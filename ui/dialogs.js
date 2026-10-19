@@ -555,13 +555,30 @@ function showWhatsNew(all, seenOverride) {
   if (!list.length) return;
   modal({ title: "What's new in RallyForge Bot", body: whatsNewBody(list), wide: true, buttons: [{ label: "OK", cls: "pri" }] });
 }
+// No pop-up after an update: the "What's new" button in the top bar gets a dot, and the list opens only when it is clicked.
+function paintNewDot() {
+  const b = document.getElementById("newBtn");
+  if (b) b.classList.toggle("hasnew", !!S.unseenNew);
+}
+function openWhatsNew() {
+  const seen = (S.cfg || {}).last_seen_version || "";
+  if (S.unseenNew) showWhatsNew(false, seen); else showWhatsNew(true);
+  if (S.unseenNew) {
+    S.unseenNew = false; paintNewDot();
+    S.cfg.last_seen_version = S.version;
+    api("save", { cfg: { last_seen_version: S.version } }).catch(() => {});
+  }
+}
 function checkWhatsNew() {
   try {
     const seen = (S.cfg || {}).last_seen_version || "";
-    if (seen === S.version) return;
-    if (!S.firstRun) setTimeout(() => showWhatsNew(false, seen), 1200);
-    S.cfg.last_seen_version = S.version;
-    api("save", { cfg: { last_seen_version: S.version } }).catch(() => {});
+    if (seen === S.version) { S.unseenNew = false; paintNewDot(); return; }
+    if (S.firstRun) {                                   // a fresh install has nothing "new" to show
+      S.cfg.last_seen_version = S.version;
+      api("save", { cfg: { last_seen_version: S.version } }).catch(() => {});
+      return;
+    }
+    S.unseenNew = true; paintNewDot();
   } catch (e) {}
 }
 

@@ -389,3 +389,5 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 @media (max-width:900px){.actsplit{grid-template-columns:1fr}}
 .actleft h3,.actright h3{margin-bottom:12px}
 .actleft .actbar{min-height:0}
+.newbtn{position:relative;margin-left:6px}
+.newbtn.hasnew::after{content:"";position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:var(--accent1);box-shadow:0 0 0 2px var(--bgc,#14161d)}

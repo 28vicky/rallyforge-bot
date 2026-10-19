@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.24", date: "2026-10-19",
+    new: ["After an update nothing pops up any more: the What\u2019s new button next to the version shows a dot, and the change list opens only when you click it."],
+    fixed: [] },
   { v: "2.4.23", date: "2026-10-19",
     new: ["A paused emulator now shows a live countdown to its automatic restart (side list and its page).", "Activity is split in two: what the bot is doing on the left, monster joins on the right. The top button bar shows only on Control settings; each emulator has its own Start / Pause / Stop / Scan city / Map by hand.", "Vikings show levels 1-50 in bands of ten (or every level)."],
     fixed: [] },

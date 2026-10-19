@@ -189,6 +189,7 @@ function layout() {
     h("div", { class: "main" },
       h("div", { class: "top" }, burger(), h("img", { src: "/assets/logo.png", alt: "" }),
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
+        h("button", { class: "btn sm newbtn", id: "newBtn", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "What\u2019s new"),
         h("span", { class: "sum", id: "sum" }),
         h("div", { class: "iconbtn", id: "modeBtn", title: "Dark / light", onclick: quickMode })),
       h("div", { class: "ribbon", id: "ribbon" }),
