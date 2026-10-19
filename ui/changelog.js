@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.19", date: "2026-10-19",
+    new: ["Monsters are shown as a grid of cards with only levels (no power numbers); Vikings are the last group.", "Scan city and Map by hand are also on each emulator\u2019s page.", "Builder tools (scan generals, add pictures, capture buttons) are hidden for normal users.", "Each emulator page now has tabs (Run & phone, Settings, Presets & generals, Monsters, Tasks, Duties) like the Control settings. Switching a setting no longer closes the section, and the tab you used is remembered - also when you open another emulator and after a restart."],
+    fixed: ["When the power or level of a monster cannot be read, the bot joins the other rallies first, then looks at that one again and reads it harder (three sizes, light and dark text). If it still cannot read it, the rally is missed - it never joins a level you switched off. A picture of each failed read is kept in the debug folder.", "A quiet emulator with an empty rally list is no longer restarted every few minutes (the frozen-screen check waits 15 minutes on the rally list)."] },
   { v: "2.4.18", date: "2026-10-19",
     new: [],
     fixed: ["A Viking whose power number cannot be read is no longer joined when one of the Viking groups is switched off - it is skipped instead."] },

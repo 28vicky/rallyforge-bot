@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.18"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.19"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -948,7 +948,7 @@ MONSTER_CATALOG.append(["Other monsters in the game's Auto-Join list", [[_n, [[1
     "Barbary Pirate", "Outlander Elites", "Temple Guard",
     "Pan (Ranged Troop)", "Pan (Ground Troop)", "Pan (Mounted Troop)")]])     # no level / power data yet: whole-monster switch only
 VIKING_SETS = {"Viking (Easy)": [[1, "1.1M"], [10, "1.7M"], [20, "2.9M"], [30, "4.9M"], [40, "8.3M"], [50, "14.1M"]], "Viking (Normal)": [[1, "3.2M"], [2, "3.4M"], [3, "3.7M"], [4, "3.9M"], [5, "4.2M"], [6, "4.5M"], [7, "4.8M"], [8, "5.2M"], [9, "5.6M"], [10, "5.9M"], [11, "6.4M"], [12, "6.8M"], [13, "7.3M"], [14, "7.8M"], [15, "8.4M"], [16, "9M"], [17, "9.6M"], [18, "10.3M"], [19, "11M"], [20, "11.8M"], [21, "12.6M"], [22, "13.5M"], [23, "14.5M"], [24, "15.5M"], [25, "16.6M"], [26, "17.8M"], [27, "19M"], [28, "20.4M"], [29, "21.8M"], [30, "23.4M"], [31, "25M"], [32, "26.8M"], [33, "28.7M"], [34, "30.7M"], [35, "32.9M"], [36, "35.2M"], [37, "37.7M"], [38, "40.4M"], [39, "43.2M"], [40, "46.3M"], [41, "49.6M"], [42, "53.1M"], [43, "56.8M"], [44, "60.8M"], [45, "65.1M"], [46, "69.8M"], [47, "74.7M"], [48, "80M"], [49, "85.6M"], [50, "91.7M"]], "Viking (Hard)": [[1, "10.6M"], [2, "11.3M"], [3, "12M"], [4, "12.7M"], [5, "13.5M"], [6, "14.3M"], [7, "15.2M"], [8, "16.1M"], [9, "17.1M"], [10, "18.1M"], [11, "19.3M"], [12, "20.4M"], [13, "21.7M"], [14, "23M"], [15, "24.4M"], [16, "26M"], [17, "27.5M"], [18, "29.2M"], [19, "31M"], [20, "32.9M"], [21, "35M"], [22, "37.1M"], [23, "39.4M"], [24, "41.8M"], [25, "44.4M"], [26, "47.1M"], [27, "50M"], [28, "53.1M"], [29, "56.3M"], [30, "59.8M"], [31, "63.4M"], [32, "67.3M"], [33, "71.5M"], [34, "75.9M"], [35, "80.5M"], [36, "85.5M"], [37, "90.7M"], [38, "96.3M"], [39, "102.2M"], [40, "108.5M"], [41, "115.1M"], [42, "122.2M"], [43, "129.7M"], [44, "137.7M"], [45, "146.1M"], [46, "155.1M"], [47, "164.6M"], [48, "174.8M"], [49, "185.5M"], [50, "196.9M"]], "Viking (Hell)": [[1, "17.9M"], [2, "19.5M"], [3, "21.3M"], [4, "23.3M"], [5, "25.4M"], [6, "27.8M"], [7, "30.3M"], [8, "33.1M"], [9, "36.1M"], [10, "39.5M"], [11, "43.1M"], [12, "47.1M"], [13, "51.4M"], [14, "56.1M"], [15, "61.3M"], [16, "66.9M"], [17, "73.1M"], [18, "79.8M"], [19, "87.1M"], [20, "95.1M"], [21, "103.9M"], [22, "113.5M"], [23, "123.9M"], [24, "135.3M"], [25, "147.7M"], [26, "161.3M"], [27, "176.2M"], [28, "192.4M"], [29, "210.1M"], [30, "229.4M"], [31, "250.5M"], [32, "273.5M"], [33, "298.7M"], [34, "326.2M"], [35, "356.2M"], [36, "388.9M"], [37, "424.7M"], [38, "463.8M"], [39, "506.4M"], [40, "551.8M"], [41, "569.7M"], [42, "588.3M"], [43, "607.4M"], [44, "627.2M"], [45, "647.6M"], [46, "668.7M"], [47, "690.4M"], [48, "712.9M"], [49, "736.1M"], [50, "760.1M"]]}
-MONSTER_CATALOG.insert(3, ["Vikings", [[_n, _l] for _n, _l in VIKING_SETS.items()]])        # Easy / Normal / Hard / Hell, level + power
+MONSTER_CATALOG.append(["Vikings", [[_n, _l] for _n, _l in VIKING_SETS.items()]])        # Easy / Normal / Hard / Hell, level + power
 MONSTER_NAMES += [_n for _c, _ms in MONSTER_CATALOG for _n, _l in _ms if _n not in MONSTER_NAMES]
 MONSTER_NAMES.append("Viking") if "Viking" not in MONSTER_NAMES else None      # the card only says "Lv.N Viking"; the set comes from the power
 
@@ -1179,23 +1179,35 @@ def _power_num(txt):
     return float(m.group(1).replace(",", ".")) * mult
 
 
-def read_monster_power(screen, hit):
+def read_monster_power(screen, hit, hard=False):
     """The monster's power (blue bar at the top right of the rally card) -> (number | None, raw text)."""
     x0, y0 = max(int(hit[0]) - 110, 0), max(int(hit[1]) - 258, 0)
     crop = screen[y0:max(int(hit[1]) - 205, y0 + 1), x0:int(hit[0]) + 50]
     if crop.size == 0:
         return None, ""
     raw = ""
-    for bright in (True, False):
-        try:
-            lines = ocr_lines(crop, scale=3.0, bright=bright)
-        except Exception:
-            lines = []
-        for text, _ in lines:
-            raw = raw or text
-            v = _power_num(text)
-            if v:
-                return v, text
+    for scale in ((3.0, 2.0, 4.0) if hard else (3.0,)):          # quick read first; the hard read also tries other sizes
+        for bright in (True, False):
+            try:
+                lines = ocr_lines(crop, scale=scale, bright=bright)
+            except Exception:
+                lines = []
+            for text, _ in lines:
+                raw = raw or text
+                v = _power_num(text)
+                if v:
+                    return v, text
+    if not hard:
+        return None, raw
+    try:                                                # keep the picture of a failed read so it can be studied
+        d = USER / "debug"
+        d.mkdir(exist_ok=True)
+        old = sorted(d.glob("power_fail_*.png"), key=lambda f: f.stat().st_mtime)
+        for f in old[:max(0, len(old) - 19)]:
+            f.unlink()
+        cv2.imwrite(str(d / f"power_fail_{int(time.time())}.png"), crop)
+    except Exception:
+        pass
     return None, raw
 
 
@@ -6298,7 +6310,15 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         return f"{mon} {mlv}" if mlv else mon
 
     def find_target(screen):
-        for hit in find_all(screen, "join_button", cfg["threshold"], cfg["search_region"]):
+        hits = find_all(screen, "join_button", cfg["threshold"], cfg["search_region"])
+        deferred = []                                                 # rallies whose power could not be read at the first try
+
+        def order():                                                  # every readable rally first, then the unreadable ones read harder
+            for h0 in hits:
+                yield h0, False
+            for h0 in list(deferred):
+                yield h0, True
+        for hit, hard in order():
             label, mon, mlv = "", None, None
             if cfg.get("save_unknown_monsters"):
                 m0, _ = identify_monster(screen, hit, cfg)
@@ -6323,11 +6343,15 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 if mon == "Viking":                                   # which set is it? level on the card + power decide
                     nx, ny = int(hit[0] - 21), int(hit[1] - 113)
                     st = screen[max(ny - 18, 0):ny + 18, max(nx - 150, 0):nx + 150]
-                    pw, praw = read_monster_power(screen, hit)
+                    pw, praw = read_monster_power(screen, hit, hard)
                     lv0 = read_monster_level(st) if st.size else None
                     vname, vlv = viking_resolve(pw, lv0)
                     if vname is None and lv0 is not None:
                         vname, vlv = viking_resolve(pw, None)
+                    if vname is None and not hard:                    # come back to this one after the other rallies
+                        say(f"[Viking] power read '{praw}' - not clear, trying the other rallies first")
+                        deferred.append(hit)
+                        continue
                     say(f"[Viking] power read '{praw}', level {lv0 if lv0 else '?'} -> {vname or 'set not recognised'} Lv{vlv if vlv else '?'}")
                     if vname:
                         mon, mlv = vname, vlv
@@ -6341,11 +6365,19 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 elif monster_needs_level(mon, cfg):
                     nx, ny = int(hit[0] - 21), int(hit[1] - 113)
                     st = screen[max(ny - 18, 0):ny + 18, max(nx - 150, 0):nx + 150]
-                    pw, praw = read_monster_power(screen, hit)
+                    pw, praw = read_monster_power(screen, hit, hard)
                     mlv = level_from_power(mon, pw) if pw else None
                     if mlv is None and st.size:
                         mlv = read_monster_level(st)
                     say(f"[{mon}] power read '{praw}' -> level {mlv if mlv else 'not readable'}")
+                    if mlv is None:
+                        if not hard:                                  # come back to this one after the other rallies
+                            say(f"[{mon}] level not clear - trying the other rallies first")
+                            deferred.append(hit)
+                            continue
+                        act_skip(mon, "level could not be read after trying hard")
+                        say(f"[{mon}] skip (level could not be read after trying hard - the rally is missed)")
+                        continue
                 m_ok, m_why = monster_allowed(mon, cfg, mlv)
                 if mon == "hidden" and mon_presets:
                     m_ok, m_why = False, "monster picture not fully on screen"
@@ -6713,10 +6745,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     still["since"] = None
                     lost_since[0] = None
                     continue
-            if still.get("any") is not None and now - still["any"] > 240:
+            if still.get("any") is not None and now - still["any"] > (900 if st in ("rally_list", "unknown") else 240):   # a quiet, empty rally list is pixel-identical for minutes - not a freeze
                 still["any"] = None
                 still["since"] = None
-                if not emu_restart(f"the screen has not drawn a new frame for 4 minutes"):
+                if not emu_restart(f"the screen has not drawn a new frame for {(900 if st in ('rally_list', 'unknown') else 240) // 60} minutes"):
                     return
                 continue
             if stuck and frozen_for > stuck:

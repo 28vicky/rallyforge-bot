@@ -227,7 +227,8 @@ function instancePage(serial) {
   const ov = (S.cfg.per_device[serial] = S.cfg.per_device[serial] || {});
   const status = h("span", { id: "instStatus", class: "hint", style: { fontSize: "13px" } });
   const bar = h("div", { class: "row", style: { marginBottom: "14px" } },
-    btn("Start", () => collectAndRun("start", { serial }), "pri"), btn("Pause", () => act(api("pause", { serial }))), btn("Stop", () => act(api("stop", { serial })), "bad"), btn("Take game back now", () => act(api("takeback", { serial }))), status);
+    btn("Start", () => collectAndRun("start", { serial }), "pri"), btn("Pause", () => act(api("pause", { serial }))), btn("Stop", () => act(api("stop", { serial })), "bad"), btn("Take game back now", () => act(api("takeback", { serial }))),
+    btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"), status);
   const head = h("h3", { style: { fontSize: "16px", color: "var(--accent2)", margin: "0 0 12px" } }, `${dev.name || "Emulator " + d.idx}   (${serial})`);
 
   // ---- overrides
@@ -362,17 +363,30 @@ function instancePage(serial) {
     h("div", { class: "hint", style: { marginBottom: "10px" } }, "ON: this emulator starts on its own whenever the app opens (after a restart or update too). OFF: it waits until you press Start. Each emulator has its own switch."),
     h("div", { class: "row", style: { gap: "22px", alignItems: "center" } },
       h("label", { class: "tgl" }, asOn, h("span", { class: "sw" }), "Start this emulator automatically when the app opens")));
-  const sect = (title, fn) => {
-    const box = h("div", { style: { marginTop: "12px" } });
-    const det = h("details", { class: "panel", style: { margin: "14px 0" } }, h("summary", { style: { cursor: "pointer", fontWeight: "700", color: "var(--accent2)", padding: "10px 4px" } }, title), box);
-    det.addEventListener("toggle", () => { if (det.open && !box.children.length) box.appendChild(fn()); });
-    return det;
+  // ---- tabs (same look as the Control settings tabs). The chosen tab is remembered, also when another emulator is opened.
+  const ITABS = [
+    ["run", "Run & phone", () => [phone, autoStart, autoJoin, staminaPanel(ov, S.cfg)]],
+    ["settings", "Settings", () => [panelEl]],
+    ["presets", "Presets & generals", () => ownP],
+    ["monsters", "Monsters", () => [PAGES.monsters(serial)]],
+    ["tasks", "Tasks", () => [PAGES.tasks(serial)]],
+    ["duties", "Duties", () => [PAGES.duties(serial)]],
+  ];
+  if (!S.instTab) { try { S.instTab = localStorage.getItem("rf_inst_tab") || ""; } catch (e) { S.instTab = ""; } }
+  if (!ITABS.some((t) => t[0] === S.instTab)) S.instTab = "run";
+  const body = h("div", {});
+  const tabRow = h("div", { class: "tabs", style: { margin: "4px 0 14px" } });
+  const showTab = (k) => {
+    S.instTab = k;
+    try { localStorage.setItem("rf_inst_tab", k); } catch (e) {}
+    [...tabRow.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
+    body.innerHTML = "";
+    const t = ITABS.find((x) => x[0] === k);
+    for (const el of t[2]()) if (el) body.appendChild(el);
   };
-  const wrap = h("div", {}, head, bar, panel("Activity", activityBox(serial)), phone, autoStart, autoJoin, staminaPanel(ov, S.cfg), ...ownP,
-    sect("Monsters for this emulator (which monsters it joins)", () => PAGES.monsters(serial)),
-    sect("Tasks for this emulator", () => PAGES.tasks(serial)),
-    sect("Duties for this emulator (Crazy Eggs, daily claims...)", () => PAGES.duties(serial)),
-    panelEl);
+  for (const [k, l] of ITABS) tabRow.appendChild(h("button", { class: "tab", "data-k": k, onclick: () => showTab(k) }, l));
+  const wrap = h("div", {}, head, bar, panel("Activity", activityBox(serial)), tabRow, body);
+  showTab(S.instTab);
   setTimeout(refreshInstanceControls, 0);
   return wrap;
 }
@@ -439,10 +453,10 @@ function presetPanels(c, inst) {
       h("div", { class: "row" }, h("span", { class: "lab" }, "General list view while joining"),
         sel(c, "general_view", [["grid", "Thumbnails (fast, recommended)"], ["list", "List (slow, reads names)"]]))),
     note("Empty = keep the generals from the preset. If the first general is not in the list, is busy or cannot be selected, the bot tries the next one. 'skip' = do not join that rally; 'march' = march with the preset's generals. Generals are found by their picture (take the screenshot in the GRID view of 'Select a General'). Tab numbers count from the left; the open tab shows its name (e.g. Development = 3). The bot switches the list to grid view itself and finds the Assistant slot after the Main general is set."),
-    inst ? null : h("div", { class: "row" }, btn("Manage generals...", openGeneralManager, "pri"), btn("Scan generals from the game...", scanGeneralsFlow),
+    inst ? null : h("div", { class: "row" }, btn("Manage generals...", openGeneralManager, "pri"), S.dev ? btn("Scan generals from the game...", scanGeneralsFlow) : null,
       S.dev ? btn("Build general catalogue (developer)...", catalogFlow) : null, S.dev ? btn("Open catalogue folder", () => act(api("catalog_open")), "sm") : null,
       S.dev ? btn("Record city frames (developer)...", cityCaptureFlow) : null, S.dev ? btn("Open city capture folder", () => act(api("city_capture_open")), "sm") : null,
-      btn("Add general from screenshot...", () => addGeneralFlow()), btn("Capture a button / pop-up from screenshot...", captureTemplate)));
+      S.dev ? btn("Add general from screenshot...", () => addGeneralFlow()) : null, S.dev ? btn("Capture a button / pop-up from screenshot...", captureTemplate) : null));
   return [bp, gen];
 }
 PAGES.presets = function () { return h("div", {}, ...presetPanels(S.cfg, false)); };
@@ -557,7 +571,9 @@ function monstersPanel(c) {
         btn("Join all", () => { list.forEach(([n]) => setSkip(n, new Set())); draw(); }, "sm"),
         btn("Skip all", () => { list.forEach(([n, lv]) => setSkip(n, new Set(lv.map((x) => x[0])))); draw(); }, "sm"));
       const rows = h("div", { class: "mon-list" });
+      S.monOpen = S.monOpen || {};
       list.forEach(([n, lv]) => {
+        const card = h("div", { class: "mon-card" });
         const st = state(n, lv);
         const box = h("button", { class: "tri " + st, type: "button", role: "checkbox", "aria-checked": st === "mixed" ? "mixed" : String(st === "join"), "aria-label": n + ": " + (st === "join" ? "join" : st === "skip" ? "skip" : "some levels")}, st === "join" ? "✓" : st === "skip" ? "" : "−");
         box.addEventListener("click", () => { setSkip(n, st === "join" ? new Set(lv.map((x) => x[0])) : new Set()); draw(); });
@@ -566,18 +582,23 @@ function monstersPanel(c) {
         const multi = lv.length > 1;
         const row = h("div", { class: "mon-row" },
           box, h("span", { class: "mon-name" }, n, known.has(n.toLowerCase()) ? h("span", { class: "mon-pic", title: "The bot has a picture of this monster" }, "pic") : null),
-          h("span", { class: "muted mon-sum" }, multi ? (st === "join" ? "all levels" : st === "skip" ? "all skipped" : (lv.length - skipSet(n).size) + " of " + lv.length + " levels") : (lv[0][1] ? lv[0][1] + " power" : "")),
+          h("span", { class: "muted mon-sum" }, multi ? (st === "join" ? "all levels" : st === "skip" ? "all skipped" : (lv.length - skipSet(n).size) + " of " + lv.length + " levels") : ""),
           pre);
-        rows.appendChild(row);
+        card.appendChild(row);
+        rows.appendChild(card);
+        const isOpen = S.monOpen[n] !== undefined ? S.monOpen[n] : lv.length <= 8;
         if (multi) {
+          row.appendChild(h("button", { type: "button", class: "btn sm", title: "Show or hide the levels", onclick: () => { S.monOpen[n] = !isOpen; draw(); } }, isOpen ? "Levels \u25B4" : "Levels \u25BE"));
+        }
+        if (multi && isOpen) {
           const chips = h("div", { class: "mon-lvls" });
           lv.forEach(([l, pw]) => {
             const off = skipSet(n).has(l);
-            const ch = h("button", { type: "button", class: "lvchip" + (off ? "" : " on"), "aria-pressed": String(!off), title: "Lv" + l + " - " + pw + " power" }, h("b", {}, "Lv" + l), h("span", {}, pw));
+            const ch = h("button", { type: "button", class: "lvchip" + (off ? "" : " on"), "aria-pressed": String(!off), title: "Level " + l }, h("b", {}, "Lv" + l));
             ch.addEventListener("click", () => { const s2 = skipSet(n); if (s2.has(l)) s2.delete(l); else s2.add(l); setSkip(n, s2); draw(); });
             chips.appendChild(ch);
           });
-          rows.appendChild(chips);
+          card.appendChild(chips);
         }
       });
       body.appendChild(head); body.appendChild(rows);
@@ -594,12 +615,12 @@ function monstersPanel(c) {
   search.addEventListener("input", () => { S.monQ = search.value; draw(); });
   draw();
   return panel("Monsters",
-    note("Ticked = the bot joins it. Untick a monster to skip it, or open its levels and untick only the levels you do not want. The level is read from the rally card; if it cannot be read the bot joins. Power numbers are from evonyguidewiki.com."),
+    note("Ticked = the bot joins it. Untick a monster to skip it, or open its levels and untick only the levels you do not want. The level is read from the rally card; if it cannot be read the bot joins."),
     h("div", { class: "row", style: { marginBottom: "12px" } }, tabs, search),
     h("div", { class: "row", style: { marginBottom: "14px" } }, h("span", { class: "lab" }, "Monster with no picture yet"), sel(c, "monster_unknown", ["join", "skip"]),
-      btn("Open unknown-monster folder", () => act(api("open_unknown")), "sm")),
+      S.dev ? btn("Open unknown-monster folder", () => act(api("open_unknown")), "sm") : null),
     body,
-    h("div", { class: "row", style: { marginTop: "14px" } }, btn("Add monster from screenshot...", addMonster), btn("Refresh list", async () => { await reloadMeta(); rerender(); })));
+    h("div", { class: "row", style: { marginTop: "14px" } }, S.dev ? btn("Add monster from screenshot...", addMonster) : null, btn("Refresh list", async () => { await reloadMeta(); rerender(); })));
 }
 async function addMonster() {
   const shot = await pickScreenshot("Screenshot of the rally list");

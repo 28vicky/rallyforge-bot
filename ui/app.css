@@ -329,3 +329,13 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .swatch.auto{width:auto;border-radius:99px;padding:0 14px;background:var(--btn);border:var(--bd);color:var(--fg)}
 .colorpick{width:44px;height:34px;padding:2px;border-radius:var(--r2);border:var(--bd);background:var(--field);cursor:pointer}
 .colorpick::-webkit-color-swatch-wrapper{padding:0}.colorpick::-webkit-color-swatch{border:0;border-radius:calc(var(--r2) - 4px)}
+
+/* monsters: cards in a responsive grid instead of one long column */
+.mon-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:10px;align-items:start}
+.mon-card{display:flex;flex-direction:column;border-radius:12px;background:var(--field);overflow:hidden}
+.mon-card .mon-row{background:transparent;flex-wrap:wrap}
+.mon-card .mon-name{min-width:120px}
+.mon-card .mon-lvls{padding:2px 10px 10px;max-height:240px;overflow:auto}
+.mon-card input.short{width:84px}
+@media (max-width:700px){.mon-list{grid-template-columns:1fr}}
+.lvchip{min-width:48px}

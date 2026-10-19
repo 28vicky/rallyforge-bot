@@ -1,24 +1,24 @@
 {
-  "version": "2.4.18",
-  "notes": "Viking fix: unreadable Viking set is skipped when a group is switched off",
+  "version": "2.4.19",
+  "notes": "Monster grid, tabs per emulator, harder power reading, fewer builder buttons, Rory restart fix",
   "files": {
     "rally_bot.py": {
-      "sha256": "551a17d93e24aff2d7d60e17aef530d4632ed96a8dad256d20233d1f1cc34538"
+      "sha256": "a010d8d5c5857a31c53e81dc88e847a52a2f5dd31a833380518da2f4f192c677"
     },
     "web_app.py": {
-      "sha256": "081cf18e293f8a37d37f4f04201db2c53b053ef8d1c163bcb06b9419e3c021d7"
+      "sha256": "fc89d68d7beeb5df556ce547111ed469e96973ce2a59ab1df0a2c393a9c8fd18"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "8469f0071476ff2f26acab8a8624e30accd93ccea0f5b6398f070676cdbf1034"
+      "sha256": "b984988d9ff07c870d926713ed2f157fcb07382e69d454cf0b82105983615dae"
     },
     "ui/app.js": {
-      "sha256": "91274939a9302582fdf1815bfe5f4b7312717d60f3666d14c79e403bd1d73464"
+      "sha256": "357a32106dbac106a5c63de4942028bb76cc447a766e4b6e20e62e50d94f4d64"
     },
     "ui/changelog.js": {
-      "sha256": "b761be222acbb4fa7c1e68c6f22089cad8367d1bbe0878d53d4ee0efb3ecc936"
+      "sha256": "2fb7899ea7b9647323f4b251fcff0d0be2f374bc834183722bb2e687b290ecb3"
     },
     "ui/dialogs.js": {
       "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
@@ -27,7 +27,7 @@
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "70f2d3a0bac5da20d4aaa9bad5beb594ac915880d78b341e0eb779c0eca67ea9"
+      "sha256": "d30ff64ea632ceb6fef3abe075afd5d1b5aa7f8437b0071e350d3f5a35dc8b67"
     }
   },
   "monsters": {

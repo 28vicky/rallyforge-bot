@@ -1028,7 +1028,7 @@ class Api:
             "bosses": rb.get_bosses(), "building_names": rb.BUILDING_NAMES,
             "icons": rb.DEFAULT_CITY_ICONS, "example_tasks": EXAMPLE_TASKS,
             "default_bot_presets": rb.default_bot_presets(),
-            "frozen": bool(getattr(sys, "frozen", False)), "license": c.lic.info(), "dev_tools": not c.lic.on,
+            "frozen": bool(getattr(sys, "frozen", False)), "license": c.lic.info(), "dev_tools": (rb.USER / "admin.txt").exists(),        # builder tools (scan, capture, add pictures) only for the owner: an admin.txt file in the data folder
         }
 
     # ---- duties (ready-made scheduled tasks with a status per instance)

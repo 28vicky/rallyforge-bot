@@ -56,7 +56,7 @@ function toast(msg, kind) {
 // ------------------------------------------------------------------ state
 const S = {
   cfg: {}, devices: [], generals: [], monsters: [], profiles: [], cityInfo: [], bosses: [], meta: {},
-  devStatus: [], logs: [], seq: 0, sel: "control", tab: "dashboard", tg: { status: "", ready: false },
+  devStatus: [], logs: [], seq: 0, sel: "control", tab: (() => { try { return localStorage.getItem("rf_ctl_tab") || "dashboard"; } catch (e) { return "dashboard"; } })(), tg: { status: "", ready: false },
   ram: {}, genScan: {}, city: false, version: "",
 };
 // ------------------------------------------------------------------ icon set (one outline style: 24 grid, 1.8 stroke, currentColor)
@@ -249,7 +249,7 @@ function buildRibbon() {
       btn("Stop", () => act(api("stop", { serial: target() })), "bad", "stop")),
     grp("Scan",
       btn("Generals", () => openGeneralManager(), "", "users"),
-      btn("Scan generals", () => scanGeneralsFlow(), "", "scan"),
+      ...(S.dev ? [btn("Scan generals", () => scanGeneralsFlow(), "", "scan")] : []),
       btn("Scan city", () => scanCityFlow(), "", "city"), btn("Map by hand", () => manualMapFlow(), "", "pin")),
     grp("Data",
       btn("Profiles ▾", (e) => menu(e.currentTarget, [
@@ -357,7 +357,7 @@ function renderTabs() {
   if (!t) return;
   t.innerHTML = "";
   t.style.display = S.sel === "control" ? "" : "none";
-  for (const [k, l] of TABS) if (k !== "license" || (S.license && S.license.required)) t.appendChild(h("button", { class: "tab" + (S.tab === k ? " on" : ""), onclick: () => { S.tab = k; renderTabs(); renderPage(); } }, ico(TAB_ICO[k] || "grid"), l));
+  for (const [k, l] of TABS) if (k !== "license" || (S.license && S.license.required)) t.appendChild(h("button", { class: "tab" + (S.tab === k ? " on" : ""), onclick: () => { S.tab = k; try { localStorage.setItem("rf_ctl_tab", k); } catch (e) {} renderTabs(); renderPage(); } }, ico(TAB_ICO[k] || "grid"), l));
 }
 function renderPage() {
   const p = $("#pages");
