@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.27"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.28"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -352,6 +352,19 @@ def migrate_cfg(cfg):
                     ms[nm] = [l for l, _p in vs[nm]]
                 elif nm == "Viking (Easy)" and set(int(x) for x in lv) == set(VIKING_EASY_MEASURED):
                     ms[nm] = [l for l, _p in vs[nm]]          # Easy used to list only 6 levels: "skip all" stays "skip all" with 1-50
+    except Exception:
+        pass
+    try:                                             # 'Junior Hydra' used to be its own monster: it is a level of 'Hydra'
+        for box in [cfg] + list((cfg.get("per_device") or {}).values()):
+            if not isinstance(box, dict):
+                continue
+            if isinstance(box.get("monster_list"), list):
+                box["monster_list"] = list(dict.fromkeys("Hydra" if n == "Junior Hydra" else n for n in box["monster_list"]))
+            for k in ("monster_skip", "monster_presets"):
+                d = box.get(k)
+                if isinstance(d, dict) and "Junior Hydra" in d:
+                    v = d.pop("Junior Hydra")
+                    d.setdefault("Hydra", v)
     except Exception:
         pass
     if cfg.get("bad_preset_seconds") == 120:             # the old default was far too long for a 5-minute rally
@@ -884,7 +897,13 @@ def monster_dirs():
 def _base_monster(stem):
     """'Kraken #2' (another look of the same monster) counts as 'Kraken'."""
     n = re.sub(r"\s#\d+$", "", stem)
-    return {"Bayar Knight": "Knight Bayard", "Bayard Knight": "Knight Bayard"}.get(n, n)
+    n = {"Bayar Knight": "Knight Bayard", "Bayard Knight": "Knight Bayard"}.get(n, n)
+    m = re.fullmatch(r"(?:Junior|Medium|Senior|Legendary)\s+(.+)", n)       # 'Senior Hydra' is a level of 'Hydra'
+    if m:
+        rest = {"Bayar Knight": "Knight Bayard", "Bayard Knight": "Knight Bayard", "Knight Bayard": "Knight Bayard", "Bayar": "Knight Bayard"}.get(m.group(1), m.group(1))
+        if rest in MONSTER_NAMES:
+            return rest
+    return n
 
 
 def _raw_monsters():
@@ -943,7 +962,7 @@ _unknown_loaded = [False]
 MONSTER_NAMES = ["Zombie", "Redcap", "Centaur", "Skeleton Dragon", "Werewolf", "Manticore", "Yasha", "Peryton", "Minotaur",
                  "Griffin", "Ifrit", "Kamaitachi", "Fafnir", "Behemoth", "Phoenix", "Jormungandr", "Typhon", "Ammit",
                  "Stymphalian Bird", "Kraken", "Azazel", "Leviathan", "Garmr", "Sphinx", "Garuda", "Warlord", "Witch",
-                 "Knight Bayard", "Cerberus", "Golem", "Hydra", "Junior Hydra", "Lava Turtle", "Pan", "Ymir",
+                 "Knight Bayard", "Cerberus", "Golem", "Hydra", "Lava Turtle", "Pan", "Ymir",
                  "Pumpkin Monster", "Skullcrawler", "Thunder Scorpion", "Bird of Hurricane"]
 MONSTER_CATALOG = [["Normal monsters",[["Zombie",[[1,"36.5K"]]],["Redcap",[[2,"219K"]]],["Centaur",[[3,"328.5K"]]],["Skeleton Dragon",[[4,"787.2K"]]],["Werewolf",[[5,"1.3M"]]],["Manticore",[[6,"2.2M"]]],["Yasha",[[7,"3.4M"]]],["Peryton",[[8,"6.5M"]]],["Minotaur",[[9,"9.9M"]]],["Griffin",[[10,"17.9M"]]],["Ifrit",[[11,"59.6M"]]],["Kamaitachi",[[12,"89.4M"]]],["Fafnir",[[13,"134.1M"]]],["Behemoth",[[14,"187.7M"]]],["Phoenix",[[15,"262.7M"]]],["Jormungandr",[[16,"394.1M"]]],["Typhon",[[17,"551.8M"]]],["Ammit",[[18,"800.1M"]]],["Stymphalian Bird",[[19,"1.1B"]]],["Kraken",[[20,"1.6B"]]],["Azazel",[[21,"2.6B"]]],["Leviathan",[[22,"3.3B"]]],["Garmr",[[23,"4.7B"]]]]],["Event monsters",[["Lava Turtle",[[1,"12.4M"],[2,"22.3M"],[3,"74.5M"],[4,"147.5M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Golem",[[1,"12.4M"],[2,"22.3M"],[3,"74.5M"],[4,"147.5M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Witch",[[1,"13M"],[2,"24.6M"],[3,"85.6M"],[4,"154.8M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Warlord",[[1,"13M"],[2,"24.6M"],[3,"85.6M"],[4,"154.8M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Ymir",[[1,"23.4M"],[2,"70.8M"],[3,"120.2M"],[4,"206.4M"],[5,"361.3M"],[6,"722.6M"],[7,"1.8B"]]],["Sphinx",[[1,"12.4M"],[2,"22.3M"],[3,"74.5M"],[4,"147.5M"],[5,"225.2M"],[6,"472.9M"],[7,"914.4M"],[8,"2B"]]],["Pan",[[1,"22.3M"],[2,"42.8M"],[3,"122.9M"],[4,"206.4M"],[5,"361.3M"],[6,"711.7M"],[7,"1.8B"]]],["Hydra",[[1,"84.9M"],[2,"120.6M"],[3,"198.9M"],[4,"328.4M"],[5,"678.8M"],[6,"1.5B"]]],["Knight Bayard",[[1,"65.5M"],[2,"147.5M"],[3,"225.2M"],[4,"668.1M"],[5,"1.5B"]]],["Cerberus",[[1,"68.2M"],[2,"153.4M"],[3,"234.2M"],[4,"694.9M"],[5,"1.5B"]]],["Aglaope",[[1,"120.2M"]]]]],["Limited-time event",[["Pumpkin Monster",[[1,"708.5K"],[2,"1.9M"],[3,"5.9M"],[4,"16.1M"],[5,"53.6M"],[6,"80.4M"],[7,"134.1M"],[8,"268.1M"]]],["Nian",[[1,"59.6M"],[2,"71.5M"],[3,"89.4M"],[4,"134.1M"],[5,"236.5M"],[6,"472.9M"]]],["Cranky Snowman",[[4,"1.6M"],[5,"2.7M"],[6,"3.5M"],[7,"11M"]]]]]]   # [category, [[name, [[level, power], ...]], ...]] from evonyguidewiki.com
 _SUMMONED = [["Fenrir",[[1,"27.4K"],[2,"186.1K"],[3,"492.7K"]]],["Garuda",[[1,"1.3M"],[2,"1.7M"],[3,"125M"]]],["Achelois",[[1,"17.9M"],[2,"89.4M"],[3,"187.7M"]]],["Basilisk",[[1,"130M"]]],["Draugr",[[1,"130M"]]],["Taotie",[[1,"124.6M"],[2,"398.1M"],[3,"805.1M"]]]]
@@ -1016,7 +1035,9 @@ def auto_join_renew(dev, cfg, log, stop, act):
     return every
 
 
-_MONSTER_ALIASES = {"Bayar Knight": "Knight Bayard", "Bayard Knight": "Knight Bayard", "Bayar": "Knight Bayard", "Bayard": "Knight Bayard"}
+_MONSTER_ALIASES = {"Bayar Knight": "Knight Bayard", "Bayard Knight": "Knight Bayard", "Bayar": "Knight Bayard", "Bayard": "Knight Bayard",
+                    **{f"{g} {m}": m for g in ("Junior", "Medium", "Senior") for m in ("Hydra", "Cerberus", "Nian")},
+                    "Junior Knight Bayard": "Knight Bayard", "Senior Bayar Knight": "Knight Bayard", "Senior Knight Bayard": "Knight Bayard"}
 
 
 def read_monster_label(strip):
@@ -6389,10 +6410,38 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     last_dn = [None]                      # monster name with its level, e.g. "Witch 6", of the rally find_target chose
     last_base = [None]
 
+    name_cache = {}
+
+    def show_name(screen, hit, mon):
+        """A monster name for the Activity screen and the log, also when the filters did not need one: the saved
+        picture first, then the name printed under the portrait (each different label is read only once).
+        Only for showing - whether to join is still decided by the filters alone."""
+        if mon and mon != "hidden":
+            return mon
+        try:
+            if mon is None:
+                m0, _ = identify_monster(screen, hit, cfg)
+                if m0 and m0 != "hidden":
+                    return m0
+            nx, ny = int(hit[0] - 21), int(hit[1] - 113)
+            st = screen[max(ny - 18, 0):ny + 18, max(nx - 150, 0):nx + 150]
+            if not st.size:
+                return "?"
+            g = cv2.cvtColor(cv2.resize(st, (48, 8), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
+            key = (g // 32).tobytes()
+            if key not in name_cache:
+                lab = read_monster_label(st)
+                if len(name_cache) > 300:
+                    name_cache.clear()
+                name_cache[key] = lab if lab in MONSTER_NAMES else "?"
+            return name_cache[key]
+        except Exception:
+            return "?"
+
     def level_name(screen, hit, mon, mlv):
         """'Witch 6' for the Activity screen (reads the level from the card's power when it is not known yet)."""
         if not mon or mon == "hidden":
-            return mon or "?"
+            return show_name(screen, hit, mon)
         if mlv is None:
             try:
                 pw, _ = read_monster_power(screen, hit)
@@ -6487,6 +6536,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 pass
             rally, march, ok, why = judge(screen, hit, cfg, need)
             last_march[0] = march
+            if not label:
+                label = f"[{show_name(screen, hit, mon)}] "
             if cfg["log_timers"]:
                 say(f"{label}rally {fmt(rally)}, march {fmt(march)}, bot needs ~{need:.0f}s -> "
                     f"{'JOIN' if ok else 'skip'} ({why})")
@@ -6496,13 +6547,13 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 act_skip(level_name(screen, hit, mon, mlv), "every preset for this monster is benched", rally, march)
                 say(f"{label}skip (every preset for this monster is benched)")
                 continue
-            if ok and rally is not None and any(m == (mon if mon and mon != "hidden" else "?") and abs(e - (time.time() + rally)) < 15 for m, e in no_open if e > time.time()):
+            if ok and rally is not None and any(m == (mon if mon and mon != "hidden" else show_name(screen, hit, mon)) and abs(e - (time.time() + rally)) < 15 for m, e in no_open if e > time.time()):
                 act_skip(level_name(screen, hit, mon, mlv), "this rally would not open before (already joined or full)", rally, march)
                 say(f"{label}skip (this rally would not open before - already joined or full)")
                 continue
             if ok:
                 last_dn[0] = level_name(screen, hit, mon, mlv)
-                last_base[0] = mon if mon and mon != "hidden" else "?"
+                last_base[0] = mon if mon and mon != "hidden" else show_name(screen, hit, mon)
                 return hit, rally, mon
         return None
 
@@ -6988,12 +7039,13 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 nap(min(max(wait, 1), 5))                  # rallies last ~5 min: keep looking, never sleep long
                 continue
 
-            vs = f" vs {mon}" if mon and mon != "hidden" else ""
+            shown = last_base[0] if last_base[0] and last_base[0] != "?" else (mon if mon and mon != "hidden" else "")
+            vs = f" vs {shown}" if shown else ""
             log(f"[*] Rally{vs} with {left}s left -> joining")
             t_join = time.time()
             t_march = None
             t_deadline = t_join + left - (last_march[0] or 0) - 2     # latest moment to press March and still arrive in time
-            mon_name = last_dn[0] if last_dn[0] and mon and mon != "hidden" else (mon if mon and mon != "hidden" else "?")
+            mon_name = last_dn[0] or (mon if mon and mon != "hidden" else "?")
             base_name = last_base[0] or "?"
 
             def fail(why):

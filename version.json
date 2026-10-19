@@ -1,9 +1,9 @@
 {
-  "version": "2.4.27",
-  "notes": "Run any number of emulators in the list (your plan sets how many run at once); removed emulators stay removed; drag to reorder; all generals in the picker; logo fixed",
+  "version": "2.4.28",
+  "notes": "Activity shows monster names; Hydra settings now apply to Hydra rallies",
   "files": {
     "rally_bot.py": {
-      "sha256": "a804f97aa0eeca3445f5d59822347a4c00f2ce5600125088fc3fadefac7c609b"
+      "sha256": "1452ddd031f6c6241dbb7ac6189de53fc03e28b42f8994cce867705e72253f69"
     },
     "web_app.py": {
       "sha256": "76d41bd6911639bb87bf7c26ce3975ccb35d93931502c0bb2b0c203c31284c44"
@@ -18,7 +18,7 @@
       "sha256": "008e6556ef32f42a0ff79ab86e2c029d6ff0c127810f3d907d273e6689c8790d"
     },
     "ui/changelog.js": {
-      "sha256": "dc61b40373f81b06f541fd70994ab71f84b83ba28488644df9258c13d769d5d2"
+      "sha256": "1f177be3b600af4277232c02339034fe28da7f604dd89cbf2810e33979182591"
     },
     "ui/dialogs.js": {
       "sha256": "ad85eb3b236e6554bce7cbf428f8d73f062f3c6ca244c74e8cfa3b33b7962709"
@@ -65,13 +65,13 @@
       "sha256": "8a448a7cf7c717f27f74d48e1f1506409bd4d961f2a5b55eb66e6af296a03461",
       "url": "monsters/Garmr.png"
     },
+    "Hydra.png": {
+      "sha256": "41b35051b41a3562bb197ad3c4c89e45b3e1c4c079c527c9d8b5f118ee9ca5ff",
+      "url": "monsters/Hydra.png"
+    },
     "Jormungandr.png": {
       "sha256": "8cc74f20d7a480341de101858868ee277480b0116c7cc430a0d91a491228a9f8",
       "url": "monsters/Jormungandr.png"
-    },
-    "Junior Hydra.png": {
-      "sha256": "41b35051b41a3562bb197ad3c4c89e45b3e1c4c079c527c9d8b5f118ee9ca5ff",
-      "url": "monsters/Junior%20Hydra.png"
     },
     "Knight Bayard.png": {
       "sha256": "1ed3b797d5a274a5124c781a23d8eec5a4873031eaf9b52ab33ca0e016ab76d0",
@@ -132,5 +132,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "0832eec8987b75ba12b4f201fd2f0e8f1f190baa2a89d692ae3ce7887f576df2"
+  "sig": "4922b4025fcb5a1eb6d4e1b27a5f19f78d5b51038f7ac59b3a4264126601a8ba"
 }
