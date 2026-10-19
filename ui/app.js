@@ -102,7 +102,7 @@ const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", mon
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
   ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["telegram", "Telegram"], ["reliability", "Reliability"],
-  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Themes"], ["license", "License"],
+  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Themes"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
 
@@ -195,7 +195,7 @@ function layout() {
       h("div", { class: "tabs", id: "tabs" }),
       h("div", { class: "pages", id: "pages" })),
     h("div", { class: "status" },
-      h("span", { class: "l", title: S.copyright || "" }, "RallyForge Bot " + S.version + "  \u00b7  by " + (S.author || "Kiravik")), h("span", { id: "sbRun" }, "0 running"),
+      h("span", { class: "l", title: S.copyright || "" }, "RallyForge Bot " + S.version + "  \u00b7  by " + (S.author || "Kiravik")), h("span", { id: "sbRun" }, "0 running"), h("span", { id: "sbLic" }),
       h("span", { id: "sbRam" }), h("span", { id: "sbTg" }))));
   buildRibbon();
   renderModeIcon();
@@ -460,6 +460,11 @@ async function poll() {
     S.catScan = j.catalog || { running: false, count: 0 };
     S.city = j.city;
     S.cityProg = j.city_progress || null;
+    if (j.lic) {
+      const wasOk = S.license && S.license.valid;
+      S.license = j.lic;
+      if (S.license.required && !S.license.valid && wasOk) showLogin(S.license.error);
+    }
     const key = JSON.stringify(j.devs);
     if (key !== lastState) { lastState = key; S.devStatus = j.devs; renderSide(); refreshInstanceControls(); }
     pushLogs(j.logs);
@@ -479,6 +484,16 @@ function updateSummary() {
   if (c.error) parts.push(c.error + " with a problem");
   const s = $("#sum"); if (s) s.textContent = parts.join("  |  ");
   const r = $("#sbRun"); if (r) r.textContent = c.run + " running";
+  const lc = $("#sbLic");
+  if (lc) {
+    const L = S.license || {};
+    if (L.required && L.valid && L.days_left != null) {
+      lc.textContent = L.days_left > 0 ? "Account: " + L.days_left + (L.days_left === 1 ? " day" : " days") + " left" : "Account: expires today";
+      lc.style.color = L.days_left <= 3 ? "var(--bad)" : "";
+      lc.style.fontWeight = L.days_left <= 3 ? "700" : "";
+      lc.title = "Valid until " + L.expires;
+    } else lc.textContent = "";
+  }
   const m = $("#sbRam");
   if (m && S.ram && S.ram.total_mb) m.textContent = `App: ${(S.ram.proc_mb || 0).toFixed(0)} MB  |  PC free: ${S.ram.free_mb.toFixed(0)} MB`;
   const t = $("#sbTg"); if (t) t.textContent = "Telegram: " + (S.tg.ready ? "connected" : "not connected");
@@ -521,7 +536,7 @@ async function boot() {
   S.copyright = j.copyright;
   S.license = j.license || { required: false };
   S.dev = !!j.dev_tools;
-  if (S.license.required && !S.license.valid) S.tab = "license";
+  if (S.license.required && !S.license.valid) setTimeout(() => showLogin(S.license.error), 300);
   S.cfg = j.cfg;
   S.devices = j.devices;
   S.firstRun = j.first_run;

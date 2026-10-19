@@ -812,21 +812,16 @@ PAGES.themes = function () {
 // ====================================================================== license (sold edition only)
 PAGES.license = function () {
   const L = S.license || {};
-  const key = h("textarea", { placeholder: "RFB1-...", style: { minHeight: "90px" } });
-  const mid = h("input", { type: "text", readOnly: true, value: L.machine_id || "" });
-  const status = L.valid
-    ? h("div", { style: { fontWeight: 600, color: "var(--good, var(--accent2))", marginBottom: "12px" } },
-        `Licensed: up to ${L.instances} emulator${L.instances > 1 ? "s" : ""}` + (L.buyer ? `  |  ${L.buyer}` : "") + (L.expires ? `  |  valid until ${L.expires}` : "") + (L.bound ? "  |  locked to this PC" : ""))
-    : h("div", { style: { fontWeight: 600, color: "var(--bad)", marginBottom: "12px" } }, L.error || "No license key entered yet.");
-  const used = h("div", { class: "hint", style: { marginBottom: "12px" } }, L.valid ? `Emulators in your list: ${S.devices.filter((d) => d.id).length} of ${L.instances}.` : "The bot will not start until a valid key is entered.");
-  return h("div", {}, panel("License", status, used,
-    fld("License key", key),
+  const left = L.days_left;
+  return h("div", {}, panel("Account",
+    h("div", { style: { fontWeight: 600, marginBottom: "10px", color: L.valid ? "var(--accent2)" : "var(--bad)" } },
+      L.valid ? "Logged in as " + (L.user || L.buyer || "") : (L.error || "Not logged in.")),
+    L.valid ? h("div", { class: "hint", style: { marginBottom: "12px" } },
+      `Up to ${L.instances} emulator${L.instances > 1 ? "s" : ""}` + (L.expires ? `  |  valid until ${L.expires}` + (left != null ? ` (${left} day${left === 1 ? "" : "s"} left)` : "") : "  |  no expiry") + `  |  emulators in your list: ${S.devices.filter((d) => d.id).length}`) : null,
     h("div", { class: "row", style: { margin: "12px 0" } },
-      btn("Activate", async () => { const j = await act(api("license_set", { key: key.value })); if (j) { S.license = j.license; renderTabs(); rerender(); } }, "pri"),
-      btn("Remove key", async () => { if (await confirmBox("License", "Remove the saved license key from this PC?")) { const j = await act(api("license_clear")); if (j) { S.license = j.license; rerender(); } } }),
-      L.buy_url ? btn("Buy / upgrade", () => window.open(L.buy_url, "_blank")) : null),
-    fld("Your machine ID (send it to the seller if your key is locked to a PC)", mid),
-    note("The number of emulators is part of your key. To add more emulators, buy a bigger license and enter the new key here; no re-install is needed.")));
+      btn("Log out", async () => { if (await confirmBox("Log out", "Log out? All bots will stop.")) { const j = await act(api("logout")); if (j) { S.license = j.license; showLogin(); } } }),
+      L.buy_url ? btn("Buy / extend", () => window.open(L.buy_url, "_blank")) : null),
+    note("The app checks your account about once an hour. If it was closed or has expired, the bots stop and you need a new ID and password from the seller. Without internet the app keeps working for up to 48 hours.")));
 };
 
 
@@ -839,7 +834,7 @@ PAGES.duties = function (fixed) {
   const draw = () => {
     root.innerHTML = "";
     if (fixed === undefined) root.appendChild(hist);
-    const pick = h("select", { onchange: (e) => { serial = e.target.value; load(); loadCe(); } },
+    const pick = h("select", { onchange: (e) => { serial = e.target.value; load(); loadCe(); loadCh(); } },
       [h("option", { value: "", selected: serial === "" }, "All emulators (default)")].concat(S.devices.map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || short(d.id)))));
     root.appendChild(panel("Duties",
       note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes, retries 3 times a day if it fails, then waits for the next reset. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
@@ -858,6 +853,7 @@ PAGES.duties = function (fixed) {
         h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text)))));
     }
     root.appendChild(ce);
+    root.appendChild(ch);
   };
   // what the bot did: today's state per emulator + the latest task events
   const hist = h("div", {});
@@ -909,6 +905,35 @@ PAGES.duties = function (fixed) {
   };
   const loadCe = async () => { const j = await act(api("crazy_eggs", { serial })); if (j) drawCe(j); };
   root.appendChild(ce);
-  draw(); load(); loadCe(); loadHist();
+  // Champions: how many of the daily 15 taps and 10 greetings each champion gets (this emulator or all)
+  const ch = h("div", {});
+  const drawCh = (j) => {
+    ch.innerHTML = "";
+    const set = async (o) => { const r = await act(api("champions_set", { serial, ...o })); if (r) drawCh(r); };
+    const sumT = Object.values(j.plan).reduce((a, v) => a + (v.taps || 0), 0), sumG = Object.values(j.plan).reduce((a, v) => a + (v.greets || 0), 0);
+    const usedT = Object.values(j.taps || {}).reduce((a, v) => a + v, 0), usedG = Object.values(j.greets || {}).reduce((a, v) => a + v, 0);
+    ch.appendChild(panel(serial ? "Champions – this emulator" : "Champions – all emulators",
+      serial && j.own && j.own.champions ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
+        h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "champions" })); loadCh(); } }, "Use the global setting")) : null,
+      note("Keep > Champions. Every account has the same champions but only a few are active; the bot skips the ones that are not (grey button at the bottom). The daily limit is " + j.max_taps + " taps and " + j.max_greets + " greetings for all champions together - put them all on one champion or share them out. Leave everything empty to use the champion the page opens on. Turn the 'Champions' duty on above. Needs the city map (the Keep)."),
+      h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } },
+        h("span", { class: "chip " + (sumT > j.max_taps ? "pill-bad" : "") }, "taps planned " + sumT + " / " + j.max_taps),
+        h("span", { class: "chip " + (sumG > j.max_greets ? "pill-bad" : "") }, "greets planned " + sumG + " / " + j.max_greets),
+        h("span", { class: "chip" }, "done today: " + usedT + " taps, " + usedG + " greets"),
+        Object.keys(j.plan).length ? h("button", { class: "btn sm", onclick: () => set({ clear: true }) }, "Clear all") : null),
+      j.names.map((n) => {
+        const e = j.plan[n] || {};
+        return h("div", { class: "row", style: { justifyContent: "space-between", padding: "6px 0", borderTop: "1px solid var(--line)", gap: "10px" } },
+          h("b", { style: { flex: "1" } }, n),
+          h("span", { class: "hint" }, (j.taps && j.taps[n] ? "tapped " + j.taps[n] + " " : "") + (j.greets && j.greets[n] ? "greeted " + j.greets[n] : "")),
+          h("span", { class: "lab" }, "Taps"),
+          h("input", { type: "number", class: "short", min: 0, max: j.max_taps, value: e.taps || "", placeholder: "0", onchange: (ev) => set({ name: n, taps: ev.target.value }) }),
+          h("span", { class: "lab" }, "Greets"),
+          h("input", { type: "number", class: "short", min: 0, max: j.max_greets, value: e.greets || "", placeholder: "0", onchange: (ev) => set({ name: n, greets: ev.target.value }) }));
+      })));
+  };
+  const loadCh = async () => { const j = await act(api("champions", { serial })); if (j) drawCh(j); };
+  root.appendChild(ch);
+  draw(); load(); loadCe(); loadCh(); loadHist();
   return root;
 };

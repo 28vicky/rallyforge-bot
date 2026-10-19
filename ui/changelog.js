@@ -1,5 +1,14 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.9", date: "2026-10-19",
+    new: ["Account login for the sold edition: ID + password, shows \u201cAccount: N days left\u201d in the status bar, and the owner can close an account early. The free edition is unchanged."],
+    fixed: [] },
+  { v: "2.4.8", date: "2026-10-19",
+    new: ["With the game\u2019s Auto-Join on, an emulator can still collect pictures of unknown monsters: it only looks at the rally list and never joins by itself."],
+    fixed: [] },
+  { v: "2.4.7", date: "2026-10-19",
+    new: ["Champions duty (Keep > Champions): choose how many of the daily 15 taps and 10 greetings each champion gets, per emulator. Inactive champions are skipped. Needs the city map (Scan city) so the bot can find the Keep."],
+    fixed: [] },
   { v: "2.4.6", date: "2026-10-19", new: [], fixed: ["The What\u2019s new window now really appears after an update."] },
   { v: "2.4.5", date: "2026-10-19",
     new: ["'What's new' window (this one) after every update, and a 'What's new' button on the Updates tab."],

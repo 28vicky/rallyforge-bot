@@ -553,3 +553,32 @@ function checkWhatsNew() {
     api("save", { cfg: { last_seen_version: S.version } }).catch(() => {});
   } catch (e) {}
 }
+
+
+// ---- login screen (licensed edition): cannot be closed until the account is accepted
+function showLogin(msg) {
+  if (document.getElementById("loginOv")) return;
+  const id = h("input", { type: "text", placeholder: "ID", autocomplete: "username", style: { width: "100%" } });
+  const pw = h("input", { type: "password", placeholder: "Password", autocomplete: "current-password", style: { width: "100%" } });
+  const err = h("div", { style: { color: "var(--bad)", minHeight: "20px", marginTop: "8px", fontWeight: "600" } }, msg && msg !== "Please log in." ? msg : "");
+  const go = async () => {
+    err.textContent = "Checking...";
+    try {
+      const j = await api("login", { id: id.value, pw: pw.value }, { quiet: true });
+      S.license = j.license;
+      ov.remove();
+      updateSummary();
+      renderTabs();
+    } catch (e) { err.textContent = e.message || "Could not log in."; }
+  };
+  const btn = h("button", { class: "btn pri", style: { width: "100%", marginTop: "14px" }, onclick: go }, "Log in");
+  [id, pw].forEach((x) => x.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); }));
+  const ov = h("div", { class: "ov", id: "loginOv", style: { zIndex: 500 } },
+    h("div", { class: "md", style: { maxWidth: "380px" } },
+      h("div", { class: "mh" }, "Log in to RallyForge Bot"),
+      h("div", { class: "mb" },
+        h("p", { class: "note", style: { marginTop: 0 } }, "Enter the ID and password you received. The app needs the internet to check your account."),
+        id, h("div", { style: { height: "8px" } }), pw, err, btn)));
+  document.body.appendChild(ov);
+  setTimeout(() => id.focus(), 50);
+}

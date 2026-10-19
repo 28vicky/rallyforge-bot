@@ -1,31 +1,48 @@
 {
-  "version": "2.4.6",
-  "notes": "Fix: the What's new window now appears after an update.",
+  "version": "2.4.9",
+  "notes": "Account login (sold edition) with days-left timer; Champions duty; picture collection with Auto-Join; fixes missing Join button picture on fresh installs.",
   "files": {
     "rally_bot.py": {
-      "sha256": "f4840350774e380bd436bde90f2542f1b1dd116ef0ae75bffb4c27f6a58562f9"
+      "sha256": "59c3e2af0b64b32df811fc185f09c93c5158a6c404c6b44cb579699331f0bd77"
     },
     "web_app.py": {
-      "sha256": "3ddc6208cf6c0aa65b2baa665fcce9bd60a1b8544e014aeb68f7fcf6cae651f7"
+      "sha256": "cf30087e96fd56d530488a7c99421e555d16bdf0b74f3ba7906787a5287162c3"
     },
-    "ui/app.js": {
-      "sha256": "81bcbc5b94fd7e19876f4e666d2e9d015f483e9962f5da20415936fc485359af"
-    },
-    "ui/dialogs.js": {
-      "sha256": "456a451f14e55436512ae50ab12bba15decfebf9c07b850a469d1b415838516a"
-    },
-    "ui/pages.js": {
-      "sha256": "fb394eed6d01cfab9bd144ed1b6f65d1432f4751915490f96379f0daa4066b6d"
+    "rf_license.py": {
+      "sha256": "27710f01381ba73b23c28173d724c8cd0cb8858fe782eca468a43d1666cb5a67"
     },
     "ui/app.css": {
       "sha256": "8469f0071476ff2f26acab8a8624e30accd93ccea0f5b6398f070676cdbf1034"
     },
+    "ui/app.js": {
+      "sha256": "8ac2eb3d307ad58580ed013d2bae82519f88b0b80eb9d87b119e6fffb126bc24"
+    },
+    "ui/changelog.js": {
+      "sha256": "f5aa328d9b5c9ce94306bbbfd7b65ad69afc449ffa9506500a88651b1163954f"
+    },
+    "ui/dialogs.js": {
+      "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
+    },
     "ui/index.html": {
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
-    "ui/changelog.js": {
-      "sha256": "6bc5e504c641828ee17975e698c61896f0fd3c607933d40c0062b51cff477fad"
+    "ui/pages.js": {
+      "sha256": "fdf573ad2563a0b3dc0b1e68055478e74c283ebc58f8abbb100eaded60cd33e5"
     }
   },
-  "sig": "a6b44c161b0a75f6f2d50328ae70a4eef864134199bf5cf8e951cb49e39c87a8"
+  "templates": {
+    "event_center_icon.png": {
+      "sha256": "ba4652d418bcd84af9971d507314c5aec49ef1de8273d3a1029f23d181c31219"
+    },
+    "join_button.png": {
+      "sha256": "271ba437e6793b6f2179e8e6ea923f29f49bfed07b45ac208a0f5696f1ee4ac1"
+    },
+    "rally_icon.png": {
+      "sha256": "a8e83f9d54048e01c976346571b9df98cc8112da9d0c5054a1b7ec71f836686e"
+    },
+    "war_button.png": {
+      "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
+    }
+  },
+  "sig": "480de0e90880be3cf6fef6a49f6a3677076efde5f4cca9e8a075cda7d4a9b263"
 }

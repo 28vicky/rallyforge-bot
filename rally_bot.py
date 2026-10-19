@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.6"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.9"                       # shown in the window; the updater compares this with the published version
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
 def _user_dir():
@@ -208,6 +208,7 @@ DEFAULTS = {
     "city_enabled": False,                  # run the tasks (Tasks tab) while no rally is waiting
     "city_tasks": [],                       # [{name, enabled, target, steps, every_min}], see run_step()
     "duties": {},                           # {duty_id: {on, every_min}} - ready-made duties, see DUTY_LIBRARY
+    "champions": {"plan": {}},                      # plan {champion: {taps, greets}}; empty = all on the champion the page opens on
     "crazy_eggs": {"eggs": {}, "lucky": "max", "min_hammers": 0},   # eggs {cost: {on, daily}}, lucky = egg cost / "max" / "" (none)
     "city_icons": {},                       # extra / changed right-side icon positions {name: [x, y]}
     "rally_nav_tap": [],                    # from the city to the rally list when there is no rally_icon picture [x, y]
@@ -5250,6 +5251,9 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "crazy_eggs":
         run_crazy_eggs(dev, cfg, log, stop)
         return
+    if cmd == "champions":
+        run_champions(dev, cfg, log, stop)
+        return
     if cmd == "text":
         dev.text(arg)
         _nap(stop, 0.8, 1.2)
@@ -5612,6 +5616,270 @@ def run_crazy_eggs(dev, cfg, log, stop):
         ce_save(serial, next_at=time.time() + 1800)
 
 
+# ------------------------------------------------------------ Champions (Keep > Champions)
+# Same 17 champions on every account, but only a few are ACTIVE on each one (an inactive one shows an "Unlock" button
+# in the bottom middle). Daily limits for ALL champions together: 15 taps ("Daily Empowerment Chance n/15") and 10 greets.
+# A tap only counts ~5 s after the previous one. Greet: label "Greet n/10" + a 1-minute timer, or "Greet x10" when the
+# account has the champion pack (one press uses all 10).
+CHAMPIONS = ["Cleopatra VII", "Helen", "Elisabeth", "Ariadne", "Dulcinea", "Esmeralda", "Josephine", "Cassandra", "Judith",
+             "Marcia", "Demeter", "Minerva", "Nefertiti", "Simonetta", "Goshasp", "Anna Maria Porcile", "Coatlicue"]
+CH_TAPS, CH_GREETS = 15, 10
+CH_LEFT, CH_RIGHT = (31, 486), (507, 486)          # arrows between champions (stop at both ends)
+CH_BODY = (270, 520)                               # tap the champion
+CH_GREET = (55, 782)                               # Greet button
+CH_NAME_BOX = (90, 100, 360, 80)
+CH_COUNT_BOX = (20, 590, 500, 55)                  # "Daily Empowerment Chance (n/15)"
+CH_GREET_BOX = (0, 795, 150, 70)                   # "Greet 3/10" + timer
+CH_DIALOG_TAP = (273, 866)                         # lower part of the greeting conversation
+CH_UNLOCK_BOX = (140, 850, 260, 100)
+
+
+def ch_conf(cfg):
+    out = {}
+    for name, v in ((cfg.get("champions") or {}).get("plan") or {}).items():
+        if name in CHAMPIONS and isinstance(v, dict):
+            taps = max(0, min(int(float(v.get("taps", 0) or 0)), CH_TAPS))
+            greets = max(0, min(int(float(v.get("greets", 0) or 0)), CH_GREETS))
+            if taps or greets:
+                out[name] = {"taps": taps, "greets": greets}
+    return {"plan": out}
+
+
+def ch_row(serial):
+    return (load_duty_state().get(serial or "default") or {}).get("champions") or {}
+
+
+def ch_save(serial, **kw):
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        data.setdefault(serial or "default", {}).setdefault("champions", {}).update(kw)
+        try:
+            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def _ch_norm(s):
+    return re.sub(r"[^a-z]", "", s.lower())
+
+
+def ch_name(img):
+    """Name of the champion on the page (read from the banner), or None."""
+    import difflib
+    x, y, w, h = CH_NAME_BOX
+    lines = [t for t, _ in ocr_lines(img[y:y + h, x:x + w], 3.0)]
+    norm = {_ch_norm(n): n for n in CHAMPIONS}
+    txt = _ch_norm(" ".join(lines))
+    for k, n in sorted(norm.items(), key=lambda kv: -len(kv[0])):
+        if k in txt:
+            return n
+    for l in lines:
+        m = difflib.get_close_matches(_ch_norm(l), list(norm), n=1, cutoff=0.72)
+        if m:
+            return norm[m[0]]
+    return None
+
+
+def ch_on_page(img):
+    return bool(find_text(img, ["Champion"], region=(150, 20, 240, 80), cutoff=0.75))
+
+
+def ch_inactive(img):
+    return bool(find_text(img, ["Unlock"], region=CH_UNLOCK_BOX, cutoff=0.7))
+
+
+def ch_taps_used(img):
+    x, y, w, h = CH_COUNT_BOX
+    txt = " ".join(t for t, _ in ocr_lines(img[y:y + h, x:x + w], 3.0))
+    m = re.search(r"(\d{1,2})\s*/\s*15", txt)
+    return int(m.group(1)) if m else None
+
+
+def ch_greet_label(img):
+    """-> {"pack": bool, "n": greets used or None, "wait": seconds left on the timer}"""
+    x, y, w, h = CH_GREET_BOX
+    txt = " ".join(t for t, _ in ocr_lines(img[y:y + h, x:x + w], 3.0)).lower().replace(";", ":")
+    out = {"pack": bool(re.search(r"x\s*10", txt)), "n": None, "wait": 0}
+    m = re.search(r"(\d{1,2})\s*/\s*10", txt)
+    if m:
+        out["n"] = int(m.group(1))
+    m = re.search(r"(\d{1,2})\s*[:.]\s*(\d{2})\s*[:.]\s*(\d{2})", txt)
+    if m:
+        out["wait"] = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+    return out
+
+
+def ch_snap(img, tag):
+    try:
+        d = USER / "debug"
+        d.mkdir(exist_ok=True)
+        cv2.imwrite(str(d / f"champions_{tag}.png"), img)
+    except Exception:
+        pass
+
+
+def ch_open_page(dev, stop, log):
+    """The Keep's ring menu is open: tap Champions. True when the Champion page shows."""
+    for _ in range(2):
+        shot = dev.screenshot()
+        ch_snap(shot, "0_ring")
+        if ch_on_page(shot) and ch_name(shot):
+            return True
+        p = find_text(shot, ["Champions", "Champion"], region=(0, 150, 540, 450), cutoff=0.7)
+        if not p:
+            log("[i]   Champions: the Champions icon is not in the Keep's menu")
+            return False
+        dev.tap(p[0], p[1] - 42)                             # the icon sits just above its caption
+        _nap(stop, 2.0, 2.8)
+        shot = dev.screenshot()
+        if ch_on_page(shot) and ch_name(shot):
+            return True
+    return False
+
+
+def ch_goto(dev, stop, log, target):
+    """Walk to a champion with the arrows (they stop at both ends). -> True when the page shows `target`."""
+    want = CHAMPIONS.index(target)
+    for _ in range(22):
+        if stop.is_set():
+            return False
+        cur = ch_name(dev.screenshot())
+        if cur == target:
+            return True
+        if cur is None:
+            _nap(stop, 1.0, 1.4)
+            continue
+        dev.tap(*(CH_RIGHT if CHAMPIONS.index(cur) < want else CH_LEFT))
+        _nap(stop, 1.1, 1.5)
+    return False
+
+
+def ch_do_taps(dev, stop, log, name, want, serial, day):
+    """Tap the champion `want` times (stops at 15 a day in total). -> taps done."""
+    done = 0
+    stuck = 0
+    before = None                                          # the counter is only visible for a few seconds after a tap
+    for _ in range(want + 6):
+        if done >= want or stop.is_set():
+            break
+        dev.tap(*CH_BODY)
+        _nap(stop, 1.0, 1.4)
+        shot = dev.screenshot()
+        if find_text(shot, ["interact with"], region=(0, 300, 540, 300), cutoff=0.7):          # "Are you sure you want to interact...?"
+            box = find_text(shot, ["Don't show this again", "Don't show"], region=(100, 420, 440, 120), cutoff=0.65)
+            dev.tap(*((box[0] - 150, box[1]) if box and box[0] > 200 else (216, 486)))           # the tick box is left of its text
+            _nap(stop, 0.5, 0.8)
+            p = find_text(dev.screenshot(), ["Confirm"], region=(150, 500, 300, 120), cutoff=0.7) or (380, 562)
+            dev.tap(*p)
+            _nap(stop, 1.0, 1.4)
+            shot = dev.screenshot()
+        after = ch_taps_used(shot)                         # "Daily Empowerment Chance (n/15)" shows after a counted tap
+        if after is None or (before is not None and after <= before):
+            stuck += 1
+            if stuck >= 3:
+                log("[i]   Champions: taps are not counting (or all 15 are used) - stopping the taps")
+                break
+        else:
+            stuck = 0
+            done += 1
+            used = {**(ch_row(serial).get("taps") or {})} if ch_row(serial).get("taps_day") == day else {}
+            used[name] = used.get(name, 0) + 1
+            ch_save(serial, taps_day=day, taps=used)
+            before = after
+            if after >= CH_TAPS:
+                log("[i]   Champions: the 15 daily taps are used up")
+                break
+        _nap(stop, 4.4, 4.9)                                 # a tap only counts after the previous message has faded
+    return done
+
+
+def ch_dialogue(dev, stop):
+    """Tap through the greeting conversation until the Greet button is back."""
+    for _ in range(9):
+        if stop.is_set():
+            return
+        dev.tap(*CH_DIALOG_TAP)
+        _nap(stop, 1.6, 2.2)
+        if find_text(dev.screenshot(), ["Greet"], region=CH_GREET_BOX, cutoff=0.7):
+            return
+
+
+def ch_do_greets(dev, stop, log, name, want, serial, day):
+    """Greet the champion `want` times (stops at 10 a day in total). -> greets done."""
+    done = 0
+    for _ in range(want + 4):
+        if done >= want or stop.is_set():
+            break
+        lab = ch_greet_label(dev.screenshot())
+        if lab["n"] is not None and lab["n"] >= CH_GREETS:
+            log("[i]   Champions: the 10 daily greetings are used up")
+            break
+        if lab["wait"] > 0:
+            log(f"[i]   Champions: greet timer, waiting {lab['wait']} s")
+            if stop.wait(min(lab["wait"], 75) + 3):
+                break
+        dev.tap(*CH_GREET)
+        _nap(stop, 1.6, 2.2)
+        ch_dialogue(dev, stop)
+        done += 1
+        used = {**(ch_row(serial).get("greets") or {})} if ch_row(serial).get("greets_day") == day else {}
+        used[name] = used.get(name, 0) + (CH_GREETS if lab["pack"] else 1)
+        ch_save(serial, greets_day=day, greets=used)
+        if lab["pack"]:
+            log("[i]   Champions: 'Greet x10' (champion pack) - one press used all 10 greetings")
+            return CH_GREETS
+        _nap(stop, 1.0, 1.4)
+    return done
+
+
+def run_champions(dev, cfg, log, stop):
+    """Keep's ring menu is open: tap Champions, then spend the day's taps and greetings on the champions you picked
+    (or, with nothing picked, on the champion the page opens on / the first active one)."""
+    serial = getattr(dev, "serial", "default")
+    day = _game_day()
+    if not ch_open_page(dev, stop, log):
+        ch_snap(dev.screenshot(), "1_failed")
+        raise RuntimeError("the Champion page did not open")
+    plan = ch_conf(cfg)["plan"]
+    row = ch_row(serial)
+    taps_used = row.get("taps") or {} if row.get("taps_day") == day else {}
+    greets_used = row.get("greets") or {} if row.get("greets_day") == day else {}
+    if not plan:                                           # default: everything on the champion shown, or the first active one
+        cur = ch_name(dev.screenshot())
+        plan = {cur: {"taps": CH_TAPS, "greets": CH_GREETS}} if cur else {}
+    order = sorted(plan, key=lambda n: CHAMPIONS.index(n))
+    if len(order) > 1 and ch_name(dev.screenshot()) in order and CHAMPIONS.index(ch_name(dev.screenshot())) > (CHAMPIONS.index(order[0]) + CHAMPIONS.index(order[-1])) / 2:
+        order.reverse()                                    # start from the end that is nearer
+    total_taps = total_greets = 0
+    for name in order:
+        if stop.is_set():
+            break
+        need_t = max(0, plan[name]["taps"] - int(taps_used.get(name, 0)))
+        need_g = max(0, plan[name]["greets"] - int(greets_used.get(name, 0)))
+        if not (need_t or need_g):
+            continue
+        if not ch_goto(dev, stop, log, name):
+            log(f"[!]  Champions: could not reach {name}")
+            continue
+        shot = dev.screenshot()
+        ch_snap(shot, "2_" + _ch_norm(name))
+        if ch_inactive(shot):
+            log(f"[i]   Champions: {name} is not active on this account - skipped")
+            continue
+        log("@act " + json.dumps({"k": "step", "text": f"Champions: {name} - {need_t} tap(s), {need_g} greet(s)"}))
+        if need_t:
+            n = ch_do_taps(dev, stop, log, name, need_t, serial, day)
+            total_taps += n
+            log(f"[+]  Champions: {name} - {n} of {need_t} taps")
+        if need_g and not stop.is_set():
+            n = ch_do_greets(dev, stop, log, name, need_g, serial, day)
+            total_greets += n
+            log(f"[+]  Champions: {name} - {n} of {need_g} greets")
+    shot = dev.screenshot()
+    used = ch_taps_used(shot)
+    log(f"[+]  Champions done: {total_taps} tap(s), {total_greets} greet(s) this run" + (f"; taps today {used}/{CH_TAPS}" if used is not None else ""))
+
+
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
 DUTY_FILE = USER / "duties_state.json"
 _DUTY_LOCK = threading.Lock()
@@ -5633,6 +5901,9 @@ DUTY_LIBRARY = [
     {"id": "alliance_help", "group": "Daily activities", "title": "Alliance help", "every_min": 60, "verified": False,
      "note": "Alliance > Help > Help all.",
      "target": "icon:Alliance", "steps": ["wait 1.5", "tap_text Help", "wait 1.2", "tap_text Help All|Help all", "wait 1"]},
+    {"id": "champions", "group": "Daily activities", "title": "Champions", "every_min": 0, "verified": False,
+     "note": "Keep > Champions: 15 taps and 10 greetings a day on the champions you pick (only active ones). Needs the city map (Keep).",
+     "target": "building:Keep", "tap_dy": 0, "steps": ["wait 1.2", "champions"]},
     {"id": "crazy_eggs", "group": "Common tasks", "title": "Crazy Eggs", "every_min": 1, "verified": False,
      "note": "Smashes the ready eggs, closes the reward panel, comes back when each timer ends; Lucky Hammer once a day on the egg you pick.",
      "target": "tpl:event_center_icon|Center",
@@ -6251,6 +6522,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     tab_check, tab_logged = [0.0], [False]
     aj_next = [0.0]
+    aj_scan = [0.0]                       # last time the rally list was read for monster pictures while the game's Auto-Join joins
     city_last, city_block = {}, [0.0]
     city_day = [_game_day()]
     last_watch = time.time()
@@ -6422,6 +6694,14 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     continue
             if cfg.get("game_auto_join") and rallies_on:          # the game joins by itself; we only keep it switched on
                 if st == "rally_list":
+                    if cfg.get("save_unknown_monsters") and now - aj_scan[0] >= 12:       # picture collector: look at the list, never join
+                        aj_scan[0] = now
+                        try:
+                            for hit in find_all(screen, "join_button", cfg["threshold"], cfg["search_region"]):
+                                if identify_monster(screen, hit, cfg)[0] is None:
+                                    collect_unknown_monster(screen, hit, cfg, log)
+                        except Exception as e:
+                            log(f"[i] Picture collector: {e}")
                     if now >= aj_next[0]:
                         aj_next[0] = now + auto_join_renew(dev, cfg, log, stop, act)
                     elif cfg.get("city_enabled") and now >= city_block[0] and (due := city_tasks_due(cfg, city_last, serial)):

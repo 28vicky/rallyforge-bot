@@ -73,7 +73,8 @@ class Controller:
     def __init__(self):
         self.lock = threading.RLock()
         self.cfg = rb.load_config()
-        self.lic = rf_license.License(rb.USER, rb.RES)
+        self.lic = rf_license.AccountLicense(rb.USER, rb.RES)
+        self.lic.set_source(self.cfg.get("update_url"))
         devs = [d for d in (self.cfg.get("devices") or []) if d != "auto"]
         self.first_run = not devs and not rb.CONFIG.exists()
         if not devs and not self.first_run:
@@ -1059,7 +1060,7 @@ class Api:
 
     def _own(self, scope):
         ov = (self.c.cfg.get("per_device") or {}).get(scope, {}) if scope else {}
-        return {"duties": "duties" in ov, "crazy_eggs": "crazy_eggs" in ov}
+        return {"duties": "duties" in ov, "crazy_eggs": "crazy_eggs" in ov, "champions": "champions" in ov}
 
     def duties(self, p):
         scope = self._scope(p)
@@ -1098,7 +1099,7 @@ class Api:
     def scope_reset(self, p):
         """Drop this emulator's own duties / Crazy Eggs copy so it follows the global setting again."""
         scope, key = self._scope(p), str(p.get("key", ""))
-        if scope and key in ("duties", "crazy_eggs"):
+        if scope and key in ("duties", "crazy_eggs", "champions"):
             per = {s: dict(v) for s, v in (self.c.cfg.get("per_device") or {}).items()}
             per.get(scope, {}).pop(key, None)
             self.c.save({"per_device": per})
@@ -1129,6 +1130,45 @@ class Api:
         self._save_scoped(scope, "crazy_eggs", c)
         return self.crazy_eggs(p)
 
+    def champions(self, p):
+        scope = self._scope(p)
+        conf = rb.ch_conf(self._eff(scope))
+        serial = scope or (self.c.devices[0]["id"] if self.c.devices else "default")
+        row = rb.ch_row(serial)
+        day = rb._game_day()
+        return {"plan": conf["plan"], "names": rb.CHAMPIONS, "max_taps": rb.CH_TAPS, "max_greets": rb.CH_GREETS, "own": self._own(scope),
+                "taps": row.get("taps") if row.get("taps_day") == day else {}, "greets": row.get("greets") if row.get("greets_day") == day else {}}
+
+    def champions_set(self, p):
+        scope = self._scope(p)
+        plan = {k: dict(v) for k, v in rb.ch_conf(self._eff(scope))["plan"].items()}
+        name = str(p.get("name", ""))
+        if name in rb.CHAMPIONS:
+            e = plan.setdefault(name, {"taps": 0, "greets": 0})
+            if "taps" in p:
+                e["taps"] = max(0, min(int(float(p["taps"] or 0)), rb.CH_TAPS))
+            if "greets" in p:
+                e["greets"] = max(0, min(int(float(p["greets"] or 0)), rb.CH_GREETS))
+            if not e["taps"] and not e["greets"]:
+                plan.pop(name, None)
+        elif p.get("clear"):
+            plan = {}
+        self._save_scoped(scope, "champions", {"plan": plan})
+        return self.champions(p)
+
+    def login(self, p):
+        try:
+            self.c.lic.login(p.get("id", ""), str(p.get("pw", "")))
+        except ValueError as e:
+            raise ApiError(str(e))
+        self.c.toast("ok", "Logged in.")
+        return {"license": self.c.lic.info()}
+
+    def logout(self, p):
+        self.c.stop_all()
+        self.c.lic.logout()
+        return {"license": self.c.lic.info()}
+
     def license_set(self, p):
         try:
             self.c.lic.set_key(str(p.get("key", "")))
@@ -1155,7 +1195,8 @@ class Api:
                 "tg": {"status": c.tg_status, "ready": c.tg_ready},
                 "ram": ram, "city": c.jobs["city"]["running"], "city_progress": c.jobs["city"].get("progress"),
                 "gen_scan": {"running": c.jobs["generals"]["running"], "count": c.jobs["generals"].get("count", 0)},
-                "catalog": {"running": c.jobs["catalog"]["running"], "count": c.jobs["catalog"].get("count", 0)}}
+                "catalog": {"running": c.jobs["catalog"]["running"], "count": c.jobs["catalog"].get("count", 0)},
+                "lic": c.lic.info() if c.lic.on else None}
 
     # ---- settings / devices
     def save(self, p):
@@ -1756,6 +1797,20 @@ def main():
         pass
     if ctl.lic.on:
         rb.INSTANCE_GUARD = ctl.allowed
+
+        def _lic_watch():                               # account check every hour: expired / closed accounts stop the bots
+            if ctl.quit_event.wait(45):
+                return
+            while True:
+                try:
+                    if not ctl.lic.recheck():
+                        ctl.log("[!] The account is no longer valid - stopping all bots. Log in again.")
+                        ctl._safe(ctl.stop_all)
+                except Exception:
+                    pass
+                if ctl.quit_event.wait(3600):
+                    return
+        threading.Thread(target=_lic_watch, daemon=True).start()
     port, key = start_server(ctl)
     url = f"http://127.0.0.1:{port}/?k={key}"
     try:
