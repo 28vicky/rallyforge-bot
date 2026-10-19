@@ -274,6 +274,8 @@ function instancePage(serial) {
   const head = h("div", { class: "row", style: { margin: "0 0 14px", gap: "16px", alignItems: "center" } },
     h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", color: "var(--accent2)", margin: "0" } }, dev.name || "Emulator " + d.idx),
     status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial));
+  const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
+    h("b", {}, "\u26A0 Out of stamina. "), "This emulator has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
   // ---- overrides
   const fields = h("div", { class: "grid2" });
@@ -432,7 +434,7 @@ function instancePage(serial) {
     for (const el of t[2]()) if (el) body.appendChild(el);
   };
   for (const [k, l] of ITABS) tabRow.appendChild(h("button", { class: "tab", "data-k": k, onclick: () => showTab(k) }, l));
-  const wrap = h("div", {}, head, bar, panel(null, activityBox(serial, "Activity")), tabRow, body);
+  const wrap = h("div", {}, head, warn, bar, panel(null, activityBox(serial, "Activity")), tabRow, body);
   showTab(S.instTab);
   setTimeout(refreshInstanceControls, 0);
   return wrap;
@@ -443,8 +445,10 @@ function refreshInstanceControls() {
   const d = S.devStatus.find((x) => x.id === S.sel);
   if (d) {
     const G = { run: "\u25B6 ", pause: "\u275A\u275A ", stop: "\u25A0 ", error: "! ", idle: "\u25CB " };
-    s.className = "state-pill st-" + d.state;
-    s.textContent = (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
+    const ns = d.state === "run" && d.no_stamina;
+    s.className = "state-pill st-" + (ns ? "pause" : d.state);
+    s.textContent = ns ? "\u26A0 NO STAMINA" + (d.joins ? `   |   joins ${d.joins}` : "") : (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
+    const w = $("#instWarn"); if (w) w.style.display = ns ? "" : "none";
     if (d.state === "pause" && d.resume_at) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.resume_at), "data-pre": " - runs again in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
   }
   if (typeof paintRunState === "function") paintRunState();

@@ -256,7 +256,7 @@ class Controller:
             if not d:
                 continue
             out.append({"id": s, "name": d["name"], "idx": d["idx"], "state": d["state"], "joins": d["joins"],
-                        "queued": s in self.start_queue, "paused": d["ctl"].paused,
+                        "queued": s in self.start_queue, "paused": d["ctl"].paused, "no_stamina": getattr(d["ctl"], "no_stamina", 0) >= 3,
                         "resume_in": (max(1, int((d["resume_at"] - time.time()) / 60) + 1) if d.get("resume_at") and d["ctl"].paused else 0),
                         "resume_at": (int(d["resume_at"]) if d.get("resume_at") and d["ctl"].paused else 0)})
         return out

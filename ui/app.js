@@ -346,6 +346,7 @@ async function loadProfileFlow() {
 // ------------------------------------------------------------------ sidebar / tabs / pages
 function devTag(d) {
   const t = { run: "RUNNING", pause: "PAUSED", stop: "STOPPED", error: "PROBLEM" }[d.state] || "";
+  if (d.state === "run" && d.no_stamina) return "NO STAMINA";
   return d.queued ? "QUEUED" : t;
 }
 function renderSide() {
@@ -357,7 +358,7 @@ function renderSide() {
     h("span", { class: "nm" }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   for (const d of S.devStatus) {
-    L.appendChild(item(d.id, `${d.idx}. ${d.name || short(d.id)}`, d.state, [devTag(d), (d.joins && !(d.state === "pause" && d.resume_at)) ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
+    L.appendChild(item(d.id, `${d.idx}. ${d.name || short(d.id)}`, (d.state === "run" && d.no_stamina) ? "pause" : d.state, [devTag(d), (d.joins && !(d.state === "pause" && d.resume_at)) ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
     sideDrag(L.lastChild, d.id);
     if (d.state === "pause" && d.resume_at) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.resume_at) })); }
   }

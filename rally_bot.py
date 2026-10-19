@@ -1968,8 +1968,10 @@ class DeviceControl:
         self.stop = threading.Event()
         self.run = threading.Event()
         self.run.set()
+        self.no_stamina = 0                 # rallies in a row that failed for lack of stamina (UI shows "NO STAMINA" from 3)
 
     def reset(self):
+        self.no_stamina = 0
         self.stop.clear()
         self.run.set()
 
@@ -7487,6 +7489,11 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         log(f"[!] Not enough stamina ({sta[0]:,} of {sta[1]:,}) - using stamina items")
                         if not refill_stamina(dev, cfg, log, stop, sta[1]):
                             log("[!] Could not get enough stamina - skipping this rally")
+                            if ctl is not None:
+                                ctl.no_stamina += 1
+                                if ctl.no_stamina == 3:
+                                    log("[!] NO STAMINA - this emulator is out of stamina (and stamina items). It keeps trying, but it cannot join until it has stamina.")
+                                    notify(cfg, serial, "Out of stamina - cannot join rallies until it recovers (add stamina or items).")
                             fail("Not enough stamina")
                             slower("Not enough stamina")
                             recover()
@@ -7562,6 +7569,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
             if ok:
                 joins += 1
+                if ctl is not None:
+                    ctl.no_stamina = 0
                 remember_rally(base_name, t_join + left, "joined")        # joined: never try this same rally again
                 speed_up()
                 log(f"[+] Joined rally #{joins}")

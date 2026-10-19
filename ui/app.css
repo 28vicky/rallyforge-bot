@@ -403,3 +403,5 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 
 /* status bar: update available */
 .sb-upd { cursor: pointer; color: var(--accent2); font-weight: 700; text-decoration: underline; }
+.warnbar{margin:0 0 14px;padding:11px 14px;border-radius:var(--r2);border:1px solid var(--warn);background:rgba(217,165,102,.12);color:var(--fg);font-size:14.5px;line-height:1.45}
+.warnbar b{color:var(--warn)}

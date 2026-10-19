@@ -1,7 +1,7 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
   { v: "2.4.49", date: "2026-10-20",
-    new: ["Each emulator page has a Profile menu next to Map by hand with Save profile and Load profile. The emulator name is bigger and the running status sits right next to it."],
+    new: ["Each emulator page has a Profile menu next to Map by hand with Save profile and Load profile. The emulator name is bigger and the running status sits right next to it.", "Themes: new Text size (makes the whole window bigger or smaller) and Emulator name size options.", "An emulator that keeps failing for lack of stamina now shows NO STAMINA (amber tag in the list, in its status and a warning on its page) and sends a Telegram/Discord alert once. It goes back to normal by itself after its next join."],
     fixed: [] },
   { v: "2.4.48", date: "2026-10-20",
     new: [],
