@@ -1,9 +1,9 @@
 {
-  "version": "2.4.41",
-  "notes": "Fixes repeated update downloads while waiting to restart.",
+  "version": "2.4.42",
+  "notes": "Troop count re-read before skipping a preset; more forgiving stamina window.",
   "files": {
     "rally_bot.py": {
-      "sha256": "54444225fe025dde26544cdb050fd755b0349f4b3f6df4bfa316078fa1c3a545"
+      "sha256": "120af3ee8f2ea7827a180f8ed428b843416b13569e4d4244b00c6add0e293ad9"
     },
     "web_app.py": {
       "sha256": "16ff8e1cfdace8f50d055397c2ffbb81d5b3cc681041b5d984f0746636ec3c49"
@@ -18,7 +18,7 @@
       "sha256": "09a26609ec60e055867c0ae5b4ab7afafc36890832938e52c9248cfe523a6a1e"
     },
     "ui/changelog.js": {
-      "sha256": "d0a4dbff321c89d6c1f47f2f2ec9e5210de4c31cb52a41a48c25dc6795b64fe8"
+      "sha256": "7cd8dbe8f143c75d57cbcd23620cd65d3b3cf0114af2967b9e39e4319355b5e1"
     },
     "ui/dialogs.js": {
       "sha256": "93b85f9748c2d4841661e449f9475108f64da23dc46165c5470327f2a38aebf0"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "b9ca163d8a2113e8a48dbbafc8b86dc1d751820dce07f3c22ad2e4150da6d3f8"
+  "sig": "3a390799ff101164c0bf7e8c155b7d143bcceb13953e2bcbcd8a64fd0942f484"
 }

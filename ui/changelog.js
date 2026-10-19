@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.42", date: "2026-10-20",
+    new: [],
+    fixed: ["A preset was passed over (and then every preset looked \u201cresting\u201d, so rallies were skipped) when the troop count was read while the march screen was still loading. The count is now read again twice before a preset is skipped.", "Using stamina items failed on some accounts (\u201cthe amount window did not open\u201d for every size). The window check is a little more forgiving, looks again after a moment, and Use is tapped once more before giving up."] },
   { v: "2.4.41", date: "2026-10-20",
     new: [],
     fixed: ["An update that is already installed is no longer downloaded again when you press Check for updates or click the status bar a second time while the app waits for a quiet moment to restart. It just restarts."] },

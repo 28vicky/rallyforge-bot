@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.41"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.42"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -1691,8 +1691,8 @@ def _refill_once(dev, cfg, log, stop, needed):
         return ROW_Y.get(size)
 
     def _dialog_open(shot):
-        return bool(find_text(shot, ["Own:", "Own"], region=(60, 310, 300, 80), cutoff=0.7)) and \
-            bool(find_text(shot, ["You can receive"], region=(40, 430, 440, 60), cutoff=0.85))
+        return bool(find_text(shot, ["Own:", "Own"], region=(60, 310, 300, 80), cutoff=0.6)) and \
+            bool(find_text(shot, ["You can receive", "can receive"], region=(40, 410, 440, 100), cutoff=0.72))
 
     for size in sizes:
         if stop.is_set():
@@ -1705,6 +1705,13 @@ def _refill_once(dev, cfg, log, stop, needed):
         dev.tap(*(use if use else (426, ry + 49)))
         nap(1.0, 1.4)
         shot = dev.screenshot()
+        if not _dialog_open(shot):                          # slow emulator: look again, then tap Use once more before giving up
+            nap(1.0, 1.4)
+            shot = dev.screenshot()
+        if not _dialog_open(shot) and screen_state(shot, cfg) != "march" and _row_y(shot, size):
+            dev.tap(*(use if use else (426, ry + 49)))
+            nap(1.2, 1.6)
+            shot = dev.screenshot()
         if not _dialog_open(shot):
             _stamina_snap(shot, "no_dialog")
             log(f"[i] Stamina: the amount window for {size} did not open - trying the next size")
@@ -7394,6 +7401,11 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     continue
                 if pcfg.get("max_troops"):
                     tr = troops_in_march(dev.screenshot())
+                    for _again in range(2):                    # the number can still be the old one while the preset loads: look again before judging
+                        if tr is None or tr <= pcfg["max_troops"]:
+                            break
+                        nap(0.8, 1.1)
+                        tr = troops_in_march(dev.screenshot())
                     if tr is not None and tr > pcfg["max_troops"]:
                         log(f"[!] Preset {cand} already has {tr:,} troops (limit {pcfg['max_troops']}) - skipped")
                         used.mark_bad(cand, cfg["bad_preset_seconds"])
