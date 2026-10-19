@@ -373,6 +373,8 @@ function instancePage(serial) {
     ["monsters", "Monsters", () => [PAGES.monsters(serial)]],
     ["tasks", "Tasks", () => [PAGES.tasks(serial)]],
     ["duties", "Duties", () => [PAGES.duties(serial)]],
+    ["crazy_eggs", "Crazy Eggs", () => [PAGES.duties(serial, "crazy_eggs")]],
+    ["champions", "Champions", () => [PAGES.duties(serial, "champions")]],
   ];
   if (!S.instTab) { try { S.instTab = localStorage.getItem("rf_inst_tab") || ""; } catch (e) { S.instTab = ""; } }
   if (!ITABS.some((t) => t[0] === S.instTab)) S.instTab = "run";
@@ -870,7 +872,7 @@ PAGES.license = function () {
 
 
 // ====================================================================== duties
-PAGES.duties = function (fixed) {
+PAGES.duties = function (fixed, only) {
   const root = h("div", {});
   let serial = fixed || "";                       // "" = all emulators (the default); an emulator id = that emulator's own copy
   let rows = [], own = {};
@@ -880,7 +882,7 @@ PAGES.duties = function (fixed) {
     if (fixed === undefined) root.appendChild(hist);
     const pick = h("select", { onchange: (e) => { serial = e.target.value; load(); loadCe(); loadCh(); } },
       [h("option", { value: "", selected: serial === "" }, "All emulators (default)")].concat(S.devices.map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || short(d.id)))));
-    root.appendChild(panel("Duties",
+    if (!only) root.appendChild(panel("Duties",
       note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes, retries 3 times a day if it fails, then waits for the next reset. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
       h("div", { class: "row" }, fixed !== undefined ? null : h("span", { class: "lab" }, "Settings for"), fixed !== undefined ? null : pick,
         serial && own.duties ? h("span", { class: "chip" }, "own settings") : null,
@@ -888,14 +890,15 @@ PAGES.duties = function (fixed) {
       note(serial ? "Changes here apply to this emulator only and replace the global list for it. Pick 'All emulators' to change the default for every emulator that has no own settings." : "These are the defaults for every emulator. Pick one emulator to give it different settings."),
     ));
     for (const g of GROUPS) {
-      const list = rows.filter((r) => r.group === g);
+      const list = rows.filter((r) => r.group === g && (!only || r.id === only));
       if (!list.length) continue;
-      root.appendChild(panel(g, list.flatMap((r) => [h("div", { class: "row", style: { justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid var(--line)" } },
+      root.appendChild(panel(only ? list[0].title || g : g, list.flatMap((r) => [h("div", { class: "row", style: { justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid var(--line)" } },
         h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" }), h("b", {}, r.title)),
         h("span", { class: "hint", style: { flex: "1", margin: "0 14px" } }, r.note, " · ", r.schedule),
         r.verified ? null : h("span", { class: "chip", title: "Steps are a first guess and have not been watched on a real emulator yet" }, "untested"),
         h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text)),
-        (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null].filter(Boolean))));
+        (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null,
+        (only && !r.on) ? note("Switch it on above and its settings open here. " + (serial ? "This emulator can have its own settings." : "")) : null].filter(Boolean))));
     }
   };
   // what the bot did: today's state per emulator + the latest task events

@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.26", date: "2026-10-19",
+    new: ["Every emulator now has its own Crazy Eggs tab and Champions tab (next to Duties): switch the duty on and set the eggs, Lucky Hammer, taps and greets for that emulator only."],
+    fixed: [] },
   { v: "2.4.25", date: "2026-10-19",
     new: ["Settings of a switched-on duty (Crazy Eggs, Champions) now open inside its own row, so everything looks connected."],
     fixed: ["Fresh install: switching a duty on before opening Presets no longer says \u201cGeneral tab must be a number\u201d."] },

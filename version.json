@@ -1,9 +1,9 @@
 {
-  "version": "2.4.25",
-  "notes": "Duty settings open inside their own row; fresh-install fix",
+  "version": "2.4.26",
+  "notes": "Crazy Eggs and Champions tabs inside every emulator",
   "files": {
     "rally_bot.py": {
-      "sha256": "45474807b7fd5d46e1198511eb44fa4d29e9e7e34fe85da528479e3720782b38"
+      "sha256": "4254fab34a4058c98024ff4fe95ab8932cb2ff11a089cad4ad7efd7cd1540a45"
     },
     "web_app.py": {
       "sha256": "8e7251bd821e4547968b5634faaaa40194427fe3f6e1960cea45b8a1f7d28810"
@@ -18,7 +18,7 @@
       "sha256": "8553ee27d679d55f762ac0bad20c553d620b789b19fa7dd7810a70e4f7ca97c3"
     },
     "ui/changelog.js": {
-      "sha256": "a7884c5bad542223e3ebf209219d112e3be14a3e317ef2d0070a6456af8229be"
+      "sha256": "248808ad3cfd391db4f6741d5299556c657eb2ef210cec156c88cb43ac069127"
     },
     "ui/dialogs.js": {
       "sha256": "1258a3ca4f8617b1e4aa0c833418f0cde8dee641931293a1258dde59959d7597"
@@ -27,7 +27,7 @@
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "0b2f264e5828c1ce19d606fa133186e33da4ed98370ddfea6fc19069f5c20867"
+      "sha256": "19fd97667749679a49ea7dea2c8adee869f19254f5c3c5ed9a03e4031ba87003"
     }
   },
   "monsters": {
@@ -114,5 +114,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "c4d16e0f8d7fbd29abe1567fc6295667d4931bd2d6be2de2fef6de3a84aedc1f"
+  "sig": "416da5e76721105ded50346e86217dcb7b2fcaea2de5aad6e2c161f5a74d6f18"
 }
