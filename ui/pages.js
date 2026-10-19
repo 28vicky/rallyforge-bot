@@ -333,7 +333,32 @@ function instancePage(serial) {
         h("div", { class: "hint", style: { fontSize: "11.5px", opacity: ".65" } }, "Only for settings that have no field above, e.g. {\"threshold\": 0.8}. Leave empty if unsure."))),
     h("div", { class: "row", style: { marginTop: "14px" } }, btn("Copy settings from...", copyMenu, "sm"),
       btn("Use these on ALL emulators", () => { for (const x of S.devices) if (x.id && x.id !== serial) S.cfg.per_device[x.id] = clone(S.cfg.per_device[serial] || {}); toast("Copied to all other emulators.", "ok"); }, "sm"),
-      btn("Clear (use global)", () => { S.cfg.per_device[serial] = {}; rerender(); }, "sm"), btn("Save", saveAll, "sm pri")));
+      btn("Clear (use global)", () => { S.cfg.per_device[serial] = {}; rerender(); }, "sm"),
+      btn("Save profile...", async () => {
+        const name = await promptBox("Save profile", "Name for these settings of this emulator:", "");
+        if (!name) return;
+        const j = await act(api("inst_profile_save", { serial, name, settings: S.cfg.per_device[serial] || {} }));
+        if (j) toast(`Profile '${j.name}' saved. Load it on any emulator with \u201cLoad profile...\u201d.`, "ok");
+      }, "sm"),
+      btn("Load profile...", async () => {
+        const j = await act(api("inst_profiles"));
+        if (!j) return;
+        if (!j.profiles.length) return toast("No emulator profiles yet - press \u201cSave profile...\u201d on an emulator first.");
+        let chosen = j.profiles[0], names = j.profiles;
+        const list = h("div", {});
+        const draw = () => { list.innerHTML = ""; names.forEach((n) => list.appendChild(h("div", { class: "li" + (n === chosen ? " sel" : ""), onclick: () => { chosen = n; draw(); } }, n))); };
+        draw();
+        modal({ title: "Load profile into this emulator", body: h("div", {}, h("p", { class: "note" }, "This replaces the settings of THIS emulator with the saved ones (its generals, presets and own settings). Other emulators are not changed."), list), buttons: [
+          { label: "Delete", onclick: async () => { if (await confirmBox("Delete profile", `Delete profile '${chosen}'?`)) await act(api("inst_profile_delete", { name: chosen })); } },
+          { label: "Cancel" },
+          { label: "Load", cls: "pri", onclick: async () => {
+              if (!chosen) return;
+              AUTO.busy = true;
+              const r = await act(api("inst_profile_load", { serial, name: chosen })).finally(() => { AUTO.busy = false; });
+              if (r) { S.cfg.per_device[serial] = r.settings || {}; AUTO.saved = AUTO.seen = cfgSnap(); rerender(); toast(`Profile '${chosen}' loaded into this emulator.`, "ok"); }
+            } }] });
+      }, "sm"),
+      btn("Save", saveAll, "sm pri")));
   // ---- own presets & generals (stored in this emulator's overrides; blank = the global ones)
   const PKEYS = ["bot_presets", "preset_mode", "general_main", "general_assistant", "general_main_tab", "general_assistant_tab", "general_main_fav",
     "general_assistant_fav", "general_on_fail", "general_idle_only", "general_assistant_optional", "general_view", "max_troops"];

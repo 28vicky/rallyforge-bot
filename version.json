@@ -1,12 +1,12 @@
 {
-  "version": "2.4.45",
-  "notes": "Duties/Crazy Eggs switches no longer revert.",
+  "version": "2.4.46",
+  "notes": "Save/Load profile for each emulator.",
   "files": {
     "rally_bot.py": {
-      "sha256": "3272b44618344f6e1aee308af7b37b147f5f1baaf6e1985d1b5bdbbddde919ad"
+      "sha256": "2b2976694fe5533b0cd51b99ddb56a06e1361797afb79d21ff169b019ffe2857"
     },
     "web_app.py": {
-      "sha256": "86d1a25ba097f315a8c15c5b88cb589d607531ed186b140532a405820e1ccd4e"
+      "sha256": "7fa9adfd624d72e424583199a595a7a9269adeca06ec6a4069aaa78edc07928d"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "09a26609ec60e055867c0ae5b4ab7afafc36890832938e52c9248cfe523a6a1e"
     },
     "ui/changelog.js": {
-      "sha256": "2b7058e54db2615a9925808bdb8cd1bc5aa3359ed3154033aacc74cb6675b66c"
+      "sha256": "2214f24b8c47c4eaf8a1897df8805ff6751f7eaafe6033fadca5ffc362234f74"
     },
     "ui/dialogs.js": {
       "sha256": "93b85f9748c2d4841661e449f9475108f64da23dc46165c5470327f2a38aebf0"
@@ -27,7 +27,7 @@
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "c07618f7da5033670dc8af7a51411b88ff14e58a29294e3ee95ed302e0e1641c"
+      "sha256": "16e581b4fb6fb1c9fbe357035c82189795760d7aa010ec21ec1472a85f525259"
     }
   },
   "mode": "ask",
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "55d329e729fb3dddad8c7f75c1236d2f6e921d8597838f231d9ae10837888bba"
+  "sig": "8262dcc8b3fce56eb7799c6b17b09d3341ee9adf9c576aeea0ae6082e4a06cde"
 }

@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.46", date: "2026-10-20",
+    new: ["Every emulator now has Save profile\u2026 and Load profile\u2026 (in its own settings page, next to \u201cCopy settings from\u2026\u201d). Save the settings, generals and presets of one emulator under a name and load them into any other emulator. Loading only changes the emulator you are on."],
+    fixed: [] },
   { v: "2.4.45", date: "2026-10-20",
     new: [],
     fixed: ["Crazy Eggs (and the other Duties and Champions switches) kept switching themselves off. The Duties page saves a switch at once, but the page\u2019s automatic save a moment later sent its older copy of the settings and put the old state back. The automatic save no longer touches the Duties, Crazy Eggs and Champions settings."] },

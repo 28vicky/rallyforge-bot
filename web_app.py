@@ -1639,6 +1639,50 @@ class Api:
         rb.delete_profile(p["name"])
         return {"profiles": rb.list_profiles()}
 
+    # ---- profiles of ONE emulator (its own settings, copied to any other emulator)
+    def _inst_dir(self):
+        d = rb.profiles_dir() / "instances"
+        d.mkdir(exist_ok=True)
+        return d
+
+    def _inst_names(self):
+        return sorted((f.stem for f in self._inst_dir().glob("*.json")), key=str.lower)
+
+    def inst_profiles(self, p):
+        return {"profiles": self._inst_names()}
+
+    def inst_profile_save(self, p):
+        name = re.sub(r'[\\/:*?"<>|]', "", str(p.get("name", ""))).strip()
+        if not name:
+            raise ApiError("Give the profile a name.")
+        serial = str(p.get("serial", ""))
+        with self.c.lock:
+            disk = dict((rb.load_config().get("per_device") or {}).get(serial) or {})
+        st = {k: v for k, v in dict(p.get("settings") or {}).items()}
+        for k in self.c.OWN_API_KEYS:                       # Duties / Crazy Eggs / Champions: always as saved
+            if k in disk:
+                st[k] = disk[k]
+        (self._inst_dir() / f"{name}.json").write_text(json.dumps(st, indent=2), encoding="utf-8")
+        return {"name": name, "profiles": self._inst_names()}
+
+    def inst_profile_load(self, p):
+        serial = str(p.get("serial", ""))
+        f = self._inst_dir() / (re.sub(r'[\\/:*?"<>|]', "", str(p.get("name", ""))) + ".json")
+        if not f.exists():
+            raise ApiError("That profile does not exist.")
+        st = json.loads(f.read_text(encoding="utf-8"))
+        with self.c.lock:
+            per = {s: dict(v) for s, v in (self.c.cfg.get("per_device") or {}).items()}
+            per[serial] = st
+        self.c.save({"per_device": per}, quiet=True, managed=True)
+        return {"settings": st}
+
+    def inst_profile_delete(self, p):
+        f = self._inst_dir() / (re.sub(r'[\\/:*?"<>|]', "", str(p.get("name", ""))) + ".json")
+        if f.exists():
+            f.unlink()
+        return {"profiles": self._inst_names()}
+
     # ---- screenshots and pictures
     def shot_take(self, p):
         return self.c.shot_from_device(p["serial"])
