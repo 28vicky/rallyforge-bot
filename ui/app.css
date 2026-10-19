@@ -347,7 +347,7 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .btn.cur-pause,.ribbon .btn.cur-pause{background:var(--warn);color:#1d1400;border-color:transparent;box-shadow:0 0 0 2px rgba(255,255,255,.28)}
 .btn.cur-stop,.ribbon .btn.cur-stop{background:var(--bad);color:#1a0509;border-color:transparent;box-shadow:0 0 0 2px rgba(255,255,255,.28)}
 .btn[class*="cur-"] .ico{color:inherit}
-.state-pill{display:inline-flex;align-items:center;padding:6px 14px;border-radius:99px;font-size:14px;font-weight:700;border:1px solid var(--line);color:var(--mute)}
+.state-pill{display:inline-flex;align-items:center;padding:6px 14px;border-radius:99px;font-size:14px;font-weight:500;border:1px solid var(--line);color:var(--mute)}
 .state-pill.st-run{border-color:var(--good);color:var(--good)}
 .state-pill.st-pause{border-color:var(--warn);color:var(--warn)}
 .state-pill.st-stop,.state-pill.st-error{border-color:var(--bad);color:var(--bad)}
@@ -378,7 +378,7 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .mon-lvnum{display:inline-block;min-width:1.9em;margin-right:8px;padding:1px 7px;border-radius:99px;background:rgba(127,127,127,.22);font-size:13px;text-align:center}
 .seg{flex-wrap:wrap;border-radius:18px;max-width:100%}
 .seg .segb{white-space:nowrap;border-radius:99px}
-.ptimer{font-variant-numeric:tabular-nums;font-weight:700}
+.ptimer{font-variant-numeric:tabular-nums;font-weight:500}
 .inst small .ptimer{color:var(--accent2)}
 .lvchip.part{opacity:.65;border-style:dashed}
 .lvchip.band{min-width:84px;text-align:center}
@@ -407,7 +407,7 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .sb-upd { cursor: pointer; color: var(--accent2); font-weight: 700; text-decoration: underline; }
 .warnbar{margin:0 0 14px;padding:11px 14px;border-radius:var(--r2);border:1px solid var(--warn);background:rgba(217,165,102,.12);color:var(--fg);font-size:14.5px;line-height:1.45}
 .warnbar b{color:var(--warn)}
-.inst small{font-size:13.5px;font-weight:600}
-.inst.sel small{opacity:1;color:var(--accfg);font-weight:700}
-.inst small .ptimer{opacity:1;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
+.inst small{font-size:13px;font-weight:400;letter-spacing:.02em}
+.inst.sel small{opacity:.92;color:var(--accfg);font-weight:400}
+.inst small .ptimer{opacity:1;font-weight:400;font-size:inherit;font-variant-numeric:tabular-nums}
 .inst.sel small .ptimer{color:var(--accfg)}
