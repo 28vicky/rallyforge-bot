@@ -366,15 +366,30 @@ class Controller:
             elif "presets" in box or box is cfg:
                 box["presets"] = on or [1]                  # the box follows the cards
 
-    def apply_config(self, posted, devices=None):
-        """Merge what the interface sends into the saved settings (checked first), keep it for the bots."""
+    OWN_API_KEYS = ("duties", "crazy_eggs", "champions")      # changed through their own calls (switches on the Duties page), not by the page's autosave
+
+    def apply_config(self, posted, devices=None, managed=False):
+        """Merge what the interface sends into the saved settings (checked first), keep it for the bots.
+        managed=True: the app itself changes the Duties / Crazy Eggs / Champions settings (the page's copy may be older)."""
         with self.lock:
             cfg = rb.load_config()
             disk_pd = dict(cfg.get("per_device") or {})
+            disk_own = {k: cfg[k] for k in self.OWN_API_KEYS if k in cfg}
             cfg.update(posted or {})
+            if not managed:                               # the page's autosave must never undo a switch made through its own call
+                for k, v in disk_own.items():
+                    cfg[k] = v
             # an emulator's own settings are never lost: what the page did not send stays as saved on disk
             pd = dict(disk_pd)
             pd.update((posted or {}).get("per_device") or {})
+            if not managed:
+                for ser, ov in list(pd.items()):
+                    old = disk_pd.get(ser) or {}
+                    ov = dict(ov)
+                    for k in self.OWN_API_KEYS:
+                        if k in old:
+                            ov[k] = old[k]
+                    pd[ser] = ov
             cfg["per_device"] = pd
             if devices is not None:
                 self.set_devices(devices)
@@ -397,8 +412,8 @@ class Controller:
             self.cfg = cfg
             return cfg
 
-    def save(self, posted, devices=None, quiet=False):
-        cfg = self.apply_config(posted, devices)
+    def save(self, posted, devices=None, quiet=False, managed=False):
+        cfg = self.apply_config(posted, devices, managed=managed)
         rb.save_config(cfg)
         if not quiet:
             self.log("[+] Settings saved.")
@@ -1321,9 +1336,9 @@ class Api:
         if scope:
             per = {s: dict(v) for s, v in (self.c.cfg.get("per_device") or {}).items()}
             per.setdefault(scope, {})[key] = value
-            self.c.save({"per_device": per})
+            self.c.save({"per_device": per}, managed=True)
         else:
-            self.c.save({key: value})
+            self.c.save({key: value}, managed=True)
 
     def _duty_rows(self, scope):
         cfg = self._eff(scope)
@@ -1383,7 +1398,7 @@ class Api:
         if scope and key in ("duties", "crazy_eggs", "champions"):
             per = {s: dict(v) for s, v in (self.c.cfg.get("per_device") or {}).items()}
             per.get(scope, {}).pop(key, None)
-            self.c.save({"per_device": per})
+            self.c.save({"per_device": per}, managed=True)
         return self.duties(p)
 
     def crazy_eggs(self, p):

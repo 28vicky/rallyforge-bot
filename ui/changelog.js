@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.45", date: "2026-10-20",
+    new: [],
+    fixed: ["Crazy Eggs (and the other Duties and Champions switches) kept switching themselves off. The Duties page saves a switch at once, but the page\u2019s automatic save a moment later sent its older copy of the settings and put the old state back. The automatic save no longer touches the Duties, Crazy Eggs and Champions settings."] },
   { v: "2.4.44", date: "2026-10-20",
     new: [],
     fixed: ["The \u201cFound emulators\u201d panel is now at the top of the Emulators page, so it cannot be missed below a long list.", "Emulator names are looked up more thoroughly (every BlueStacks folder, also when BlueStacks keeps its data on another drive), and an emulator whose name cannot be found gets a readable one from its address (e.g. \u201cEmulator 5595\u201d) instead of an empty box."] },
