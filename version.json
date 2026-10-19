@@ -1,9 +1,9 @@
 {
-  "version": "2.4.17",
-  "notes": "Crazy Eggs: visit gap setting (default 30 min) so eggs are smashed together.",
+  "version": "2.4.18",
+  "notes": "Viking fix: unreadable Viking set is skipped when a group is switched off",
   "files": {
     "rally_bot.py": {
-      "sha256": "cb73dd7fb448c0f2b54b68f9b2ba41766ac15ccb7459110f9ec0cd68b3e3e8ae"
+      "sha256": "551a17d93e24aff2d7d60e17aef530d4632ed96a8dad256d20233d1f1cc34538"
     },
     "web_app.py": {
       "sha256": "081cf18e293f8a37d37f4f04201db2c53b053ef8d1c163bcb06b9419e3c021d7"
@@ -18,7 +18,7 @@
       "sha256": "91274939a9302582fdf1815bfe5f4b7312717d60f3666d14c79e403bd1d73464"
     },
     "ui/changelog.js": {
-      "sha256": "7a3826e210e68119cbb5971e398907d51f4151c1b80a950d6138ea80d02aec06"
+      "sha256": "b761be222acbb4fa7c1e68c6f22089cad8367d1bbe0878d53d4ee0efb3ecc936"
     },
     "ui/dialogs.js": {
       "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
@@ -113,6 +113,5 @@
     "war_button.png": {
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
-  },
-  "sig": "1c5d434d8fb88c23021a7df484531e183ca5a3f6441325a9c711b31021434d3a"
+  }
 }

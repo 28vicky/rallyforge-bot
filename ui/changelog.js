@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.18", date: "2026-10-19",
+    new: [],
+    fixed: ["A Viking whose power number cannot be read is no longer joined when one of the Viking groups is switched off - it is skipped instead."] },
   { v: "2.4.17", date: "2026-10-19",
     new: ["Crazy Eggs: \u201cVisit at most every N minutes\u201d (default 30) per emulator. The bot goes back after that time and smashes every ready egg together instead of visiting every 10 minutes."],
     fixed: [] },
