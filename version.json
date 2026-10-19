@@ -1,12 +1,12 @@
 {
-  "version": "2.4.28",
-  "notes": "Activity shows monster names; Hydra settings now apply to Hydra rallies",
+  "version": "2.4.29",
+  "notes": "Settings save themselves; presets no longer go back to 1 after a restart",
   "files": {
     "rally_bot.py": {
-      "sha256": "1452ddd031f6c6241dbb7ac6189de53fc03e28b42f8994cce867705e72253f69"
+      "sha256": "15d6fbcf80c9d868588699d205395b1f2ac77a631cc71d88c50b6ef6a5cc1719"
     },
     "web_app.py": {
-      "sha256": "76d41bd6911639bb87bf7c26ce3975ccb35d93931502c0bb2b0c203c31284c44"
+      "sha256": "99a5bdb712a46c5d48e5113dd87129c9985c60b4e3a3cf98830fad4be3d32564"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -15,10 +15,10 @@
       "sha256": "ad92febadfaf763234e408da8d122bee0c69dec5f48ca0223a6d0f5bb5e9e9da"
     },
     "ui/app.js": {
-      "sha256": "008e6556ef32f42a0ff79ab86e2c029d6ff0c127810f3d907d273e6689c8790d"
+      "sha256": "d7296d0d1abb4506ed9c341e1fe28657e444ab7e330b4d757b257bb9d2cde380"
     },
     "ui/changelog.js": {
-      "sha256": "1f177be3b600af4277232c02339034fe28da7f604dd89cbf2810e33979182591"
+      "sha256": "ea65b32f92f04a7d4e45ec4ed39799cdcaf3a2530265291958c436eca0a2783f"
     },
     "ui/dialogs.js": {
       "sha256": "ad85eb3b236e6554bce7cbf428f8d73f062f3c6ca244c74e8cfa3b33b7962709"
@@ -132,5 +132,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "4922b4025fcb5a1eb6d4e1b27a5f19f78d5b51038f7ac59b3a4264126601a8ba"
+  "sig": "35b4c4ec2bc9f8808f17ae5ee90cf13f05f9d4948eefa15025b9e4966c968f43"
 }

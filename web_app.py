@@ -323,6 +323,39 @@ class Controller:
                     ov[k] = v
         return cfg
 
+    @staticmethod
+    def _enabled(bps):
+        return [int(b.get("n", i + 1)) for i, b in enumerate(bps or []) if isinstance(b, dict) and b.get("enabled")]
+
+    def sync_presets(self, cfg):
+        """Each emulator (and the global settings) had two preset lists: the preset cards (bot_presets) and the
+        plain 'Presets (1-8)' box. They now always agree: a box that was changed switches the cards, otherwise the
+        box shows what the cards say. This stops 6 armed presets from falling back to 1."""
+        try:
+            disk = rb.load_config()
+        except Exception:
+            disk = {}
+        boxes = [(cfg, disk)] + [(ov, (disk.get("per_device") or {}).get(s) or {}) for s, ov in (cfg.get("per_device") or {}).items() if isinstance(ov, dict)]
+        for box, old in boxes:
+            bps = box.get("bot_presets")
+            if not isinstance(bps, list) or not bps:
+                continue
+            on = self._enabled(bps)
+            plain = box.get("presets")
+            try:
+                plain = sorted({int(x) for x in plain}) if isinstance(plain, list) else None
+            except (TypeError, ValueError):
+                plain = None
+            old_plain = old.get("presets") if isinstance(old, dict) else None
+            changed_box = plain is not None and plain != on and plain != old_plain and self._enabled(old.get("bot_presets")) == on
+            if changed_box and plain:                      # the user typed new numbers into the box: arm those cards
+                want = set(plain)
+                for i, b in enumerate(bps):
+                    if isinstance(b, dict):
+                        b["enabled"] = int(b.get("n", i + 1)) in want
+            elif "presets" in box or box is cfg:
+                box["presets"] = on or [1]                  # the box follows the cards
+
     def apply_config(self, posted, devices=None):
         """Merge what the interface sends into the saved settings (checked first), keep it for the bots."""
         with self.lock:
@@ -337,6 +370,7 @@ class Controller:
             cfg["per_device"] = {s: ov for s, ov in (cfg.get("per_device") or {}).items() if s in ids and ov}
             cfg["removed_devices"] = list(self.removed)       # kept by the app, not by the page
             self.fix_general_tabs(cfg)
+            self.sync_presets(cfg)
             _mt = cfg.get("general_main_tab")
             cfg["general_tab"] = _mt if _mt not in (None, "") else (cfg.get("general_tab") or 0)
             cfg["general_favourites"] = cfg.get("general_main_fav", "leave")
@@ -348,10 +382,11 @@ class Controller:
             self.cfg = cfg
             return cfg
 
-    def save(self, posted, devices=None):
+    def save(self, posted, devices=None, quiet=False):
         cfg = self.apply_config(posted, devices)
         rb.save_config(cfg)
-        self.log("[+] Settings saved.")
+        if not quiet:
+            self.log("[+] Settings saved.")
         return cfg
 
     # ------------------------------------------------------------------ start / stop
@@ -1367,7 +1402,7 @@ class Api:
 
     # ---- settings / devices
     def save(self, p):
-        self.c.save(p.get("cfg"), p.get("devices"))
+        self.c.save(p.get("cfg"), p.get("devices"), quiet=bool(p.get("auto")))
         return {}
 
     def set_devices(self, p):
@@ -1395,7 +1430,7 @@ class Api:
     def start(self, p):
         c = self.c
         if p.get("cfg") is not None:
-            c.apply_config(p.get("cfg"), p.get("devices"))
+            c.save(p.get("cfg"), p.get("devices"), quiet=True)        # what you start with is also kept after a restart
         if not c.devices:
             raise ApiError("Add at least one device ID.")
         if p.get("serial") and p["serial"] != "all":

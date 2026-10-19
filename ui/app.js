@@ -267,7 +267,7 @@ function buildRibbon() {
         { label: "Restart app", icon: "refresh", run: restartFlow }, { label: "Quit and stop everything", icon: "power", run: quitFlow }]), "", "more")));
 }
 async function saveAll() {
-  if (await act(api("save", { cfg: S.cfg, devices: S.devices }))) { toast("Settings saved.", "ok"); await reloadMeta(); }
+  if (await act(api("save", { cfg: S.cfg, devices: S.devices }))) { AUTO.saved = AUTO.seen = cfgSnap(); toast("Settings saved.", "ok"); await reloadMeta(); }
 }
 async function copyLog() {
   const j = await act(api("log_text", { lines: 300 }));
@@ -326,8 +326,10 @@ async function loadProfileFlow() {
     { label: "Cancel" },
     { label: "Load", cls: "pri", onclick: async () => {
         if (!chosen) return;
-        const r = await act(api("profile_load", { name: chosen }));
-        if (r) { const j = await api("state"); S.cfg = j.cfg; S.devices = j.devices; S.generals = j.generals; S.monsters = j.monsters; S.profiles = j.profiles;
+        AUTO.busy = true;                                   // no automatic save while the profile is swapped in
+        const r = await act(api("profile_load", { name: chosen })).finally(() => {});
+        if (!r) AUTO.busy = false;
+        if (r) { const j = await api("state").finally(() => (AUTO.busy = false)); S.cfg = j.cfg; S.devices = j.devices; AUTO.saved = AUTO.seen = cfgSnap(); S.generals = j.generals; S.monsters = j.monsters; S.profiles = j.profiles;
           S.cfg.ui_pal = S.cfg.ui_pal || "amber"; S.cfg.ui_mode = S.cfg.ui_mode || "dark"; applyTheme(); layout(); toast(`Profile '${chosen}' loaded.`); }
       } }] });
 }
@@ -662,3 +664,24 @@ async function boot() {
   checkWhatsNew();
   if (S.firstRun) { if (!S.devices.length) S.devices.push({ id: "", name: "" }); setTimeout(() => detectDevices(), 900); }
 }
+
+// Every change is saved by itself about 2 seconds after you stop editing (Save still works, and Start saves too),
+// so nothing you set on an emulator or on the presets is lost when the app restarts.
+const AUTO = { saved: null, seen: null, busy: false, err: "" };
+function cfgSnap() { try { return JSON.stringify({ c: S.cfg, d: S.devices }); } catch (e) { return null; } }
+setInterval(async () => {
+  if (!S.cfg || AUTO.busy) return;
+  const now = cfgSnap();
+  if (now === null) return;
+  if (AUTO.saved === null) { AUTO.saved = AUTO.seen = now; return; }          // first look after start: nothing changed yet
+  if (now === AUTO.saved) { AUTO.seen = now; return; }
+  if (now !== AUTO.seen) { AUTO.seen = now; return; }                           // still being edited: wait until it is quiet
+  AUTO.busy = true;
+  try {
+    await api("save", { cfg: S.cfg, devices: S.devices, auto: true }, { quiet: true });
+    AUTO.saved = now; AUTO.err = "";
+  } catch (e) {
+    const m = e && !(e instanceof TypeError) ? String(e.message || "") : "";      // a setting that is not valid yet (not a lost connection)
+    if (m && m !== AUTO.err) { AUTO.err = m; toast("Not saved yet: " + m, "error"); }
+  } finally { AUTO.busy = false; }
+}, 1000);

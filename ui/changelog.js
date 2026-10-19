@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.29", date: "2026-10-19",
+    new: ["Settings save themselves about 2 seconds after you change something, and Start saves too. Nothing you set on an emulator or on its presets is lost when the app restarts."],
+    fixed: ["Presets armed on an emulator (e.g. 1-6) went back to 1 after a restart. Each emulator had two preset lists (the preset cards and the \u201cPresets (1-8)\u201d box) that could disagree; they now always match."] },
   { v: "2.4.28", date: "2026-10-19",
     new: [],
     fixed: ["Activity shows the monster\u2019s name instead of \u201c?\u201d, also with the monster filter off or when the bot has no picture of that monster: it reads the name printed under the portrait (once per name). Joining and skipping work exactly as before.", "Hydra rallies were filed as a separate monster (\u201cJunior Hydra\u201d), so the Hydra settings on the Monsters page (skip, levels, presets) did not apply to them. Junior / Medium / Senior Hydra, Cerberus, Nian and Knight Bayard now all count as the main monster, and the Hydra picture is called Hydra."] },
