@@ -113,5 +113,6 @@
     "war_button.png": {
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
-  }
+  },
+  "sig": "909df3701ace869b64d3863ddac0918c843ad7abf097a9eb66edca5c6aac1a10"
 }
