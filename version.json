@@ -1,24 +1,24 @@
 {
-  "version": "2.4.48",
-  "notes": "Clearer update progress; restart waits at most 1 minute.",
+  "version": "2.4.49",
+  "notes": "Emulator list shows NO STAMINA and KICKED (with countdown); Profile menu on each emulator; bigger emulator name; text size and name size options in Themes",
   "files": {
     "rally_bot.py": {
-      "sha256": "53b7e82e73cd22818bef2c10735160b79125b94c2a9c44310379b15854d66d33"
+      "sha256": "84652dcd81a9c182ee5a2af8a8f6e89f95d74526b201bca1ad56800f51a2f2f4"
     },
     "web_app.py": {
-      "sha256": "6ea30bbd8369a4da41a2912bed3b98a3f03b7232b3941f33ac6ae198244cd6f7"
+      "sha256": "35c7fee927ede0f0891c5ced224c0a8cb8cc7acdd307ebf8e7614287952ce6a2"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "368148eeb84c5a3960854ad4ce5a05bb0e7f59bc7554c71ce9ea93514cc744b9"
+      "sha256": "b647ac8b4a6fde5680c050734ca147b10f8c930bdbddbc2ef768279119c0102d"
     },
     "ui/app.js": {
-      "sha256": "fd04190a1af8e1808a7906bc150b7d922ab9760f1667c5da8ff59b3c53825ca8"
+      "sha256": "0822ac7c852ed122a7f6102ae84ec1bd04d45378f9d0859c9d109f12cbbc2d3f"
     },
     "ui/changelog.js": {
-      "sha256": "79dcec90b530940f4d5a7ead6d95e750e84cdd86e55c7a14f651d60b6cf40514"
+      "sha256": "db76bdef91aa3b7deb282617c3e8f79ac1bed02e6f16cdc397ec55690de3edb7"
     },
     "ui/dialogs.js": {
       "sha256": "93b85f9748c2d4841661e449f9475108f64da23dc46165c5470327f2a38aebf0"
@@ -27,7 +27,7 @@
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "16e581b4fb6fb1c9fbe357035c82189795760d7aa010ec21ec1472a85f525259"
+      "sha256": "52da2e3f60b03b180a402198e0d3229b99a71123b3208b37a0f972254ea78ddb"
     }
   },
   "mode": "ask",
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "62725a42f033fb9f4cf97b269e577bec5a7d32f180cd33e6bc959d0e20a23770"
+  "sig": "88c6900bbf0473f2a909a175dba972174703a164dcc78c80f51a2da9aa4f2672"
 }
