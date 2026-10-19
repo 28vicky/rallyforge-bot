@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.10", date: "2026-10-19",
+    new: [],
+    fixed: ["Fresh installs no longer stop with \u201cJoin button image missing\u201d: the missing pictures are delivered with this update."] },
   { v: "2.4.9", date: "2026-10-19",
     new: ["Account login for the sold edition: ID + password, shows \u201cAccount: N days left\u201d in the status bar, and the owner can close an account early. The free edition is unchanged."],
     fixed: [] },
