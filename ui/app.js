@@ -473,10 +473,13 @@ function renderTabs() {
     t.appendChild(b);
   }
 }
+let lastPageSel = null;                                                 // which page was shown before (to keep the scroll position between two emulators)
 function renderPage() {
   const p = $("#pages");
   if (!p) return;
   logViews = []; actViews = [];
+  // going from one emulator to another keeps the scroll position: the same setting is at the same place, no scrolling down again
+  const keep = (S.sel !== "control" && lastPageSel && lastPageSel !== "control" && lastPageSel !== S.sel) ? p.scrollTop : 0;
   p.innerHTML = "";
   p.scrollTop = 0;
   if (S.sel === "control") {
@@ -485,6 +488,8 @@ function renderPage() {
   } else {
     p.appendChild(instancePage(S.sel));
   }
+  lastPageSel = S.sel;
+  if (keep) { p.scrollTop = keep; requestAnimationFrame(() => { p.scrollTop = keep; }); setTimeout(() => { p.scrollTop = keep; }, 250); }
   paintRunState();
 }
 function rerender() { const p = $("#pages"); const y = p.scrollTop; renderPage(); p.scrollTop = y; }

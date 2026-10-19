@@ -1,9 +1,9 @@
 {
-  "version": "2.4.46",
-  "notes": "Save/Load profile for each emulator.",
+  "version": "2.4.47",
+  "notes": "Keeps the scroll position when switching emulators.",
   "files": {
     "rally_bot.py": {
-      "sha256": "2b2976694fe5533b0cd51b99ddb56a06e1361797afb79d21ff169b019ffe2857"
+      "sha256": "0f8ead7dfb337c59e49651d2a7eb4f18712e36094273c804681182d877be87d2"
     },
     "web_app.py": {
       "sha256": "7fa9adfd624d72e424583199a595a7a9269adeca06ec6a4069aaa78edc07928d"
@@ -15,10 +15,10 @@
       "sha256": "368148eeb84c5a3960854ad4ce5a05bb0e7f59bc7554c71ce9ea93514cc744b9"
     },
     "ui/app.js": {
-      "sha256": "09a26609ec60e055867c0ae5b4ab7afafc36890832938e52c9248cfe523a6a1e"
+      "sha256": "8413144699cf5861b65c071ff88a0287f46e5859226f6e9b0d5a787528d55226"
     },
     "ui/changelog.js": {
-      "sha256": "2214f24b8c47c4eaf8a1897df8805ff6751f7eaafe6033fadca5ffc362234f74"
+      "sha256": "c04094c1f73415ca9fd64e76b60f48741c82529917d21717b9fe204d071cbfb5"
     },
     "ui/dialogs.js": {
       "sha256": "93b85f9748c2d4841661e449f9475108f64da23dc46165c5470327f2a38aebf0"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "8262dcc8b3fce56eb7799c6b17b09d3341ee9adf9c576aeea0ae6082e4a06cde"
+  "sig": "296073495ccf3c55c188c15dc39944374f857ef04784194ec7e401b51417154e"
 }
