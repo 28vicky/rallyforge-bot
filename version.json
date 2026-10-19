@@ -23,5 +23,6 @@
     "ui/index.html": {
       "sha256": "0bdacb95df93177098c07b570662efa58ff126596afad42b2ff992ad1c4cd65c"
     }
-  }
+  },
+  "sig": "1a354b4c73395623931e31f171ebaaf389d272d4057dd34ca6bfb771df8e9300"
 }
