@@ -304,7 +304,7 @@ async function saveReportFlow() {
 async function updateNow() {
   S.updClicked = true;
   if (S.update) S.update.installing = true;
-  toast("Installing the update - the app restarts by itself and the running emulators start again.", "ok");
+  toast("Installing the update - the status bar at the bottom shows the progress. The app restarts by itself (up to about a minute) and the running emulators start again.", "ok");
   await act(api("install_update", { restart: true }));
 }
 async function restartFlow() { if (await confirmBox("Restart", "Restart the app now? Running bots are stopped.")) act(api("restart")); }
@@ -647,9 +647,10 @@ function updateSummary() {
     const U = S.update;
     u.style.display = U ? "" : "none";
     if (U) {
-      u.textContent = U.installing ? `Installing ${U.version}\u2026` : `\u2B06 Update ${U.version} available \u2013 click to install`;
-      u.title = (U.notes || "") + (U.installing ? "" : "\nClick: install it, restart the app and start the running emulators again");
-      u.onclick = U.installing ? null : updateNow;
+      u.textContent = U.needs_restart ? `\u2714 Version ${U.version} installed \u2013 click to restart now` : U.restarting ? `\u2714 Version ${U.version} installed \u2013 restarting in a moment, the emulators start again by themselves\u2026`
+        : U.installing ? `Installing ${U.version}\u2026 please wait` : `\u2B06 Update ${U.version} available \u2013 click to install`;
+      u.title = (U.notes || "") + (U.installing || U.restarting ? "" : "\nClick: install it, restart the app and start the running emulators again");
+      u.onclick = U.needs_restart ? (() => act(api("restart"))) : (U.installing || U.restarting) ? null : updateNow;
     }
   }
   const ts = $("#tgStatus"); if (ts) ts.textContent = S.tg.status;

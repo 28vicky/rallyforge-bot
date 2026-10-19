@@ -1,12 +1,12 @@
 {
-  "version": "2.4.47",
-  "notes": "Keeps the scroll position when switching emulators.",
+  "version": "2.4.48",
+  "notes": "Clearer update progress; restart waits at most 1 minute.",
   "files": {
     "rally_bot.py": {
-      "sha256": "0f8ead7dfb337c59e49651d2a7eb4f18712e36094273c804681182d877be87d2"
+      "sha256": "53b7e82e73cd22818bef2c10735160b79125b94c2a9c44310379b15854d66d33"
     },
     "web_app.py": {
-      "sha256": "7fa9adfd624d72e424583199a595a7a9269adeca06ec6a4069aaa78edc07928d"
+      "sha256": "6ea30bbd8369a4da41a2912bed3b98a3f03b7232b3941f33ac6ae198244cd6f7"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -15,10 +15,10 @@
       "sha256": "368148eeb84c5a3960854ad4ce5a05bb0e7f59bc7554c71ce9ea93514cc744b9"
     },
     "ui/app.js": {
-      "sha256": "8413144699cf5861b65c071ff88a0287f46e5859226f6e9b0d5a787528d55226"
+      "sha256": "fd04190a1af8e1808a7906bc150b7d922ab9760f1667c5da8ff59b3c53825ca8"
     },
     "ui/changelog.js": {
-      "sha256": "c04094c1f73415ca9fd64e76b60f48741c82529917d21717b9fe204d071cbfb5"
+      "sha256": "79dcec90b530940f4d5a7ead6d95e750e84cdd86e55c7a14f651d60b6cf40514"
     },
     "ui/dialogs.js": {
       "sha256": "93b85f9748c2d4841661e449f9475108f64da23dc46165c5470327f2a38aebf0"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "296073495ccf3c55c188c15dc39944374f857ef04784194ec7e401b51417154e"
+  "sig": "62725a42f033fb9f4cf97b269e577bec5a7d32f180cd33e6bc959d0e20a23770"
 }

@@ -1241,14 +1241,14 @@ class Controller:
 
     def _maybe_restart(self):
         """An update was installed: restart by itself at a quiet moment (no emulator in the middle of a join, or after
-        3 minutes at the latest). The emulators that were running start again on their own after the restart."""
+        1 minute at the latest). The emulators that were running start again on their own after the restart."""
         if not self.restart_pending or not getattr(self, "_auto_restart", False):
             return
         now = time.time()
         since = getattr(self, "_pending_since", None) or now
         self._pending_since = since
         busy = [d["name"] or s for s, d in self.dev.items() if self.running(s) and d.get("busy_until", 0) > now]
-        if busy and now - since < 180:
+        if busy and now - since < 60:
             return
         running = [s for s in self.dev if self.running(s)]
         try:
@@ -1496,8 +1496,10 @@ class Api:
                 "catalog": {"running": c.jobs["catalog"]["running"], "count": c.jobs["catalog"].get("count", 0)},
                 "lic": c.lic.info() if c.lic.on else None,
                 "update": ({"version": c._pending_update["version"], "notes": c._pending_update.get("notes", ""),
-                            "installing": bool(getattr(c, "_installing", False))}
-                           if getattr(c, "_pending_update", None) and not c.restart_pending else None)}
+                            "installing": bool(getattr(c, "_installing", False)),
+                            "restarting": bool(c.restart_pending and getattr(c, "_auto_restart", False)),   # installed: restarts at the next quiet moment
+                            "needs_restart": bool(c.restart_pending and not getattr(c, "_auto_restart", False))}
+                           if getattr(c, "_pending_update", None) else None)}
 
     # ---- settings / devices
     def save(self, p):
