@@ -171,7 +171,7 @@ function chooseGenerals(title, current) {
       const cnt = {};
       S.generals.forEach((g) => { if (g.cat) cnt[g.cat] = (cnt[g.cat] || 0) + 1; });
       Object.keys(cnt).sort().forEach((c) => { const k = "@" + c; A.appendChild(h("div", { class: "li" + (selA.has(k) ? " sel" : ""), title: "Every general in this category is tried (the first free one is used)", onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(k) ? selA.delete(k) : selA.add(k); else { selA = new Set([k]); } draw(); }, ondblclick: () => add() }, h("b", {}, "Category: " + c), h("span", { class: "hint", style: { marginLeft: "8px" } }, cnt[c] + (cnt[c] === 1 ? " general" : " generals")))); });
-      S.generals.filter((g) => flt.ok(g)).forEach((g) => A.appendChild(h("div", { class: "li" + (selA.has(g.name) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(g.name) ? selA.delete(g.name) : selA.add(g.name); else { selA = new Set([g.name]); } draw(); }, ondblclick: () => add() }, gimg(g.name), g.name)));
+      S.generals.filter((g) => flt.ok(g)).forEach((g) => A.appendChild(h("div", { class: "li" + (selA.has(g.name) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(g.name) ? selA.delete(g.name) : selA.add(g.name); else { selA = new Set([g.name]); } draw(); }, ondblclick: () => add(), title: g.pic === false ? "No picture yet: the bot finds this general by its name (list view)" : "" }, gimg(g.name), g.name, g.pic === false ? h("span", { class: "hint", style: { marginLeft: "6px" } }, "(by name)") : null)));
       if (!S.generals.length) A.appendChild(h("div", { class: "empty" }, "No saved generals yet. Use 'Scan generals' or 'Add general from screenshot'."));
       chosen.forEach((n, i) => C.appendChild(h("div", { class: "li" + (selC.has(n) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selC.has(n) ? selC.delete(n) : selC.add(n); else { selC = new Set([n]); } draw(); } }, h("span", { class: "chip" }, i + 1), n.startsWith("@") ? "Category: " + n.slice(1) : n)));
     };
@@ -449,7 +449,7 @@ async function detectDevices() {
   S.devices = j.devices;
   if (j.found === null) toast("ADB not found. Set the ADB path in Settings.", "error");
   else if (!j.found.length) toast("No emulators found. Start them and enable ADB.", "error");
-  else toast(`Found ${j.found.length}: ${j.found.join(", ")}`, "ok");
+  else toast(`Found ${j.found.length}` + (j.new && j.new.length ? `, added ${j.new.length} new` : ", nothing new to add") + (j.skipped && j.skipped.length ? `. ${j.skipped.length} you removed earlier stay hidden.` : "."), "ok");
   if (S.sel === "control" && S.tab === "dashboard") rerender();
 }
 

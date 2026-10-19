@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.27", date: "2026-10-19",
+    new: ["Add as many emulators as you like. Your plan sets how many RUN at the same time; the others wait and start when one stops.", "Emulators you remove stay removed: Detect never adds them back, also after restarting the app or the emulators. Type an ID in to add one back, or use \u201cShow removed emulators again\u201d.", "Drag emulators in the left list to change their order. The list is saved at once.", "The general picker lists every general of the game, not only the ones with a saved picture. A general without a picture is found by reading its name (list view) when the bot joins.", "Test installs and updates now come with the same general pictures, monster pictures and buttons as the main copy (admin tools stay hidden)."],
+    fixed: ["Start is no longer blocked by \u201cGeneral tab must be a number\u201d: an empty or wrong tab now uses the global setting, and the log names the emulator.", "Detect no longer adds the same emulator twice (emulator-5556 and 127.0.0.1:5557).", "The logo shows again after an update."] },
   { v: "2.4.26", date: "2026-10-19",
     new: ["Every emulator now has its own Crazy Eggs tab and Champions tab (next to Duties): switch the duty on and set the eggs, Lucky Hammer, taps and greets for that emulator only."],
     fixed: [] },

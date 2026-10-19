@@ -112,7 +112,9 @@ PAGES.dashboard = function () {
     btn("+ Add device", () => { S.devices.push({ id: "", name: "" }); draw(); }),
     btn("Detect emulators", detectDevices, "pri"),
     btn("Clear empty rows", () => { S.devices = S.devices.filter((d) => d.id); if (!S.devices.length) S.devices.push({ id: "", name: "" }); draw(); applyDevs(); }),
-    btn("Update emulator list", applyDevs)));
+    btn("Update emulator list", applyDevs),
+    btn("Show removed emulators again", async () => { if (!(await confirmBox("Removed emulators", "Emulators you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) { toast(j.restored ? `${j.restored} emulator(s) can be detected again. Press Detect emulators.` : "No emulators were removed.", "ok"); } }, "sm")),
+    note("Any number of emulators can be in this list. Drag them in the left list to change the order. Emulators you remove stay removed, even after a restart."));
   const ctl = h("div", { class: "row", style: { marginBottom: "16px" } },
     btn("Start all", () => collectAndRun("start", { serial: "all" }), "pri"), btn("Pause all", () => act(api("pause", { serial: "all" }))),
     btn("Resume all", () => act(api("resume"))), btn("Stop all", () => act(api("stop", { serial: "all" })), "bad"),
@@ -863,7 +865,7 @@ PAGES.license = function () {
     h("div", { style: { fontWeight: 600, marginBottom: "10px", color: L.valid ? "var(--accent2)" : "var(--bad)" } },
       L.valid ? "Logged in as " + (L.user || L.buyer || "") : (L.error || "Not logged in.")),
     L.valid ? h("div", { class: "hint", style: { marginBottom: "12px" } },
-      `Up to ${L.instances} emulator${L.instances > 1 ? "s" : ""}` + (L.expires ? `  |  valid until ${L.expires}` + (left != null ? ` (${left} day${left === 1 ? "" : "s"} left)` : "") : "  |  no expiry") + `  |  emulators in your list: ${S.devices.filter((d) => d.id).length}`) : null,
+      `Up to ${L.instances} emulator${L.instances > 1 ? "s" : ""} running at the same time` + (L.expires ? `  |  valid until ${L.expires}` + (left != null ? ` (${left} day${left === 1 ? "" : "s"} left)` : "") : "  |  no expiry") + `  |  emulators in your list: ${S.devices.filter((d) => d.id).length}`) : null,
     h("div", { class: "row", style: { margin: "12px 0" } },
       btn("Log out", async () => { if (await confirmBox("Log out", "Log out? All bots will stop.")) { const j = await act(api("logout")); if (j) { S.license = j.license; showLogin(); } } }),
       L.buy_url ? btn("Buy / extend", () => window.open(L.buy_url, "_blank")) : null),

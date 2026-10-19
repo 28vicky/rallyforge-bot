@@ -339,7 +339,7 @@ function devTag(d) {
 }
 function renderSide() {
   const L = $("#instList");
-  if (!L) return;
+  if (!L || S.dragging) return;          // do not redraw under the mouse while an emulator is being dragged
   L.innerHTML = "";
   const item = (key, label, dot, extra) => h("div", { class: "inst" + (S.sel === key ? " sel" : ""), onclick: () => { S.sel = key; renderSide(); renderTabs(); renderPage(); } },
     dot ? h("span", { class: "dot " + dot }) : h("span", { class: "dot run", style: { background: "var(--accent1)" } }),
@@ -347,9 +347,42 @@ function renderSide() {
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   for (const d of S.devStatus) {
     L.appendChild(item(d.id, `${d.idx}. ${d.name || short(d.id)}`, d.state, [devTag(d), (d.joins && !(d.state === "pause" && d.resume_at)) ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
+    sideDrag(L.lastChild, d.id);
     if (d.state === "pause" && d.resume_at) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.resume_at) })); }
   }
   tickPauseTimers();
+}
+// Drag an emulator up or down in the left list to change the order (saved at once, kept after a restart)
+function sideDrag(el, id) {
+  el.draggable = true;
+  el.dataset.id = id;
+  el.title = "Drag to change the order";
+  el.addEventListener("dragstart", (e) => { S.dragging = id; el.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", id); } catch (x) {} });
+  el.addEventListener("dragover", (e) => {
+    if (!S.dragging || S.dragging === id) return;
+    e.preventDefault();
+    const L = el.parentElement, src = L.querySelector(`.inst[data-id="${CSS.escape(S.dragging)}"]`);
+    if (!src) return;
+    const r = el.getBoundingClientRect();
+    L.insertBefore(src, e.clientY < r.top + r.height / 2 ? el : el.nextSibling);
+  });
+  el.addEventListener("drop", (e) => e.preventDefault());
+  el.addEventListener("dragend", async () => {
+    el.classList.remove("dragging");
+    const L = el.parentElement;
+    const order = L ? [...L.querySelectorAll(".inst[data-id]")].map((x) => x.dataset.id) : [];
+    const before = S.devStatus.map((d) => d.id);
+    S.dragging = null;
+    if (!order.length || order.join("\n") === before.join("\n")) return renderSide();
+    const j = await act(api("reorder_devices", { order }, { quiet: true }));
+    if (j) {
+      S.devices = j.devices;
+      S.devStatus = order.map((i) => S.devStatus.find((d) => d.id === i)).filter(Boolean).map((d, k) => ({ ...d, idx: k + 1 }));
+      toast("Order saved.", "ok");
+    }
+    renderSide();
+    if (S.sel === "control" && S.tab === "dashboard") rerender();
+  });
 }
 // Paused emulators count down to their automatic restart; one 1-second ticker updates every timer in place
 function fmtLeft(sec) { sec = Math.max(0, Math.round(sec)); const m = Math.floor(sec / 60), s = sec % 60; return m + ":" + String(s).padStart(2, "0"); }

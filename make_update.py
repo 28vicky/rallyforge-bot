@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--templates", default="", help="folder with .png pictures to publish too")
     ap.add_argument("--monsters", default="", help="folder with monster .png pictures to publish too")
     ap.add_argument("--extra", nargs="*", default=[], help="more .py files that belong to the update")
+    ap.add_argument("--catalog", default="", help="the general catalogue folder (catalog.json + art) to publish too, e.g. %%APPDATA%%\\RallyForgeBot\\catalog")
     a = ap.parse_args()
 
     src = (HERE / "rally_bot.py").read_text(encoding="utf-8")
@@ -55,7 +56,17 @@ def main():
         from urllib.parse import quote
         for p in sorted(Path(a.monsters).glob("*.png")):
             mons[p.name] = {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "url": "monsters/" + quote(p.name)}
-    manifest = {"version": m.group(1), "notes": a.notes, "files": files}
+    cat = {}
+    if a.catalog:
+        from urllib.parse import quote
+        root = Path(a.catalog)
+        if (root / "catalog.json").exists():
+            cat["catalog.json"] = {"sha256": hashlib.sha256((root / "catalog.json").read_bytes()).hexdigest(), "url": "catalog/catalog.json"}
+        for p in sorted((root / "art").glob("*.png")):
+            cat["art/" + p.name] = {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "url": "catalog/art/" + quote(p.name)}
+        manifest = {"version": m.group(1), "notes": a.notes, "files": files}
+    if cat:
+        manifest["catalog"] = cat
     if mons:
         manifest["monsters"] = mons
     if pics:
@@ -65,6 +76,8 @@ def main():
     (HERE / "version.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(f"version.json written for version {m.group(1)}" + (" (signed)" if a.key else " (NOT signed)"))
     print("Upload:", ", ".join(list(files) + ["version.json"] + list(pics)))
+    if cat:
+        print(f"Also upload the catalogue folder as catalog/ (catalog.json + art/, {len(cat)} files) next to version.json.")
 
 
 if __name__ == "__main__":

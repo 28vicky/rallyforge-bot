@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.26"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.27"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -2874,6 +2874,9 @@ def choose_general(dev, name, cfg, log, stop, role="main"):
             return False
     screen = dev.screenshot()
     view = "list" if cfg.get("general_view") == "list" else "grid"
+    if view == "grid" and general_image(name) is None:     # no picture of this general on this PC: find it by its name
+        view = "list"
+        log(f"[i] No picture of '{name}' yet - looking for it by name (list view)")
     tr = tab_row(screen)
     if tr is not None:                                   # both screens: the buttons are found by their pictures
         if not set_list_view(dev, view, log, stop):
@@ -3367,6 +3370,59 @@ def sync_monster_pack(log=print):
         except Exception:
             pass
         log(f"[+] {n} new monster picture(s) added to your library.")
+    try:
+        sync_catalog_pack(log)
+    except Exception:
+        pass
+    return n
+
+
+_NAME_CAT = re.compile(r"^(catalog\.json|art/[^/\\:*?\"<>|]{1,80}\.png)$")
+
+
+def sync_catalog_pack(log=print):
+    """The published list can carry the general catalogue (catalog.json + a picture of every general), so testers who
+    only update (no reinstall) get the full Listed generals picker too. Only missing or changed files are fetched."""
+    import urllib.parse
+    got = _LAST_MANIFEST[0]
+    if not got:
+        return 0
+    man, base = got
+    pack = man.get("catalog") or {}
+    if not pack:
+        return 0
+    root = USER / "catalog"
+    (root / "art").mkdir(parents=True, exist_ok=True)
+    n = 0
+    for name, meta in pack.items():
+        try:
+            if not _NAME_CAT.match(name):
+                continue
+            want = str((meta or {}).get("sha256", ""))
+            target = root / name
+            if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == want:
+                continue
+            if target.exists() and name != "catalog.json":
+                continue                                       # never replace a picture already on this PC
+            data = _download(urllib.parse.urljoin(base, (meta or {}).get("url", "catalog/" + urllib.parse.quote(name))), 3_000_000)
+            if hashlib.sha256(data).hexdigest() != want:
+                continue
+            if name.endswith(".png") and not data.startswith(b"\x89PNG"):
+                continue
+            if name == "catalog.json":
+                json.loads(data.decode("utf-8"))                # must be valid
+            target.write_bytes(data)
+            n += 1
+        except Exception:
+            continue
+    if n:
+        with _cache_lock:
+            _gen_cache.clear()
+        try:
+            list_generals(refresh=True)
+        except Exception:
+            pass
+        log(f"[+] General catalogue updated ({n} file(s)).")
     return n
 
 

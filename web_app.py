@@ -81,6 +81,7 @@ class Controller:
             devs = [self.cfg.get("device_id")] if self.cfg.get("device_id") else []
         names = self.cfg.get("device_names", {})
         self.devices = [{"id": d, "name": names.get(d, "")} for d in devs]
+        self.removed = [str(x) for x in (self.cfg.get("removed_devices") or []) if x]   # emulators you removed: Detect never adds them again
         self.dev = {}                                   # serial -> runtime record
         self.start_queue = []
         self.logs = collections.deque(maxlen=2500)      # (id, serial, name, text)
@@ -159,13 +160,32 @@ class Controller:
                                    "connected": False, "failed": False, "idx": i, "name": d["name"]}
                 self.dev[s]["idx"], self.dev[s]["name"] = i, d["name"]
 
+    def n_active(self):
+        """Emulators running now or in the middle of starting (counted against the license)."""
+        return sum(1 for s, d in self.dev.items() if self.running(s) or d.get("starting"))
+
     def allowed(self, serial):
-        """License check: only the first N emulators of the list may run (N = instances of the license)."""
+        """License check: any number of emulators can be in the list, but only N of them may RUN at the same
+        time (N = emulators of the license). One that is already running or starting is always allowed."""
         lim = self.lic.limit()
         if lim is None:
             return True
-        ids = [d["id"] for d in self.devices]
-        return serial in ids and ids.index(serial) < lim
+        d = self.dev.get(serial)
+        if d is None:
+            return False
+        if self.running(serial) or d.get("starting"):
+            return True
+        return self.n_active() < lim
+
+    def run_cap(self, cfg=None):
+        """How many emulators may run at once: the 'at most N at once' setting and the license, whichever is lower (0 = no cap)."""
+        cfg = cfg or self.cfg
+        caps = [int(cfg.get("max_running_emulators", 0) or 0)]
+        lim = self.lic.limit()
+        if lim:
+            caps.append(int(lim))
+        caps = [c for c in caps if c > 0]
+        return min(caps) if caps else 0
 
     def set_devices(self, rows):
         out, seen = [], set()
@@ -174,13 +194,42 @@ class Controller:
             if i and i not in seen:
                 seen.add(i)
                 out.append({"id": i, "name": str(r.get("name", "")).strip()})
-        lim = self.lic.limit()
-        if lim and len(out) > lim:
-            out = out[:lim]
-            self.toast("error", f"Your license allows {lim} emulator(s). Extra ones were removed - buy a bigger license to add more.")
         with self.lock:
+            old = [d["id"] for d in self.devices]
+            new = [d["id"] for d in out]
+            gone = [i for i in old if i not in new]
+            removed = [i for i in self.removed if i not in new] + [i for i in gone if i not in self.removed]   # typed back in = wanted again
+            changed = removed != self.removed or old != new
+            self.removed = removed
             self.devices = out
             self.sync_devices()
+        if changed:
+            self._persist_devices()
+
+    def _persist_devices(self):
+        """Write the emulator list and the removed list to the settings file at once, so a restart of the app or of
+        the emulators never brings removed emulators back (even if Save was not pressed)."""
+        try:
+            with self.lock:
+                cfg = rb.load_config()
+                ids = [d["id"] for d in self.devices]
+                cfg["devices"] = ids
+                cfg["device_id"] = ids[0] if ids else ""
+                cfg["device_names"] = {d["id"]: d["name"] for d in self.devices if d["name"]}
+                cfg["removed_devices"] = list(self.removed)
+                rb.save_config(cfg)
+                for k in ("devices", "device_id", "device_names", "removed_devices"):
+                    self.cfg[k] = cfg[k]
+        except Exception as e:
+            self.log(f"[!] Could not save the emulator list: {e}")
+
+    def restore_removed(self):
+        """Forget the removed list: the next Detect may add those emulators again."""
+        with self.lock:
+            n = len(self.removed)
+            self.removed = []
+        self._persist_devices()
+        return n
 
     def running(self, serial):
         d = self.dev.get(serial)
@@ -222,9 +271,7 @@ class Controller:
         num("stuck_seconds", "Stuck seconds")
         num("max_emulator_restarts", "Emulator restarts per hour")
         num("adaptive_max", "Slowest it goes", 1, 5, float)
-        for k in ("general_main_tab", "general_assistant_tab"):
-            if cfg.get(k) not in (None, ""):                 # empty = use the general tab setting (a fresh install has not opened the Presets page yet)
-                num(k, "General tab", 0, 5)
+        # general tabs are fixed by fix_general_tabs() before this check: a missing one never stops Start
         if not cfg.get("rally_timer_source"):
             raise ApiError("The rally countdown has to be read from the progress bar or the join button.")
         try:
@@ -238,6 +285,44 @@ class Controller:
                 except ValueError as e:
                     raise ApiError(f"{s}: schedule: {e}")
 
+    @staticmethod
+    def _tab_value(v):
+        """A general tab as 0-5, or None when it is empty or unreadable ("", "All", null...)."""
+        if v in (None, ""):
+            return None
+        if isinstance(v, str) and not re.fullmatch(r"\s*\d+(\.0+)?\s*", v):
+            names = ["leave as is", "all", "military", "development", "duty", "subordinate city"]
+            return names.index(v.strip().lower()) if v.strip().lower() in names else None
+        try:
+            return max(0, min(5, int(float(v))))
+        except (TypeError, ValueError):
+            return None
+
+    def fix_general_tabs(self, cfg):
+        """An empty or wrong general tab must not block Start: it falls back to the global one (or 'Leave as is'),
+        and the log says which emulator it was."""
+        names = {d["id"]: (d["name"] or d["id"]) for d in self.devices}
+        for k in ("general_main_tab", "general_assistant_tab"):
+            raw = cfg.get(k)
+            v = self._tab_value(raw)
+            if v is None and raw not in (None, ""):
+                self.log(f"[i] {'Main' if 'main' in k else 'Assistant'} general tab '{raw}' is not valid - using the general tab setting.")
+            cfg[k] = v
+        for s, ov in (cfg.get("per_device") or {}).items():
+            if not isinstance(ov, dict):
+                continue
+            for k in ("general_main_tab", "general_assistant_tab", "general_tab"):
+                if k not in ov:
+                    continue
+                v = self._tab_value(ov[k])
+                if v is None:
+                    if ov[k] not in (None, ""):
+                        self.log(f"[i] {names.get(s, s)}: {'main' if 'main' in k else 'assistant' if 'assistant' in k else ''} general tab '{ov[k]}' is not valid - using the global setting.")
+                    ov.pop(k)
+                else:
+                    ov[k] = v
+        return cfg
+
     def apply_config(self, posted, devices=None):
         """Merge what the interface sends into the saved settings (checked first), keep it for the bots."""
         with self.lock:
@@ -250,6 +335,8 @@ class Controller:
             cfg["device_id"] = ids[0] if ids else cfg.get("device_id", "")
             cfg["device_names"] = {d["id"]: d["name"] for d in self.devices if d["name"]}
             cfg["per_device"] = {s: ov for s, ov in (cfg.get("per_device") or {}).items() if s in ids and ov}
+            cfg["removed_devices"] = list(self.removed)       # kept by the app, not by the page
+            self.fix_general_tabs(cfg)
             _mt = cfg.get("general_main_tab")
             cfg["general_tab"] = _mt if _mt not in (None, "") else (cfg.get("general_tab") or 0)
             cfg["general_favourites"] = cfg.get("general_main_fav", "leave")
@@ -270,31 +357,36 @@ class Controller:
     # ------------------------------------------------------------------ start / stop
     def start_instance(self, serial, cfg=None):
         d = self.dev.get(serial)
-        if d is None or self.running(serial):
+        if d is None or self.running(serial) or d.get("starting"):
             return
-        if not self.allowed(serial):
-            lim = self.lic.limit()
-            self.log("[!] No valid license - open the License tab." if not lim else
-                     f"[!] Your license allows {lim} emulator(s); this one is over the limit.", serial)
+        lim = self.lic.limit()
+        if lim is not None and not lim:
+            self.log("[!] No valid license - open the License tab.", serial)
             return
         cfg = cfg or self.cfg
-        cap = int(cfg.get("max_running_emulators", 0) or 0)
-        if cap > 0 and self.n_running() >= cap:
-            if serial not in self.start_queue:
-                self.start_queue.append(serial)
-                self.log(f"[*] Waiting for a free slot (at most {cap} emulators run at once)", serial)
-            return
-        if serial in self.start_queue:
-            self.start_queue.remove(serial)
-        log = lambda m, s=serial: self.log(m, s)
-        adb = rb.prepare(cfg, log)
-        if not adb:
-            d["failed"], d["state"] = True, "error"
-            return
-        d["joins"], d["connected"], d["failed"] = 0, False, False
-        d["thread"] = rb.start_instance(serial, adb, cfg, log, d["ctl"], on_frame=None,
-                                        on_end=lambda s: self._ended(s))
-        d["state"] = "run" if d["thread"] is not None else "idle"
+        with self.lock:                                   # check and reserve the seat together (starts can overlap)
+            cap = self.run_cap(cfg)
+            if cap > 0 and self.n_active() >= cap:
+                if serial not in self.start_queue:
+                    self.start_queue.append(serial)
+                    why = (f"your plan runs {lim} emulator(s) at once" if lim and cap == lim else f"at most {cap} emulators run at once")
+                    self.log(f"[*] Waiting for a free slot ({why}) - it starts when another one stops", serial)
+                return
+            if serial in self.start_queue:
+                self.start_queue.remove(serial)
+            d["starting"] = True
+        try:
+            log = lambda m, s=serial: self.log(m, s)
+            adb = rb.prepare(cfg, log)
+            if not adb:
+                d["failed"], d["state"] = True, "error"
+                return
+            d["joins"], d["connected"], d["failed"] = 0, False, False
+            d["thread"] = rb.start_instance(serial, adb, cfg, log, d["ctl"], on_frame=None,
+                                            on_end=lambda s: self._ended(s))
+            d["state"] = "run" if d["thread"] is not None else "idle"
+        finally:
+            d["starting"] = False
 
     def _ended(self, serial):
         d = self.dev.get(serial)
@@ -303,8 +395,8 @@ class Controller:
         self._start_next_queued()
 
     def _start_next_queued(self):
-        cap = int(self.cfg.get("max_running_emulators", 0) or 0)
-        while self.start_queue and (cap <= 0 or self.n_running() < cap):
+        cap = self.run_cap()
+        while self.start_queue and (cap <= 0 or self.n_active() < cap):
             s = self.start_queue.pop(0)
             if s in self.dev and not self.running(s):
                 self.start_instance(s)
@@ -353,12 +445,20 @@ class Controller:
         self.log("[*] Stopping...", serial)
 
     def start_all(self, auto=False):
-        todo = [d["id"] for d in self.devices if not self.running(d["id"]) and self.allowed(d["id"])]
+        todo = [d["id"] for d in self.devices if d["id"] and not self.running(d["id"])]
         if auto:      # app just opened: each emulator follows its own 'start by itself' switch (falls back to the global one)
             todo = [s for s in todo if rb.merge_device_cfg(self.cfg, s).get("auto_start")]
-        if not self.lic.limit() and self.lic.limit() is not None:
+        lim = self.lic.limit()
+        if lim is not None and not lim:
             self.log("[!] No valid license - open the License tab.")
-        self.log(f"[+] Starting {len(todo)} emulator(s)...")
+            return
+        cap = self.run_cap()
+        free = max(0, cap - self.n_active()) if cap else len(todo)
+        if cap and len(todo) > free:
+            why = f"your plan runs {lim} at once" if lim and cap == lim else f"at most {cap} run at once"
+            self.log(f"[+] Starting {min(free, len(todo))} emulator(s); {len(todo) - free} more wait for a free slot ({why}).")
+        else:
+            self.log(f"[+] Starting {len(todo)} emulator(s)...")
         cfg = self.cfg
         for i, s in enumerate(todo):
             gap = max(0, int(cfg.get("start_gap_seconds", 40) or 0))
@@ -493,18 +593,43 @@ class Controller:
         if not found:
             self.log("[!] No emulators found. Start them and enable ADB.")
             return {"found": [], "devices": self.devices}
-        self.log(f"[+] Found {len(found)}: {', '.join(found)}")
         with self.lock:
-            by_id = {d["id"]: d for d in self.devices}
+            listed = {d["id"] for d in self.devices}
+            # the same emulator can answer as emulator-5556 and as 127.0.0.1:5557 - keep one of them
+            same = {}
             for dev in found:
-                if dev not in by_id:
-                    row = {"id": dev, "name": ""}
-                    self.devices.append(row)
-                    by_id[dev] = row
-                if not by_id[dev]["name"] and names.get(dev):
+                m = re.fullmatch(r"emulator-(\d+)", dev)
+                if m:
+                    same[dev] = f"127.0.0.1:{int(m.group(1)) + 1}"
+            dupes = [e for e, ip in same.items() if ip in found and e not in listed]
+            dupes += [ip for e, ip in same.items() if ip in found and e in listed and ip not in listed]
+            found = [f for f in found if f not in dupes]
+            skipped = [f for f in found if f in self.removed and f not in listed]
+            new = [f for f in found if f not in listed and f not in skipped]
+            msg = f"[+] Found {len(found)}: {', '.join(found)}"
+            self.log(msg)
+            if dupes:
+                self.log(f"[i] Same emulator under two names, kept one: {', '.join(dupes)} not added")
+            if skipped:
+                self.log(f"[i] Not added because you removed them earlier: {', '.join(skipped)} (type the ID in to add one back)")
+            by_id = {d["id"]: d for d in self.devices}
+            if new and len(self.devices) == 1 and not self.devices[0]["id"]:
+                self.devices = []                             # replace the empty first row
+                by_id = {}
+            for dev in new:
+                row = {"id": dev, "name": ""}
+                self.devices.append(row)
+                by_id[dev] = row
+            for dev in found:
+                if dev in by_id and not by_id[dev]["name"] and names.get(dev):
                     by_id[dev]["name"] = names[dev]
             self.sync_devices()
-        return {"found": found, "devices": self.devices}
+        if new:
+            self._persist_devices()
+        lim = self.lic.limit()
+        if lim and len(self.devices) > lim:
+            self.log(f"[i] {len(self.devices)} emulators in the list - your plan runs {lim} at the same time, the others wait their turn.")
+        return {"found": found, "new": new, "skipped": skipped, "dupes": dupes, "devices": self.devices}
 
     # ------------------------------------------------------------------ screenshots
     def keep_shot(self, img):
@@ -550,13 +675,23 @@ class Controller:
         def real(n):                                          # hide junk names left by poor scans ("a ae", "all tie")
             k = key(n)
             return len(k) >= 4 and (rb.is_known_general(rb.snap_name(n, [])) or any(x.startswith(k) or k in x for x in known))
+        pictured = set()
         for n in rb.list_generals(refresh=True):
             if not real(n):
                 continue
+            pictured.add(key(n))
             m = rb.get_general_meta(n)
             c = cat.get(n) or {}
             out.append({"name": n, "tab": m.get("tab"), "fav": m.get("fav"), "copy": m.get("copy", "any"), "tabs": m.get("tabs", []),
-                        "region": c.get("region", []), "troops": c.get("troops", []), "cat_tab": rb.catalog_tab(n) if c else 0, "cat": m.get("cat", "")})
+                        "region": c.get("region", []), "troops": c.get("troops", []), "cat_tab": rb.catalog_tab(n) if c else 0, "cat": m.get("cat", ""), "pic": True})
+        hidden = set(rb.load_general_meta().get("__hidden__", []))
+        for n in rb.KNOWN_GENERALS:                           # every general of the game can be listed, also without a picture (found by name)
+            if key(n) in pictured or n in hidden:
+                continue
+            m = rb.get_general_meta(n)
+            out.append({"name": n, "tab": m.get("tab"), "fav": m.get("fav"), "copy": m.get("copy", "any"), "tabs": m.get("tabs", []),
+                        "region": [], "troops": [], "cat_tab": 0, "cat": m.get("cat", ""), "pic": False})
+        out.sort(key=lambda g: (not g["pic"], g["name"].lower()))
         return out
 
     def ready_device(self, serial, adb, stop, check_ready=True):
@@ -1242,6 +1377,20 @@ class Api:
     def detect(self, p):
         return self.c.detect()
 
+    def restore_removed(self, p):
+        n = self.c.restore_removed()
+        return {"restored": n, "devices": self.c.devices}
+
+    def reorder_devices(self, p):
+        """New order of the emulator list (dragged in the left sidebar). Saved at once."""
+        order = [str(x) for x in (p.get("order") or [])]
+        with self.c.lock:
+            by_id = {d["id"]: d for d in self.c.devices}
+            rows = [by_id[i] for i in order if i in by_id] + [d for d in self.c.devices if d["id"] not in order]
+        self.c.set_devices(rows)
+        self.c._persist_devices()
+        return {"devices": self.c.devices}
+
     # ---- run control
     def start(self, p):
         c = self.c
@@ -1654,8 +1803,17 @@ class Handler(BaseHTTPRequestHandler):
                 if not self._authed(q):
                     return self._send(403, {"ok": False, "error": "forbidden"})
                 return self._get_api(path, q)
-            f = (UI_DIR / path.lstrip("/")).resolve()
-            if UI_DIR.resolve() in f.parents and f.is_file():
+            f = None
+            # an update only brings the code (js / css / html): pictures such as the logo stay in the installed copy,
+            # so look there too instead of showing a broken image
+            for base in (UI_DIR, rb.RES / "ui", rb.RES):
+                c = (base / path.lstrip("/")).resolve()
+                if base.resolve() in c.parents and c.is_file():
+                    f = c
+                    break
+            if f is None and path.endswith("/logo.png") and (rb.RES / "assets" / "logo.png").is_file():
+                f = (rb.RES / "assets" / "logo.png").resolve()
+            if f is not None:
                 ctype = mimetypes.guess_type(str(f))[0] or "application/octet-stream"
                 if f.suffix in (".js", ".css", ".html", ".svg"):
                     ctype += "; charset=utf-8"
