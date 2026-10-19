@@ -128,7 +128,7 @@ class License:
         return int(self.payload["n"]) if self.payload else 0
 
     def info(self):
-        p, error, user = self.payload or {}, self.error, self.user
+        p = self.payload or {}
         left = None
         if p.get("exp"):
             try:
@@ -295,7 +295,7 @@ class AccountLicense:
         return int(p["n"]) if p else 0
 
     def info(self):
-        p = self.payload or {}
+        p, error, user = self.payload or {}, self.error, self.user
         left = None
         if p.get("exp"):
             try:

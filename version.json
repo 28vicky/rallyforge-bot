@@ -1,15 +1,15 @@
 {
-  "version": "2.4.12",
-  "notes": "Fix: login window no longer reappears when saving an emulator; updates work with an empty update address.",
+  "version": "2.4.13",
+  "notes": "Fix: error in the account check (NameError user). Login no longer reappears when saving; updates work with a blank address.",
   "files": {
     "rally_bot.py": {
-      "sha256": "abc1d885d19fe2f461e1cd900b038883f3de5ebabc8312bb3545b7ef5d9ec358"
+      "sha256": "4a36ef9d16e864f6d9f522f58445ad9959b159adbafed6c0f7721b488f8ca120"
     },
     "web_app.py": {
       "sha256": "e68c6b1f7b4f5606ee038dfb9813b6eff3fe92529fab86a76923200abaf3bef9"
     },
     "rf_license.py": {
-      "sha256": "d0a63d405eb24237e94b9e20b90cf9029c58976be76ab31f78ce2f9db2bd4387"
+      "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
       "sha256": "8469f0071476ff2f26acab8a8624e30accd93ccea0f5b6398f070676cdbf1034"
@@ -18,7 +18,7 @@
       "sha256": "91274939a9302582fdf1815bfe5f4b7312717d60f3666d14c79e403bd1d73464"
     },
     "ui/changelog.js": {
-      "sha256": "76740d79ea4d98a18f573fb725cf5147d623364cb7635a9343778215b8f42f3e"
+      "sha256": "a81b2ab629d3fbbca0f699b9d34431a8459af1e11a28b50ed7686e162eefd585"
     },
     "ui/dialogs.js": {
       "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
@@ -44,5 +44,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "04ba554982aa5dddae495d00ac4b934754728a78e7eff17c93e916a8d818bfa4"
+  "sig": "4827a0217132434c297226a9bdf571da58974b27520af8e292b1ad35567ab4ae"
 }
