@@ -1,33 +1,33 @@
 {
-  "version": "2.4.21",
-  "notes": "Pause lasts 15 min then resumes",
+  "version": "2.4.22",
+  "notes": "General categories; Setup and App tab dropdowns; solid selected buttons; monster list cleanup (Summoned group, level numbers)",
   "files": {
     "rally_bot.py": {
-      "sha256": "c4834f06bb8c1789118aff10431bc41eb6c927a7c24cbd2f72ca55f64090bf35"
+      "sha256": "9ad1b33454410c6def80be09888fcb64893e85427048aed2289dab670d5c8c4c"
     },
     "web_app.py": {
-      "sha256": "3d86644dff7395946b97aa420bb105fc90efd61f4f5350dd2664cf0c773d2842"
+      "sha256": "c50e13c0e2dcf8cd36fe516149ab9142548050d70d9ceee35ae0144b27e3f257"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "cd146cdd6c7d39edba04227fbfb06da0e13db89cf906802ec601b136bc138b50"
+      "sha256": "94feaf1c7a07899f8f73a23b240b5ae61470e0f54c449b52c89c21c2840926fe"
     },
     "ui/app.js": {
-      "sha256": "a3dca8705b979d2046179fe1fa27ca10f5123b35004a7a6688ebecf9392ecb5a"
+      "sha256": "940647e5369d400efa46788d93147ac0281abe592bca537df2167210070cd5ae"
     },
     "ui/changelog.js": {
-      "sha256": "d2b4ba2a8be526463e8166d925f0e9fe2023160ee53c163fb88d2b7d98e250fa"
+      "sha256": "f6d36a3d1c33b736977043ab9684dcab5f36c2a441d1679317bb5c5549b7be4b"
     },
     "ui/dialogs.js": {
-      "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
+      "sha256": "5118411f4218bf8ef2b9e705f2fa2c12ffa374beed877f996b646838f281b098"
     },
     "ui/index.html": {
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "ded5c9d9d9d8be09ffa13e65a88a1fe2e0873bfc5b25ee413b67b07a6dfd9614"
+      "sha256": "a0b2c9ae648b5c382335c96e42a0d769835fba0a50c7eed994a53c7230ffcc90"
     }
   },
   "monsters": {
@@ -114,5 +114,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "909df3701ace869b64d3863ddac0918c843ad7abf097a9eb66edca5c6aac1a10"
+  "sig": "9c91cb8dd86be735876b0895505240cb8976d4cf67841529dc15a9eb38c95842"
 }

@@ -149,10 +149,13 @@ function pickOnShot(shot, hint, mode, boxSize) {
 function genFilter(onchange) {
   const troops = ["All troop types", ...new Set(S.generals.flatMap((g) => g.troops || []))];
   const regions = ["All regions", ...new Set(S.generals.flatMap((g) => g.region || []))];
-  const st = { troop: troops[0], region: regions[0] };
+  const cats = ["All categories", ...new Set(S.generals.map((g) => g.cat).filter(Boolean)), "(no category)"];
+  const st = { troop: troops[0], region: regions[0], cat: cats[0] };
   const mk = (arr, key) => h("select", { onchange: (e) => { st[key] = e.target.value; onchange(); } }, arr.map((x) => h("option", {}, x)));
-  const el = (troops.length > 1 || regions.length > 1) ? h("div", { class: "row", style: { margin: "6px 0" } }, mk(troops, "troop"), mk(regions, "region")) : h("span");
-  st.ok = (g) => (st.troop === troops[0] || (g.troops || []).includes(st.troop)) && (st.region === regions[0] || (g.region || []).includes(st.region));
+  const hasCat = cats.length > 2;
+  const el = (troops.length > 1 || regions.length > 1 || hasCat) ? h("div", { class: "row", style: { margin: "6px 0" } }, troops.length > 1 ? mk(troops, "troop") : null, regions.length > 1 ? mk(regions, "region") : null, hasCat ? mk(cats, "cat") : null) : h("span");
+  st.ok = (g) => (st.troop === troops[0] || (g.troops || []).includes(st.troop)) && (st.region === regions[0] || (g.region || []).includes(st.region))
+    && (st.cat === cats[0] || (st.cat === "(no category)" ? !g.cat : g.cat === st.cat));
   st.el = el;
   return st;
 }
@@ -165,9 +168,12 @@ function chooseGenerals(title, current) {
     const gimg = (n) => h("img", { src: `/api/general_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, onerror: (e) => (e.target.style.display = "none") });
     const draw = () => {
       A.innerHTML = ""; C.innerHTML = "";
+      const cnt = {};
+      S.generals.forEach((g) => { if (g.cat) cnt[g.cat] = (cnt[g.cat] || 0) + 1; });
+      Object.keys(cnt).sort().forEach((c) => { const k = "@" + c; A.appendChild(h("div", { class: "li" + (selA.has(k) ? " sel" : ""), title: "Every general in this category is tried (the first free one is used)", onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(k) ? selA.delete(k) : selA.add(k); else { selA = new Set([k]); } draw(); }, ondblclick: () => add() }, h("b", {}, "Category: " + c), h("span", { class: "hint", style: { marginLeft: "8px" } }, cnt[c] + (cnt[c] === 1 ? " general" : " generals")))); });
       S.generals.filter((g) => flt.ok(g)).forEach((g) => A.appendChild(h("div", { class: "li" + (selA.has(g.name) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(g.name) ? selA.delete(g.name) : selA.add(g.name); else { selA = new Set([g.name]); } draw(); }, ondblclick: () => add() }, gimg(g.name), g.name)));
       if (!S.generals.length) A.appendChild(h("div", { class: "empty" }, "No saved generals yet. Use 'Scan generals' or 'Add general from screenshot'."));
-      chosen.forEach((n, i) => C.appendChild(h("div", { class: "li" + (selC.has(n) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selC.has(n) ? selC.delete(n) : selC.add(n); else { selC = new Set([n]); } draw(); } }, h("span", { class: "chip" }, i + 1), n)));
+      chosen.forEach((n, i) => C.appendChild(h("div", { class: "li" + (selC.has(n) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selC.has(n) ? selC.delete(n) : selC.add(n); else { selC = new Set([n]); } draw(); } }, h("span", { class: "chip" }, i + 1), n.startsWith("@") ? "Category: " + n.slice(1) : n)));
     };
     const add = () => { selA.forEach((n) => { if (!chosen.includes(n)) chosen.push(n); }); draw(); };
     const remove = () => { chosen = chosen.filter((n) => !selC.has(n)); selC.clear(); draw(); };
@@ -204,6 +210,9 @@ function openGeneralManager() {
   const tab = h("select", {}, TABS_.map((t) => h("option", {}, t)));
   const fav = h("select", {}, FAVS.map((t) => h("option", {}, t)));
   const copy = h("select", {}, COPIES.map((t) => h("option", {}, t)));
+  const catList = h("datalist", { id: "genCats" });
+  const catIn = h("input", { type: "text", list: "genCats", placeholder: "e.g. Ground, Mounted, Ranged - or leave empty" });
+  const fillCats = () => { catList.innerHTML = ""; [...new Set(S.generals.map((g) => g.cat).filter(Boolean))].sort().forEach((c) => catList.appendChild(h("option", { value: c }))); };
   const pic = h("img", { class: "gen-pic", style: { display: "none" } });
   const msg = h("div", { class: "hint" }, "'(use default)' = use the Main / Assistant tab and favourites settings. The picture must come from a screenshot of the grid view, because the bot finds the general by matching it.");
   const find = (n) => S.generals.find((g) => g.name === n);
@@ -213,7 +222,7 @@ function openGeneralManager() {
     const items = S.generals.filter((g) => (!term || g.name.toLowerCase().includes(term)) && flt.ok(g));
     items.forEach((g) => list.appendChild(h("div", { class: "li" + (g.name === cur ? " sel" : ""), onclick: () => select(g.name) },
       h("img", { src: `/api/general_img?name=${encodeURIComponent(g.name)}&k=${window.KEY}&t=${Date.now() % 100000}`, onerror: (e) => (e.target.style.display = "none") }),
-      h("span", { style: { flex: 1 } }, g.name), h("span", { class: "hint", style: { color: "inherit", opacity: .7 } }, `${g.tab == null ? (g.cat_tab ? TAB_CHOICES[g.cat_tab] + " (auto)" : "default tab") : TAB_CHOICES[Number(g.tab)]} · ${g.fav || "default"}`))));
+      h("span", { style: { flex: 1 } }, g.name), h("span", { class: "hint", style: { color: "inherit", opacity: .7 } }, `${g.cat ? g.cat + " · " : ""}${g.tab == null ? (g.cat_tab ? TAB_CHOICES[g.cat_tab] + " (auto)" : "default tab") : TAB_CHOICES[Number(g.tab)]} · ${g.fav || "default"}`))));
     if (!items.length) list.appendChild(h("div", { class: "empty" }, "No generals. Use 'Scan from the game' or 'Add from screenshot'."));
   }
   function select(n) {
@@ -222,6 +231,7 @@ function openGeneralManager() {
     name.value = n;
     tab.value = g.tab == null ? TABS_[0] : TABS_[1 + Number(g.tab)];
     fav.value = g.fav || FAVS[0];
+    catIn.value = g.cat || ""; fillCats();
     const c = g.copy;
     copy.selectedIndex = c === "stars" ? 1 : c === "any" || c == null ? 0 : (Number(c) >= 1 && Number(c) <= 6 ? 1 + Number(c) : 0);
     pic.src = `/api/general_img?name=${encodeURIComponent(n)}&k=${window.KEY}&t=${Date.now()}`; pic.style.display = "";
@@ -232,7 +242,7 @@ function openGeneralManager() {
     const t = tab.value === TABS_[0] ? null : Number(tab.value[0]);
     const f = fav.value === FAVS[0] ? null : fav.value;
     const ci = copy.selectedIndex;
-    const j = await act(api("general_meta", { name: cur, new_name: name.value.trim(), tab: t, fav: f, copy: ci === 0 ? null : ci === 1 ? "stars" : ci - 1 }));
+    const j = await act(api("general_meta", { name: cur, new_name: name.value.trim(), tab: t, fav: f, copy: ci === 0 ? null : ci === 1 ? "stars" : ci - 1, cat: catIn.value.trim() }));
     if (!j) return;
     if (j.renamed) swapGeneral(cur, j.name);
     S.generals = j.generals; cur = j.name; drawList(); select(cur); msg.textContent = `Saved '${j.name}'.`;
@@ -249,6 +259,7 @@ function openGeneralManager() {
     h("button", { class: "btn sm", onclick: del }, "Delete")), search, flt.el, h("div", { style: { height: "8px" } }), list);
   const right = h("div", { class: "field", style: { gap: "9px" } }, h("label", {}, "General name"), name, h("label", {}, "Tab in the 'Select a General' list"), tab,
     h("label", {}, "Favourites filter (heart)"), fav, h("label", {}, "If you own several copies of it"), copy,
+    h("label", {}, "Category (your own group, e.g. Ground / Mounted)"), catIn, catList,
     h("div", {}, h("button", { class: "btn pri sm", onclick: save }, "Save changes")), h("label", {}, "Picture the bot looks for"), pic,
     h("button", { class: "btn sm", onclick: recapture }, "New picture from a screenshot..."), msg);
   drawList();

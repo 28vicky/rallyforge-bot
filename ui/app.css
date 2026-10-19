@@ -351,3 +351,28 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .state-pill.st-stop,.state-pill.st-error{border-color:var(--bad);color:var(--bad)}
 [data-mode="light"] .btn[class*="cur-"],[data-mode="light"] .ribbon .btn[class*="cur-"]{color:#fff}
 .ribbon .btn[class*="cur-"] .ico,.btn[class*="cur-"] .ico{color:#1a1208!important}.ribbon .btn[class*="cur-"] .ico svg{stroke:currentColor}[data-mode="light"] .btn[class*="cur-"] .ico{color:#fff!important}
+
+
+.tab.grp .gcur{opacity:.85;font-weight:600}
+.tab.grp .gcur::before{content:"\00b7";margin-right:8px;opacity:.6}
+.tab.grp .chev{font-size:11px;opacity:.7;margin-left:2px}
+.tabmenu{position:fixed;z-index:9999;min-width:210px;padding:6px;border-radius:14px;background:var(--card,var(--bg2,#1b1b22));border:1px solid var(--line,rgba(255,255,255,.12));box-shadow:0 14px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:2px}
+.tmi{display:flex;align-items:center;gap:10px;padding:9px 12px;border:0;border-radius:9px;background:transparent;color:var(--fg);font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.tmi:hover{background:rgba(127,127,127,.18)}
+.tmi.on{background:var(--accent);color:var(--accfg)}
+.tmi .ico svg{width:17px;height:17px}
+.tabs{flex-wrap:wrap}
+.tab{white-space:nowrap;flex:0 0 auto}
+/* selected = solid colour */
+.tab.on,.btn.on,.segb.on,.seg button.on,.tmi.on,.ctlbtn.on{background:var(--accent1);color:var(--accfg);box-shadow:none}
+.tabs{align-items:center}
+.tab{flex-direction:row;display:inline-flex;align-items:center}
+/* one-shot ribbon buttons: solid colour on hover only */
+.ribbon .btn:hover:not(:disabled),.ribbon .btn:focus-visible{background:var(--accent1);color:var(--accfg);border-color:transparent;box-shadow:none}
+.ribbon .btn:hover .ico,.ribbon .btn:focus-visible .ico{color:var(--accfg)!important}
+/* Paused / Stopped state = solid primary */
+.btn.cur-pause,.btn.cur-stop,.ribbon .btn.cur-pause,.ribbon .btn.cur-stop{background:var(--accent1);color:var(--accfg);border-color:transparent;box-shadow:none}
+.btn.cur-pause .ico,.btn.cur-stop .ico,.ribbon .btn.cur-pause .ico,.ribbon .btn.cur-stop .ico{color:var(--accfg)!important}
+.mon-lvnum{display:inline-block;min-width:1.9em;margin-right:8px;padding:1px 7px;border-radius:99px;background:rgba(127,127,127,.22);font-size:13px;text-align:center}
+.seg{flex-wrap:wrap;border-radius:18px;max-width:100%}
+.seg .segb{white-space:nowrap;border-radius:99px}

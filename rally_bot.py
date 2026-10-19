@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.21"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.22"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -942,14 +942,14 @@ MONSTER_NAMES = ["Zombie", "Redcap", "Centaur", "Skeleton Dragon", "Werewolf", "
                  "Griffin", "Ifrit", "Kamaitachi", "Fafnir", "Behemoth", "Phoenix", "Jormungandr", "Typhon", "Ammit",
                  "Stymphalian Bird", "Kraken", "Azazel", "Leviathan", "Garmr", "Sphinx", "Garuda", "Warlord", "Witch",
                  "Knight Bayard", "Cerberus", "Golem", "Hydra", "Junior Hydra", "Lava Turtle", "Pan", "Ymir",
-                 "Pumpkin Monster", "Skullcrawler", "Thunder Scorpion", "Bird of Hurricane", "Terminator"]
-MONSTER_CATALOG = [["Normal boss",[["Zombie",[[1,"36.5K"]]],["Redcap",[[2,"219K"]]],["Centaur",[[3,"328.5K"]]],["Skeleton Dragon",[[4,"787.2K"]]],["Werewolf",[[5,"1.3M"]]],["Manticore",[[6,"2.2M"]]],["Yasha",[[7,"3.4M"]]],["Peryton",[[8,"6.5M"]]],["Minotaur",[[9,"9.9M"]]],["Griffin",[[10,"17.9M"]]],["Ifrit",[[11,"59.6M"]]],["Kamaitachi",[[12,"89.4M"]]],["Fafnir",[[13,"134.1M"]]],["Behemoth",[[14,"187.7M"]]],["Phoenix",[[15,"262.7M"]]],["Jormungandr",[[16,"394.1M"]]],["Typhon",[[17,"551.8M"]]],["Ammit",[[18,"800.1M"]]],["Stymphalian Bird",[[19,"1.1B"]]],["Kraken",[[20,"1.6B"]]],["Azazel",[[21,"2.6B"]]],["Leviathan",[[22,"3.3B"]]],["Garmr",[[23,"4.7B"]]]]],["Event boss",[["Fenrir",[[1,"27.4K"],[2,"186.1K"],[3,"492.7K"]]],["Garuda",[[1,"1.3M"],[2,"1.7M"],[3,"125M"]]],["Royal Thief",[[1,"13.6M"]]],["Lava Turtle",[[1,"12.4M"],[2,"22.3M"],[3,"74.5M"],[4,"147.5M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Golem",[[1,"12.4M"],[2,"22.3M"],[3,"74.5M"],[4,"147.5M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Witch",[[1,"13M"],[2,"24.6M"],[3,"85.6M"],[4,"154.8M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Warlord",[[1,"13M"],[2,"24.6M"],[3,"85.6M"],[4,"154.8M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Ymir",[[1,"23.4M"],[2,"70.8M"],[3,"120.2M"],[4,"206.4M"],[5,"361.3M"],[6,"722.6M"],[7,"1.8B"]]],["Sphinx",[[1,"12.4M"],[2,"22.3M"],[3,"74.5M"],[4,"147.5M"],[5,"225.2M"],[6,"472.9M"],[7,"914.4M"],[8,"2B"]]],["Pan",[[1,"22.3M"],[2,"42.8M"],[3,"122.9M"],[4,"206.4M"],[5,"361.3M"],[6,"711.7M"],[7,"1.8B"]]],["Hydra",[[1,"84.9M"],[2,"120.6M"],[3,"198.9M"],[4,"328.4M"],[5,"678.8M"],[6,"1.5B"]]],["Knight Bayard",[[1,"65.5M"],[2,"147.5M"],[3,"225.2M"],[4,"668.1M"],[5,"1.5B"]]],["Cerberus",[[1,"68.2M"],[2,"153.4M"],[3,"234.2M"],[4,"694.9M"],[5,"1.5B"]]],["Aglaope",[[1,"120.2M"]]],["Achelois",[[1,"17.9M"],[2,"89.4M"],[3,"187.7M"]]],["Basilisk",[[1,"130M"]]],["Draugr",[[1,"130M"]]],["Taotie",[[1,"124.6M"],[2,"398.1M"],[3,"805.1M"]]],["Desert Bandit",[[1,"3.5M"],[2,"5.5M"],[3,"10.4M"],[4,"19.5M"],[5,"30.6M"],[6,"48M"],[7,"82.4M"],[8,"118.1M"],[9,"165.2M"],[10,"289M"]]]]],["Limited-time event",[["Pumpkin Monster",[[1,"708.5K"],[2,"1.9M"],[3,"5.9M"],[4,"16.1M"],[5,"53.6M"],[6,"80.4M"],[7,"134.1M"],[8,"268.1M"]]],["Nian",[[1,"59.6M"],[2,"71.5M"],[3,"89.4M"],[4,"134.1M"],[5,"236.5M"],[6,"472.9M"]]],["Cranky Snowman",[[4,"1.6M"],[5,"2.7M"],[6,"3.5M"],[7,"11M"]]]]],["Alliance challenge",[["Viking Icebreaker",[[1,"89.4M"]]],["Viking Berserker",[[2,"134.1M"]]],["Viking Chief",[[3,"262.7M"]]],["King of the Vikings",[[4,"1B"]]]]]]   # [category, [[name, [[level, power], ...]], ...]] from evonyguidewiki.com
-MONSTER_CATALOG.append(["Other monsters in the game's Auto-Join list", [[_n, [[1, ""]]] for _n in (
-    "Terminator", "Savage Tiger Gladiator", "Arachne", "Carcinus", "Harpy", "Serpopard", "Gugler Knight", "Nasu",
-    "Barbary Pirate", "Outlander Elites", "Temple Guard",
-    "Pan (Ranged Troop)", "Pan (Ground Troop)", "Pan (Mounted Troop)")]])     # no level / power data yet: whole-monster switch only
+                 "Pumpkin Monster", "Skullcrawler", "Thunder Scorpion", "Bird of Hurricane"]
+MONSTER_CATALOG = [["Normal monsters",[["Zombie",[[1,"36.5K"]]],["Redcap",[[2,"219K"]]],["Centaur",[[3,"328.5K"]]],["Skeleton Dragon",[[4,"787.2K"]]],["Werewolf",[[5,"1.3M"]]],["Manticore",[[6,"2.2M"]]],["Yasha",[[7,"3.4M"]]],["Peryton",[[8,"6.5M"]]],["Minotaur",[[9,"9.9M"]]],["Griffin",[[10,"17.9M"]]],["Ifrit",[[11,"59.6M"]]],["Kamaitachi",[[12,"89.4M"]]],["Fafnir",[[13,"134.1M"]]],["Behemoth",[[14,"187.7M"]]],["Phoenix",[[15,"262.7M"]]],["Jormungandr",[[16,"394.1M"]]],["Typhon",[[17,"551.8M"]]],["Ammit",[[18,"800.1M"]]],["Stymphalian Bird",[[19,"1.1B"]]],["Kraken",[[20,"1.6B"]]],["Azazel",[[21,"2.6B"]]],["Leviathan",[[22,"3.3B"]]],["Garmr",[[23,"4.7B"]]]]],["Event monsters",[["Lava Turtle",[[1,"12.4M"],[2,"22.3M"],[3,"74.5M"],[4,"147.5M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Golem",[[1,"12.4M"],[2,"22.3M"],[3,"74.5M"],[4,"147.5M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Witch",[[1,"13M"],[2,"24.6M"],[3,"85.6M"],[4,"154.8M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Warlord",[[1,"13M"],[2,"24.6M"],[3,"85.6M"],[4,"154.8M"],[5,"225.2M"],[6,"668.1M"],[7,"1.5B"]]],["Ymir",[[1,"23.4M"],[2,"70.8M"],[3,"120.2M"],[4,"206.4M"],[5,"361.3M"],[6,"722.6M"],[7,"1.8B"]]],["Sphinx",[[1,"12.4M"],[2,"22.3M"],[3,"74.5M"],[4,"147.5M"],[5,"225.2M"],[6,"472.9M"],[7,"914.4M"],[8,"2B"]]],["Pan",[[1,"22.3M"],[2,"42.8M"],[3,"122.9M"],[4,"206.4M"],[5,"361.3M"],[6,"711.7M"],[7,"1.8B"]]],["Hydra",[[1,"84.9M"],[2,"120.6M"],[3,"198.9M"],[4,"328.4M"],[5,"678.8M"],[6,"1.5B"]]],["Knight Bayard",[[1,"65.5M"],[2,"147.5M"],[3,"225.2M"],[4,"668.1M"],[5,"1.5B"]]],["Cerberus",[[1,"68.2M"],[2,"153.4M"],[3,"234.2M"],[4,"694.9M"],[5,"1.5B"]]],["Aglaope",[[1,"120.2M"]]]]],["Limited-time event",[["Pumpkin Monster",[[1,"708.5K"],[2,"1.9M"],[3,"5.9M"],[4,"16.1M"],[5,"53.6M"],[6,"80.4M"],[7,"134.1M"],[8,"268.1M"]]],["Nian",[[1,"59.6M"],[2,"71.5M"],[3,"89.4M"],[4,"134.1M"],[5,"236.5M"],[6,"472.9M"]]],["Cranky Snowman",[[4,"1.6M"],[5,"2.7M"],[6,"3.5M"],[7,"11M"]]]]]]   # [category, [[name, [[level, power], ...]], ...]] from evonyguidewiki.com
+_SUMMONED = [["Fenrir",[[1,"27.4K"],[2,"186.1K"],[3,"492.7K"]]],["Garuda",[[1,"1.3M"],[2,"1.7M"],[3,"125M"]]],["Achelois",[[1,"17.9M"],[2,"89.4M"],[3,"187.7M"]]],["Basilisk",[[1,"130M"]]],["Draugr",[[1,"130M"]]],["Taotie",[[1,"124.6M"],[2,"398.1M"],[3,"805.1M"]]]]
+MONSTER_CATALOG.append(["Summoned", _SUMMONED + [[_n, [[1, ""]]] for _n in (
+    "Savage Tiger Gladiator", "Arachne", "Carcinus", "Harpy", "Serpopard", "Gugler Knight", "Nasu",
+    "Barbary Pirate", "Outlander Elites", "Temple Guard")]])     # summoned / auto-join monsters; no level data yet for the plain ones
 VIKING_SETS = {"Viking (Easy)": [[1, "1.1M"], [10, "1.7M"], [20, "2.9M"], [30, "4.9M"], [40, "8.3M"], [50, "14.1M"]], "Viking (Normal)": [[1, "3.2M"], [2, "3.4M"], [3, "3.7M"], [4, "3.9M"], [5, "4.2M"], [6, "4.5M"], [7, "4.8M"], [8, "5.2M"], [9, "5.6M"], [10, "5.9M"], [11, "6.4M"], [12, "6.8M"], [13, "7.3M"], [14, "7.8M"], [15, "8.4M"], [16, "9M"], [17, "9.6M"], [18, "10.3M"], [19, "11M"], [20, "11.8M"], [21, "12.6M"], [22, "13.5M"], [23, "14.5M"], [24, "15.5M"], [25, "16.6M"], [26, "17.8M"], [27, "19M"], [28, "20.4M"], [29, "21.8M"], [30, "23.4M"], [31, "25M"], [32, "26.8M"], [33, "28.7M"], [34, "30.7M"], [35, "32.9M"], [36, "35.2M"], [37, "37.7M"], [38, "40.4M"], [39, "43.2M"], [40, "46.3M"], [41, "49.6M"], [42, "53.1M"], [43, "56.8M"], [44, "60.8M"], [45, "65.1M"], [46, "69.8M"], [47, "74.7M"], [48, "80M"], [49, "85.6M"], [50, "91.7M"]], "Viking (Hard)": [[1, "10.6M"], [2, "11.3M"], [3, "12M"], [4, "12.7M"], [5, "13.5M"], [6, "14.3M"], [7, "15.2M"], [8, "16.1M"], [9, "17.1M"], [10, "18.1M"], [11, "19.3M"], [12, "20.4M"], [13, "21.7M"], [14, "23M"], [15, "24.4M"], [16, "26M"], [17, "27.5M"], [18, "29.2M"], [19, "31M"], [20, "32.9M"], [21, "35M"], [22, "37.1M"], [23, "39.4M"], [24, "41.8M"], [25, "44.4M"], [26, "47.1M"], [27, "50M"], [28, "53.1M"], [29, "56.3M"], [30, "59.8M"], [31, "63.4M"], [32, "67.3M"], [33, "71.5M"], [34, "75.9M"], [35, "80.5M"], [36, "85.5M"], [37, "90.7M"], [38, "96.3M"], [39, "102.2M"], [40, "108.5M"], [41, "115.1M"], [42, "122.2M"], [43, "129.7M"], [44, "137.7M"], [45, "146.1M"], [46, "155.1M"], [47, "164.6M"], [48, "174.8M"], [49, "185.5M"], [50, "196.9M"]], "Viking (Hell)": [[1, "17.9M"], [2, "19.5M"], [3, "21.3M"], [4, "23.3M"], [5, "25.4M"], [6, "27.8M"], [7, "30.3M"], [8, "33.1M"], [9, "36.1M"], [10, "39.5M"], [11, "43.1M"], [12, "47.1M"], [13, "51.4M"], [14, "56.1M"], [15, "61.3M"], [16, "66.9M"], [17, "73.1M"], [18, "79.8M"], [19, "87.1M"], [20, "95.1M"], [21, "103.9M"], [22, "113.5M"], [23, "123.9M"], [24, "135.3M"], [25, "147.7M"], [26, "161.3M"], [27, "176.2M"], [28, "192.4M"], [29, "210.1M"], [30, "229.4M"], [31, "250.5M"], [32, "273.5M"], [33, "298.7M"], [34, "326.2M"], [35, "356.2M"], [36, "388.9M"], [37, "424.7M"], [38, "463.8M"], [39, "506.4M"], [40, "551.8M"], [41, "569.7M"], [42, "588.3M"], [43, "607.4M"], [44, "627.2M"], [45, "647.6M"], [46, "668.7M"], [47, "690.4M"], [48, "712.9M"], [49, "736.1M"], [50, "760.1M"]]}
-MONSTER_CATALOG.append(["Vikings", [[_n, _l] for _n, _l in VIKING_SETS.items()]])        # Easy / Normal / Hard / Hell, level + power
+MONSTER_CATALOG.append(["Vikings", [[_n, _l] for _n, _l in VIKING_SETS.items()] + [["Viking Icebreaker",[[1,"89.4M"]]],["Viking Berserker",[[2,"134.1M"]]],["Viking Chief",[[3,"262.7M"]]],["King of the Vikings",[[4,"1B"]]]]])        # Easy / Normal / Hard / Hell, level + power
 MONSTER_NAMES += [_n for _c, _ms in MONSTER_CATALOG for _n, _l in _ms if _n not in MONSTER_NAMES]
 MONSTER_NAMES.append("Viking") if "Viking" not in MONSTER_NAMES else None      # the card only says "Lv.N Viking"; the set comes from the power
 
@@ -2417,7 +2417,10 @@ def get_general_meta(name):
     return m if isinstance(m, dict) else {}
 
 
-def set_general_meta(name, tab=None, fav=None, copy=None, tabs=None):
+_KEEP = "\0keep"
+
+
+def set_general_meta(name, tab=None, fav=None, copy=None, tabs=None, cat=_KEEP):
     """tab: 0-5 or None (= use the role setting). fav: leave|on|off or None (= use the role setting).
     copy: None / "any", "stars" or a number - which copy to pick when you own several."""
     meta = load_general_meta()
@@ -2428,8 +2431,12 @@ def set_general_meta(name, tab=None, fav=None, copy=None, tabs=None):
         entry["tab"] = max(0, min(5, int(tab)))
     if fav not in (None, ""):
         entry["fav"] = fav
+    old = meta.get(name) if isinstance(meta.get(name), dict) else {}
+    cat = old.get("cat", "") if cat is _KEEP or cat == _KEEP else str(cat or "").strip()[:40]
+    if cat:
+        entry["cat"] = cat
     if tabs is None:
-        tabs = (meta.get(name) or {}).get("tabs") if isinstance(meta.get(name), dict) else None
+        tabs = old.get("tabs")
     if tabs:
         entry["tabs"] = sorted({int(t) for t in tabs if 1 <= int(t) <= 5})
     if entry:
@@ -3002,12 +3009,35 @@ def general_slot(dev, role, cfg):
     return tuple(pos) if pos else None
 
 
+def general_categories():
+    """{category: [general names]} from the categories you gave your generals in the General Manager."""
+    out = {}
+    for n, m in load_general_meta().items():
+        if isinstance(m, dict) and m.get("cat") and not n.startswith("__"):
+            out.setdefault(m["cat"], []).append(n)
+    return {c: sorted(v, key=str.lower) for c, v in out.items()}
+
+
 def general_choices(cfg, role):
-    """The generals to try for 'main' / 'assistant', best first (a single name as text is accepted too)."""
+    """The generals to try for 'main' / 'assistant', best first (a single name as text is accepted too).
+    An entry '@Name' stands for every general in that category (in name order)."""
     v = cfg.get(f"general_{role}")
     if isinstance(v, str):
         v = [v]
-    return [str(x).strip() for x in (v or []) if str(x).strip()]
+    out, cats = [], None
+    for x in (v or []):
+        x = str(x).strip()
+        if not x:
+            continue
+        if x.startswith("@"):
+            cats = cats if cats is not None else general_categories()
+            key = {c.lower(): c for c in cats}.get(x[1:].strip().lower())
+            for n in (cats.get(key) or []):
+                if n not in out:
+                    out.append(n)
+        elif x not in out:
+            out.append(x)
+    return out
 
 
 def set_generals(dev, cfg, log, stop):

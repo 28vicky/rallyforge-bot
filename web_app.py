@@ -553,7 +553,7 @@ class Controller:
             m = rb.get_general_meta(n)
             c = cat.get(n) or {}
             out.append({"name": n, "tab": m.get("tab"), "fav": m.get("fav"), "copy": m.get("copy", "any"), "tabs": m.get("tabs", []),
-                        "region": c.get("region", []), "troops": c.get("troops", []), "cat_tab": rb.catalog_tab(n) if c else 0})
+                        "region": c.get("region", []), "troops": c.get("troops", []), "cat_tab": rb.catalog_tab(n) if c else 0, "cat": m.get("cat", "")})
         return out
 
     def ready_device(self, serial, adb, stop, check_ready=True):
@@ -1405,7 +1405,7 @@ class Api:
         try:
             if new != old:
                 new = rb.rename_general(old, new)
-            rb.set_general_meta(new, p.get("tab"), p.get("fav"), p.get("copy"))
+            rb.set_general_meta(new, p.get("tab"), p.get("fav"), p.get("copy"), cat=(p["cat"] if "cat" in p else rb._KEEP))
         except ValueError as e:
             raise ApiError(str(e))
         return {"name": new, "renamed": new != old, "generals": self.c.generals_info()}

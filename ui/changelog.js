@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.22", date: "2026-10-19",
+    new: ["General categories: give each general your own category (e.g. Ground, Mounted) in the General Manager. In the main / assistant general lists you can pick a whole category - the bot then tries every general in it and uses the first free one.", "Menus: Setup and App tabs are now dropdowns, so all tabs fit on one line. A selected button turns solid colour; the Run buttons only stay lit while paused or stopped, and the top buttons turn solid on hover.", "Monster list: Royal Thief, Desert Bandits and Terminator removed; Fenrir, Garuda, Achelois, Basilisk, Draugr and Taotie moved to a new Summoned group; Viking bosses moved into Vikings; Pan troop entries removed; normal monsters show their level number."],
+    fixed: [] },
   { v: "2.4.21", date: "2026-10-19",
     new: ["Pause now lasts 15 minutes by default and then the bot runs again by itself. The wait is shown on the status badge, and you can change it (or set 0 for no automatic restart) under Settings > Pause lasts."],
     fixed: [] },

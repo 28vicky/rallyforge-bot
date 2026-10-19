@@ -356,20 +356,66 @@ function paintRunState() {
   const map = { run: "start", pause: "pause", stop: "stop" };
   document.querySelectorAll("[data-act]").forEach((b) => {
     b.className = b.className.replace(/\bcur-\w+/g, "").replace(/\s+/g, " ").trim();
-    if (map[st] && map[st] === b.dataset.act) b.classList.add("cur-" + st);
+    if (st !== "run" && map[st] && map[st] === b.dataset.act) b.classList.add("cur-" + st);   // only Paused / Stopped stay lit; running = all normal
   });
 }
 function ribbonLabels() {
   const all = S.sel === "control";
   document.querySelectorAll(".runlbl").forEach((e) => { e.textContent = e.dataset.base + (all ? " all" : ""); });
 }
+const TAB_GROUPS = [
+  ["dashboard", "Dashboard", null],
+  ["presets", "Presets & generals", null],
+  ["monsters", "Monsters", null],
+  ["tasks", "Tasks", null],
+  ["duties", "Duties", null],
+  ["market", "Market", null],
+  ["setup", "Setup", ["settings", "reliability", "schedule", "telegram"]],
+  ["app", "App", ["updates", "themes", "license"]],
+];
+function closeTabMenu() { const m = document.getElementById("tabmenu"); if (m) m.remove(); document.removeEventListener("mousedown", tabMenuOutside, true); document.removeEventListener("keydown", tabMenuKey, true); }
+function tabMenuOutside(e) { const m = document.getElementById("tabmenu"); if (m && !m.contains(e.target) && !e.target.closest(".tab.grp")) closeTabMenu(); }
+function tabMenuKey(e) { if (e.key === "Escape") closeTabMenu(); }
+function pickTab(k) { S.tab = k; try { localStorage.setItem("rf_ctl_tab", k); } catch (e) {} closeTabMenu(); renderTabs(); renderPage(); }
+function openTabMenu(btn, items) {
+  const was = document.getElementById("tabmenu") && document.getElementById("tabmenu").dataset.for;
+  closeTabMenu();
+  if (was === btn.dataset.g) return;
+  const r = btn.getBoundingClientRect();
+  const m = h("div", { id: "tabmenu", class: "tabmenu", role: "menu" });
+  m.dataset.for = btn.dataset.g;
+  for (const k of items) {
+    const l = (TABS.find((x) => x[0] === k) || [k, k])[1];
+    m.appendChild(h("button", { class: "tmi" + (S.tab === k ? " on" : ""), role: "menuitem", onclick: () => pickTab(k) }, ico(TAB_ICO[k] || "grid"), l));
+  }
+  m.style.left = Math.max(8, Math.min(r.left, innerWidth - 230)) + "px";
+  m.style.top = (r.bottom + 6) + "px";
+  document.body.appendChild(m);
+  document.addEventListener("mousedown", tabMenuOutside, true);
+  document.addEventListener("keydown", tabMenuKey, true);
+}
 function renderTabs() {
   ribbonLabels();
+  closeTabMenu();
   const t = $("#tabs");
   if (!t) return;
   t.innerHTML = "";
   t.style.display = S.sel === "control" ? "" : "none";
-  for (const [k, l] of TABS) if (k !== "license" || (S.license && S.license.required)) t.appendChild(h("button", { class: "tab" + (S.tab === k ? " on" : ""), onclick: () => { S.tab = k; try { localStorage.setItem("rf_ctl_tab", k); } catch (e) {} renderTabs(); renderPage(); } }, ico(TAB_ICO[k] || "grid"), l));
+  const ok = (k) => k !== "license" || (S.license && S.license.required);
+  for (const [g, label, kids] of TAB_GROUPS) {
+    if (!kids) {
+      t.appendChild(h("button", { class: "tab" + (S.tab === g ? " on" : ""), onclick: () => pickTab(g) }, ico(TAB_ICO[g] || "grid"), label));
+      continue;
+    }
+    const items = kids.filter(ok);
+    if (!items.length) continue;
+    const here = items.includes(S.tab);
+    const cur = here ? (TABS.find((x) => x[0] === S.tab) || [0, label])[1] : "";
+    const b = h("button", { class: "tab grp" + (here ? " on" : ""), "aria-haspopup": "menu", onclick: (e) => openTabMenu(e.currentTarget, items) },
+      ico(TAB_ICO[here ? S.tab : items[0]] || "grid"), h("span", { class: "gl" }, label), here ? h("span", { class: "gcur" }, cur) : null, h("span", { class: "chev" }, "\u25BE"));
+    b.dataset.g = g;
+    t.appendChild(b);
+  }
 }
 function renderPage() {
   const p = $("#pages");
