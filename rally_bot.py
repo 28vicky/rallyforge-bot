@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.29"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.30"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -6325,6 +6325,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         log(f"[i] Screen is {rw}x{rh}; scaling to 540x960 automatically.")
 
     rot = PresetRotator(active_presets(cfg), cfg["preset_mode"])
+    at_bottom = [False]                   # True while a bottom-to-top sweep of the rally list is under way
+    back_at = {}                          # preset -> time its troops should be home again (rally left + march there and back + fight)
     mon_presets = {k.lower(): v for k, v in cfg.get("monster_presets", {}).items() if v}
     rots = {}
 
@@ -6452,7 +6454,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     def find_target(screen):
         hits = find_all(screen, "join_button", cfg["threshold"], cfg["search_region"])
+        hits = sorted(hits, key=lambda h0: -h0[1])                    # bottom of the list first: those rallies have the least time left
         deferred = []                                                 # rallies whose power could not be read at the first try
+        picks = []                                                    # every rally on screen the bot could join: the one closing soonest wins
 
         def order():                                                  # every readable rally first, then the unreadable ones read harder
             for h0 in hits:
@@ -6538,24 +6542,35 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             last_march[0] = march
             if not label:
                 label = f"[{show_name(screen, hit, mon)}] "
+            if ok and not rotator_for(mon).available():
+                r0 = rotator_for(mon)
+                wait = r0.seconds_until_free()
+                why_b = f"preset {'/'.join(str(p) for p in r0.presets)} still out - free in about {max(1, round(wait / 60))} min" if wait > 60 \
+                    else "every preset for this monster is resting"
+                act_skip(level_name(screen, hit, mon, mlv), why_b, rally, march)
+                if cfg["log_timers"]:
+                    say(f"{label}rally {fmt(rally)}, march {fmt(march)} -> skip ({why_b})")
+                continue
             if cfg["log_timers"]:
                 say(f"{label}rally {fmt(rally)}, march {fmt(march)}, bot needs ~{need:.0f}s -> "
                     f"{'JOIN' if ok else 'skip'} ({why})")
             if not ok:
                 act_skip(level_name(screen, hit, mon, mlv), why, rally, march)
-            if ok and not rotator_for(mon).available():
-                act_skip(level_name(screen, hit, mon, mlv), "every preset for this monster is benched", rally, march)
-                say(f"{label}skip (every preset for this monster is benched)")
-                continue
             if ok and rally is not None and any(m == (mon if mon and mon != "hidden" else show_name(screen, hit, mon)) and abs(e - (time.time() + rally)) < 15 for m, e in no_open if e > time.time()):
                 act_skip(level_name(screen, hit, mon, mlv), "this rally would not open before (already joined or full)", rally, march)
                 say(f"{label}skip (this rally would not open before - already joined or full)")
                 continue
             if ok:
-                last_dn[0] = level_name(screen, hit, mon, mlv)
-                last_base[0] = mon if mon and mon != "hidden" else show_name(screen, hit, mon)
-                return hit, rally, mon
-        return None
+                picks.append((rally if rally is not None else 10 ** 6, hit, mon, mlv, march))
+        if not picks:
+            return None
+        rally, hit, mon, mlv, march = min(picks, key=lambda x: x[0])   # least time left that can still be reached
+        last_march[0] = march
+        if len(picks) > 1 and cfg["log_timers"]:
+            say(f"{len(picks)} rallies can be joined - taking the one closing first ({fmt(rally)} left)")
+        last_dn[0] = level_name(screen, hit, mon, mlv)
+        last_base[0] = mon if mon and mon != "hidden" else show_name(screen, hit, mon)
+        return hit, rally, mon
 
     last_frame = [0.0]
 
@@ -6618,6 +6633,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     def recover():
         """Get back to the rally list: close pop-ups, follow the navigation steps, use Back where it is safe."""
+        at_bottom[0] = False                  # the list reopens at the top: the next sweep jumps to the bottom first
         outside_taps = [0]
         back_taps = [0]
         war_row_taps = [0]
@@ -6872,6 +6888,29 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             elif still.get("any") is None:
                 still["any"] = now
             if not moving and still.get("any") is not None and now - still["any"] > 200:
+                # an empty rally list can stay pixel-identical for many minutes. Before calling it frozen, prove it:
+                # tap the Event War tab - a live game redraws the tabs, a frozen emulator does not.
+                alive = None
+                if st in ("rally_list", "unknown"):
+                    try:
+                        war_tab_is_event(screen)
+                        lt, rt = war_tab_is_event.last
+                        if lt > rt + 25:                                   # we really are on Alliance War (PvP tab lit)
+                            dev.tap(400, 105)
+                            nap(1.2, 1.6)
+                            probe = cv2.cvtColor(dev.screenshot(), cv2.COLOR_BGR2GRAY)
+                            diff = cv2.countNonZero(cv2.threshold(cv2.absdiff(probe, sig), 10, 255, cv2.THRESH_BINARY)[1])
+                            alive = diff > 500
+                            if alive:
+                                dev.tap(140, 105)                          # back to PvP War
+                                nap(1.0, 1.4)
+                    except Exception:
+                        alive = None
+                if alive:
+                    log(f"[i] The rally list has been quiet for {(now - still['any']) / 60:.0f} min - checked: the game is responding")
+                    still["any"], still["since"], still["sig"] = None, None, None
+                    lost_since[0] = None
+                    continue
                 moving = True
             if not moving or changed >= 8:            # a ticking countdown changes far more than 8 pixels
                 still["since"] = None
@@ -7011,25 +7050,35 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     recover()
                     continue
             if not target:
+                # the list is read from the BOTTOM up: the lowest rallies close first, the top ones were just started.
+                # One sweep = jump to the bottom, then one page up at a time until the top.
                 max_sc = cfg["max_scrolls"]
                 x1, y1, x2, y2, ms = cfg["swipe"]
+                if max_sc and not at_bottom[0]:
+                    for _ in range(max_sc):                    # down to the end of the list (the oldest rallies)
+                        dev.swipe(x1, y1, x2, y2, ms)
+                        nap(0.3, 0.5)
+                    at_bottom[0] = True
+                    scrolls = 0
+                    act("step", text="Looking for a rally to join (from the bottom)")
+                    nap(0.6, 0.9)
+                    continue
                 if max_sc and scrolls >= max_sc:
-                    log("[*] End of list - back to top")
-                    for _ in range(max_sc):
-                        dev.swipe(x1, y2, x2, y1, ms)
-                        nap(0.4, 0.7)
+                    log("[*] Top of the list - every rally checked")
+                    at_bottom[0] = False                       # next sweep starts at the bottom again
                     scrolls = 0
                     act("step", text="Idle - nothing to join, waiting for a new rally")
                     nap(3, 5)
                 else:
                     act("step", text="Looking for a rally to join")
-                    log("[*] No rally found, scrolling")
-                    dev.swipe(x1, y1, x2, y2, ms)
+                    log("[*] No rally to join here, scrolling up")
+                    dev.swipe(x1, y2, x2, y1, ms)
                     scrolls += 1
                 lo, hi = cfg["poll_seconds"]
                 nap(lo * _TL.cpu, hi * _TL.cpu)                # CPU level: longer pause = lighter
                 continue
             scrolls = 0
+            at_bottom[0] = False                              # after joining, the next look starts at the bottom again
             hit, left, mon = target
 
             used = rotator_for(mon)
@@ -7083,9 +7132,13 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 picks_generals = bool(pcfg["general_main"] or pcfg["general_assistant"])
                 if pcfg.get("use_preset_generals"):        # march with whatever generals the game preset already holds
                     picks_generals = False                     # (the preset's own 'skip if no general' choice still applies)
-                if skip_empty and not slot_has_general(dev.screenshot(), "main", pcfg):
-                    log(f"[!] Preset {cand} has no general - skipped, trying the next preset")
-                    used.mark_bad(cand, cfg["bad_preset_seconds"])
+                # 'Skip if no general': an empty general slot means this preset is passed for THIS rally and the next
+                # one is tried at once (no resting - it is tried again on the next rally). A 'Listed' preset is never
+                # skipped for an empty slot: the bot puts a general from its list in.
+                if skip_empty and not picks_generals and not slot_has_general(dev.screenshot(), "main", pcfg):
+                    out = back_at.get(cand, 0) > time.time()
+                    log(f"[!] Preset {cand} has no general" + (" (its general is probably still out on the last march)" if out else "")
+                        + " - trying the next preset")
                     continue
                 if pcfg.get("max_troops"):
                     tr = troops_in_march(dev.screenshot())
@@ -7156,6 +7209,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
 
             log(f"[+] Preset {preset} marched")
+            mt = last_march[0] or 0
+            back_at[preset] = time.time() + max(left, 0) + 2 * (mt if mt else 90) + 60   # march time unknown: count 90 s each way
             if t_march:
                 lat = t_march - t_join
                 if preset is not None and preset_picks(cfg, preset):      # keep the slow general search apart from the base time

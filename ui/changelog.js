@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.30", date: "2026-10-19",
+    new: ["\u201cSkip if no general\u201d now only passes that preset for the current rally and tries the next preset straight away. It is no longer rested for 20 seconds, so a single-preset account tries again on the very next rally. A preset set to Listed is never skipped for an empty slot: the bot puts a general from its list in. With the box unticked the bot marches with whatever the game preset holds.", "The rally list is now read from the bottom up: the bot jumps to the end of the list (the rallies closing first) and works its way to the top. On each screen it takes the rally closing first, so short rallies are not missed."],
+    fixed: ["An emulator watching a quiet, empty rally list was restarted after about 5 minutes because the screen did not change. The bot now taps the Event War tab first: if the game reacts it switches back and keeps watching; only a really frozen screen is restarted.", "The log no longer says JOIN for a rally it then skips because the presets are resting."] },
   { v: "2.4.29", date: "2026-10-19",
     new: ["Settings save themselves about 2 seconds after you change something, and Start saves too. Nothing you set on an emulator or on its presets is lost when the app restarts."],
     fixed: ["Presets armed on an emulator (e.g. 1-6) went back to 1 after a restart. Each emulator had two preset lists (the preset cards and the \u201cPresets (1-8)\u201d box) that could disagree; they now always match."] },
