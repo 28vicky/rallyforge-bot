@@ -1,24 +1,24 @@
 {
-  "version": "2.4.24",
-  "notes": "What's new opens only from its button; pause countdown; split Activity; per-emulator controls; Viking level bands",
+  "version": "2.4.25",
+  "notes": "Duty settings open inside their own row; fresh-install fix",
   "files": {
     "rally_bot.py": {
-      "sha256": "8f9d796929184a072c1d361773c2f7ecbb8f25c4845271b651f3ce1742d563d4"
+      "sha256": "45474807b7fd5d46e1198511eb44fa4d29e9e7e34fe85da528479e3720782b38"
     },
     "web_app.py": {
-      "sha256": "c502098b7f9c9187514449935072910a0f415abeaf09a3a6b06ee542e04dd941"
+      "sha256": "8e7251bd821e4547968b5634faaaa40194427fe3f6e1960cea45b8a1f7d28810"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "8881362fdcd88c375fca3eea0f45e6622859caa4dbc0eea1b03447cc05c4c098"
+      "sha256": "525f6cfd6c185993fe9167e22e4dcdc6bde83c899f3e20726bdf2edbfec833cb"
     },
     "ui/app.js": {
       "sha256": "8553ee27d679d55f762ac0bad20c553d620b789b19fa7dd7810a70e4f7ca97c3"
     },
     "ui/changelog.js": {
-      "sha256": "fbba0882209095f8a76d5d0543608b5b5f46895a7e2b461a3fec01abe64b1845"
+      "sha256": "a7884c5bad542223e3ebf209219d112e3be14a3e317ef2d0070a6456af8229be"
     },
     "ui/dialogs.js": {
       "sha256": "1258a3ca4f8617b1e4aa0c833418f0cde8dee641931293a1258dde59959d7597"
@@ -27,7 +27,7 @@
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "4a41c53ecf042e0d64cf8b6d5908f2cf45cb1c66c77207c5b89c6eba87954ce0"
+      "sha256": "0b2f264e5828c1ce19d606fa133186e33da4ed98370ddfea6fc19069f5c20867"
     }
   },
   "monsters": {
@@ -114,5 +114,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "cd33414fd3275945b03020dc66b262562b20f8c0496acc56e6b08b22540283c2"
+  "sig": "c4d16e0f8d7fbd29abe1567fc6295667d4931bd2d6be2de2fef6de3a84aedc1f"
 }

@@ -223,7 +223,8 @@ class Controller:
         num("max_emulator_restarts", "Emulator restarts per hour")
         num("adaptive_max", "Slowest it goes", 1, 5, float)
         for k in ("general_main_tab", "general_assistant_tab"):
-            num(k, "General tab", 0, 5)
+            if cfg.get(k) not in (None, ""):                 # empty = use the general tab setting (a fresh install has not opened the Presets page yet)
+                num(k, "General tab", 0, 5)
         if not cfg.get("rally_timer_source"):
             raise ApiError("The rally countdown has to be read from the progress bar or the join button.")
         try:
@@ -249,7 +250,8 @@ class Controller:
             cfg["device_id"] = ids[0] if ids else cfg.get("device_id", "")
             cfg["device_names"] = {d["id"]: d["name"] for d in self.devices if d["name"]}
             cfg["per_device"] = {s: ov for s, ov in (cfg.get("per_device") or {}).items() if s in ids and ov}
-            cfg["general_tab"] = cfg.get("general_main_tab", 0)
+            _mt = cfg.get("general_main_tab")
+            cfg["general_tab"] = _mt if _mt not in (None, "") else (cfg.get("general_tab") or 0)
             cfg["general_favourites"] = cfg.get("general_main_fav", "leave")
             cfg["cpu_level"] = int(cfg.get("cpu_level", 2))
             if cfg.get("march_timer_source") == "none":

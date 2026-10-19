@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.25", date: "2026-10-19",
+    new: ["Settings of a switched-on duty (Crazy Eggs, Champions) now open inside its own row, so everything looks connected."],
+    fixed: ["Fresh install: switching a duty on before opening Presets no longer says \u201cGeneral tab must be a number\u201d."] },
   { v: "2.4.24", date: "2026-10-19",
     new: ["After an update nothing pops up any more: the What\u2019s new button next to the version shows a dot, and the change list opens only when you click it."],
     fixed: [] },

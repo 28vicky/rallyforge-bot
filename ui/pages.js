@@ -29,6 +29,7 @@ function parseXY(t, def) {
 
 // ------------------------------------------------------------------ field builders (bound to an object)
 function panel(title, ...kids) { return h("div", { class: "panel" }, title ? h("h3", {}, title) : null, kids); }
+function subset(title, ...kids) { return h("div", { class: "subset" }, h("div", { class: "subtitle" }, title), kids); }   // settings that belong to a switched-on row: shown inside the same card
 function note(t) { return h("p", { class: "note" }, t); }
 function fld(label, control, hint) { return h("div", { class: "field" }, h("label", {}, label), control, hint ? h("div", { class: "hint" }, hint) : null); }
 
@@ -889,14 +890,13 @@ PAGES.duties = function (fixed) {
     for (const g of GROUPS) {
       const list = rows.filter((r) => r.group === g);
       if (!list.length) continue;
-      root.appendChild(panel(g, list.map((r) => h("div", { class: "row", style: { justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid var(--line)" } },
+      root.appendChild(panel(g, list.flatMap((r) => [h("div", { class: "row", style: { justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid var(--line)" } },
         h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" }), h("b", {}, r.title)),
         h("span", { class: "hint", style: { flex: "1", margin: "0 14px" } }, r.note, " · ", r.schedule),
         r.verified ? null : h("span", { class: "chip", title: "Steps are a first guess and have not been watched on a real emulator yet" }, "untested"),
-        h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text)))));
+        h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text)),
+        (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null].filter(Boolean))));
     }
-    root.appendChild(ce);
-    root.appendChild(ch);
   };
   // what the bot did: today's state per emulator + the latest task events
   const hist = h("div", {});
@@ -927,7 +927,7 @@ PAGES.duties = function (fixed) {
     ce.innerHTML = "";
     const c = j.conf;
     const set = async (o) => { const r = await act(api("crazy_eggs_set", { serial, ...o })); if (r) drawCe(r); };
-    ce.appendChild(panel(serial ? "Crazy Eggs \u2013 this emulator" : "Crazy Eggs \u2013 all emulators",
+    ce.appendChild(subset(serial ? "Crazy Eggs \u2013 this emulator" : "Crazy Eggs \u2013 all emulators",
       serial && j.own && j.own.crazy_eggs ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "crazy_eggs" })); loadCe(); } }, "Use the global setting")) : null,
       note("Event Center > Activities > Crazy Eggs. The bot smashes every ready egg you switch on, closes the reward panel, and comes back when the next timer ends. The Lucky Hammer (1 a day) skips an egg's wait, so give it to the egg with the longest wait."),
@@ -950,7 +950,6 @@ PAGES.duties = function (fixed) {
         h("span", { class: "chip" }, j.lucky_used ? "Lucky Hammer used today" : (c.lucky ? "Lucky Hammer ready" : "Lucky Hammer off")))));
   };
   const loadCe = async () => { const j = await act(api("crazy_eggs", { serial })); if (j) drawCe(j); };
-  root.appendChild(ce);
   // Champions: how many of the daily 15 taps and 10 greetings each champion gets (this emulator or all)
   const ch = h("div", {});
   const drawCh = (j) => {
@@ -958,7 +957,7 @@ PAGES.duties = function (fixed) {
     const set = async (o) => { const r = await act(api("champions_set", { serial, ...o })); if (r) drawCh(r); };
     const sumT = Object.values(j.plan).reduce((a, v) => a + (v.taps || 0), 0), sumG = Object.values(j.plan).reduce((a, v) => a + (v.greets || 0), 0);
     const usedT = Object.values(j.taps || {}).reduce((a, v) => a + v, 0), usedG = Object.values(j.greets || {}).reduce((a, v) => a + v, 0);
-    ch.appendChild(panel(serial ? "Champions – this emulator" : "Champions – all emulators",
+    ch.appendChild(subset(serial ? "Champions – this emulator" : "Champions – all emulators",
       serial && j.own && j.own.champions ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "champions" })); loadCh(); } }, "Use the global setting")) : null,
       note("Keep > Champions. Every account has the same champions but only a few are active; the bot skips the ones that are not (grey button at the bottom). The daily limit is " + j.max_taps + " taps and " + j.max_greets + " greetings for all champions together - put them all on one champion or share them out. Leave everything empty to use the champion the page opens on. Turn the 'Champions' duty on above. Needs the city map (the Keep)."),
@@ -979,7 +978,6 @@ PAGES.duties = function (fixed) {
       })));
   };
   const loadCh = async () => { const j = await act(api("champions", { serial })); if (j) drawCh(j); };
-  root.appendChild(ch);
   draw(); load(); loadCe(); loadCh(); loadHist();
   return root;
 };
