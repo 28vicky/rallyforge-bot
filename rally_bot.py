@@ -152,6 +152,7 @@ DEFAULTS = {
     # Any template called popup_*.png is tapped whenever it is seen (use it for pop-up close buttons).
     "rally_nav_steps": ["rally_icon"],
     # emulator + game lifecycle (off by default)
+    "start_with_windows": False,            # open the app when Windows starts (registry Run key, applied by web_app)
     "auto_launch_emulator": True,           # start the emulator if it is closed
     "auto_launch_game": True,               # start Evony if it is not open and wait until it is stable
     "emulator_launch_gap": 15,              # seconds between starting two emulators (they boot one after another)

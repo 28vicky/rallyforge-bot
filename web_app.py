@@ -66,6 +66,26 @@ class ApiError(Exception):
     pass
 
 
+def set_windows_startup(on):
+    """Add / remove the app in the Windows 'Run at sign-in' list (current user only). Only the installed .exe can do this."""
+    if os.name != "nt" or not getattr(sys, "frozen", False):
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE) as k:
+            if on:
+                winreg.SetValueEx(k, "RallyForgeBot", 0, winreg.REG_SZ, '"' + sys.executable + '"')
+            else:
+                try:
+                    winreg.DeleteValue(k, "RallyForgeBot")
+                except FileNotFoundError:
+                    pass
+        return True
+    except Exception:
+        return False
+
+
+
 class Controller:
     """Everything the old window did (emulator list, start / stop, schedules, Telegram, updates) without any
     drawing code: the interface asks for the state and sends commands through the web API."""
@@ -264,6 +284,7 @@ class Controller:
     def save(self, posted, devices=None):
         cfg = self.apply_config(posted, devices)
         rb.save_config(cfg)
+        set_windows_startup(bool(cfg.get("start_with_windows")))
         self.log("[+] Settings saved.")
         return cfg
 

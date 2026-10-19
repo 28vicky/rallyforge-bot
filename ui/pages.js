@@ -782,11 +782,14 @@ PAGES.telegram = function () {
 // ====================================================================== reliability / schedule & alerts / updates
 PAGES.reliability = function () {
   const c = S.cfg;
-  return panel("Reliability: slow down after failures, restart when stuck", tog(c, "adaptive_delay", "Slow down after a failed click, speed up again after a success"),
+  const startup = panel("Start with Windows",
+    tog(c, "start_with_windows", "Open RallyForge Bot when this PC starts"),
+    note(S.frozen ? "Works for the installed app. After a restart the app opens by itself; emulators that have 'Start this emulator automatically' on (Run & phone tab) start their bot too, and the game and emulator are launched if they are closed. Remember to press Save." : "Only the installed app (.exe) can do this; it has no effect when run from source."));
+  return h("div", {}, startup, panel("Reliability: slow down after failures, restart when stuck", tog(c, "adaptive_delay", "Slow down after a failed click, speed up again after a success"),
     h("div", { style: { height: "14px" } }),
     grid2(fld("Slowest it goes (x click delay)", inp(c, "adaptive_max", { type: "float", cls: "short" })), fld("Restart Evony if the screen is frozen for (s, 0 = off)", inp(c, "frozen_seconds", { type: "int", cls: "short" })),
       fld("Restart the emulator if stuck / not answering for (s, 0 = off)", inp(c, "stuck_seconds", { type: "int", cls: "short" })), fld("Give up after this many emulator restarts per hour", inp(c, "max_emulator_restarts", { type: "int", cls: "short" }))),
-    note("'Frozen' = Join buttons or a non-rally screen that has not changed at all. 'Stuck' = no screenshot from the emulator, a frozen screen that came back after restarting Evony, or not getting back to the rally list. The emulator is closed with its own command (MuMu and LDPlayer are known; otherwise set 'Command that closes this emulator' for that emulator), then started again."));
+    note("'Frozen' = Join buttons or a non-rally screen that has not changed at all. 'Stuck' = no screenshot from the emulator, a frozen screen that came back after restarting Evony, or not getting back to the rally list. The emulator is closed with its own command (MuMu and LDPlayer are known; otherwise set 'Command that closes this emulator' for that emulator), then started again.")));
 };
 PAGES.schedule = function () {
   const c = S.cfg;
@@ -806,6 +809,17 @@ PAGES.updates = function () {
       fld("Update key (optional, recommended)", inp(c, "update_key", { type: "password" }))),
     h("div", { style: { marginTop: "14px", display: "flex", gap: "10px" } }, btn("Check for updates now", async () => { if (await act(api("check_updates", { cfg: c }))) toast("Checking for updates..."); }, "pri"), btn("What's new", () => showWhatsNew(true))),
     note("off = never check, ask = ask before installing, auto = install by itself. The app checks when it opens and every few hours. A new version starts after the app restarts; if emulators are running the restart waits until they are stopped. With an update key, only updates signed with the same key (make_update.py --key) are accepted. Updates only work when the app was started through launcher.py / the exe built from it."));
+};
+
+// ====================================================================== features
+PAGES.features = function () {
+  const F = window.FEATURES || { now: [], planned: [] };
+  const sec = (title, list, cls) => panel(title, list.map((g) => h("div", { style: { margin: "12px 0 6px" } },
+    h("b", {}, g.t),
+    h("ul", { style: { margin: "6px 0 0 18px", padding: 0, lineHeight: "1.6" } }, g.items.map((x) => h("li", { class: cls }, x))))));
+  return h("div", {},
+    note("What the bot can do today, and what is planned. The list grows with every update; \u201cWhat\u2019s new\u201d (top bar) shows only the latest changes."),
+    sec("What the bot can do now", F.now, ""), sec("Planned", F.planned, "hint"));
 };
 
 // ====================================================================== themes

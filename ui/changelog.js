@@ -84,3 +84,45 @@ window.CHANGELOG = [
       "Stuck emulators are restarted automatically after 4 minutes without a new picture."
     ] }
 ];
+
+/* Features - what the bot can do now and what is planned. Edit this list when something new works or is added to the plan. status: "ok" = works, "new" = new / not yet seen on every emulator */
+window.FEATURES = {
+  now: [
+    { t: "Rallies", items: [
+      "Joins monster rallies by itself: reads the rally list, checks the monster, level and time left, and sends a march with your preset and general.",
+      "Monster list by group (Normal, Event, Limited-time, Vikings, Summoned) with level numbers; choose which monsters and which levels to join.",
+      "Viking sets with every level 1\u201350 (bands of ten, or every level).",
+      "Picks the best preset and general for each monster; skips presets that are busy or have no general; stamina refill if you allow it.",
+      "Game Auto-Join mode (Rally Monthly Card): renews the game\u2019s own Auto-Join when time runs low.",
+      "Takes pictures of unknown monsters so they can be added to the list later."] },
+    { t: "Emulators", items: [
+      "Runs many emulators at once (MuMu, BlueStacks), each with its own Start / Pause / Stop, own settings, own monsters, tasks and duties.",
+      "Pause shows a countdown and resumes by itself; \u201cTake game back now\u201d when you played elsewhere.",
+      "Starts the emulator and the game if they are closed; restarts Evony or the emulator when the screen is frozen or the bot is lost.",
+      "Starts chosen emulators by itself when the app opens; optional \u201cStart with Windows\u201d."] },
+    { t: "Tasks and duties", items: [
+      "Tasks that run between rallies, on a timer or at fixed times of day.",
+      "Crazy Eggs: smashes ready eggs, Lucky Hammer on the egg you pick, hammers to keep, limits per egg \u2013 settings per emulator.",
+      "Champions: spends the daily taps and greetings on the champions you choose \u2013 settings per emulator.",
+      "Other duties: Login gifts, Mail, Alliance gift, Alliance help, Collect resources (first versions, still being checked on real emulators).",
+      "Today-at-a-glance table and a history of what each duty did."] },
+    { t: "Market", items: ["Black Market tasks (first version)."] },
+    { t: "App", items: [
+      "Control settings for everything, Setup and App menus, light and dark themes.",
+      "Updates: the app checks, shows \u201cUpdate available\u201d and installs signed updates; \u201cWhat\u2019s new\u201d shows the change list.",
+      "Telegram alerts, schedule, reliability settings, account login (sold edition)."] }
+  ],
+  planned: [
+    { t: "Next", items: [
+      "Check Champions and Crazy Eggs on every emulator and fix what fails (wrong-screen loops, \u201cscreen did not open\u201d).",
+      "General thumbnails: scan owned generals and make sure every name matches its picture.",
+      "Market: finish Black Market buying.",
+      "Daily tasks: Resource tax, Gold levy, Alliance help and donation, Ranger Knight, Patrol, Wheel of Fortune, Trade Carriage, resource collecting twice a day.",
+      "Read the game\u2019s own reset countdown so the daily reset time is set automatically."] },
+    { t: "Later", items: [
+      "Events: Garuda rewards, Grace of Star Trail, Voyage to Civilizations, Wishful Windmill.",
+      "Alliance shop, Alliance treasure, daily check-in, free monthly cards.",
+      "Gmail login linked to the licence key, price per emulator, seat counting across several PCs.",
+      "Lower memory use on PCs running 8 or more emulators."] }
+  ]
+};

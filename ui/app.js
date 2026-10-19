@@ -97,12 +97,12 @@ function ico(name, cls) {
   return e;
 }
 const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", monsters: "sword", tasks: "list", duties: "clock", market: "bag",
-  telegram: "send", reliability: "shield", schedule: "bell", updates: "down", themes: "palette", license: "key" };
+  telegram: "send", reliability: "shield", schedule: "bell", updates: "down", features: "list", themes: "palette", license: "key" };
 
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
   ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["telegram", "Telegram"], ["reliability", "Reliability"],
-  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Themes"], ["license", "Account"],
+  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["features", "Features"], ["themes", "Themes"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
 
@@ -385,7 +385,7 @@ const TAB_GROUPS = [
   ["duties", "Duties", null],
   ["market", "Market", null],
   ["setup", "Setup", ["settings", "reliability", "schedule", "telegram"]],
-  ["app", "App", ["updates", "themes", "license"]],
+  ["app", "App", ["updates", "features", "themes", "license"]],
 ];
 function closeTabMenu() { const m = document.getElementById("tabmenu"); if (m) m.remove(); document.removeEventListener("mousedown", tabMenuOutside, true); document.removeEventListener("keydown", tabMenuKey, true); }
 function tabMenuOutside(e) { const m = document.getElementById("tabmenu"); if (m && !m.contains(e.target) && !e.target.closest(".tab.grp")) closeTabMenu(); }
@@ -609,6 +609,7 @@ async function reloadMeta() {
 async function boot() {
   const j = await api("state");
   S.version = j.version;
+  S.frozen = !!j.frozen;
   S.author = j.author;
   S.copyright = j.copyright;
   S.license = j.license || { required: false };
