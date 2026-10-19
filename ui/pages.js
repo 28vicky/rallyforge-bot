@@ -398,7 +398,7 @@ function refreshInstanceControls() {
   if (d) {
     const G = { run: "\u25B6 ", pause: "\u275A\u275A ", stop: "\u25A0 ", error: "! ", idle: "\u25CB " };
     s.className = "state-pill st-" + d.state;
-    s.textContent = (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
+    s.textContent = (G[d.state] || "") + STATE_TXT[d.state] + (d.state === "pause" && d.resume_in ? ` (runs again in ${d.resume_in} min)` : "") + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
   }
   if (typeof paintRunState === "function") paintRunState();
 }
@@ -496,7 +496,7 @@ PAGES.settings = function () {
   const c = S.cfg;
   const g = panel("Global settings (every emulator, unless it has its own)",
     grid2(
-      fld("ADB path (auto)", inp(c, "adb_path")), fld("Evony package name", inp(c, "evony_package")),
+      fld("ADB path (auto)", inp(c, "adb_path")), fld("Evony package name", inp(c, "evony_package")), fld("Pause lasts (minutes, 0 = until I press Pause again)", inp(c, "pause_minutes", { type: "int", cls: "short", get: (v) => (v === undefined ? 15 : v) })),
       fld("Presets if bot presets unused (1-8)", inp(c, "presets", { get: (v) => (v || []).join(","), set: (t) => parsePresets(t) || [1] })), fld("Preset mode", sel(c, "preset_mode", ["rotate", "random", "fixed"])),
       fld("Join if spare time >= (s)", inp(c, "safety_margin", { type: "int", cls: "short" })), fld("Skip if rally has more than (s, 0 = any)", inp(c, "max_rally_seconds", { type: "int", cls: "short" })),
       fld("Rally countdown read from", sel(c, "rally_timer_source", ["progress_bar", "join_button"])), fld("March time read from", sel(c, "march_timer_source", ["join_button", "progress_bar", "none"], { get: (v) => v || "none", set: (v) => (v === "none" ? "" : v) })),

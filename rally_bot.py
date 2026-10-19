@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.20"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.21"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -156,6 +156,7 @@ DEFAULTS = {
     "auto_launch_game": True,               # start Evony if it is not open and wait until it is stable
     "emulator_launch_gap": 15,              # seconds between starting two emulators (they boot one after another)
     "reclaim_elsewhere": True,              # someone logged in on another device: wait, then reload (False = ignore)
+    "pause_minutes": 15,                    # Pause lasts this long, then the bot runs again by itself (0 = until you press Resume / Pause again)
     "reclaim_grace_min": 10,                # minutes to leave the game alone after being kicked off
     "lost_seconds": 240,                    # not on the rally list for this long -> restart Evony (0 = never)
     "launch_cmd": "",                       # optional command that starts THIS emulator instance

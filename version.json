@@ -1,12 +1,12 @@
 {
-  "version": "2.4.20",
-  "notes": "Run state shown on Start/Pause/Stop",
+  "version": "2.4.21",
+  "notes": "Pause lasts 15 min then resumes",
   "files": {
     "rally_bot.py": {
-      "sha256": "d45c98515e151940fead6a60c72a44107928500268d60d32af661e9f56bbef68"
+      "sha256": "c4834f06bb8c1789118aff10431bc41eb6c927a7c24cbd2f72ca55f64090bf35"
     },
     "web_app.py": {
-      "sha256": "fc89d68d7beeb5df556ce547111ed469e96973ce2a59ab1df0a2c393a9c8fd18"
+      "sha256": "3d86644dff7395946b97aa420bb105fc90efd61f4f5350dd2664cf0c773d2842"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "a3dca8705b979d2046179fe1fa27ca10f5123b35004a7a6688ebecf9392ecb5a"
     },
     "ui/changelog.js": {
-      "sha256": "41c76c819ffe2643da66ba7e7f69e035b37ef4ac54a91c9b8f763f3e25a1abfc"
+      "sha256": "d2b4ba2a8be526463e8166d925f0e9fe2023160ee53c163fb88d2b7d98e250fa"
     },
     "ui/dialogs.js": {
       "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
@@ -27,7 +27,7 @@
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "8c37da126899e9897e18abd537e199972e962d4fdb7aa2a64731a136be50d502"
+      "sha256": "ded5c9d9d9d8be09ffa13e65a88a1fe2e0873bfc5b25ee413b67b07a6dfd9614"
     }
   },
   "monsters": {

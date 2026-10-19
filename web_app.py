@@ -197,7 +197,8 @@ class Controller:
             if not d:
                 continue
             out.append({"id": s, "name": d["name"], "idx": d["idx"], "state": d["state"], "joins": d["joins"],
-                        "queued": s in self.start_queue, "paused": d["ctl"].paused})
+                        "queued": s in self.start_queue, "paused": d["ctl"].paused,
+                        "resume_in": (max(1, int((d["resume_at"] - time.time()) / 60) + 1) if d.get("resume_at") and d["ctl"].paused else 0)})
         return out
 
     # ------------------------------------------------------------------ config
@@ -310,16 +311,38 @@ class Controller:
         if not d or not self.running(serial):
             return
         if d["ctl"].paused:
+            d["pause_tok"], d["resume_at"] = None, None
             d["ctl"].resume()
             d["state"] = "run"
         else:
             d["ctl"].pause()
             d["state"] = "pause"
+            try:
+                mins = float(rb.merge_device_cfg(self.cfg, serial).get("pause_minutes", 15) or 0)
+            except (TypeError, ValueError):
+                mins = 15.0
+            tok = object()
+            d["pause_tok"] = tok if mins > 0 else None
+            d["resume_at"] = time.time() + mins * 60 if mins > 0 else None
+            if mins > 0:
+                self.log(f"[i] Paused for {mins:g} min - it runs again by itself after that", serial)
+                t = threading.Timer(mins * 60, self._auto_resume, (serial, tok))
+                t.daemon = True
+                t.start()
+
+    def _auto_resume(self, serial, tok):
+        d = self.dev.get(serial)
+        if d and d.get("pause_tok") is tok and d["ctl"].paused and self.running(serial):
+            d["pause_tok"], d["resume_at"] = None, None
+            d["ctl"].resume()
+            d["state"] = "run"
+            self.log("[+] The pause time is over - running again", serial)
 
     def stop_instance(self, serial):
         d = self.dev.get(serial)
         if not d:
             return
+        d["pause_tok"], d["resume_at"] = None, None
         if serial in self.start_queue:
             self.start_queue.remove(serial)
         d["ctl"].stop.set()
