@@ -69,7 +69,9 @@ body{font:16px/1.45 var(--font);color:var(--fg);background:var(--bgc);overflow:h
 .inst{padding:10px 12px;border-radius:var(--r2);background:var(--btn);box-shadow:var(--sh2);border:var(--bd);display:flex;align-items:center;gap:10px;font-size:15px;cursor:pointer;user-select:none}
 .inst:hover{transform:translateY(-1px)}
 .inst.sel{background:var(--accent);color:var(--accfg);box-shadow:var(--glow)}
-.inst small{margin-left:auto;opacity:.75;font-size:13px;white-space:nowrap}
+.inst{flex-wrap:wrap;row-gap:2px}
+.inst small{flex:0 0 100%;margin-left:19px;opacity:.8;font-size:12.5px;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inst .nm{flex:1 1 0;min-width:0}
 .inst .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--mute)}
 .dot.run{background:var(--good)}.dot.pause{background:var(--warn)}.dot.error{background:var(--bad)}.dot.stop,.dot.idle{background:var(--mute);opacity:.7}
