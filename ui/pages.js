@@ -272,7 +272,7 @@ function instancePage(serial) {
     btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"),
     btn("Profile \u25BE", (e) => menu(e.currentTarget, [{ label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "sm"));
   const head = h("div", { class: "row", style: { margin: "0 0 14px", gap: "16px", alignItems: "center" } },
-    h("h2", { style: { fontSize: "30px", lineHeight: "1.1", fontWeight: "800", color: "var(--accent2)", margin: "0" } }, dev.name || "Emulator " + d.idx),
+    h("h2", { style: { fontSize: "24px", lineHeight: "1.1", fontWeight: "800", color: "var(--accent2)", margin: "0" } }, dev.name || "Emulator " + d.idx),
     status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial));
 
   // ---- overrides
