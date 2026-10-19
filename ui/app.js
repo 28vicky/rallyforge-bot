@@ -702,7 +702,8 @@ async function boot() {
   layout();
   poll();
   checkWhatsNew();
-  if (S.firstRun) { if (!S.devices.length) S.devices.push({ id: "", name: "" }); setTimeout(() => detectDevices(), 900); }
+  if (S.firstRun && !S.devices.length) S.devices.push({ id: "", name: "" });
+  setTimeout(() => detectDevices(!S.firstRun), 900);          // every start: look for emulators so the "Found emulators" panel is ready (quiet unless something new turns up)
 }
 
 // Every change is saved by itself about 2 seconds after you stop editing (Save still works, and Start saves too),

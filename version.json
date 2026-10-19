@@ -1,9 +1,9 @@
 {
-  "version": "2.4.39",
-  "notes": "Joins rallies even when the level number is blurry; unclear Viking sets are joined unless all Viking groups are off.",
+  "version": "2.4.40",
+  "notes": "Looks for emulators at every start; joins rallies whose level is blurry.",
   "files": {
     "rally_bot.py": {
-      "sha256": "70f40a8b51ac15c75b5f6d71ea56430821f2696d9fcc32e25262633afc4f0481"
+      "sha256": "f374671dd4ddfbb8b46b4c546d42fc0c5abb4da65a23ac3811873cb55d140418"
     },
     "web_app.py": {
       "sha256": "e344cf5ab91c1527942d3a51d5f11373afd0becdfe062a4abeecd5f35c53b10c"
@@ -15,13 +15,13 @@
       "sha256": "368148eeb84c5a3960854ad4ce5a05bb0e7f59bc7554c71ce9ea93514cc744b9"
     },
     "ui/app.js": {
-      "sha256": "a63be466b7e68e44d179ada9c5e009caa95e5f8c9c4b68aef123c5a0cadcddb2"
+      "sha256": "09a26609ec60e055867c0ae5b4ab7afafc36890832938e52c9248cfe523a6a1e"
     },
     "ui/changelog.js": {
-      "sha256": "886c325ed559343d252e2e892224004ca379138dd29323ba58b8e4c3e1817f55"
+      "sha256": "639c6ec8c4bb21099b583389a720271866f04036362d5eab7c9f52512d445edd"
     },
     "ui/dialogs.js": {
-      "sha256": "e094cbaeedb72d17ded8c04c298720af1f5c75340e845b99eeed03d7d01310f2"
+      "sha256": "93b85f9748c2d4841661e449f9475108f64da23dc46165c5470327f2a38aebf0"
     },
     "ui/index.html": {
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "4aae303cc6ab94331e4a3ac59a5c87cf1007868375a565350abb134a37652fd1"
+  "sig": "aae68d846f588f0d91776b5bed514672fbb5957de9b83fa32ae75fa3e0703513"
 }
