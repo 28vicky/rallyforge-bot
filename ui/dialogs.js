@@ -160,20 +160,36 @@ function genFilter(onchange) {
   return st;
 }
 
+// ---- general lists: pictured generals first, search box, grid / list switch (remembered on this PC)
+function genViewGet() { try { return localStorage.getItem("rf_genview") === "grid" ? "grid" : "list"; } catch (e) { return "list"; } }
+function genViewSet(v) { try { localStorage.setItem("rf_genview", v); } catch (e) {} }
+function genSorted(arr) { return arr.slice().sort((a, b) => (b.pic !== false) - (a.pic !== false) || a.name.toLowerCase().localeCompare(b.name.toLowerCase())); }
+function genViewBar(onchange) {
+  const mk = (v, label) => h("button", { class: "btn sm" + (genViewGet() === v ? " pri" : ""), title: v === "grid" ? "Only generals that have a picture, shown as thumbnails" : "Every general, one per line", onclick: () => { genViewSet(v); box.querySelectorAll("button").forEach((b) => b.classList.toggle("pri", b.dataset.v === genViewGet())); onchange(); } }, label);
+  const box = h("div", { class: "row", style: { gap: "6px" } }, mk("list", "\u2630 List"), mk("grid", "\u25A6 Grid"));
+  box.querySelectorAll("button").forEach((b, i) => (b.dataset.v = i ? "grid" : "list"));
+  return box;
+}
+
 function chooseGenerals(title, current) {
   return new Promise((res) => {
     let chosen = [...current], selA = new Set(), selC = new Set();
     const A = h("div", { class: "lst" }), C = h("div", { class: "lst" });
     const flt = genFilter(() => draw());
+    let term = "";
+    const search = h("input", { type: "text", placeholder: "\uD83D\uDD0D  Type to search generals (works in List and Grid)", oninput: (e) => { term = e.target.value.trim().toLowerCase(); draw(); } });
+    const viewBar = genViewBar(() => draw());
     const gimg = (n) => h("img", { src: `/api/general_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, onerror: (e) => (e.target.style.display = "none") });
     const draw = () => {
       A.innerHTML = ""; C.innerHTML = "";
+      A.className = "lst" + (genViewGet() === "grid" ? " grid" : "");
       const cnt = {};
       S.generals.forEach((g) => { if (g.cat) cnt[g.cat] = (cnt[g.cat] || 0) + 1; });
       Object.keys(cnt).sort().forEach((c) => { const k = "@" + c; A.appendChild(h("div", { class: "li" + (selA.has(k) ? " sel" : ""), title: "Every general in this category is tried (the first free one is used)", onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(k) ? selA.delete(k) : selA.add(k); else { selA = new Set([k]); } draw(); }, ondblclick: () => add() }, h("b", {}, "Category: " + c), h("span", { class: "hint", style: { marginLeft: "8px" } }, cnt[c] + (cnt[c] === 1 ? " general" : " generals")))); });
-      S.generals.filter((g) => flt.ok(g)).forEach((g) => A.appendChild(h("div", { class: "li" + (selA.has(g.name) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(g.name) ? selA.delete(g.name) : selA.add(g.name); else { selA = new Set([g.name]); } draw(); }, ondblclick: () => add(), title: g.pic === false ? "No picture yet: the bot finds this general by its name (list view)" : "" }, gimg(g.name), g.name, g.pic === false ? h("span", { class: "hint", style: { marginLeft: "6px" } }, "(by name)") : null)));
+      genSorted(S.generals.filter((g) => flt.ok(g) && (!term || g.name.toLowerCase().includes(term)) && (genViewGet() === "list" || g.pic !== false))).forEach((g) => A.appendChild(h("div", { class: "li" + (selA.has(g.name) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(g.name) ? selA.delete(g.name) : selA.add(g.name); else { selA = new Set([g.name]); } draw(); }, ondblclick: () => add(), title: g.pic === false ? "No picture yet: the bot finds this general by its name (list view)" : "" }, genViewGet() === "grid" ? gimg(g.name) : null, h("span", { class: "gname" }, g.name), g.pic === false ? h("span", { class: "hint", style: { marginLeft: "6px" } }, "(by name)") : null)));
+      if (term && !A.querySelector(".li")) A.appendChild(h("div", { class: "empty" }, "No general matches '" + term + "'."));
       if (!S.generals.length) A.appendChild(h("div", { class: "empty" }, "No saved generals yet. Use 'Scan generals' or 'Add general from screenshot'."));
-      chosen.forEach((n, i) => C.appendChild(h("div", { class: "li" + (selC.has(n) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selC.has(n) ? selC.delete(n) : selC.add(n); else { selC = new Set([n]); } draw(); } }, h("span", { class: "chip" }, i + 1), n.startsWith("@") ? "Category: " + n.slice(1) : n)));
+      chosen.forEach((n, i) => C.appendChild(h("div", { class: "li" + (selC.has(n) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selC.has(n) ? selC.delete(n) : selC.add(n); else { selC = new Set([n]); } draw(); } }, h("span", { class: "chip" }, i + 1), n.startsWith("@") ? null : gimg(n), n.startsWith("@") ? "Category: " + n.slice(1) : n)));
     };
     const add = () => { selA.forEach((n) => { if (!chosen.includes(n)) chosen.push(n); }); draw(); };
     const remove = () => { chosen = chosen.filter((n) => !selC.has(n)); selC.clear(); draw(); };
@@ -184,7 +200,7 @@ function chooseGenerals(title, current) {
       h("button", { class: "btn sm", onclick: () => move(-1) }, "Up"), h("button", { class: "btn sm", onclick: () => move(1) }, "Down"),
       h("button", { class: "btn sm", onclick: () => { chosen = []; draw(); } }, "Clear all"));
     modal({ title, wide: true, oncancel: () => res(null), focus: false, buttons: [{ label: "Cancel", onclick: () => res(null) }, { label: "OK", cls: "pri", onclick: () => res(chosen) }],
-      body: h("div", {}, h("div", { class: "two" }, h("div", {}, h("div", { class: "lab" }, "All generals"), flt.el, A), h("div", {}, h("div", { class: "lab" }, "Tried in this order (top first)"), C)), mid) });
+      body: h("div", {}, h("div", { class: "two" }, h("div", {}, h("div", { class: "row", style: { justifyContent: "space-between", alignItems: "center" } }, h("div", { class: "lab" }, "All generals"), viewBar), search, flt.el, A), h("div", {}, h("div", { class: "lab" }, "Tried in this order (top first)"), C)), mid) });
   });
 }
 
@@ -205,7 +221,7 @@ function openGeneralManager() {
   const COPIES = ["Any (best match)", "Most stars", "1st on screen", "2nd on screen", "3rd on screen", "4th on screen", "5th on screen", "6th on screen"];
   let cur = null, term = "";
   const list = h("div", { class: "lst", style: { maxHeight: "430px", minHeight: "430px" } });
-  const search = h("input", { type: "text", placeholder: "Search generals...", oninput: (e) => { term = e.target.value.toLowerCase(); drawList(); } });
+  const search = h("input", { type: "text", placeholder: "\uD83D\uDD0D  Type to search generals (works in List and Grid)", oninput: (e) => { term = e.target.value.trim().toLowerCase(); drawList(); } });
   const name = h("input", { type: "text" });
   const tab = h("select", {}, TABS_.map((t) => h("option", {}, t)));
   const fav = h("select", {}, FAVS.map((t) => h("option", {}, t)));
@@ -219,10 +235,11 @@ function openGeneralManager() {
   const flt = genFilter(() => drawList());
   function drawList() {
     list.innerHTML = "";
-    const items = S.generals.filter((g) => (!term || g.name.toLowerCase().includes(term)) && flt.ok(g));
+    list.className = "lst" + (genViewGet() === "grid" ? " grid" : "");
+    const items = genSorted(S.generals.filter((g) => (!term || g.name.toLowerCase().includes(term)) && flt.ok(g) && (genViewGet() === "list" || g.pic !== false)));
     items.forEach((g) => list.appendChild(h("div", { class: "li" + (g.name === cur ? " sel" : ""), onclick: () => select(g.name) },
-      h("img", { src: `/api/general_img?name=${encodeURIComponent(g.name)}&k=${window.KEY}&t=${Date.now() % 100000}`, onerror: (e) => (e.target.style.display = "none") }),
-      h("span", { style: { flex: 1 } }, g.name), h("span", { class: "hint", style: { color: "inherit", opacity: .7 } }, `${g.cat ? g.cat + " · " : ""}${g.tab == null ? (g.cat_tab ? TAB_CHOICES[g.cat_tab] + " (auto)" : "default tab") : TAB_CHOICES[Number(g.tab)]} · ${g.fav || "default"}`))));
+      genViewGet() === "grid" ? h("img", { src: `/api/general_img?name=${encodeURIComponent(g.name)}&k=${window.KEY}&t=${Date.now() % 100000}`, onerror: (e) => (e.target.style.display = "none") }) : null,
+      h("span", { class: "gname", style: { flex: 1 } }, g.name), h("span", { class: "hint gmeta", style: { color: "inherit", opacity: .7 } }, `${g.cat ? g.cat + " · " : ""}${g.tab == null ? (g.cat_tab ? TAB_CHOICES[g.cat_tab] + " (auto)" : "default tab") : TAB_CHOICES[Number(g.tab)]} · ${g.fav || "default"}`))));
     if (!items.length) list.appendChild(h("div", { class: "empty" }, "No generals. Use 'Scan from the game' or 'Add from screenshot'."));
   }
   function select(n) {
@@ -256,7 +273,7 @@ function openGeneralManager() {
   const left = h("div", {}, h("div", { class: "row", style: { marginBottom: "8px" } },
     h("button", { class: "btn sm pri", onclick: async () => { await addGeneralFlow(); drawList(); } }, "+ Add from screenshot..."),
     h("button", { class: "btn sm", onclick: () => scanGeneralsFlow() }, "Scan from the game..."),
-    h("button", { class: "btn sm", onclick: del }, "Delete")), search, flt.el, h("div", { style: { height: "8px" } }), list);
+    h("button", { class: "btn sm", onclick: del }, "Delete"), genViewBar(() => drawList())), search, flt.el, h("div", { style: { height: "8px" } }), list);
   const right = h("div", { class: "field", style: { gap: "9px" } }, h("label", {}, "General name"), name, h("label", {}, "Tab in the 'Select a General' list"), tab,
     h("label", {}, "Favourites filter (heart)"), fav, h("label", {}, "If you own several copies of it"), copy,
     h("label", {}, "Category (your own group, e.g. Ground / Mounted)"), catIn, catList,

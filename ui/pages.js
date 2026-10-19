@@ -434,7 +434,7 @@ function instancePage(serial) {
     for (const el of t[2]()) if (el) body.appendChild(el);
   };
   for (const [k, l] of ITABS) tabRow.appendChild(h("button", { class: "tab", "data-k": k, onclick: () => showTab(k) }, l));
-  const wrap = h("div", {}, head, warn, bar, panel(null, activityBox(serial, "Activity")), tabRow, body);
+  const wrap = h("div", {}, h("div", { class: "stickyhead" }, head, warn, bar), panel(null, activityBox(serial, "Activity")), tabRow, body);
   showTab(S.instTab);
   setTimeout(refreshInstanceControls, 0);
   return wrap;
