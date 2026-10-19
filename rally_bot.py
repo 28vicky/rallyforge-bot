@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.15"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.16"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -342,6 +342,15 @@ def migrate_cfg(cfg):
         v = cfg.get(k)
         if not v or (len(v) == 2 and v[0] > 300):
             cfg[k] = new
+    try:                                             # Viking sets used to be one on/off switch stored as [1]; they now have levels
+        vs = globals().get("VIKING_SETS") or {}
+        for box in [cfg] + list((cfg.get("per_device") or {}).values()):
+            ms = box.get("monster_skip") if isinstance(box, dict) else None
+            for nm, lv in list((ms or {}).items()):
+                if nm in vs and [int(x) for x in lv] == [1]:
+                    ms[nm] = [l for l, _p in vs[nm]]
+    except Exception:
+        pass
     if cfg.get("bad_preset_seconds") == 120:             # the old default was far too long for a 5-minute rally
         cfg["bad_preset_seconds"] = 20
     return cfg

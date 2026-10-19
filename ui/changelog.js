@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.16", date: "2026-10-19",
+    new: [],
+    fixed: ["A Viking group that was switched off before the 2.4.14 update stays switched off (it only skipped level 1 after the update)."] },
   { v: "2.4.15", date: "2026-10-19",
     new: ["Updates can now bring a pack of monster pictures, so a fresh install knows the monsters straight away (no more \u201cmonster with no picture \u2192 skip\u201d)."],
     fixed: [] },

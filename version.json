@@ -1,9 +1,9 @@
 {
-  "version": "2.4.15",
-  "notes": "Monster picture pack (fresh installs know the monsters), Viking groups, login fixes.",
+  "version": "2.4.16",
+  "notes": "Fix: Viking groups switched off before the update stay off.",
   "files": {
     "rally_bot.py": {
-      "sha256": "d6834ee182cb4a6ad6644ffcc2115a00ed397d0f168b483834d883a4008e0e45"
+      "sha256": "7147e10313c4579f93d45669bd3a875b246fb2913b181c6171950376ff3d1483"
     },
     "web_app.py": {
       "sha256": "4262f00f8e5b061be6873b030fadd2dcd0b27444a9de4a65bd4f7f147ea634d8"
@@ -18,7 +18,7 @@
       "sha256": "91274939a9302582fdf1815bfe5f4b7312717d60f3666d14c79e403bd1d73464"
     },
     "ui/changelog.js": {
-      "sha256": "6d733f0557ac17a420eed9e08618dd909f7ba362d27fa6873dffb67cc9f22662"
+      "sha256": "b59286a56844542a4e396a37ecee4640c85737c838f1e0f970461e30b31bde93"
     },
     "ui/dialogs.js": {
       "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
@@ -114,5 +114,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "5c0f9240023fea1e3fddd4d46c965a7b3c2f5d6bf684afc5519bd64282554c9e"
+  "sig": "86db7a0f0e32b2e1b043afe8e6cf0b00719199e80432ae200b9c95d112bd7fa8"
 }
