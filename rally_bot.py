@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.35"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.36"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -6484,7 +6484,20 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     steps = [s for s in cfg["after_join_steps"] if has_template(s)]
     joins = scrolls = unknown = errors = 0
     warned_verify = False
-    no_open = []                          # (monster, end time) of rallies whose march screen would not open
+    no_open = []                          # [monster, end time, "joined" | "failed", failures, last failure time]
+
+    def remember_rally(name, end, kind):
+        now_t = time.time()
+        no_open[:] = [x for x in no_open if x[1] > now_t]
+        for x in no_open:
+            if x[0] == name and abs(x[1] - end) <= 6:
+                if kind == "joined":
+                    x[2] = "joined"
+                else:
+                    x[3] += 1
+                    x[4] = now_t
+                return
+        no_open.append([name, end, kind, 1 if kind == "failed" else 0, now_t])
     lat_pick = [None]                     # extra seconds a preset needs when the bot has to pick generals
     last_march = [None]                   # march time of the rally find_target just chose
     latency = [None]                      # seconds the bot itself needs between reading a rally and pressing March
@@ -6737,9 +6750,20 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     f"{'JOIN' if ok else 'skip'} ({why})")
             if not ok:
                 act_skip(level_name(screen, hit, mon, mlv), why, rally, march)
-            if ok and rally is not None and any(m == (mon if mon and mon != "hidden" else show_name(screen, hit, mon)) and abs(e - (time.time() + rally)) < 15 for m, e in no_open if e > time.time()):
-                act_skip(level_name(screen, hit, mon, mlv), "this rally would not open before (already joined or full)", rally, march)
-                say(f"{label}skip (this rally would not open before - already joined or full)")
+            now_t = time.time()
+            same = [x for x in no_open if x[1] > now_t and rally is not None and abs(x[1] - (now_t + rally)) <= 6
+                    and x[0] == (mon if mon and mon != "hidden" else show_name(screen, hit, mon))] if ok else []
+            # a failed open is tried again after 20 s; only after 2 failures (or our own join) is the rally left alone
+            seen_before = [x[2] for x in same if x[2] == "joined" or (x[2] == "failed" and (x[3] >= 2 or now_t - x[4] < 20))]
+            if seen_before:
+                if "joined" in seen_before:                   # our own join: already shown as JOINED - not a skip
+                    say(f"{label}already joined by this emulator")
+                else:
+                    tries = max(x[3] for x in same)
+                    why_o = ("would not open twice (full or ended)" if tries >= 2 else
+                             f"did not open just now - trying again in {max(1, int(20 - (now_t - max(x[4] for x in same))))}s")
+                    act_skip(level_name(screen, hit, mon, mlv), why_o, rally, march)
+                    say(f"{label}skip ({why_o})")
                 continue
             if ok:
                 picks.append((rally if rally is not None else 10 ** 6, hit, mon, mlv, march))
@@ -7294,8 +7318,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
             if has_template("march_screen") and not wait_state("march", 3):
                 log("[!] March screen did not open (rally ended?) - skipping")
-                no_open[:] = [x for x in no_open if x[1] > time.time()]
-                no_open.append((base_name, t_join + left))   # do not try this same rally again
+                remember_rally(base_name, t_join + left, "failed")   # tried again in 20 s, given up after 2 failures
                 fail("March screen did not open (rally ended?)")
                 slower("The march screen did not open")
                 continue
@@ -7406,8 +7429,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 log("[!] No preset could march - going back")
                 fail("No preset could march")
                 if time_skips:                             # too little time for these presets: do not come back to this rally
-                    no_open[:] = [x for x in no_open if x[1] > time.time()]
-                    no_open.append((base_name, t_join + left))
+                    remember_rally(base_name, t_join + left, "failed")
                 if screen_state(dev.screenshot(), cfg) == "march":
                     dev.back()
                     nap(1, 2)
@@ -7446,8 +7468,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
             if ok:
                 joins += 1
-                no_open[:] = [x for x in no_open if x[1] > time.time()]
-                no_open.append((base_name, t_join + left))        # joined: never try this same rally again
+                remember_rally(base_name, t_join + left, "joined")        # joined: never try this same rally again
                 speed_up()
                 log(f"[+] Joined rally #{joins}")
                 act("join", mon=mon_name, rally=left, took=round(time.time() - t_join, 1), preset=preset, n=joins)

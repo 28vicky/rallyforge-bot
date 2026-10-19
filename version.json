@@ -1,9 +1,9 @@
 {
-  "version": "2.4.35",
-  "notes": "Detect shows found emulators with an Add button; settings are backed up before every new version and per-emulator settings are never lost",
+  "version": "2.4.36",
+  "notes": "Fewer missed rallies: a rally that did not open is tried again; neighbouring rallies are no longer mixed up. Monster joins shows one row per rally.",
   "files": {
     "rally_bot.py": {
-      "sha256": "eec8a18d5afa55e45424676136cc4f95fdd079ad068aba2c429c08337e84ccce"
+      "sha256": "551a1ac4684c061c3911ad783dc59da44547aca6342531c3639e8fdbbc5e133c"
     },
     "web_app.py": {
       "sha256": "e344cf5ab91c1527942d3a51d5f11373afd0becdfe062a4abeecd5f35c53b10c"
@@ -15,10 +15,10 @@
       "sha256": "368148eeb84c5a3960854ad4ce5a05bb0e7f59bc7554c71ce9ea93514cc744b9"
     },
     "ui/app.js": {
-      "sha256": "0e5bb98812f4b12562b8ca9438ba49e8e1765495d1015915ae43d10da510b687"
+      "sha256": "a63be466b7e68e44d179ada9c5e009caa95e5f8c9c4b68aef123c5a0cadcddb2"
     },
     "ui/changelog.js": {
-      "sha256": "f94d64edc0e2c891505923d9fa567b3890ba249f6714ce68c916a5e363bb1dd0"
+      "sha256": "5ceccea698ff52f40a58b8b9a629ca79a95102c01f6df7c7efdd3da5d2137246"
     },
     "ui/dialogs.js": {
       "sha256": "e094cbaeedb72d17ded8c04c298720af1f5c75340e845b99eeed03d7d01310f2"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "a69073e187e4ca193cec4cd8d4011aba5351b5a3c8e90a1da60d14922871d7ca"
+  "sig": "e8340ab09c873380a90db887071d97c7c82c776e4aab1706ab06da5bcdb7ef90"
 }

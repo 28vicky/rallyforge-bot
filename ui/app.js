@@ -516,7 +516,27 @@ function actRow(v, l) {
   const took = a.took != null ? a.took + "s" : "";
   const cells = [a.t, v.serial === null ? l.n : null, k === "renew" ? "Auto-Join" : a.mon, a.rally != null ? a.rally + "s" : "", h("span", { class: "chip " + chip[1] }, chip[0]),
     k === "join" ? "Preset " + a.preset + (a.n ? "  (#" + a.n + ")" : "") : k === "renew" ? "Game Auto-Join restarted - now " + a.left + " left" : a.why, took];
-  return h("tr", {}, ...cells.filter((c, i) => !(i === 1 && c === null)).map((c) => h("td", {}, c)));
+  const tr = h("tr", {}, ...cells.filter((c, i) => !(i === 1 && c === null)).map((c) => h("td", {}, c)));
+  // one row per rally: same emulator + monster + (almost) the same end time = the same rally
+  if (a.rally != null && a.t && a.mon) {
+    const [hh, mm, ss] = String(a.t).split(":").map(Number);
+    tr.dataset.end = String(hh * 3600 + mm * 60 + ss + Number(a.rally));
+    tr.dataset.mon = String(a.mon).replace(/\s+\d+$/, "") + "|" + l.s;
+    tr.dataset.k = k;
+  }
+  return tr;
+}
+// Put the newest result of a rally at the top and drop the older row of the same rally (a JOINED row is never replaced by a skip)
+function placeActRow(body, row) {
+  if (row.dataset.end) {
+    for (const old of [...body.children]) {
+      if (old.dataset.mon === row.dataset.mon && Math.abs(Number(old.dataset.end) - Number(row.dataset.end)) <= 15) {
+        if (old.dataset.k === "join" && row.dataset.k !== "join") return;
+        old.remove();
+      }
+    }
+  }
+  body.insertBefore(row, body.firstChild);
 }
 function actStats(serial) {
   const list = S.acts.filter((l) => serial === null || l.s === serial);
@@ -537,7 +557,7 @@ function activityBox(serial, title) {
   const wrap = h("div", { class: "actwrap" }, h("table", { class: "acttable" }, h("thead", {}, h("tr", {}, ...head.map((t) => h("th", {}, t)))), body));
   const view = { now, stats, body, wrap, serial };
   actViews.push(view);
-  for (const l of S.acts.slice(-200)) if (l.a.k !== "step" && (serial === null || l.s === serial)) body.insertBefore(actRow(view, l), body.firstChild);
+  for (const l of S.acts.slice(-200)) if (l.a.k !== "step" && (serial === null || l.s === serial)) placeActRow(body, actRow(view, l));
   now.textContent = actNow(serial); stats.textContent = actStats(serial);
   return h("div", { class: "actsplit" },
     h("div", { class: "actleft" }, h("h3", {}, title || "Activity"), h("div", { class: "actbar" }, h("span", { class: "actlab" }, "Now"), now), stats),
@@ -548,7 +568,7 @@ function pushActs(list) {
     if (l.a.k === "step") { S.now[l.s] = { text: l.a.text, t: l.a.t, n: l.n }; continue; }
     S.acts.push(l);
     for (const v of actViews) if (v.serial === null || v.serial === l.s) {
-      v.body.insertBefore(actRow(v, l), v.body.firstChild);
+      placeActRow(v.body, actRow(v, l));
       while (v.body.childNodes.length > 200) v.body.removeChild(v.body.lastChild);
     }
   }
