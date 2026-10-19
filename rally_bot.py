@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.30"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.31"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -3085,8 +3085,8 @@ def set_generals(dev, cfg, log, stop):
                 taken = have
             continue
         for i, name in enumerate(names):
-            if name not in list_generals():
-                log(f"[!] No picture for general '{name}' in the generals folder")
+            if name not in list_generals() and not is_known_general(name):
+                log(f"[!] '{name}' is not a general the bot knows and has no picture - skipped")
                 continue
             if not on_list:
                 pos = general_slot(dev, role, cfg)
@@ -6904,6 +6904,14 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             if alive:
                                 dev.tap(140, 105)                          # back to PvP War
                                 nap(1.0, 1.4)
+                        if not alive:                                      # not sure where we are (or the tab did not react): press Back
+                            dev.back()
+                            nap(1.5, 2.0)
+                            probe = cv2.cvtColor(dev.screenshot(), cv2.COLOR_BGR2GRAY)
+                            diff = cv2.countNonZero(cv2.threshold(cv2.absdiff(probe, sig), 10, 255, cv2.THRESH_BINARY)[1])
+                            alive = diff > 500
+                            if alive:
+                                recover()                                  # the game answered: go back to the rally list
                     except Exception:
                         alive = None
                 if alive:
@@ -7114,10 +7122,17 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             # Take the next preset in the rotation. A preset that has no general (or does not march) is
             # skipped and the next preset is tried straight away, on the same march screen.
             preset, plain_fails, gave_up = None, [], False
-            for _ in range(len(used.presets)):
+            tried, time_skips = set(), 0
+            for _ in range(len(used.presets) * 2):
                 cand = used.next()
-                if cand is None:
+                if cand is None or len(tried) >= len(used.presets):
                     break
+                if cand in tried:                              # 'fixed' mode hands out the first preset again: take the next unused one
+                    rest = [p for p in used.presets if p not in tried and used.bad.get(p, 0) <= time.time()]
+                    if not rest:
+                        break
+                    cand = rest[0]
+                tried.add(cand)
                 log(f"[*] Trying preset {cand}")
                 act("step", text=f"Trying preset {cand}")
                 t_preset = time.time()
@@ -7125,6 +7140,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 est = (lat_pick[0] if lat_pick[0] is not None else 35.0) if slow else 0.0
                 if slow and time.time() + est > t_deadline:        # the general search would not finish in time
                     log(f"[!] Preset {cand} needs ~{est:.0f}s to pick generals but only {max(t_deadline - time.time(), 0):.0f}s are left - skipped")
+                    time_skips += 1
                     continue
                 dev.tap(*preset_xy(cfg, cand))
                 nap(0.6, 1.0)
@@ -7149,12 +7165,18 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 if picks_generals:
                     act("step", text="Choosing generals")
                     if not set_generals(dev, pcfg, log, stop):
-                        if cfg["general_on_fail"] == "march" and back_to_march():
-                            log("[!] General selection failed - marching with the preset's generals")
+                        # the listed general could not be set: never drop the whole rally for that.
+                        if back_to_march():
+                            if slot_has_general(dev.screenshot(), "main", pcfg):
+                                log(f"[!] Could not set the listed general - marching with the general already in preset {cand}")
+                            elif cfg["general_on_fail"] == "march":
+                                log(f"[!] Could not set the listed general and preset {cand} is empty - marching anyway (setting: march)")
+                            else:
+                                log(f"[!] Could not set the listed general and preset {cand} is empty - trying the next preset")
+                                continue
                         else:
-                            log("[!] General selection failed - skipping this rally")
+                            log("[!] General selection failed and the march screen is gone - skipping this rally")
                             fail("General selection failed")
-                            slower("General selection failed")
                             recover()
                             gave_up = True
                             break
@@ -7202,6 +7224,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     used.bad.pop(p, None)                  # full or over, so do not bench them
                 log("[!] No preset could march - going back")
                 fail("No preset could march")
+                if time_skips:                             # too little time for these presets: do not come back to this rally
+                    no_open[:] = [x for x in no_open if x[1] > time.time()]
+                    no_open.append((base_name, t_join + left))
                 if screen_state(dev.screenshot(), cfg) == "march":
                     dev.back()
                     nap(1, 2)

@@ -1,9 +1,9 @@
 {
-  "version": "2.4.30",
-  "notes": "Reads the rally list bottom-up and joins the rally closing first; Skip if no general only passes the preset for that rally; no restart on a quiet rally list",
+  "version": "2.4.31",
+  "notes": "Listed preset failures march with the preset's general instead of dropping the rally; generals found by name; quiet-list check uses Back too",
   "files": {
     "rally_bot.py": {
-      "sha256": "160a3b21bf26a1f332380f7e488e5bdf275b96a66dd89729a3eaddf536a3732d"
+      "sha256": "82c05b7efffff2089ee87a3e426820d5db41a5680002f367c72e6d8df50e1547"
     },
     "web_app.py": {
       "sha256": "99a5bdb712a46c5d48e5113dd87129c9985c60b4e3a3cf98830fad4be3d32564"
@@ -18,7 +18,7 @@
       "sha256": "d7296d0d1abb4506ed9c341e1fe28657e444ab7e330b4d757b257bb9d2cde380"
     },
     "ui/changelog.js": {
-      "sha256": "6e2eb1e5f61cef66e849e12f45daeb5f71807d408441e7c32e41dca8b9f14c4d"
+      "sha256": "92544d7494fcdf7c399dda125aa944bcc3034a06b64d3564970a570de84f84d9"
     },
     "ui/dialogs.js": {
       "sha256": "ad85eb3b236e6554bce7cbf428f8d73f062f3c6ca244c74e8cfa3b33b7962709"
@@ -132,5 +132,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "6c51651a58471f4eabc1877f08a916f60fe1843c439181de9afbce8fbc47ffe4"
+  "sig": "f60a4da4356fc0b570867e40b3cad355be82cbfb11dc64cc7214786caa833f8f"
 }
