@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.12", date: "2026-10-19",
+    new: [],
+    fixed: ["Updates now work even when the update address box is empty (the built-in address is used)."] },
   { v: "2.4.11", date: "2026-10-19",
     new: [],
     fixed: ["The login window no longer pops up again when you save changes on an emulator."] },

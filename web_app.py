@@ -392,7 +392,7 @@ class Controller:
                     self._tg_tick()
                 if now - last["upd"] > 6 * 3600 or (last["upd"] == 0 and now - t0 > 12):
                     last["upd"] = now
-                    if self.cfg.get("update_mode") != "off" and (self.cfg.get("update_url") or "").strip():
+                    if self.cfg.get("update_mode") != "off" and ((self.cfg.get("update_url") or "").strip() or rb.DEFAULT_UPDATE_URL):
                         self.check_updates(False)
             except Exception as e:
                 self.log(f"[!] {type(e).__name__}: {e}")
@@ -930,7 +930,7 @@ class Controller:
 
     # ------------------------------------------------------------------ updates
     def check_updates(self, manual):
-        cfg = {"update_url": self.cfg.get("update_url", ""), "update_key": self.cfg.get("update_key", "")}
+        cfg = {"update_url": (self.cfg.get("update_url") or "").strip() or rb.DEFAULT_UPDATE_URL, "update_key": self.cfg.get("update_key", "")}
         if manual:
             self.log("[*] Checking for updates...")
 

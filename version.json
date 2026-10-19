@@ -1,12 +1,12 @@
 {
-  "version": "2.4.11",
-  "notes": "Fix: the login window no longer reappears when you save changes on an emulator.",
+  "version": "2.4.12",
+  "notes": "Fix: login window no longer reappears when saving an emulator; updates work with an empty update address.",
   "files": {
     "rally_bot.py": {
-      "sha256": "019a7ea83c7018d85ac1e2beab51c5c615071fdd3046e4ce2d8acc9899936fba"
+      "sha256": "abc1d885d19fe2f461e1cd900b038883f3de5ebabc8312bb3545b7ef5d9ec358"
     },
     "web_app.py": {
-      "sha256": "cf30087e96fd56d530488a7c99421e555d16bdf0b74f3ba7906787a5287162c3"
+      "sha256": "e68c6b1f7b4f5606ee038dfb9813b6eff3fe92529fab86a76923200abaf3bef9"
     },
     "rf_license.py": {
       "sha256": "d0a63d405eb24237e94b9e20b90cf9029c58976be76ab31f78ce2f9db2bd4387"
@@ -18,7 +18,7 @@
       "sha256": "91274939a9302582fdf1815bfe5f4b7312717d60f3666d14c79e403bd1d73464"
     },
     "ui/changelog.js": {
-      "sha256": "948b95cdf3088bf5351c0302dfa39e2bf64f53721a4e74239385c60a2512365f"
+      "sha256": "76740d79ea4d98a18f573fb725cf5147d623364cb7635a9343778215b8f42f3e"
     },
     "ui/dialogs.js": {
       "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
@@ -44,5 +44,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "2ac65a6e298cbcf65f0e664983ca4989d96f75cc16a8c3b3bccc42703859b2b6"
+  "sig": "04ba554982aa5dddae495d00ac4b934754728a78e7eff17c93e916a8d818bfa4"
 }
