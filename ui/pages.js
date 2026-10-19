@@ -485,15 +485,19 @@ async function captureTemplate() {
 function staminaPanel(store, base) {
   // base = where the value comes from when this emulator has none of its own (the global settings)
   const g = (k, d) => (store[k] !== undefined ? store[k] : base[k] !== undefined ? base[k] : d);
-  const S_ = (k, opts, d) => sel(store, k, opts, { get: () => g(k, d) });
+  const S_ = (k, opts, d, after) => sel(store, k, opts, { get: () => g(k, d), after });
+  // the exact number only matters when "exact number" is chosen: grey it out for "game default" and "full (Max)"
+  const cnt = inp(store, "stamina_count", { type: "int", cls: "short", get: (v) => g("stamina_count", 2) });
+  const syncCnt = () => { const off = g("stamina_amount", "game default") !== "exact number"; cnt.disabled = off; cnt.style.opacity = off ? "0.45" : ""; cnt.title = off ? "Choose 'exact number' in How many to type a number" : ""; };
+  syncCnt();
   return panel("Stamina (when a march needs more than you have)",
     h("div", { class: "hint", style: { marginBottom: "10px" } }, "The bot uses stamina ITEMS only (never gems). Choose which items it may use, in which order, and how many."),
     h("div", { style: { marginBottom: "10px" } }, tog({ stamina_auto: g("stamina_auto", true) }, "stamina_auto", "Use stamina items automatically", { after: (v) => { store.stamina_auto = v; } })),
     grid2(
       fld("Items it may use", S_("stamina_items", ["all", "100 only", "50 only", "10 only", "50 + 100"], "all")),
       fld("Order", S_("stamina_order", ["large first", "small first"], "large first")),
-      fld("How many", S_("stamina_amount", ["game default", "full (Max)", "exact number"], "game default")),
-      fld("Exact number of items (when 'exact number')", inp(store, "stamina_count", { type: "int", cls: "short", get: (v) => g("stamina_count", 2) }))),
+      fld("How many", S_("stamina_amount", ["game default", "full (Max)", "exact number"], "game default", syncCnt)),
+      fld("Exact number of items (when 'exact number')", cnt)),
     note("Game default = the amount the game suggests (2 items, so 100 stamina with the 50 item). Full = the Max button (uses all of that item). Exact number = the number you type."));
 }
 PAGES.settings = function () {
