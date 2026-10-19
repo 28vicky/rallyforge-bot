@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.39", date: "2026-10-20",
+    new: [],
+    fixed: ["A rally is no longer missed because the monster level could not be read (blurry number on the card, as seen on Witch rallies: \u201clevel could not be read - the rally is missed\u201d). After the second, harder read the bot now joins anyway.", "A Viking rally whose set could not be recognised is now joined when at least one Viking group is switched on; it is only skipped when all of them are switched off."] },
   { v: "2.4.38", date: "2026-10-19",
     new: [],
     fixed: ["A Listed general found by name (e.g. Cleopatra) could not be picked: the bot looked for her Select button only below her name and missed it. It now looks along the whole row and takes the button closest to her name. Before, Toph passed an idle Cleopatra and reported \u201cNo preset could march\u201d.", "The bot never gives up on a rally and never gets stuck on one. A rally closing soon (90 s or less) is a priority: the bot stays on it and tries again straight away until it is too late, since there is no second chance. A rally with more time left can wait: if no preset can march within 30 s (all marches busy, generals out, general not found, march screen did not open) the bot joins the other rallies first and comes back to it on the next pass over the list - again and again while it still shows Join. When one of your 6 marches comes back, it is used.", "Report a problem now includes the 8 newest debug pictures (it used to take 5 in alphabetical order, so the important one was often missing)."] },

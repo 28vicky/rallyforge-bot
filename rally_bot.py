@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.38"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.39"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -6710,7 +6710,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         mon, mlv = vname, vlv
                     else:                                             # set unknown: join only if every Viking group would be allowed
                         bad = [vn for vn in VIKING_SETS if not monster_allowed(vn, cfg, lv0)[0]]
-                        if bad:
+                        if len(bad) >= len(VIKING_SETS):              # every group is off: nothing to join. Some on: join rather than miss it
                             act_skip("Viking", "Viking set not recognised and some groups are switched off")
                             if cfg["log_timers"]:
                                 say("[Viking] skip (set not recognised and %s is switched off)" % ", ".join(bad))
@@ -6734,9 +6734,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             say(f"[{mon}] level not clear - trying the other rallies first")
                             deferred.append(hit)
                             continue
-                        act_skip(mon, "level could not be read after trying hard")
-                        say(f"[{mon}] skip (level could not be read after trying hard - the rally is missed)")
-                        continue
+                        say(f"[{mon}] level still not readable - joining anyway (a rally is never left unjoined just because of a blurry number)")
                 m_ok, m_why = monster_allowed(mon, cfg, mlv)
                 if mon == "hidden" and mon_presets:
                     m_ok, m_why = False, "monster picture not fully on screen"
