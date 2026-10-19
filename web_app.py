@@ -937,6 +937,10 @@ class Controller:
         def work():
             try:
                 info = rb.check_update(cfg)
+                try:
+                    rb.sync_monster_pack(lambda m: self.log(m))
+                except Exception:
+                    pass
                 if info is None:
                     if manual:
                         self.event("update_none", {"version": rb.VERSION})

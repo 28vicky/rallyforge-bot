@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.14"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.15"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -3246,6 +3246,8 @@ def save_catalog(found, log=print):
 APP_DIR = USER / "app"                  # downloaded versions live here: app/v1.2.0/rally_bot.py ...
 _NAME_PY = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_\-]*\.py$")
 _NAME_UI = re.compile(r"^ui/[A-Za-z0-9_][A-Za-z0-9_\-]*\.(js|css|html)$")
+_LAST_MANIFEST = [None]
+_NAME_MON = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_\-# ()]*\.png$")
 _NAME_PNG = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_\- ]*\.png$")
 
 
@@ -3279,6 +3281,38 @@ def _download(url, limit=12_000_000, timeout=25):
     return data
 
 
+def sync_monster_pack(log=print):
+    """The published list can carry a pack of monster pictures. Download the ones this PC does not have yet (never
+    replaces a picture you already have). -> number of new pictures."""
+    import urllib.parse
+    got = _LAST_MANIFEST[0]
+    if not got:
+        return 0
+    man, base = got
+    n = 0
+    (USER / "monsters").mkdir(exist_ok=True)
+    for name, meta in (man.get("monsters") or {}).items():
+        try:
+            if not _NAME_MON.match(name) or (USER / "monsters" / name).exists():
+                continue
+            data = _download(urllib.parse.urljoin(base, (meta or {}).get("url", "monsters/" + urllib.parse.quote(name))), 1_000_000)
+            if hashlib.sha256(data).hexdigest() != str((meta or {}).get("sha256", "")) or not data.startswith(b"\x89PNG"):
+                continue
+            (USER / "monsters" / name).write_bytes(data)
+            n += 1
+        except Exception:
+            continue
+    if n:
+        with _cache_lock:
+            _mon_cache.clear()
+        try:
+            list_monsters(refresh=True)
+        except Exception:
+            pass
+        log(f"[+] {n} new monster picture(s) added to your library.")
+    return n
+
+
 def check_update(cfg):
     """-> {'version', 'notes', 'manifest', 'base'} if a newer version is published, None if you are up to date.
     Raises ValueError / OSError with a readable message when something is wrong."""
@@ -3308,6 +3342,7 @@ def check_update(cfg):
     for name, meta in {**files, **pics}.items():
         if not re.fullmatch(r"[0-9a-f]{64}", str((meta or {}).get("sha256", ""))):
             raise ValueError(f"No valid checksum for {name}.")
+    _LAST_MANIFEST[0] = (manifest, url)
     if version_tuple(ver) <= version_tuple(VERSION):
         return None
     return {"version": ver, "notes": str(manifest.get("notes", "")), "manifest": manifest, "base": url}

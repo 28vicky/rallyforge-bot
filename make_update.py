@@ -1,0 +1,71 @@
+"""
+Publish a new version of the bot.
+
+  1. Put the new rally_bot.py, web_app.py and the ui folder in this folder (next to this file).
+  2. Run:  python make_update.py
+     (optional)  python make_update.py --notes "What is new" --key MY_SECRET --templates new_pictures_folder
+  3. Upload rally_bot.py, web_app.py, the ui folder and the new version.json to the web address you typed into the app
+     ("Update address" = the link to version.json, e.g. https://raw.githubusercontent.com/you/repo/main/version.json).
+
+With --key (or the UPDATE_KEY environment variable) the version.json is signed. Type the same key into the
+"Update key" box of the app and it will only accept updates signed with it.
+"""
+import argparse
+import hashlib
+import hmac
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).parent
+
+
+def canonical(manifest):
+    return json.dumps({k: v for k, v in manifest.items() if k != "sig"}, sort_keys=True, separators=(",", ":"))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--notes", default="")
+    ap.add_argument("--key", default=os.environ.get("UPDATE_KEY", ""))
+    ap.add_argument("--templates", default="", help="folder with .png pictures to publish too")
+    ap.add_argument("--monsters", default="", help="folder with monster .png pictures to publish too")
+    ap.add_argument("--extra", nargs="*", default=[], help="more .py files that belong to the update")
+    a = ap.parse_args()
+
+    src = (HERE / "rally_bot.py").read_text(encoding="utf-8")
+    m = re.search(r'(?m)^VERSION\s*=\s*"([^"]+)"', src)
+    if not m:
+        sys.exit("rally_bot.py has no VERSION = \"x.y.z\" line.")
+    files = {}
+    for name in ["rally_bot.py", "web_app.py", "rf_license.py", *sorted(f"ui/{x.name}" for x in (HERE / "ui").glob("*") if x.suffix in (".js", ".css", ".html")), *a.extra]:
+        p = HERE / name
+        if not p.exists():
+            sys.exit(f"{name} is missing from this folder.")
+        if name.endswith(".py"): compile(p.read_bytes(), name, "exec")                      # refuse to publish a file with a syntax error
+        files[name] = {"sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+    pics = {}
+    if a.templates:
+        for p in sorted(Path(a.templates).glob("*.png")):
+            pics[p.name] = {"sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+    mons = {}
+    if a.monsters:
+        from urllib.parse import quote
+        for p in sorted(Path(a.monsters).glob("*.png")):
+            mons[p.name] = {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "url": "monsters/" + quote(p.name)}
+    manifest = {"version": m.group(1), "notes": a.notes, "files": files}
+    if mons:
+        manifest["monsters"] = mons
+    if pics:
+        manifest["templates"] = pics
+    if a.key:
+        manifest["sig"] = hmac.new(a.key.encode("utf-8"), canonical(manifest).encode("utf-8"), hashlib.sha256).hexdigest()
+    (HERE / "version.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    print(f"version.json written for version {m.group(1)}" + (" (signed)" if a.key else " (NOT signed)"))
+    print("Upload:", ", ".join(list(files) + ["version.json"] + list(pics)))
+
+
+if __name__ == "__main__":
+    main()

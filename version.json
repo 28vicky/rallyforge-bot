@@ -1,12 +1,12 @@
 {
-  "version": "2.4.14",
-  "notes": "Vikings in four groups (Easy/Normal/Hard/Hell) with level and power.",
+  "version": "2.4.15",
+  "notes": "Monster picture pack (fresh installs know the monsters), Viking groups, login fixes.",
   "files": {
     "rally_bot.py": {
-      "sha256": "5875264491f0e81a09a1d216faf46a1cef3c1d8bb2cac414ee9a470f93542dbc"
+      "sha256": "d6834ee182cb4a6ad6644ffcc2115a00ed397d0f168b483834d883a4008e0e45"
     },
     "web_app.py": {
-      "sha256": "e68c6b1f7b4f5606ee038dfb9813b6eff3fe92529fab86a76923200abaf3bef9"
+      "sha256": "4262f00f8e5b061be6873b030fadd2dcd0b27444a9de4a65bd4f7f147ea634d8"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "91274939a9302582fdf1815bfe5f4b7312717d60f3666d14c79e403bd1d73464"
     },
     "ui/changelog.js": {
-      "sha256": "afb98fd9d534b7666c399e6e6bb4e3a8064389b5b0bebd87cc1dd6afddc636c3"
+      "sha256": "6d733f0557ac17a420eed9e08618dd909f7ba362d27fa6873dffb67cc9f22662"
     },
     "ui/dialogs.js": {
       "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
@@ -28,6 +28,76 @@
     },
     "ui/pages.js": {
       "sha256": "fdf573ad2563a0b3dc0b1e68055478e74c283ebc58f8abbb100eaded60cd33e5"
+    }
+  },
+  "monsters": {
+    "Ammit.png": {
+      "sha256": "075ebc7204c3ae426b3d1cda862fe89dc85b723b10f78893b102f23e0db19c36",
+      "url": "monsters/Ammit.png"
+    },
+    "Azazel.png": {
+      "sha256": "d1616064cb0e029acf8329e6f923cfb05ea616869be886589f664c43646f64c4",
+      "url": "monsters/Azazel.png"
+    },
+    "Bayar Knight.png": {
+      "sha256": "1ed3b797d5a274a5124c781a23d8eec5a4873031eaf9b52ab33ca0e016ab76d0",
+      "url": "monsters/Bayar%20Knight.png"
+    },
+    "Cerberus.png": {
+      "sha256": "170942996446f624f9d37cd19f7243c601d4beb46c8744e7d627a11b9c06d9c5",
+      "url": "monsters/Cerberus.png"
+    },
+    "Garmr.png": {
+      "sha256": "8a448a7cf7c717f27f74d48e1f1506409bd4d961f2a5b55eb66e6af296a03461",
+      "url": "monsters/Garmr.png"
+    },
+    "Jormungandr.png": {
+      "sha256": "8cc74f20d7a480341de101858868ee277480b0116c7cc430a0d91a491228a9f8",
+      "url": "monsters/Jormungandr.png"
+    },
+    "Junior Hydra.png": {
+      "sha256": "41b35051b41a3562bb197ad3c4c89e45b3e1c4c079c527c9d8b5f118ee9ca5ff",
+      "url": "monsters/Junior%20Hydra.png"
+    },
+    "Knight Bayard.png": {
+      "sha256": "1ed3b797d5a274a5124c781a23d8eec5a4873031eaf9b52ab33ca0e016ab76d0",
+      "url": "monsters/Knight%20Bayard.png"
+    },
+    "Kraken.png": {
+      "sha256": "aeeaac12b1864c0d969457a13194d65fe1f91242868451b537c3153fe843dea5",
+      "url": "monsters/Kraken.png"
+    },
+    "Pan.png": {
+      "sha256": "8094140c2b9f0fc6e924b4bea4683efe8fa25d1e4c4a4f47be2c7fbc9d27b97a",
+      "url": "monsters/Pan.png"
+    },
+    "Phoenix.png": {
+      "sha256": "4ad9ff94e3889c26f99f0058bdff35ea4ba1a2d0f1930e6bdd8711e1af46013a",
+      "url": "monsters/Phoenix.png"
+    },
+    "Sphinx.png": {
+      "sha256": "80ed9e22b3da441f270c93bd458c72d936db28e70a33254b37a2800104c2f584",
+      "url": "monsters/Sphinx.png"
+    },
+    "Stymphalian Bird.png": {
+      "sha256": "cce472c4479f3b3d8e430c4e8a445816cdb85fdbb67a09c1dc6a2feda76c60ad",
+      "url": "monsters/Stymphalian%20Bird.png"
+    },
+    "Thunder Scorpion.png": {
+      "sha256": "b6aa5341e5ce557a0ff13100f5f1c1be640d291d1235d020fe6083851e817ce8",
+      "url": "monsters/Thunder%20Scorpion.png"
+    },
+    "Typhon.png": {
+      "sha256": "12f12603caf3c9f69ecf269c25b461c9acfef5b0ce2be59a5817acda93342c72",
+      "url": "monsters/Typhon.png"
+    },
+    "Witch #2.png": {
+      "sha256": "839ff35c62ae98b388dc1934e5b717784d5ab1bee258510988a69d447b264c64",
+      "url": "monsters/Witch%20%232.png"
+    },
+    "Witch.png": {
+      "sha256": "ac394b658002e4cc611f77c3be72d6df12f52ff81baab3885483593887192316",
+      "url": "monsters/Witch.png"
     }
   },
   "templates": {
@@ -44,5 +114,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "434f8bfa6f1c4174a8c39dafcf6eba48988c77f2995aa8f4675a6552a241e04e"
+  "sig": "5c0f9240023fea1e3fddd4d46c965a7b3c2f5d6bf684afc5519bd64282554c9e"
 }
