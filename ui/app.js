@@ -138,6 +138,8 @@ function applyCustom() {
     const base = cs.getPropertyValue("--btn").trim();
     st.setProperty("--btn", `linear-gradient(rgba(${ar},${ag},${ab},${light ? 0.2 : 0.17}),rgba(${ar},${ag},${ab},${light ? 0.2 : 0.17})), ${base}`);
   }
+  const tz = Math.max(85, Math.min(150, parseInt(c.ui_text, 10) || 100));
+  try { root.style.zoom = tz === 100 ? "" : String(tz / 100); } catch (e) {}
   const R = { sharp: [6, 4, 8], round: [28, 18, 28] }[c.ui_round];
   if (R) { st.setProperty("--r1", R[0] + "px"); st.setProperty("--r2", R[1] + "px"); st.setProperty("--rad", R[2] + "px"); }
 }

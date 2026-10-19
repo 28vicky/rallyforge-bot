@@ -272,7 +272,7 @@ function instancePage(serial) {
     btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"),
     btn("Profile \u25BE", (e) => menu(e.currentTarget, [{ label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "sm"));
   const head = h("div", { class: "row", style: { margin: "0 0 14px", gap: "16px", alignItems: "center" } },
-    h("h2", { style: { fontSize: "24px", lineHeight: "1.1", fontWeight: "800", color: "var(--accent2)", margin: "0" } }, dev.name || "Emulator " + d.idx),
+    h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", color: "var(--accent2)", margin: "0" } }, dev.name || "Emulator " + d.idx),
     status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial));
 
   // ---- overrides
@@ -884,6 +884,8 @@ PAGES.themes = function () {
     look.append(
       row("Buttons", segOf("ui_btn", [["raised", "Plain"], ["tinted", "Accent tint"]], "raised"), "Tint the buttons with the accent colour."),
       row("Borders", segOf("ui_border", [["subtle", "Subtle"], ["accent", "Accent"]], "subtle"), "Outline of cards, buttons and boxes."),
+      row("Text size", segOf("ui_text", [[85, "Small"], [100, "Normal"], [115, "Large"], [130, "Extra large"]], 100), "Makes everything in the window bigger or smaller."),
+      row("Emulator name", segOf("ui_name", [[20, "Small"], [24, "Medium"], [30, "Large"], [38, "Huge"]], 24), "Size of the name at the top of each emulator page."),
       row("Corners", segOf("ui_round", [["sharp", "Sharp"], ["normal", "Soft"], ["round", "Round"]], "normal"), "How round the cards and buttons are."));
   };
   picker.oninput = () => { setLook({ ui_accent: picker.value }); hexIn.value = picker.value; };
@@ -895,7 +897,7 @@ PAGES.themes = function () {
     panel("Accent colour", note("Pick a colour for the highlights: the active tab, switches, the selected emulator and the focus outlines. The text colour on top of it is chosen automatically so it stays readable."),
       h("div", { class: "row", style: { gap: "12px" } }, sw, picker, hexIn)),
     panel("Look", look,
-      h("div", { class: "row", style: { marginTop: "6px" } }, btn("Reset look", () => { setLook({ ui_accent: "", ui_btn: "raised", ui_border: "subtle", ui_round: "normal" }); drawLook(); }, "", "refresh"))));
+      h("div", { class: "row", style: { marginTop: "6px" } }, btn("Reset look", () => { setLook({ ui_accent: "", ui_btn: "raised", ui_border: "subtle", ui_round: "normal", ui_text: 100, ui_name: 24 }); drawLook(); }, "", "refresh"))));
 };
 
 // ====================================================================== license (sold edition only)
