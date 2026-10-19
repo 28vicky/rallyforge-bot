@@ -198,6 +198,7 @@ function layout() {
       h("span", { class: "l", title: S.copyright || "" }, "RallyForge Bot " + S.version + "  \u00b7  by " + (S.author || "Kiravik")), h("span", { id: "sbRun" }, "0 running"), h("span", { id: "sbLic" }),
       h("span", { id: "sbRam" }), h("span", { id: "sbTg" }))));
   buildRibbon();
+  paintRunState();
   renderModeIcon();
   renderSide();
   renderTabs();
@@ -238,7 +239,7 @@ function buildRibbon() {
   const btn = (txt, fn, cls, icon) => {
     const caret = txt.endsWith(" \u25be");
     const run = ["Start", "Pause", "Stop"].includes(txt);        // these act on all emulators when Control settings is open
-    return h("button", { class: "btn ib " + (cls || ""), onclick: fn }, icon ? ico(icon) : null,
+    return h("button", { class: "btn ib " + (cls || ""), onclick: fn, "data-act": run ? txt.toLowerCase() : null }, icon ? ico(icon) : null,
       run ? h("span", { class: "runlbl", "data-base": txt }, txt) : (caret ? txt.slice(0, -2) : txt), caret ? ico("chev", "caret") : null);
   };
   const grp = (cap, ...kids) => h("div", { class: "grp" }, h("div", { class: "row" }, kids), h("div", { class: "cap" }, cap));
@@ -347,6 +348,17 @@ function renderSide() {
     L.appendChild(item(d.id, `${d.idx}. ${d.name || short(d.id)}`, d.state, [devTag(d), d.joins ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
   }
 }
+// Start / Pause / Stop: the button that matches the current state lights up in its own colour (green / amber / red)
+function paintRunState() {
+  let st = null;
+  if (S.sel !== "control") { const d = S.devStatus.find((x) => x.id === S.sel); st = d ? d.state : null; }
+  else { const sts = new Set(S.devStatus.map((d) => d.state)); st = sts.size === 1 ? [...sts][0] : null; }
+  const map = { run: "start", pause: "pause", stop: "stop" };
+  document.querySelectorAll("[data-act]").forEach((b) => {
+    b.className = b.className.replace(/\bcur-\w+/g, "").replace(/\s+/g, " ").trim();
+    if (map[st] && map[st] === b.dataset.act) b.classList.add("cur-" + st);
+  });
+}
 function ribbonLabels() {
   const all = S.sel === "control";
   document.querySelectorAll(".runlbl").forEach((e) => { e.textContent = e.dataset.base + (all ? " all" : ""); });
@@ -371,6 +383,7 @@ function renderPage() {
   } else {
     p.appendChild(instancePage(S.sel));
   }
+  paintRunState();
 }
 function rerender() { const p = $("#pages"); const y = p.scrollTop; renderPage(); p.scrollTop = y; }
 
@@ -468,7 +481,7 @@ async function poll() {
       if (bad && wasOk && S.licBad >= 2) showLogin(j.lic.error);
     }
     const key = JSON.stringify(j.devs);
-    if (key !== lastState) { lastState = key; S.devStatus = j.devs; renderSide(); refreshInstanceControls(); }
+    if (key !== lastState) { lastState = key; S.devStatus = j.devs; renderSide(); refreshInstanceControls(); paintRunState(); }
     pushLogs(j.logs);
     pushActs(j.acts);
     for (const ev of j.events) handleEvent(ev);

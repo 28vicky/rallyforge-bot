@@ -1,9 +1,9 @@
 {
-  "version": "2.4.19",
-  "notes": "Monster grid, tabs per emulator, harder power reading, fewer builder buttons, Rory restart fix",
+  "version": "2.4.20",
+  "notes": "Run state shown on Start/Pause/Stop",
   "files": {
     "rally_bot.py": {
-      "sha256": "a010d8d5c5857a31c53e81dc88e847a52a2f5dd31a833380518da2f4f192c677"
+      "sha256": "d45c98515e151940fead6a60c72a44107928500268d60d32af661e9f56bbef68"
     },
     "web_app.py": {
       "sha256": "fc89d68d7beeb5df556ce547111ed469e96973ce2a59ab1df0a2c393a9c8fd18"
@@ -12,13 +12,13 @@
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "b984988d9ff07c870d926713ed2f157fcb07382e69d454cf0b82105983615dae"
+      "sha256": "cd146cdd6c7d39edba04227fbfb06da0e13db89cf906802ec601b136bc138b50"
     },
     "ui/app.js": {
-      "sha256": "357a32106dbac106a5c63de4942028bb76cc447a766e4b6e20e62e50d94f4d64"
+      "sha256": "a3dca8705b979d2046179fe1fa27ca10f5123b35004a7a6688ebecf9392ecb5a"
     },
     "ui/changelog.js": {
-      "sha256": "2fb7899ea7b9647323f4b251fcff0d0be2f374bc834183722bb2e687b290ecb3"
+      "sha256": "41c76c819ffe2643da66ba7e7f69e035b37ef4ac54a91c9b8f763f3e25a1abfc"
     },
     "ui/dialogs.js": {
       "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
@@ -27,7 +27,7 @@
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "d30ff64ea632ceb6fef3abe075afd5d1b5aa7f8437b0071e350d3f5a35dc8b67"
+      "sha256": "8c37da126899e9897e18abd537e199972e962d4fdb7aa2a64731a136be50d502"
     }
   },
   "monsters": {

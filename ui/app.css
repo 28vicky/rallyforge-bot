@@ -339,3 +339,15 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .mon-card input.short{width:84px}
 @media (max-width:700px){.mon-list{grid-template-columns:1fr}}
 .lvchip{min-width:48px}
+
+/* run state: the active Start / Pause / Stop button and the status pill */
+.btn.cur-run,.ribbon .btn.cur-run{background:var(--good);color:#06150c;border-color:transparent;box-shadow:0 0 0 2px rgba(255,255,255,.28)}
+.btn.cur-pause,.ribbon .btn.cur-pause{background:var(--warn);color:#1d1400;border-color:transparent;box-shadow:0 0 0 2px rgba(255,255,255,.28)}
+.btn.cur-stop,.ribbon .btn.cur-stop{background:var(--bad);color:#1a0509;border-color:transparent;box-shadow:0 0 0 2px rgba(255,255,255,.28)}
+.btn[class*="cur-"] .ico{color:inherit}
+.state-pill{display:inline-flex;align-items:center;padding:6px 14px;border-radius:99px;font-size:14px;font-weight:700;border:1px solid var(--line);color:var(--mute)}
+.state-pill.st-run{border-color:var(--good);color:var(--good)}
+.state-pill.st-pause{border-color:var(--warn);color:var(--warn)}
+.state-pill.st-stop,.state-pill.st-error{border-color:var(--bad);color:var(--bad)}
+[data-mode="light"] .btn[class*="cur-"],[data-mode="light"] .ribbon .btn[class*="cur-"]{color:#fff}
+.ribbon .btn[class*="cur-"] .ico,.btn[class*="cur-"] .ico{color:#1a1208!important}.ribbon .btn[class*="cur-"] .ico svg{stroke:currentColor}[data-mode="light"] .btn[class*="cur-"] .ico{color:#fff!important}

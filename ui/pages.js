@@ -225,9 +225,10 @@ function instancePage(serial) {
   const dev = S.devices.find((x) => x.id === serial) || { name: "" };
   S.cfg.per_device = S.cfg.per_device || {};
   const ov = (S.cfg.per_device[serial] = S.cfg.per_device[serial] || {});
-  const status = h("span", { id: "instStatus", class: "hint", style: { fontSize: "13px" } });
+  const status = h("span", { id: "instStatus", class: "state-pill" });
+  const stBtn = (t, fn) => h("button", { class: "btn", "data-act": t.toLowerCase(), onclick: fn }, t);
   const bar = h("div", { class: "row", style: { marginBottom: "14px" } },
-    btn("Start", () => collectAndRun("start", { serial }), "pri"), btn("Pause", () => act(api("pause", { serial }))), btn("Stop", () => act(api("stop", { serial })), "bad"), btn("Take game back now", () => act(api("takeback", { serial }))),
+    stBtn("Start", () => collectAndRun("start", { serial })), stBtn("Pause", () => act(api("pause", { serial }))), stBtn("Stop", () => act(api("stop", { serial }))), btn("Take game back now", () => act(api("takeback", { serial }))),
     btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"), status);
   const head = h("h3", { style: { fontSize: "16px", color: "var(--accent2)", margin: "0 0 12px" } }, `${dev.name || "Emulator " + d.idx}   (${serial})`);
 
@@ -394,7 +395,12 @@ function refreshInstanceControls() {
   const s = $("#instStatus");
   if (!s || S.sel === "control") return;
   const d = S.devStatus.find((x) => x.id === S.sel);
-  if (d) s.textContent = STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
+  if (d) {
+    const G = { run: "\u25B6 ", pause: "\u275A\u275A ", stop: "\u25A0 ", error: "! ", idle: "\u25CB " };
+    s.className = "state-pill st-" + d.state;
+    s.textContent = (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
+  }
+  if (typeof paintRunState === "function") paintRunState();
 }
 
 // ====================================================================== presets & generals
