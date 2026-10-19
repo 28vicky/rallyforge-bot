@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.3.5"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.0"                       # shown in the window; the updater compares this with the published version
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
 def _user_dir():
@@ -1505,7 +1505,7 @@ def troops_in_march(shot):
 
 def read_stamina(shot):
     """The stamina on the march screen ('5,333 / 33' -> (5333, 33) = (owned, needed)), or None if it cannot be read."""
-    c = shot[832:880, 300:480]
+    c = shot[832:880, 200:480]                 # wide enough for big numbers such as '123,456 / 28' (digits were cut off before)
     if c.size == 0:
         return None
     g = cv2.resize(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY), None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
@@ -1531,6 +1531,7 @@ def refill_stamina(dev, cfg, log, stop, needed):
     sizes = sorted({int(x) for x in cfg.get("stamina_sizes", [])}, reverse=bool(cfg.get("stamina_largest_first", True)))
     if not sizes:
         return False
+    before = read_stamina(dev.screenshot())
     opened = False
     for xy in (tuple(cfg["stamina_xy"]), (478, 853), (345, 853)):      # the saved spot, then the round "+" button, then the number
         dev.tap(*xy)
@@ -1546,34 +1547,80 @@ def refill_stamina(dev, cfg, log, stop, needed):
         log("[!] Stamina: the Use Item screen did not open")
         return False
     used_any = False
+    ROW_Y = {10: 442, 50: 604, 100: 766}                     # the title line of each item row on the Use Item screen (the Use button is ~49 px lower)
+
+    def _row_y(shot, size):
+        """Exact-number match ('100' must not match '10' or '50'), then the fixed spot."""
+        try:
+            for _, ws in ocr_lines(shot[300:940, 0:340]):
+                for k, w in enumerate(ws):
+                    if re.sub(r"\D", "", w[0]) == str(size) and k + 1 < len(ws) and ws[k + 1][0].lower().startswith("stam"):
+                        return int(w[2]) + 300
+        except Exception:
+            pass
+        return ROW_Y.get(size)
+
+    def _dialog_open(shot):
+        return bool(find_text(shot, ["Own:", "Own"], region=(60, 310, 300, 80), cutoff=0.7)) and \
+            bool(find_text(shot, ["You can receive"], region=(40, 430, 440, 60), cutoff=0.85))
+
     for size in sizes:
         if stop.is_set():
             break
         shot = dev.screenshot()
-        row = find_text(shot, [f"{size} Stamina"], region=(0, 300, 540, 560), cutoff=0.75)    # below the Buy banner
-        if not row:
-            continue                                        # the account has none of this size
-        use = find_text(shot, ["Use"], region=(330, max(row[1] - 45, 300), 200, 90))
-        dev.tap(*(use if use else (460, row[1] + 20)))
-        nap(0.9, 1.3)
+        ry = _row_y(shot, size)
+        if not ry:
+            continue                                        # the account has none of this size / not a size we know
+        use = find_text(shot, ["Use"], region=(330, ry + 10, 200, 80))
+        dev.tap(*(use if use else (426, ry + 49)))
+        nap(1.0, 1.4)
         shot = dev.screenshot()
-        if not find_text(shot, ["receive", "You can receive"], region=(0, 300, 540, 400), cutoff=0.7):
-            continue                                        # no amount dialog: nothing was used
-        btn = find_text(shot, ["Use"], region=(260, 640, 260, 100))   # the slider is already at its maximum
-        dev.tap(*(btn if btn else (384, 690)))
-        used_any = True
-        log(f"[+] Stamina: used {size}-stamina items")
-        nap(1.0, 1.5)
+        if not _dialog_open(shot):
+            _stamina_snap(shot, "no_dialog")
+            log(f"[i] Stamina: the amount window for {size} did not open - trying the next size")
+            continue
+        _stamina_snap(shot, "dialog")
+        for attempt in range(3):                            # the slider already sits at 2 items; press the green Use inside the window
+            dev.tap(383 + random.randint(-12, 12), 685 + random.randint(-6, 6))
+            nap(1.2, 1.7)
+            shot = dev.screenshot()
+            if not _dialog_open(shot):
+                used_any = True
+                break
+            log(f"[i] Stamina: the amount window is still open - pressing Use again ({attempt + 2})")
+        _stamina_snap(shot, "after_use")
+        if used_any:
+            log(f"[+] Stamina: used {size}-stamina items")
+        else:
+            log("[!] Stamina: the Use button did not close the window")
+            dev.tap(502, 273)                               # the red X of the amount window
+            nap(0.8, 1.2)
         break
     for _ in range(3):                                      # back to the march screen
         if screen_state(dev.screenshot(), cfg) == "march":
             break
         dev.back()
         nap(0.8, 1.2)
-    st = read_stamina(dev.screenshot())
+    nap(0.8, 1.2)
+    shot_end = dev.screenshot()
+    st = read_stamina(shot_end)
+    log(f"[i] Stamina after using items: {st[0]:,} (needs {needed:,})" if st else "[i] Stamina after using items: not readable")
+    _stamina_snap(shot_end, "march_after")
     if used_any and st and st[0] >= needed:
         return True
+    if used_any and (st is None or st[0] == before[0] if before else True) and screen_state(shot_end, cfg) == "march":
+        log("[i] The stamina number did not change after using items - it may be misread, marching anyway")
+        return True
     return False
+
+
+def _stamina_snap(img, tag):
+    try:
+        d = USER / "debug"
+        d.mkdir(exist_ok=True)
+        cv2.imwrite(str(d / f"stamina_{tag}.png"), img)
+    except Exception:
+        pass
 
 
 def preset_xy(cfg, n):
@@ -2526,6 +2573,7 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
     th = min(cfg["threshold"], 0.85)
     closed = 0
     outside_done = False
+    back_arrow_taps = 0
     for _ in range(rounds):
         if stop.is_set():
             break
@@ -2552,6 +2600,21 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         st = screen_state(shot, cfg)
         if st != "unknown" or not has_template("city_screen"):
             break
+        if tap_alliance_war_row(dev, shot, log):          # the Alliance page is not a pop-up: go on into Alliance War
+            _nap(stop, 1.5, 2.2)
+            break
+        try:                                               # a full page (Alliance Science, event, ...) has the gold Back arrow top left: it is not a pop-up
+            _hsv = cv2.cvtColor(shot[8:80, 5:75], cv2.COLOR_BGR2HSV)
+            _gold = cv2.countNonZero(cv2.inRange(_hsv, (12, 110, 150), (32, 255, 255)))
+        except Exception:
+            _gold = 0
+        if _gold > 250 and back_arrow_taps < 6:
+            back_arrow_taps += 1
+            dev.tap(*cfg.get("city_to_tap", (35, 35)))
+            log("[*] A full page is open (not a pop-up) - tapped the Back arrow")
+            closed += 1
+            _nap(stop, 1.2, 1.8)
+            continue
         cx = find_close_x(shot)
         if cx:                                             # any pop-up with a round X button: tap it (works on every instance)
             dev.tap(cx[0][0], cx[0][1])
@@ -4294,6 +4357,28 @@ def find_text(img, options, region=None, cutoff=0.8):
     return None
 
 
+def tap_alliance_war_row(dev, shot, log):
+    """On the Alliance main page (rows: Alliance War / Gift / Treasure / Building / Help): tap the 'Alliance War' row.
+    -> True if tapped."""
+    try:
+        row = None
+        reg = (60, 330, 420, 440)
+        t = find_text(shot, ["Alliance War"], region=reg, cutoff=0.8)
+        if t and find_text(shot, ["Alliance Gift", "Alliance Treasure", "Alliance Help", "Alliance Building"], region=reg, cutoff=0.75):
+            row = t
+        if not row and has_template("war_button"):
+            h = find(shot, "war_button", 0.7)
+            if h:
+                row = (int(h[0]), int(h[1]))
+        if row:
+            dev.tap(int(row[0]), int(row[1]))
+            log(f"[*] On the Alliance page - tapped the 'Alliance War' row ({int(row[0])},{int(row[1])})")
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def read_building_labels(img):
     """The building names visible on the city screen: [(name, x, y), ...] in screen coordinates."""
     x, y, w, h = LABEL_VIEW
@@ -5939,6 +6024,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 tap_hit(dev, h)
                 log(f"[*] Closed popup ({name})")
                 return True
+        if x_ok and tap_alliance_war_row(dev, screen, log):
+            return True
         if x_ok:                                          # no saved picture: look for the round X button of any pop-up
             cx = find_close_x(screen)
             if cx:
@@ -5951,6 +6038,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         """Get back to the rally list: close pop-ups, follow the navigation steps, use Back where it is safe."""
         outside_taps = [0]
         back_taps = [0]
+        war_row_taps = [0]
         view_toggles = [0]
         last_toggle = [0.0]
         for _ in range(8):
@@ -5972,6 +6060,25 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 log("[*] Unknown screen after switching view - tapped the city/landscape switch again")
                 nap(2.5, 3.5)
                 continue
+            if st == "unknown" and war_row_taps[0] < 3:       # the Alliance main page (list: Alliance War / Gift / Treasure ...): tap the 'Alliance War' row
+                _row = None
+                try:
+                    if has_template("war_button"):
+                        _row = find(screen, "war_button", 0.7)
+                        if _row:
+                            _row = (int(_row[0]), int(_row[1]))
+                    if not _row:
+                        _t = find_text(screen, ["Alliance War"], region=(60, 330, 420, 440), cutoff=0.8)
+                        if _t and find_text(screen, ["Alliance Gift", "Alliance Treasure", "Alliance Help"], region=(60, 330, 420, 440), cutoff=0.75):
+                            _row = _t
+                except Exception:
+                    _row = None
+                if _row:
+                    war_row_taps[0] += 1
+                    dev.tap(int(_row[0]), int(_row[1]))
+                    log(f"[*] On the Alliance page - tapped the 'Alliance War' row ({int(_row[0])},{int(_row[1])})")
+                    nap(1.5, 2.2)
+                    continue
             if st == "unknown" and back_taps[0] < 2:          # a full page (event, Royal Thief, ...) has the gold Back arrow top left: use it first
                 try:
                     hsv = cv2.cvtColor(screen[8:80, 5:75], cv2.COLOR_BGR2HSV)

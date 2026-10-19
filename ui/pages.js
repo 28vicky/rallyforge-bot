@@ -356,13 +356,19 @@ function instancePage(serial) {
       h("label", { class: "tgl" }, ajOn, h("span", { class: "sw" }), "Use the game's Auto-Join"),
       h("span", {}, "Renew when less than "), numOv("auto_join_renew_min", 120), h("span", {}, " min are left"),
       h("span", {}, "Check every "), numOv("auto_join_check_min", 10), h("span", {}, " min")));
+  const asOn = h("input", { type: "checkbox", checked: !!eff("auto_start", false) });
+  asOn.addEventListener("change", () => { ov.auto_start = asOn.checked; });
+  const autoStart = panel("Start by itself",
+    h("div", { class: "hint", style: { marginBottom: "10px" } }, "ON: this emulator starts on its own whenever the app opens (after a restart or update too). OFF: it waits until you press Start. Each emulator has its own switch."),
+    h("div", { class: "row", style: { gap: "22px", alignItems: "center" } },
+      h("label", { class: "tgl" }, asOn, h("span", { class: "sw" }), "Start this emulator automatically when the app opens")));
   const sect = (title, fn) => {
     const box = h("div", { style: { marginTop: "12px" } });
     const det = h("details", { class: "panel", style: { margin: "14px 0" } }, h("summary", { style: { cursor: "pointer", fontWeight: "700", color: "var(--accent2)", padding: "10px 4px" } }, title), box);
     det.addEventListener("toggle", () => { if (det.open && !box.children.length) box.appendChild(fn()); });
     return det;
   };
-  const wrap = h("div", {}, head, bar, panel("Activity", activityBox(serial)), phone, autoJoin, ...ownP,
+  const wrap = h("div", {}, head, bar, panel("Activity", activityBox(serial)), phone, autoStart, autoJoin, ...ownP,
     sect("Monsters for this emulator (which monsters it joins)", () => PAGES.monsters(serial)),
     sect("Tasks for this emulator", () => PAGES.tasks(serial)),
     sect("Duties for this emulator (Crazy Eggs, daily claims...)", () => PAGES.duties(serial)),
@@ -470,7 +476,7 @@ PAGES.settings = function () {
   const lr = panel("Low RAM / weak PC", h("div", { id: "ramInfo", class: "hint", style: { marginBottom: "10px" } }, "PC memory: ..."),
     tog(c, "low_memory", "Low-memory mode (no live picture, shorter logs, one text reading at a time, lower priority, slower emulator start-up)"),
     h("div", { style: { marginBottom: "8px" } }, tog(c, "keep_running_on_close", "Keep the bots running in the background when I close this window (off = closing the window stops everything)")),
-    h("div", { style: { marginBottom: "12px" } }, tog(c, "auto_start", "Start all emulators by itself whenever the app opens (after a restart or update too)")),
+    h("div", { style: { marginBottom: "12px" } }, tog(c, "auto_start", "Start all emulators by itself whenever the app opens (default for every emulator - each one can override it on its own page)")),
     grid2(fld("Gap between starting one emulator and the next (seconds)", inp(c, "start_gap_seconds", { type: "int", cls: "short" })),
       fld("Run at most this many emulators at once (0 = no limit)", inp(c, "max_running_emulators", { type: "int", cls: "short" })),
       fld("Wait for this much free RAM before starting an emulator (MB, 0 = off)", inp(c, "min_free_ram_mb", { type: "int", cls: "short" }))),

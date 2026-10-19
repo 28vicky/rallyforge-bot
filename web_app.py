@@ -325,8 +325,10 @@ class Controller:
         d["ctl"].resume()
         self.log("[*] Stopping...", serial)
 
-    def start_all(self):
+    def start_all(self, auto=False):
         todo = [d["id"] for d in self.devices if not self.running(d["id"]) and self.allowed(d["id"])]
+        if auto:      # app just opened: each emulator follows its own 'start by itself' switch (falls back to the global one)
+            todo = [s for s in todo if rb.merge_device_cfg(self.cfg, s).get("auto_start")]
         if not self.lic.limit() and self.lic.limit() is not None:
             self.log("[!] No valid license - open the License tab.")
         self.log(f"[+] Starting {len(todo)} emulator(s)...")
@@ -1760,11 +1762,11 @@ def main():
         (rb.USER / "startup.log").open("a", encoding="utf-8").write(f"server up on port {port}\n")
     except Exception:
         pass
-    if ctl.cfg.get("auto_start"):                       # 'start by itself when the app opens'
-        def _auto():
+    if ctl.cfg.get("auto_start") or any(v.get("auto_start") for v in (ctl.cfg.get("per_device") or {}).values()):
+        def _auto():                                    # 'start by itself when the app opens' (global switch + per-emulator switches)
             time.sleep(6)
-            ctl.log("[+] Auto-start is on - starting all emulators, one after the other")
-            ctl._safe(ctl.start_all)
+            ctl.log("[+] Auto-start is on - starting the chosen emulators, one after the other")
+            ctl._safe(ctl.start_all, True)
         threading.Thread(target=_auto, daemon=True).start()
     if "--no-window" in sys.argv:
         print(url)
