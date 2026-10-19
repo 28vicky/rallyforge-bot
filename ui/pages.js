@@ -116,7 +116,7 @@ PAGES.dashboard = function () {
     btn("Start all", () => collectAndRun("start", { serial: "all" }), "pri"), btn("Pause all", () => act(api("pause", { serial: "all" }))),
     btn("Resume all", () => act(api("resume"))), btn("Stop all", () => act(api("stop", { serial: "all" })), "bad"),
     btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
-  const log = panel("Activity - all emulators", activityBox(null));
+  const log = panel(null, activityBox(null, "Activity - all emulators"));
   return h("div", {}, dev, ctl, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
@@ -386,7 +386,7 @@ function instancePage(serial) {
     for (const el of t[2]()) if (el) body.appendChild(el);
   };
   for (const [k, l] of ITABS) tabRow.appendChild(h("button", { class: "tab", "data-k": k, onclick: () => showTab(k) }, l));
-  const wrap = h("div", {}, head, bar, panel("Activity", activityBox(serial)), tabRow, body);
+  const wrap = h("div", {}, head, bar, panel(null, activityBox(serial, "Activity")), tabRow, body);
   showTab(S.instTab);
   setTimeout(refreshInstanceControls, 0);
   return wrap;
@@ -398,7 +398,8 @@ function refreshInstanceControls() {
   if (d) {
     const G = { run: "\u25B6 ", pause: "\u275A\u275A ", stop: "\u25A0 ", error: "! ", idle: "\u25CB " };
     s.className = "state-pill st-" + d.state;
-    s.textContent = (G[d.state] || "") + STATE_TXT[d.state] + (d.state === "pause" && d.resume_in ? ` (runs again in ${d.resume_in} min)` : "") + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
+    s.textContent = (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
+    if (d.state === "pause" && d.resume_at) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.resume_at), "data-pre": " - runs again in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
   }
   if (typeof paintRunState === "function") paintRunState();
 }
@@ -598,12 +599,27 @@ function monstersPanel(c) {
         }
         if (multi && isOpen) {
           const chips = h("div", { class: "mon-lvls" });
-          lv.forEach(([l, pw]) => {
-            const off = skipSet(n).has(l);
-            const ch = h("button", { type: "button", class: "lvchip" + (off ? "" : " on"), "aria-pressed": String(!off), title: "Level " + l }, h("b", {}, "Lv" + l));
-            ch.addEventListener("click", () => { const s2 = skipSet(n); if (s2.has(l)) s2.delete(l); else s2.add(l); setSkip(n, s2); draw(); });
-            chips.appendChild(ch);
-          });
+          const many = lv.length > 12;                                   // Vikings: 50 levels = bands of 10, or every level
+          S.monAll = S.monAll || {};
+          const flip = (set, l) => { if (set.has(l)) set.delete(l); else set.add(l); };
+          if (many && !S.monAll[n]) {
+            for (let i = 0; i < lv.length; i += 10) {
+              const grp = lv.slice(i, i + 10), ids = grp.map((x) => x[0]), s2 = skipSet(n);
+              const offN = ids.filter((l) => s2.has(l)).length;
+              const cls = offN === 0 ? " on" : offN === ids.length ? "" : " part";
+              const ch = h("button", { type: "button", class: "lvchip band" + cls, "aria-pressed": String(offN === 0), title: "Levels " + ids[0] + " to " + ids[ids.length - 1] + (offN && offN < ids.length ? " (some skipped)" : "") }, h("b", {}, ids[0] + "\u2013" + ids[ids.length - 1]));
+              ch.addEventListener("click", () => { const s3 = skipSet(n); if (offN === 0) ids.forEach((l) => s3.add(l)); else ids.forEach((l) => s3.delete(l)); setSkip(n, s3); draw(); });
+              chips.appendChild(ch);
+            }
+          } else {
+            lv.forEach(([l, pw]) => {
+              const off = skipSet(n).has(l);
+              const ch = h("button", { type: "button", class: "lvchip" + (off ? "" : " on"), "aria-pressed": String(!off), title: "Level " + l }, h("b", {}, "Lv" + l));
+              ch.addEventListener("click", () => { const s2 = skipSet(n); flip(s2, l); setSkip(n, s2); draw(); });
+              chips.appendChild(ch);
+            });
+          }
+          if (many) chips.appendChild(h("button", { type: "button", class: "btn sm", onclick: () => { S.monAll[n] = !S.monAll[n]; draw(); } }, S.monAll[n] ? "Show bands of 10" : "Show every level (1-" + lv.length + ")"));
           card.appendChild(chips);
         }
       });

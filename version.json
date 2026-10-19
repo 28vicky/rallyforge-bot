@@ -1,24 +1,24 @@
 {
-  "version": "2.4.22",
-  "notes": "General categories; Setup and App tab dropdowns; solid selected buttons; monster list cleanup (Summoned group, level numbers)",
+  "version": "2.4.23",
+  "notes": "Pause countdown; Activity split view; per-emulator button bar; Vikings levels 1-50 in bands; monster list cleanup; general categories; grouped tabs",
   "files": {
     "rally_bot.py": {
-      "sha256": "9ad1b33454410c6def80be09888fcb64893e85427048aed2289dab670d5c8c4c"
+      "sha256": "7275e38fa43fdc73cacfe564b641cd43912c9d1ae0ce215f0b6614b1f018a4fe"
     },
     "web_app.py": {
-      "sha256": "c50e13c0e2dcf8cd36fe516149ab9142548050d70d9ceee35ae0144b27e3f257"
+      "sha256": "c502098b7f9c9187514449935072910a0f415abeaf09a3a6b06ee542e04dd941"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "94feaf1c7a07899f8f73a23b240b5ae61470e0f54c449b52c89c21c2840926fe"
+      "sha256": "648ba5a2761eda663e59bafc9e9e3909146fb85172a1fe2fdcb72a84c8e43c05"
     },
     "ui/app.js": {
-      "sha256": "940647e5369d400efa46788d93147ac0281abe592bca537df2167210070cd5ae"
+      "sha256": "15b7eefeeb701d7ffbca71d574ea8c76b1975662855bd581ad25920702213544"
     },
     "ui/changelog.js": {
-      "sha256": "f6d36a3d1c33b736977043ab9684dcab5f36c2a441d1679317bb5c5549b7be4b"
+      "sha256": "35884c0496be1b4eab9e3d3f1c58a70f2c64ec111ba6ae8bd3f8f4b1c6829cdf"
     },
     "ui/dialogs.js": {
       "sha256": "5118411f4218bf8ef2b9e705f2fa2c12ffa374beed877f996b646838f281b098"
@@ -27,7 +27,7 @@
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "a0b2c9ae648b5c382335c96e42a0d769835fba0a50c7eed994a53c7230ffcc90"
+      "sha256": "4a41c53ecf042e0d64cf8b6d5908f2cf45cb1c66c77207c5b89c6eba87954ce0"
     }
   },
   "monsters": {
@@ -114,5 +114,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "9c91cb8dd86be735876b0895505240cb8976d4cf67841529dc15a9eb38c95842"
+  "sig": "babf6af290e512b35905de3414d7b6bfd30e51483d2b5da318575c5c514f6ff0"
 }

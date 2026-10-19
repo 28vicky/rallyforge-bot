@@ -251,7 +251,7 @@ function buildRibbon() {
     grp("Scan",
       btn("Generals", () => openGeneralManager(), "", "users"),
       ...(S.dev ? [btn("Scan generals", () => scanGeneralsFlow(), "", "scan")] : []),
-      btn("Scan city", () => scanCityFlow(), "", "city"), btn("Map by hand", () => manualMapFlow(), "", "pin")),
+      btn("Scan city", () => scanCityFlow(S.sel === "control" ? undefined : S.sel), "", "city"), btn("Map by hand", () => manualMapFlow(S.sel === "control" ? undefined : S.sel), "", "pin")),
     grp("Data",
       btn("Profiles ▾", (e) => menu(e.currentTarget, [
         { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user"),
@@ -345,9 +345,21 @@ function renderSide() {
     h("span", { class: "nm" }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   for (const d of S.devStatus) {
-    L.appendChild(item(d.id, `${d.idx}. ${d.name || short(d.id)}`, d.state, [devTag(d), d.joins ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
+    L.appendChild(item(d.id, `${d.idx}. ${d.name || short(d.id)}`, d.state, [devTag(d), (d.joins && !(d.state === "pause" && d.resume_at)) ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
+    if (d.state === "pause" && d.resume_at) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.resume_at) })); }
   }
+  tickPauseTimers();
 }
+// Paused emulators count down to their automatic restart; one 1-second ticker updates every timer in place
+function fmtLeft(sec) { sec = Math.max(0, Math.round(sec)); const m = Math.floor(sec / 60), s = sec % 60; return m + ":" + String(s).padStart(2, "0"); }
+function tickPauseTimers() {
+  document.querySelectorAll(".ptimer").forEach((e) => {
+    const left = Number(e.dataset.at) - Date.now() / 1000;
+    const pre = e.dataset.pre || "";
+    e.textContent = left > 0 ? (e.parentElement && e.parentElement.tagName === "SMALL" ? " \u00b7 " : "") + pre + (pre ? "" : "\u23F8 ") + fmtLeft(left) : (pre ? pre : " ") + "resuming\u2026";
+  });
+}
+setInterval(tickPauseTimers, 1000);
 // Start / Pause / Stop: the button that matches the current state lights up in its own colour (green / amber / red)
 function paintRunState() {
   let st = null;
@@ -361,6 +373,7 @@ function paintRunState() {
 }
 function ribbonLabels() {
   const all = S.sel === "control";
+  const rib = document.getElementById("ribbon"); if (rib) rib.style.display = all ? "" : "none";      // the top button bar belongs to Control settings; each emulator has its own bar
   document.querySelectorAll(".runlbl").forEach((e) => { e.textContent = e.dataset.base + (all ? " all" : ""); });
 }
 const TAB_GROUPS = [
@@ -472,9 +485,9 @@ function actStats(serial) {
 function actNow(serial) {
   if (serial !== null) { const x = S.now[serial]; return x ? `${x.t}  ${x.text}` : "Waiting for the bot to start..."; }
   const rows = Object.entries(S.now).map(([s, x]) => `${x.n}: ${x.text}`);
-  return rows.length ? rows.join("   |   ") : "Waiting for the bot to start...";
+  return rows.length ? rows.join("\n") : "Waiting for the bot to start...";
 }
-function activityBox(serial) {
+function activityBox(serial, title) {
   const now = h("div", { class: "actnow" }), stats = h("div", { class: "actstats" });
   const head = ["Time", serial === null ? "Emulator" : null, "Monster", "Rally left", "Result", "Details", "Took"].filter(Boolean);
   const body = h("tbody", {});
@@ -483,7 +496,9 @@ function activityBox(serial) {
   actViews.push(view);
   for (const l of S.acts.slice(-200)) if (l.a.k !== "step" && (serial === null || l.s === serial)) body.insertBefore(actRow(view, l), body.firstChild);
   now.textContent = actNow(serial); stats.textContent = actStats(serial);
-  return h("div", {}, h("div", { class: "actbar" }, h("span", { class: "actlab" }, "Now"), now), stats, wrap);
+  return h("div", { class: "actsplit" },
+    h("div", { class: "actleft" }, h("h3", {}, title || "Activity"), h("div", { class: "actbar" }, h("span", { class: "actlab" }, "Now"), now), stats),
+    h("div", { class: "actright" }, h("h3", {}, "Monster joins"), wrap));
 }
 function pushActs(list) {
   for (const l of list || []) {
