@@ -1,9 +1,9 @@
 {
-  "version": "2.3.3",
-  "notes": "Per-emulator monsters/tasks/duties, Knight Bayard + Viking monsters, staggered start + auto-start, Lucky Hammer confirm, freeze/error recovery, task history, report button.",
+  "version": "2.3.4",
+  "notes": "Fix: join without a general now works; Knight Bayard / Viking skips; per-emulator monsters, tasks and duties; staggered start and auto-start; freeze and error recovery.",
   "files": {
     "rally_bot.py": {
-      "sha256": "f1e6981074687517e9dd7724d83f390949d2246207c5c2ca8ab9bbf6dddd7055"
+      "sha256": "02d9afdee2cc9f8bb393f36a201f3242a75e45ff405f2ef8da19dc8262f47c0d"
     },
     "web_app.py": {
       "sha256": "8e129fbcf73deef58711eec56dea2f952e3d2643a0d06cade2a2ebaedb271281"
@@ -24,5 +24,5 @@
       "sha256": "0bdacb95df93177098c07b570662efa58ff126596afad42b2ff992ad1c4cd65c"
     }
   },
-  "sig": "1a354b4c73395623931e31f171ebaaf389d272d4057dd34ca6bfb771df8e9300"
+  "sig": "2752d6b3047343aef9b3d88220cbb9e468e362c43a9f08f989c4965517ec82ea"
 }
