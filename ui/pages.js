@@ -242,11 +242,38 @@ function instancePage(serial) {
   S.cfg.per_device = S.cfg.per_device || {};
   const ov = (S.cfg.per_device[serial] = S.cfg.per_device[serial] || {});
   const status = h("span", { id: "instStatus", class: "state-pill" });
+  const saveInstProfile = async () => {
+    const name = await promptBox("Save profile", "Name for these settings of this emulator:", "");
+    if (!name) return;
+    const j = await act(api("inst_profile_save", { serial, name, settings: S.cfg.per_device[serial] || {} }));
+    if (j) toast(`Profile '${j.name}' saved. Load it on any emulator with \u201cLoad profile...\u201d.`, "ok");
+  };
+  const loadInstProfile = async () => {
+        const j = await act(api("inst_profiles"));
+        if (!j) return;
+        if (!j.profiles.length) return toast("No emulator profiles yet - press \u201cSave profile...\u201d on an emulator first.");
+        let chosen = j.profiles[0], names = j.profiles;
+        const list = h("div", {});
+        const draw = () => { list.innerHTML = ""; names.forEach((n) => list.appendChild(h("div", { class: "li" + (n === chosen ? " sel" : ""), onclick: () => { chosen = n; draw(); } }, n))); };
+        draw();
+        modal({ title: "Load profile into this emulator", body: h("div", {}, h("p", { class: "note" }, "This replaces the settings of THIS emulator with the saved ones (its generals, presets and own settings). Other emulators are not changed."), list), buttons: [
+          { label: "Delete", onclick: async () => { if (await confirmBox("Delete profile", `Delete profile '${chosen}'?`)) await act(api("inst_profile_delete", { name: chosen })); } },
+          { label: "Cancel" },
+          { label: "Load", cls: "pri", onclick: async () => {
+              if (!chosen) return;
+              AUTO.busy = true;
+              const r = await act(api("inst_profile_load", { serial, name: chosen })).finally(() => { AUTO.busy = false; });
+              if (r) { S.cfg.per_device[serial] = r.settings || {}; AUTO.saved = AUTO.seen = cfgSnap(); rerender(); toast(`Profile '${chosen}' loaded into this emulator.`, "ok"); }
+            } }] });
+  };
   const stBtn = (t, fn) => h("button", { class: "btn", "data-act": t.toLowerCase(), onclick: fn }, t);
   const bar = h("div", { class: "row", style: { marginBottom: "14px" } },
     stBtn("Start", () => collectAndRun("start", { serial })), stBtn("Pause", () => act(api("pause", { serial }))), stBtn("Stop", () => act(api("stop", { serial }))), btn("Take game back now", () => act(api("takeback", { serial }))),
-    btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"), status);
-  const head = h("h3", { style: { fontSize: "16px", color: "var(--accent2)", margin: "0 0 12px" } }, `${dev.name || "Emulator " + d.idx}   (${serial})`);
+    btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"),
+    btn("Profile \u25BE", (e) => menu(e.currentTarget, [{ label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "sm"));
+  const head = h("div", { class: "row", style: { margin: "0 0 14px", gap: "16px", alignItems: "center" } },
+    h("h2", { style: { fontSize: "30px", lineHeight: "1.1", fontWeight: "800", color: "var(--accent2)", margin: "0" } }, dev.name || "Emulator " + d.idx),
+    status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial));
 
   // ---- overrides
   const fields = h("div", { class: "grid2" });
@@ -334,30 +361,6 @@ function instancePage(serial) {
     h("div", { class: "row", style: { marginTop: "14px" } }, btn("Copy settings from...", copyMenu, "sm"),
       btn("Use these on ALL emulators", () => { for (const x of S.devices) if (x.id && x.id !== serial) S.cfg.per_device[x.id] = clone(S.cfg.per_device[serial] || {}); toast("Copied to all other emulators.", "ok"); }, "sm"),
       btn("Clear (use global)", () => { S.cfg.per_device[serial] = {}; rerender(); }, "sm"),
-      btn("Save profile...", async () => {
-        const name = await promptBox("Save profile", "Name for these settings of this emulator:", "");
-        if (!name) return;
-        const j = await act(api("inst_profile_save", { serial, name, settings: S.cfg.per_device[serial] || {} }));
-        if (j) toast(`Profile '${j.name}' saved. Load it on any emulator with \u201cLoad profile...\u201d.`, "ok");
-      }, "sm"),
-      btn("Load profile...", async () => {
-        const j = await act(api("inst_profiles"));
-        if (!j) return;
-        if (!j.profiles.length) return toast("No emulator profiles yet - press \u201cSave profile...\u201d on an emulator first.");
-        let chosen = j.profiles[0], names = j.profiles;
-        const list = h("div", {});
-        const draw = () => { list.innerHTML = ""; names.forEach((n) => list.appendChild(h("div", { class: "li" + (n === chosen ? " sel" : ""), onclick: () => { chosen = n; draw(); } }, n))); };
-        draw();
-        modal({ title: "Load profile into this emulator", body: h("div", {}, h("p", { class: "note" }, "This replaces the settings of THIS emulator with the saved ones (its generals, presets and own settings). Other emulators are not changed."), list), buttons: [
-          { label: "Delete", onclick: async () => { if (await confirmBox("Delete profile", `Delete profile '${chosen}'?`)) await act(api("inst_profile_delete", { name: chosen })); } },
-          { label: "Cancel" },
-          { label: "Load", cls: "pri", onclick: async () => {
-              if (!chosen) return;
-              AUTO.busy = true;
-              const r = await act(api("inst_profile_load", { serial, name: chosen })).finally(() => { AUTO.busy = false; });
-              if (r) { S.cfg.per_device[serial] = r.settings || {}; AUTO.saved = AUTO.seen = cfgSnap(); rerender(); toast(`Profile '${chosen}' loaded into this emulator.`, "ok"); }
-            } }] });
-      }, "sm"),
       btn("Save", saveAll, "sm pri")));
   // ---- own presets & generals (stored in this emulator's overrides; blank = the global ones)
   const PKEYS = ["bot_presets", "preset_mode", "general_main", "general_assistant", "general_main_tab", "general_assistant_tab", "general_main_fav",
