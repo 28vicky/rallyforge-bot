@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.49", date: "2026-10-20",
+    new: ["Each emulator page has a Profile menu next to Map by hand with Save profile and Load profile. The emulator name is bigger and the running status sits right next to it."],
+    fixed: [] },
   { v: "2.4.48", date: "2026-10-20",
     new: [],
     fixed: ["After you click the update in the status bar, the bar now keeps showing what is happening (\u201cInstalling\u2026\u201d, then \u201cinstalled - restarting in a moment\u201d) instead of vanishing, which looked as if the update had failed. The restart waits at most 1 minute for a quiet moment (it was 3), so with many emulators it no longer takes so long."] },
