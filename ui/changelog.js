@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.37", date: "2026-10-19",
+    new: [],
+    fixed: ["The bot now goes by what the game shows: a green \u201cJoin\u201d button is a rally to try, a grey \u201cJoined\u201d button is one this account is already in. No timers decide any more.", "A rally that did not open is tried again on the next pass over the list (every bottom-to-top sweep), as long as it still shows \u201cJoin\u201d - so no rally on the screen is left out."] },
   { v: "2.4.36", date: "2026-10-19",
     new: ["Monster joins shows one row per rally with its latest result, newest on top. A rally the bot joined stays JOINED; it is no longer followed by \u201cskipped \u2013 already joined or full\u201d rows that made it look as if joining failed."],
     fixed: ["A rally the emulator joined itself is no longer reported as skipped. \u201cWould not open\u201d now only appears for rallies that really could not be opened (full or ended).", "Rallies were missed: one failed try to open a rally (a slow click, a pop-up) blocked it for the rest of its time. It is now tried again after 20 seconds and only given up after 2 failed tries.", "Two rallies of the same monster that started a few seconds apart were mixed up, so joining or failing one blocked the other. They are now told apart (end time within 6 s instead of 15 s)."] },

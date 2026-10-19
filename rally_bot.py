@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.36"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.37"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -1207,6 +1207,21 @@ def _power_num(txt):
         return None
     mult = {"K": 1e3, "M": 1e6, "B": 1e9, "8": 1e9}[m.group(2).upper()]
     return float(m.group(1).replace(",", ".")) * mult
+
+
+def joined_button(screen, hit):
+    """True when this rally's button is the grey "Joined" (this account already joined) instead of the green "Join"."""
+    try:
+        x, y = int(hit[0]), int(hit[1])
+        w, h = (hit[3] if len(hit) > 3 and hit[3] else (119, 43))
+        box = screen[max(y - h // 2, 0):y + h // 2, max(x - w // 2, 0):x + w // 2]
+        if box.size == 0:
+            return False
+        hsv = cv2.cvtColor(box, cv2.COLOR_BGR2HSV)
+        green = cv2.inRange(hsv, (35, 90, 60), (90, 255, 255))
+        return cv2.countNonZero(green) < 0.15 * box.shape[0] * box.shape[1]
+    except Exception:
+        return False
 
 
 def read_monster_power(screen, hit, hard=False):
@@ -6469,6 +6484,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     rot = PresetRotator(active_presets(cfg), cfg["preset_mode"])
     at_bottom = [False]                   # True while a bottom-to-top sweep of the rally list is under way
+    sweep_no = [0]                        # every new pass over the list: rallies that did not open are tried again
     back_at = {}                          # preset -> time its troops should be home again (rally left + march there and back + fight)
     mon_presets = {k.lower(): v for k, v in cfg.get("monster_presets", {}).items() if v}
     rots = {}
@@ -6496,8 +6512,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 else:
                     x[3] += 1
                     x[4] = now_t
+                    x[5] = sweep_no[0]
                 return
-        no_open.append([name, end, kind, 1 if kind == "failed" else 0, now_t])
+        no_open.append([name, end, kind, 1 if kind == "failed" else 0, now_t, sweep_no[0]])
     lat_pick = [None]                     # extra seconds a preset needs when the bot has to pick generals
     last_march = [None]                   # march time of the rally find_target just chose
     latency = [None]                      # seconds the bot itself needs between reading a rally and pressing March
@@ -6636,6 +6653,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     def find_target(screen, nudged=False):
         hits = find_all(screen, "join_button", cfg["threshold"], cfg["search_region"])
+        hits = [h0 for h0 in hits if not joined_button(screen, h0)]   # grey "Joined" = this account is already in it
         hits = sorted(hits, key=lambda h0: -h0[1])                    # bottom of the list first: those rallies have the least time left
         deferred = []                                                 # rallies whose power could not be read at the first try
         picks = []                                                    # every rally on screen the bot could join: the one closing soonest wins
@@ -6753,15 +6771,14 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             now_t = time.time()
             same = [x for x in no_open if x[1] > now_t and rally is not None and abs(x[1] - (now_t + rally)) <= 6
                     and x[0] == (mon if mon and mon != "hidden" else show_name(screen, hit, mon))] if ok else []
-            # a failed open is tried again after 20 s; only after 2 failures (or our own join) is the rally left alone
-            seen_before = [x[2] for x in same if x[2] == "joined" or (x[2] == "failed" and (x[3] >= 2 or now_t - x[4] < 20))]
+            # the game itself says what is joined (grey "Joined" button, filtered out above). A rally that did not open is left
+            # alone only for the rest of this pass over the list - the next pass tries it again while it still shows "Join".
+            seen_before = [x[2] for x in same if x[2] == "joined" or (x[2] == "failed" and x[5] == sweep_no[0])]
             if seen_before:
                 if "joined" in seen_before:                   # our own join: already shown as JOINED - not a skip
                     say(f"{label}already joined by this emulator")
                 else:
-                    tries = max(x[3] for x in same)
-                    why_o = ("would not open twice (full or ended)" if tries >= 2 else
-                             f"did not open just now - trying again in {max(1, int(20 - (now_t - max(x[4] for x in same))))}s")
+                    why_o = "did not open just now - tried again on the next pass over the list"
                     act_skip(level_name(screen, hit, mon, mlv), why_o, rally, march)
                     say(f"{label}skip ({why_o})")
                 continue
@@ -7272,6 +7289,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         dev.swipe(x1, y1, x2, y2, ms)
                         nap(0.3, 0.5)
                     at_bottom[0] = True
+                    sweep_no[0] += 1
                     scrolls = 0
                     act("step", text="Looking for a rally to join (from the bottom)")
                     nap(0.6, 0.9)
