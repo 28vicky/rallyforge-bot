@@ -57,7 +57,7 @@ function choiceBox(title, items) {
 }
 async function chooseDevice(title) {
   const ids = S.devices.filter((d) => d.id.trim());
-  if (!ids.length) { toast("Add an emulator first.", "error"); return null; }
+  if (!ids.length) { toast("Add an instance first.", "error"); return null; }
   if (ids.length === 1) return ids[0].id;
   const i = await choiceBox(title, ids.map((d) => `${d.name || d.id}   (${d.id})`));
   return i === null ? null : ids[i].id;
@@ -79,14 +79,14 @@ function pickScreenshot(title) {
       if (j) { m.close(); res(j); }
     };
     const buttons = [{ label: "Cancel", onclick: () => res(null) }, { label: "Choose image file...", keep: true, onclick: () => file.click() }];
-    if (ids.length) buttons.push({ label: "Take from emulator", cls: "pri", keep: true, onclick: async (e) => {
+    if (ids.length) buttons.push({ label: "Take from instance", cls: "pri", keep: true, onclick: async (e) => {
       const j = await act(api("shot_take", { serial: sel.value }));
       if (j) { m.close(); res(j); }
     } });
     m = modal({ title, oncancel: () => res(null), focus: false, buttons,
       body: h("div", { style: { minWidth: "420px" } },
-        h("p", { class: "note" }, "Use a screenshot from an emulator right now (exact size, best for matching) or load an image file."),
-        ids.length ? h("div", { class: "field" }, h("label", {}, "Emulator"), sel) : h("p", { class: "note" }, "No emulator is added yet - choose an image file."), file) });
+        h("p", { class: "note" }, "Use a screenshot from an instance right now (exact size, best for matching) or load an image file."),
+        ids.length ? h("div", { class: "field" }, h("label", {}, "Instance"), sel) : h("p", { class: "note" }, "No instance is added yet - choose an image file."), file) });
   });
 }
 
@@ -295,14 +295,14 @@ function swapGeneral(old, neu) {
 let scanBox = null;
 function closeScanBox() { if (scanBox) { scanBox.close(); scanBox = null; } }
 async function scanGeneralsFlow() {
-  const serial = await chooseDevice("Scan with which emulator?");
+  const serial = await chooseDevice("Scan with which instance?");
   if (!serial) return;
   const m = await choiceBox("How should the bot scan?", ["Automatic (recommended): the bot opens Generals from the city, switches to thumbnail view and scans all 5 tabs", "Only the list that is open right now (you open it, in GRID view)"]);
   if (m === null) return;
   const mode = m === 0 ? "all" : "current";
   const ok = await confirmBox("Scan generals", mode === "all"
-    ? "On that emulator, show the CITY screen (no pop-ups open).\n\nThe bot taps the round 3-dots button, opens Generals, switches to thumbnail view and scans All, Military, Development, Duty and Subordinate City. It remembers which tab each general is in. This takes a few minutes; do not touch the emulator."
-    : "In the game, on that emulator:\n\n1. Open the list of generals.\n2. Switch it to GRID (thumbnail) view with the little button under the tabs.\n3. Pick the tab you want to scan.\n\nThe bot then scrolls through the whole list. Press OK when the list is open.", "Start the scan");
+    ? "On that instance, show the CITY screen (no pop-ups open).\n\nThe bot taps the round 3-dots button, opens Generals, switches to thumbnail view and scans All, Military, Development, Duty and Subordinate City. It remembers which tab each general is in. This takes a few minutes; do not touch the instance."
+    : "In the game, on that instance:\n\n1. Open the list of generals.\n2. Switch it to GRID (thumbnail) view with the little button under the tabs.\n3. Pick the tab you want to scan.\n\nThe bot then scrolls through the whole list. Press OK when the list is open.", "Start the scan");
   if (!ok) return;
   if (!(await act(api("scan_generals", { serial, mode })))) return;
   scanBox = modal({ title: "Scanning generals", focus: false, buttons: [{ label: "Stop and use what was found", cls: "pri", onclick: () => { act(api("scan_generals_stop")); return false; } }],
@@ -349,7 +349,7 @@ async function scanGeneralsDone(d) {
 
 // ---- map the city by hand: every building gets a numbered plot (slot) from a drop-down; "Go" shows that plot
 async function manualMapFlow(arg) {
-  const serial = typeof arg === "string" ? arg : await chooseDevice("Map the city by hand on which emulator?");
+  const serial = typeof arg === "string" ? arg : await chooseDevice("Map the city by hand on which instance?");
   if (!serial) return;
   if (!(await act(api("manual_open", { serial })))) return;
   let info = await act(api("slots_info", { serial }));
@@ -401,9 +401,9 @@ async function manualMapFlow(arg) {
 }
 
 async function scanCityTapsFlow() {
-  const serial = await chooseDevice("Tap-test the city with which emulator?");
+  const serial = await chooseDevice("Tap-test the city with which instance?");
   if (!serial) return;
-  if (!(await confirmBox("City mapper - tap test", "TEST RUN. The bot goes to every building on the saved city map, taps it, opens Detail > More Information and reads its name and level. Run the normal city scan first. Open the CITY screen and leave the emulator alone.", "OK, ready"))) return;
+  if (!(await confirmBox("City mapper - tap test", "TEST RUN. The bot goes to every building on the saved city map, taps it, opens Detail > More Information and reads its name and level. Run the normal city scan first. Open the CITY screen and leave the instance alone.", "OK, ready"))) return;
   await act(api("save", { cfg: S.cfg, devices: S.devices }, { quiet: true }));
   if (!(await act(api("scan_city_taps_start", { serial })))) return;
   S.cityScanSerial = serial;
@@ -416,9 +416,9 @@ async function scanCityTapsFlow() {
 }
 async function scanCityFlow(arg) {
   const again = typeof arg === "string" ? arg : null;
-  const serial = again || await chooseDevice("Map the city with which emulator?");
+  const serial = again || await chooseDevice("Map the city with which instance?");
   if (!serial) return;
-  if (!again && !(await confirmBox("City mapper", "Open the CITY screen (not the rally list) on that emulator and leave it alone while the bot sweeps the map. Press OK when ready.", "OK, ready"))) return;
+  if (!again && !(await confirmBox("City mapper", "Open the CITY screen (not the rally list) on that instance and leave it alone while the bot sweeps the map. Press OK when ready.", "OK, ready"))) return;
   await act(api("save", { cfg: S.cfg, devices: S.devices }, { quiet: true }));
   if (!(await act(api("scan_city", { serial })))) return;
   S.cityScanSerial = serial;
@@ -467,8 +467,8 @@ async function detectDevices(quiet) {
   S.avail = j.available || [];
   if (quiet === true && !(j.found && S.avail.length)) { if (S.sel === "control" && S.tab === "dashboard") rerender(); return; }
   if (j.found === null) toast("ADB not found. Set the ADB path in Settings.", "error");
-  else if (!j.found.length) toast("No emulators found. Start them and enable ADB.", "error");
-  else toast(S.avail.length ? `Found ${j.found.length} emulator(s). ${S.avail.length} are not in your list yet - press Add next to the ones you want.` : `Found ${j.found.length} emulator(s) - all of them are already in your list.`, "ok");
+  else if (!j.found.length) toast("No instances found. Start them and enable ADB.", "error");
+  else toast(S.avail.length ? `Found ${j.found.length} instance(s). ${S.avail.length} are not in your list yet - press Add next to the ones you want.` : `Found ${j.found.length} instance(s) - all of them are already in your list.`, "ok");
   if (S.sel === "control" && S.tab === "dashboard") rerender();
 }
 
@@ -526,9 +526,9 @@ function iconsDialog() {
 
 // ------------------------------------------------------------------ developer tool: build the general catalogue (Tavern > Portraits)
 async function catalogFlow() {
-  const serial = await chooseDevice("Record the catalogue with which emulator?");
+  const serial = await chooseDevice("Record the catalogue with which instance?");
   if (!serial) return;
-  const ok = await confirmBox("Build the general catalogue", "Open the Tavern (Recruit General) yourself and leave it there. If the emulator is on the city screen instead, the bot opens Tavern > Portraits by itself, but only when this emulator already has a city map.\n\nIt then goes through every region tab (Europe, America, Japan, Korea, ...) and every troop-type filter, scrolls each list and records each general's name and picture. It takes several minutes; do not touch the emulator.\n\nWhen it is done, copy the 'catalog' folder (button 'Open catalogue folder') next to rally_bot.py and rebuild.", "Start");
+  const ok = await confirmBox("Build the general catalogue", "Open the Tavern (Recruit General) yourself and leave it there. If the instance is on the city screen instead, the bot opens Tavern > Portraits by itself, but only when this instance already has a city map.\n\nIt then goes through every region tab (Europe, America, Japan, Korea, ...) and every troop-type filter, scrolls each list and records each general's name and picture. It takes several minutes; do not touch the instance.\n\nWhen it is done, copy the 'catalog' folder (button 'Open catalogue folder') next to rally_bot.py and rebuild.", "Start");
   if (!ok) return;
   if (!(await act(api("catalog_crawl", { serial })))) return;
   scanBox = modal({ title: "Recording the catalogue", focus: false, buttons: [{ label: "Stop and save what was found", cls: "pri", onclick: () => { act(api("catalog_stop")); return false; } }],
@@ -544,9 +544,9 @@ async function catalogDone(d) {
 
 // ------------------------------------------------------------------ developer tool: record the city frames
 async function cityCaptureFlow() {
-  const serial = await chooseDevice("Record the city frames with which emulator?");
+  const serial = await chooseDevice("Record the city frames with which instance?");
   if (!serial) return;
-  const ok = await confirmBox("Record the city frames", "Leave that emulator on the CITY screen and do not touch it. The bot drags the city around and saves screenshots of every part (also while dragging, when the building names show).\n\nIt takes several minutes. Afterwards use 'Open city capture folder' and send me the folder.", "Start");
+  const ok = await confirmBox("Record the city frames", "Leave that instance on the CITY screen and do not touch it. The bot drags the city around and saves screenshots of every part (also while dragging, when the building names show).\n\nIt takes several minutes. Afterwards use 'Open city capture folder' and send me the folder.", "Start");
   if (!ok) return;
   if (!(await act(api("city_capture", { serial })))) return;
   scanBox = modal({ title: "Recording the city", focus: false, buttons: [{ label: "Stop and save what was found", cls: "pri", onclick: () => { act(api("scan_city_stop")); return false; } }],

@@ -181,13 +181,13 @@ let logViews = [];                               // {el, serial|null} : every lo
 function layout() {
   const root = $("#root");
   root.innerHTML = "";
-  const burger = () => h("div", { class: "burger", title: "Show / hide the emulator list (Ctrl+B)", onclick: toggleSide },
+  const burger = () => h("div", { class: "burger", title: "Show / hide the instance list (Ctrl+B)", onclick: toggleSide },
     h("i"), h("i"), h("i"));
   root.appendChild(h("div", { class: "app" + (S.cfg.sidebar_open === false ? " nosb" : ""), id: "app" },
     h("div", { class: "side" },
-      h("h4", {}, "EMULATORS", burger()),
+      h("h4", {}, "INSTANCES", burger()),
       h("div", { class: "inst-list", id: "instList" }),
-      h("div", { class: "sidefoot" }, h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all emulators", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
+      h("div", { class: "sidefoot" }, h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
     h("div", { class: "main" },
       h("div", { class: "top" }, burger(), h("img", { src: "/assets/logo.png", alt: "" }),
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
@@ -241,7 +241,7 @@ function buildRibbon() {
   r.innerHTML = "";
   const btn = (txt, fn, cls, icon) => {
     const caret = txt.endsWith(" \u25be");
-    const run = ["Start", "Pause", "Stop"].includes(txt);        // these act on all emulators when Control settings is open
+    const run = ["Start", "Pause", "Stop"].includes(txt);        // these act on all instances when Control settings is open
     return h("button", { class: "btn ib " + (cls || ""), onclick: fn, "data-act": run ? txt.toLowerCase() : null }, icon ? ico(icon) : null,
       run ? h("span", { class: "runlbl", "data-base": txt }, txt) : (caret ? txt.slice(0, -2) : txt), caret ? ico("chev", "caret") : null);
   };
@@ -302,11 +302,11 @@ async function saveReportFlow() {
     h("label", { class: "tgl", style: { marginTop: "6px" } }, shots, h("span", { class: "sw" }), "Include the last screenshots the bot saved (they can show your account name)"),
     h("p", { class: "note" }, "The app collects the log and settings for you. Nothing is sent automatically.")) });
 }
-// The update in the status bar: one click installs it, restarts the app and starts the running emulators again
+// The update in the status bar: one click installs it, restarts the app and starts the running instances again
 async function updateNow() {
   S.updClicked = true;
   if (S.update) S.update.installing = true;
-  toast("Installing the update - the status bar at the bottom shows the progress. The app restarts by itself (up to about a minute) and the running emulators start again.", "ok");
+  toast("Installing the update - the status bar at the bottom shows the progress. The app restarts by itself (up to about a minute) and the running instances start again.", "ok");
   await act(api("install_update", { restart: true }));
 }
 async function restartFlow() { if (await confirmBox("Restart", "Restart the app now? Running bots are stopped.")) act(api("restart")); }
@@ -319,7 +319,7 @@ async function saveProfileFlow() {
   const name = await promptBox("Save profile", "Name for this set of settings:", "");
   if (!name) return;
   const j = await act(api("profile_save", { name, cfg: S.cfg, devices: S.devices }));
-  if (j) { S.profiles = j.profiles; toast(`Profile '${j.name}' saved (all emulators and settings).`, "ok"); }
+  if (j) { S.profiles = j.profiles; toast(`Profile '${j.name}' saved (all instances and settings).`, "ok"); }
 }
 async function loadProfileFlow() {
   const j = await act(api("state"));
@@ -352,7 +352,7 @@ function devTag(d) {
 }
 function renderSide() {
   const L = $("#instList");
-  if (!L || S.dragging) return;          // do not redraw under the mouse while an emulator is being dragged
+  if (!L || S.dragging) return;          // do not redraw under the mouse while an instance is being dragged
   L.innerHTML = "";
   const item = (key, label, dot, extra) => h("div", { class: "inst" + (S.sel === key ? " sel" : ""), onclick: () => { S.sel = key; renderSide(); renderTabs(); renderPage(); } },
     dot ? h("span", { class: "dot " + dot }) : h("span", { class: "dot run", style: { background: "var(--accent1)" } }),
@@ -365,7 +365,7 @@ function renderSide() {
   }
   tickPauseTimers();
 }
-// Drag an emulator up or down in the left list to change the order (saved at once, kept after a restart)
+// Drag an instance up or down in the left list to change the order (saved at once, kept after a restart)
 function sideDrag(el, id) {
   el.draggable = true;
   el.dataset.id = id;
@@ -397,7 +397,7 @@ function sideDrag(el, id) {
     if (S.sel === "control" && S.tab === "dashboard") rerender();
   });
 }
-// Paused emulators count down to their automatic restart; one 1-second ticker updates every timer in place
+// Paused instances count down to their automatic restart; one 1-second ticker updates every timer in place
 function fmtLeft(sec) { sec = Math.max(0, Math.round(sec)); const m = Math.floor(sec / 60), s = sec % 60; return m + ":" + String(s).padStart(2, "0"); }
 function tickPauseTimers() {
   document.querySelectorAll(".ptimer").forEach((e) => {
@@ -420,7 +420,7 @@ function paintRunState() {
 }
 function ribbonLabels() {
   const all = S.sel === "control";
-  const rib = document.getElementById("ribbon"); if (rib) rib.style.display = all ? "" : "none";      // the top button bar belongs to Control settings; each emulator has its own bar
+  const rib = document.getElementById("ribbon"); if (rib) rib.style.display = all ? "" : "none";      // the top button bar belongs to Control settings; each instance has its own bar
   document.querySelectorAll(".runlbl").forEach((e) => { e.textContent = e.dataset.base + (all ? " all" : ""); });
 }
 const TAB_GROUPS = [
@@ -477,12 +477,12 @@ function renderTabs() {
     t.appendChild(b);
   }
 }
-let lastPageSel = null;                                                 // which page was shown before (to keep the scroll position between two emulators)
+let lastPageSel = null;                                                 // which page was shown before (to keep the scroll position between two instances)
 function renderPage() {
   const p = $("#pages");
   if (!p) return;
   logViews = []; actViews = [];
-  // going from one emulator to another keeps the scroll position: the same setting is at the same place, no scrolling down again
+  // going from one instance to another keeps the scroll position: the same setting is at the same place, no scrolling down again
   const keep = (S.sel !== "control" && lastPageSel && lastPageSel !== "control" && lastPageSel !== S.sel) ? p.scrollTop : 0;
   p.innerHTML = "";
   p.scrollTop = 0;
@@ -526,7 +526,7 @@ function actRow(v, l) {
   const cells = [a.t, v.serial === null ? l.n : null, k === "renew" ? "Auto-Join" : a.mon, a.rally != null ? a.rally + "s" : "", h("span", { class: "chip " + chip[1] }, chip[0]),
     k === "join" ? "Preset " + a.preset + (a.n ? "  (#" + a.n + ")" : "") : k === "renew" ? "Game Auto-Join restarted - now " + a.left + " left" : a.why, took];
   const tr = h("tr", {}, ...cells.filter((c, i) => !(i === 1 && c === null)).map((c) => h("td", {}, c)));
-  // one row per rally: same emulator + monster + (almost) the same end time = the same rally
+  // one row per rally: same instance + monster + (almost) the same end time = the same rally
   if (a.rally != null && a.t && a.mon) {
     const [hh, mm, ss] = String(a.t).split(":").map(Number);
     tr.dataset.end = String(hh * 3600 + mm * 60 + ss + Number(a.rally));
@@ -561,7 +561,7 @@ function actNow(serial) {
 }
 function activityBox(serial, title) {
   const now = h("div", { class: "actnow" }), stats = h("div", { class: "actstats" });
-  const head = ["Time", serial === null ? "Emulator" : null, "Monster", "Rally left", "Result", "Details", "Took"].filter(Boolean);
+  const head = ["Time", serial === null ? "Instance" : null, "Monster", "Rally left", "Result", "Details", "Took"].filter(Boolean);
   const body = h("tbody", {});
   const wrap = h("div", { class: "actwrap" }, h("table", { class: "acttable" }, h("thead", {}, h("tr", {}, ...head.map((t) => h("th", {}, t)))), body));
   const view = { now, stats, body, wrap, serial };
@@ -651,9 +651,9 @@ function updateSummary() {
     const U = S.update;
     u.style.display = U ? "" : "none";
     if (U) {
-      u.textContent = U.needs_restart ? `\u2714 Version ${U.version} installed \u2013 click to restart now` : U.restarting ? `\u2714 Version ${U.version} installed \u2013 restarting in a moment, the emulators start again by themselves\u2026`
+      u.textContent = U.needs_restart ? `\u2714 Version ${U.version} installed \u2013 click to restart now` : U.restarting ? `\u2714 Version ${U.version} installed \u2013 restarting in a moment, the instances start again by themselves\u2026`
         : U.installing ? `Installing ${U.version}\u2026 please wait` : `\u2B06 Update ${U.version} available \u2013 click to install`;
-      u.title = (U.notes || "") + (U.installing || U.restarting ? "" : "\nClick: install it, restart the app and start the running emulators again");
+      u.title = (U.notes || "") + (U.installing || U.restarting ? "" : "\nClick: install it, restart the app and start the running instances again");
       u.onclick = U.needs_restart ? (() => act(api("restart"))) : (U.installing || U.restarting) ? null : updateNow;
     }
   }
@@ -678,8 +678,8 @@ async function handleEvent(ev) {
     const ok = await confirmBox("Update available", `Version ${d.version} is available (you have ${S.version}).${d.notes ? "\n\n" + d.notes : ""}\n\nInstall it now?`, "Install");
     if (ok) updateNow();
   } else if (ev.k === "update_installed") {
-    if (S.updClicked) toast(`Version ${d.version} is installed. The app restarts in a moment and the running emulators start again.`, "ok");
-    else if (d.auto) toast(`Version ${d.version} is installed. The app restarts by itself in a moment and the running emulators carry on.`, "ok");
+    if (S.updClicked) toast(`Version ${d.version} is installed. The app restarts in a moment and the running instances start again.`, "ok");
+    else if (d.auto) toast(`Version ${d.version} is installed. The app restarts by itself in a moment and the running instances carry on.`, "ok");
     else if (await confirmBox("Update installed", `Version ${d.version} is installed. Restart the app now?`, "Restart")) act(api("restart"));
   }
 }
@@ -713,11 +713,11 @@ async function boot() {
   poll();
   checkWhatsNew();
   if (S.firstRun && !S.devices.length) S.devices.push({ id: "", name: "" });
-  setTimeout(() => detectDevices(!S.firstRun), 900);          // every start: look for emulators so the "Found emulators" panel is ready (quiet unless something new turns up)
+  setTimeout(() => detectDevices(!S.firstRun), 900);          // every start: look for instances so the "Found instances" panel is ready (quiet unless something new turns up)
 }
 
 // Every change is saved by itself about 2 seconds after you stop editing (Save still works, and Start saves too),
-// so nothing you set on an emulator or on the presets is lost when the app restarts.
+// so nothing you set on an instance or on the presets is lost when the app restarts.
 const AUTO = { saved: null, seen: null, busy: false, err: "" };
 function cfgSnap() { try { return JSON.stringify({ c: S.cfg, d: S.devices }); } catch (e) { return null; } }
 setInterval(async () => {

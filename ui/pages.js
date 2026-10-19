@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Kiravik. All rights reserved. RallyForge Bot was created by Kiravik. */
-/* RallyForge Bot - the tabs and the per-emulator page. */
+/* RallyForge Bot - the tabs and the per-instance page. */
 "use strict";
 
 // ------------------------------------------------------------------ value converters
@@ -102,27 +102,27 @@ PAGES.dashboard = function () {
     S.devices.forEach((d, i) => {
       rows.appendChild(h("div", { class: "row", style: { marginBottom: "8px", flexWrap: "nowrap" } },
         h("span", { class: "lab", style: { width: "78px", flex: "none" } }, "Device " + (i + 1)),
-        h("input", { type: "text", value: d.id, placeholder: "127.0.0.1:5565 / emulator-5556", style: { maxWidth: "300px" }, oninput: (e) => (d.id = e.target.value.trim()), onchange: applyDevs }),
+        h("input", { type: "text", value: d.id, placeholder: "127.0.0.1:5565 / instance-5556", style: { maxWidth: "300px" }, oninput: (e) => (d.id = e.target.value.trim()), onchange: applyDevs }),
         h("input", { type: "text", value: d.name, placeholder: "Name (shown in the list)", style: { maxWidth: "220px" }, oninput: (e) => (d.name = e.target.value.trim()), onchange: applyDevs }),
         btn("Remove", () => { if (S.devices.length <= 1) { d.id = ""; d.name = ""; } else S.devices.splice(i, 1); draw(); applyDevs(); }, "sm")));
     });
   };
   draw();
-  const dev = panel("Emulators", rows, h("div", { class: "row" },
+  const dev = panel("Instances", rows, h("div", { class: "row" },
     btn("+ Add device", () => { S.devices.push({ id: "", name: "" }); draw(); }),
-    btn("Detect emulators", detectDevices, "pri"),
+    btn("Detect instances", detectDevices, "pri"),
     btn("Clear empty rows", () => { S.devices = S.devices.filter((d) => d.id); if (!S.devices.length) S.devices.push({ id: "", name: "" }); draw(); applyDevs(); }),
-    btn("Update emulator list", applyDevs),
-    btn("Show removed emulators again", async () => { if (!(await confirmBox("Removed emulators", "Emulators you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) { toast(j.restored ? `${j.restored} emulator(s) can be detected again. Press Detect emulators.` : "No emulators were removed.", "ok"); } }, "sm")),
-    note("Any number of emulators can be in this list. Detect shows the emulators it finds - you add the ones you want. Drag them in the left list to change the order. Emulators you remove stay removed, even after a restart."));
-  // ---- emulators found by Detect but not added: one click each (nothing is added by itself)
+    btn("Update instance list", applyDevs),
+    btn("Show removed instances again", async () => { if (!(await confirmBox("Removed instances", "Instances you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) { toast(j.restored ? `${j.restored} instance(s) can be detected again. Press Detect instances.` : "No instances were removed.", "ok"); } }, "sm")),
+    note("Any number of instances can be in this list. Detect shows the instances it finds - you add the ones you want. Drag them in the left list to change the order. Instances you remove stay removed, even after a restart."));
+  // ---- instances found by Detect but not added: one click each (nothing is added by itself)
   const addFound = async (ids) => {
     const j = await act(api("add_found", { ids }));
-    if (j) { S.devices = j.devices; S.avail = j.available; toast(ids.length > 1 ? `${ids.length} emulators added.` : "Emulator added.", "ok"); rerender(); poll1(); }
+    if (j) { S.devices = j.devices; S.avail = j.available; toast(ids.length > 1 ? `${ids.length} instances added.` : "Instance added.", "ok"); rerender(); poll1(); }
   };
   const avail = (S.avail || []).filter((a) => !S.devices.some((d) => d.id === a.id));
-  const found = avail.length ? panel("Found emulators (not in your list yet)",
-    note("Detect only shows what it found. Press Add for each emulator you want the bot to use."),
+  const found = avail.length ? panel("Found instances (not in your list yet)",
+    note("Detect only shows what it found. Press Add for each instance you want the bot to use."),
     ...avail.map((a) => h("div", { class: "row", style: { marginBottom: "6px", gap: "14px" } },
       h("span", { style: { minWidth: "170px", fontFamily: "var(--mono)" } }, a.id),
       h("span", { class: "mute", style: { minWidth: "140px" } }, (a.name || "") + (a.removed ? "  (removed earlier)" : "")),
@@ -132,14 +132,14 @@ PAGES.dashboard = function () {
     btn("Start all", () => collectAndRun("start", { serial: "all" }), "pri"), btn("Pause all", () => act(api("pause", { serial: "all" }))),
     btn("Resume all", () => act(api("resume"))), btn("Stop all", () => act(api("stop", { serial: "all" })), "bad"),
     btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
-  const log = panel(null, activityBox(null, "Activity - all emulators"));
+  const log = panel(null, activityBox(null, "Activity - all instances"));
   return h("div", {}, found, dev, ctl, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
 const TAB_CHOICES = ["Leave as is", "All", "Military", "Development", "Duty", "Subordinate City"];   // index = tab number in the game (0 = do not switch)
 const tabOptions = TAB_CHOICES.map((l, i) => [i, l]);
-// ====================================================================== per-emulator page
+// ====================================================================== per-instance page
 const INSTANCE_FIELDS = [
   ["presets", "Presets (1-8, e.g. 1,2)", "presets"], ["preset_mode", "Preset mode", "choice", ["rotate", "random", "fixed"]],
   ["safety_margin", "Join if spare time >= (s)", "int"], ["max_rally_seconds", "Skip rally with more than (s)", "int"],
@@ -152,8 +152,8 @@ const INSTANCE_FIELDS = [
   ["general_on_fail", "If choosing a general fails", "choice", ["skip", "march"]], ["monster_unknown", "Monster with no picture", "choice", ["join", "skip"]], ["cerberus", "Cerberus rallies", "choice", ["skip", "join"]], ["game_auto_join", "Use the game's Auto-Join (bot only renews it)", "bool"], ["general_assistant_optional", "No assistant available: join without it", "bool"], ["auto_join_renew_min", "Auto-Join: renew when less than (min) is left", "int"], ["auto_join_check_min", "Auto-Join: check every (min)", "int"], ["save_unknown_monsters", "Beta: save pictures of unknown monsters", "bool"],
   ["rally_nav_steps", "Buttons to reach rally list", "names"], ["lost_seconds", "Restart Evony if lost for (s, 0 = never)", "int"], ["reclaim_elsewhere", "Reclaim when I play elsewhere", "bool"], ["reclaim_grace_min", "Wait this long after I play elsewhere (min)", "int"], ["settle_seconds", "Wait after the game loads (s, 0 = off)", "int"],
   ["click_delay_ms", "Click delay (ms)", "int"], ["adaptive_delay", "Slow down after failures", "bool"],
-  ["frozen_seconds", "Restart Evony if screen frozen (s)", "int"], ["stuck_seconds", "Restart emulator if stuck (s)", "int"],
-  ["stop_cmd", "Command that closes this emulator", "text"], ["close_emulator_on_stop", "Close the emulator when stopped", "bool"],
+  ["frozen_seconds", "Restart Evony if screen frozen (s)", "int"], ["stuck_seconds", "Restart instance if stuck (s)", "int"],
+  ["stop_cmd", "Command that closes this instance", "text"], ["close_emulator_on_stop", "Close the instance when stopped", "bool"],
   ["schedule", "Schedule (blank = global one)", "text"], ["cpu_level", "Load level (1 fastest - 4 lightest)", "choice", ["1", "2", "3", "4"]],
   ["screenshot_mode", "Screenshot method", "choice", ["auto", "png"]], ["rally_timer_source", "Rally countdown read from", "choice", ["progress_bar", "join_button"]],
   ["march_timer_source", "March time read from", "choice", ["join_button", "progress_bar", "none"]],
@@ -162,16 +162,16 @@ const INSTANCE_FIELDS = [
   ["game_reset_utc", "Game daily reset time (UTC, HH:MM; Evony = 00:00 = 05:30 India)", "text"],
   ["rally_enabled", "Join rallies (off = only do the tasks)", "bool"], ["city_enabled", "Do the tasks when no rally is waiting", "bool"], ["tasks_first", "A task that is due goes before rallies (then back to rallies)", "bool"],
   ["general_max_scrolls", "Scrolls when looking for a general", "int"], ["monster_presets", "Presets per monster (Witch:1,2; Pan:3)", "monpresets"],
-  ["log_timers", "Log the timers it reads", "bool"], ["auto_launch_emulator", "Start emulator automatically", "bool"],
-  ["auto_launch_game", "Start Evony and wait for it", "bool"], ["launch_cmd", "Command that starts this emulator", "text"],
+  ["log_timers", "Log the timers it reads", "bool"], ["auto_launch_emulator", "Start instance automatically", "bool"],
+  ["auto_launch_game", "Start Evony and wait for it", "bool"], ["launch_cmd", "Command that starts this instance", "text"],
   ["evony_package", "Evony package name", "text"],
 ];
 const FIELD_HELP = {
-  presets: "Which game presets this emulator uses, e.g. 1,2,3. Blank = the global list.",
+  presets: "Which game presets this instance uses, e.g. 1,2,3. Blank = the global list.",
   preset_mode: "rotate = take presets in turn, random = any armed one, fixed = always the lowest.",
   safety_margin: "Join only if the rally has at least this many seconds to spare after the march.",
   max_rally_seconds: "Ignore rallies that still have more time than this (0 = no limit).",
-  max_joins: "Stop this emulator after this many joins (0 = never stop).",
+  max_joins: "Stop this instance after this many joins (0 = never stop).",
   monster_mode: "off = join everything, skip = skip the ticked monsters, only = join only the ticked ones.",
   monster_list: "Monster names separated by commas. Easier: use the Monsters tab.",
   general_main: "Main generals the bot tries in order. Use the ... button to pick from your generals.",
@@ -191,17 +191,17 @@ const FIELD_HELP = {
   auto_join_check_min: "How often (minutes) the bot looks at the Auto-Join time left.",
   save_unknown_monsters: "Saves a picture of monsters the bot does not know, so you can name them later.",
   rally_nav_steps: "Names of the buttons (templates) the bot taps to get from the city to the rally list.",
-  reclaim_elsewhere: "If you open the game on your phone the emulator gets kicked off. ON = the bot waits out the grace time, then reloads the game and carries on. OFF = ignore.",
+  reclaim_elsewhere: "If you open the game on your phone the instance gets kicked off. ON = the bot waits out the grace time, then reloads the game and carries on. OFF = ignore.",
   reclaim_grace_min: "How many minutes to leave the game alone after you took it over on another device (default 10).",
   lost_seconds: "Restart Evony if the bot cannot tell which screen it is on for this long (0 = never).",
   settle_seconds: "Seconds to wait after the game finishes loading before starting.",
-  click_delay_ms: "Pause after every tap in milliseconds. Raise it on a slow emulator.",
+  click_delay_ms: "Pause after every tap in milliseconds. Raise it on a slow instance.",
   adaptive_delay: "Yes = the bot slows its taps down by itself after failures.",
   frozen_seconds: "Restart Evony if the screen has not changed for this long.",
-  stuck_seconds: "Restart the whole emulator if nothing worked for this long.",
-  stop_cmd: "Optional command that closes this emulator when the bot stops.",
-  close_emulator_on_stop: "Yes = close the emulator when the bot stops.",
-  schedule: "Optional run times for this emulator, e.g. 08:00-23:00. Blank = the global schedule.",
+  stuck_seconds: "Restart the whole instance if nothing worked for this long.",
+  stop_cmd: "Optional command that closes this instance when the bot stops.",
+  close_emulator_on_stop: "Yes = close the instance when the bot stops.",
+  schedule: "Optional run times for this instance, e.g. 08:00-23:00. Blank = the global schedule.",
   cpu_level: "1 = fastest but heaviest on the PC, 4 = slowest and lightest.",
   screenshot_mode: "auto is fastest; png is a slower fallback if screenshots look wrong.",
   rally_timer_source: "Where the bot reads the rally countdown from.",
@@ -217,9 +217,9 @@ const FIELD_HELP = {
   general_max_scrolls: "How many times to scroll the general list while looking for a general.",
   monster_presets: "Different presets per monster, e.g. Witch:1,2; Pan:3.",
   log_timers: "Yes = write the timers it reads into the log (useful for checking).",
-  auto_launch_emulator: "Yes = start the emulator by itself when the bot starts.",
+  auto_launch_emulator: "Yes = start the instance by itself when the bot starts.",
   auto_launch_game: "Yes = start Evony and wait until it is loaded.",
-  launch_cmd: "Optional command that starts this emulator (needed for auto start on some emulators).",
+  launch_cmd: "Optional command that starts this instance (needed for auto start on some instances).",
   evony_package: "Android package name of Evony. Leave blank unless you use a different version.",
 };
 function globalText(key, kind) {
@@ -243,27 +243,27 @@ function instancePage(serial) {
   const ov = (S.cfg.per_device[serial] = S.cfg.per_device[serial] || {});
   const status = h("span", { id: "instStatus", class: "state-pill" });
   const saveInstProfile = async () => {
-    const name = await promptBox("Save profile", "Name for these settings of this emulator:", "");
+    const name = await promptBox("Save profile", "Name for these settings of this instance:", "");
     if (!name) return;
     const j = await act(api("inst_profile_save", { serial, name, settings: S.cfg.per_device[serial] || {} }));
-    if (j) toast(`Profile '${j.name}' saved. Load it on any emulator with \u201cLoad profile...\u201d.`, "ok");
+    if (j) toast(`Profile '${j.name}' saved. Load it on any instance with \u201cLoad profile...\u201d.`, "ok");
   };
   const loadInstProfile = async () => {
         const j = await act(api("inst_profiles"));
         if (!j) return;
-        if (!j.profiles.length) return toast("No emulator profiles yet - press \u201cSave profile...\u201d on an emulator first.");
+        if (!j.profiles.length) return toast("No instance profiles yet - press \u201cSave profile...\u201d on an instance first.");
         let chosen = j.profiles[0], names = j.profiles;
         const list = h("div", {});
         const draw = () => { list.innerHTML = ""; names.forEach((n) => list.appendChild(h("div", { class: "li" + (n === chosen ? " sel" : ""), onclick: () => { chosen = n; draw(); } }, n))); };
         draw();
-        modal({ title: "Load profile into this emulator", body: h("div", {}, h("p", { class: "note" }, "This replaces the settings of THIS emulator with the saved ones (its generals, presets and own settings). Other emulators are not changed."), list), buttons: [
+        modal({ title: "Load profile into this instance", body: h("div", {}, h("p", { class: "note" }, "This replaces the settings of THIS instance with the saved ones (its generals, presets and own settings). Other instances are not changed."), list), buttons: [
           { label: "Delete", onclick: async () => { if (await confirmBox("Delete profile", `Delete profile '${chosen}'?`)) await act(api("inst_profile_delete", { name: chosen })); } },
           { label: "Cancel" },
           { label: "Load", cls: "pri", onclick: async () => {
               if (!chosen) return;
               AUTO.busy = true;
               const r = await act(api("inst_profile_load", { serial, name: chosen })).finally(() => { AUTO.busy = false; });
-              if (r) { S.cfg.per_device[serial] = r.settings || {}; AUTO.saved = AUTO.seen = cfgSnap(); rerender(); toast(`Profile '${chosen}' loaded into this emulator.`, "ok"); }
+              if (r) { S.cfg.per_device[serial] = r.settings || {}; AUTO.saved = AUTO.seen = cfgSnap(); rerender(); toast(`Profile '${chosen}' loaded into this instance.`, "ok"); }
             } }] });
   };
   const stBtn = (t, fn) => h("button", { class: "btn", "data-act": t.toLowerCase(), onclick: fn }, t);
@@ -272,10 +272,10 @@ function instancePage(serial) {
     btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"),
     btn("Profile \u25BE", (e) => menu(e.currentTarget, [{ label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "sm"));
   const head = h("div", { class: "row", style: { margin: "0 0 14px", gap: "16px", alignItems: "center" } },
-    h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", color: "var(--accent2)", margin: "0" } }, dev.name || "Emulator " + d.idx),
+    h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", color: "var(--accent2)", margin: "0" } }, dev.name || "Instance " + d.idx),
     status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial));
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
-    h("b", {}, "\u26A0 Out of stamina. "), "This emulator has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
+    h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
   // ---- overrides
   const fields = h("div", { class: "grid2" });
@@ -351,33 +351,33 @@ function instancePage(serial) {
   });
   const copyMenu = (e) => {
     const others = S.devices.filter((x) => x.id && x.id !== serial);
-    if (!others.length) return toast("There is no other emulator.");
+    if (!others.length) return toast("There is no other instance.");
     menu(e.currentTarget, others.map((o) => ({ label: o.name || o.id, run: () => { S.cfg.per_device[serial] = clone(S.cfg.per_device[o.id] || {}); rerender(); } })));
   };
-  const panelEl = panel("Settings for this emulator only  (blank or (global) = use the global setting)", fields,
+  const panelEl = panel("Settings for this instance only  (blank or (global) = use the global setting)", fields,
     h("details", { style: { marginTop: "14px" }, open: Object.keys(ov).some((k) => IF_KEYS.has(k) && !BASIC.has(k) && !PKEYS0.has(k)) },
       h("summary", { style: { cursor: "pointer", color: "var(--accent2)", fontWeight: "600" } }, "More settings (rarely needed)"),
       h("div", { style: { marginTop: "12px" } }, moreFields),
       h("div", { class: "field", style: { marginTop: "14px" } }, h("label", {}, "Advanced: any other setting as JSON"), adv,
         h("div", { class: "hint", style: { fontSize: "11.5px", opacity: ".65" } }, "Only for settings that have no field above, e.g. {\"threshold\": 0.8}. Leave empty if unsure."))),
     h("div", { class: "row", style: { marginTop: "14px" } }, btn("Copy settings from...", copyMenu, "sm"),
-      btn("Use these on ALL emulators", () => { for (const x of S.devices) if (x.id && x.id !== serial) S.cfg.per_device[x.id] = clone(S.cfg.per_device[serial] || {}); toast("Copied to all other emulators.", "ok"); }, "sm"),
+      btn("Use these on ALL instances", () => { for (const x of S.devices) if (x.id && x.id !== serial) S.cfg.per_device[x.id] = clone(S.cfg.per_device[serial] || {}); toast("Copied to all other instances.", "ok"); }, "sm"),
       btn("Clear (use global)", () => { S.cfg.per_device[serial] = {}; rerender(); }, "sm"),
       btn("Save", saveAll, "sm pri")));
-  // ---- own presets & generals (stored in this emulator's overrides; blank = the global ones)
+  // ---- own presets & generals (stored in this instance's overrides; blank = the global ones)
   const PKEYS = ["bot_presets", "preset_mode", "general_main", "general_assistant", "general_main_tab", "general_assistant_tab", "general_main_fav",
     "general_assistant_fav", "general_on_fail", "general_idle_only", "general_assistant_optional", "general_view", "max_troops"];
   const customP = "bot_presets" in ov;
   const pview = new Proxy(ov, { get: (t, k) => (k in t ? t[k] : S.cfg[k]), set: (t, k, v) => { t[k] = v; return true; } });
-  const swp = h("input", { type: "checkbox", checked: customP, "aria-label": "Own presets and generals for this emulator" });
+  const swp = h("input", { type: "checkbox", checked: customP, "aria-label": "Own presets and generals for this instance" });
   swp.addEventListener("change", () => {
     if (swp.checked) { ensureBotPresets(S.cfg); PKEYS.forEach((k) => { if (S.cfg[k] !== undefined) ov[k] = clone(S.cfg[k]); }); }
     else PKEYS.forEach((k) => delete ov[k]);
     rerender();
   });
-  const ownP = [panel("Presets and generals for this emulator",
+  const ownP = [panel("Presets and generals for this instance",
     h("label", { class: "tgl" }, swp, h("span", { class: "sw" }), "Use its own presets and generals (otherwise it uses the ones on the Presets & generals tab)"),
-    customP ? null : note("Now using the global presets and generals. Switch this on to give this emulator its own set; it starts as a copy of the global one."))];
+    customP ? null : note("Now using the global presets and generals. Switch this on to give this instance its own set; it starts as a copy of the global one."))];
   if (customP) ownP.push(...presetPanels(pview, true));
   // ---- phone / shared device (important, so it sits right under Activity)
   const eff = (k, dflt) => (ov[k] !== undefined ? ov[k] : S.cfg[k] !== undefined ? S.cfg[k] : dflt);
@@ -387,12 +387,12 @@ function instancePage(serial) {
   rcMin.value = ov.reclaim_grace_min === undefined ? "" : String(ov.reclaim_grace_min);
   rcMin.addEventListener("input", () => { const t = rcMin.value.trim(); if (t === "") delete ov.reclaim_grace_min; else ov.reclaim_grace_min = Math.max(0, parseInt(t, 10) || 0); });
   const phone = panel("When I play on my phone (game opened on another device)",
-    h("div", { class: "hint", style: { marginBottom: "10px" } }, "Opening the game on your phone kicks this emulator off. With this ON the bot shows a countdown, leaves the game alone for the wait time, then taps Restart and carries on. Leave the minutes blank to use the global value."),
+    h("div", { class: "hint", style: { marginBottom: "10px" } }, "Opening the game on your phone kicks this instance off. With this ON the bot shows a countdown, leaves the game alone for the wait time, then taps Restart and carries on. Leave the minutes blank to use the global value."),
     h("div", { class: "row", style: { gap: "22px", alignItems: "center" } },
       h("label", { class: "tgl" }, rcOn, h("span", { class: "sw" }), "Wait, then take the game back"),
       h("span", {}, "Wait "), rcMin, h("span", {}, " minutes"),
       btn("Take game back now", () => act(api("takeback", { serial })))));
-  // ---- the game's own Auto-Join (needs the Rally Monthly Card): per emulator, right under the "game kicked" box
+  // ---- the game's own Auto-Join (needs the Rally Monthly Card): per instance, right under the "game kicked" box
   const numOv = (key, dflt) => { const e = h("input", { type: "number", min: 0, class: "short", placeholder: "Global " + eff(key, dflt) + " \u2013 type to change" });
     e.value = ov[key] === undefined ? "" : String(ov[key]);
     e.addEventListener("input", () => { const t = e.value.trim(); if (t === "") delete ov[key]; else ov[key] = Math.max(0, parseInt(t, 10) || 0); }); return e; };
@@ -407,10 +407,10 @@ function instancePage(serial) {
   const asOn = h("input", { type: "checkbox", checked: !!eff("auto_start", false) });
   asOn.addEventListener("change", () => { ov.auto_start = asOn.checked; });
   const autoStart = panel("Start by itself",
-    h("div", { class: "hint", style: { marginBottom: "10px" } }, "ON: this emulator starts on its own whenever the app opens (after a restart or update too). OFF: it waits until you press Start. Each emulator has its own switch."),
+    h("div", { class: "hint", style: { marginBottom: "10px" } }, "ON: this instance starts on its own whenever the app opens (after a restart or update too). OFF: it waits until you press Start. Each instance has its own switch."),
     h("div", { class: "row", style: { gap: "22px", alignItems: "center" } },
-      h("label", { class: "tgl" }, asOn, h("span", { class: "sw" }), "Start this emulator automatically when the app opens")));
-  // ---- tabs (same look as the Control settings tabs). The chosen tab is remembered, also when another emulator is opened.
+      h("label", { class: "tgl" }, asOn, h("span", { class: "sw" }), "Start this instance automatically when the app opens")));
+  // ---- tabs (same look as the Control settings tabs). The chosen tab is remembered, also when another instance is opened.
   const ITABS = [
     ["run", "Run & phone", () => [phone, autoStart, autoJoin, staminaPanel(ov, S.cfg)]],
     ["settings", "Settings", () => [panelEl]],
@@ -495,7 +495,7 @@ function presetPanels(c, inst) {
     h("div", { class: "row", style: { marginBottom: "10px", gap: "18px" } }, tog(c, "game_auto_join", "Use the game's Auto-Join (needs the Rally Monthly Card)"),
       h("span", { class: "lab" }, "Renew when less than (min) is left"), inp(c, "auto_join_renew_min", { type: "int", cls: "short" }),
       h("span", { class: "lab" }, "Check every (min)"), inp(c, "auto_join_check_min", { type: "int", cls: "short" })),
-    note("On: the bot stops joining rallies itself. It opens Alliance War > Auto-Join, reads the time left and presses Start again when it falls under your limit (Start resets it to 8 hours). Switch it on per emulator on each emulator's own page if only some accounts have the card."),
+    note("On: the bot stops joining rallies itself. It opens Alliance War > Auto-Join, reads the time left and presses Start again when it falls under your limit (Start resets it to 8 hours). Switch it on per instance on each instance's own page if only some accounts have the card."),
     h("div", { class: "row", style: { marginBottom: "6px" } }, h("span", { class: "lab" }, "Preset priority"), seg, h("span", { class: "armed" }, `${armed}/8 ARMED`),
       btn("1 - 6", () => { c.bot_presets.forEach((b) => (b.enabled = b.n <= 6)); rerender(); }, "sm"), btn("1 - 8", () => { c.bot_presets.forEach((b) => (b.enabled = true)); rerender(); }, "sm")),
     h("div", { class: "pgrid" }, c.bot_presets.map(card)),
@@ -532,7 +532,7 @@ async function captureTemplate() {
 
 // ====================================================================== settings (+ low RAM)
 function staminaPanel(store, base) {
-  // base = where the value comes from when this emulator has none of its own (the global settings)
+  // base = where the value comes from when this instance has none of its own (the global settings)
   const g = (k, d) => (store[k] !== undefined ? store[k] : base[k] !== undefined ? base[k] : d);
   const S_ = (k, opts, d) => sel(store, k, opts, { get: () => g(k, d) });
   return panel("Stamina (when a march needs more than you have)",
@@ -547,7 +547,7 @@ function staminaPanel(store, base) {
 }
 PAGES.settings = function () {
   const c = S.cfg;
-  const g = panel("Global settings (every emulator, unless it has its own)",
+  const g = panel("Global settings (every instance, unless it has its own)",
     grid2(
       fld("ADB path (auto)", inp(c, "adb_path")), fld("Evony package name", inp(c, "evony_package")), fld("Pause lasts (minutes, 0 = until I press Pause again)", inp(c, "pause_minutes", { type: "int", cls: "short", get: (v) => (v === undefined ? 15 : v) })),
       fld("Presets if bot presets unused (1-8)", inp(c, "presets", { get: (v) => (v || []).join(","), set: (t) => parsePresets(t) || [1] })), fld("Preset mode", sel(c, "preset_mode", ["rotate", "random", "fixed"])),
@@ -555,20 +555,20 @@ PAGES.settings = function () {
       fld("Rally countdown read from", sel(c, "rally_timer_source", ["progress_bar", "join_button"])), fld("March time read from", sel(c, "march_timer_source", ["join_button", "progress_bar", "none"], { get: (v) => v || "none", set: (v) => (v === "none" ? "" : v) })),
       fld("Max joins per device (0 = no limit)", inp(c, "max_joins", { type: "int", cls: "short" })), fld("Buttons to tap to reach the rally list", inp(c, "rally_nav_steps", { get: (v) => (v || []).join(", "), set: (t) => parseNames(t) })),
       fld("Click delay (ms): lower = faster, higher = slower", inp(c, "click_delay_ms", { type: "int", cls: "short" })),
-      fld("Load on the PC / emulator", sel(c, "cpu_level", [[1, "1 - fastest"], [2, "2 - balanced"], [3, "3 - light"], [4, "4 - lightest"]], { num: true, get: (v) => v || 2 })),
+      fld("Load on the PC / instance", sel(c, "cpu_level", [[1, "1 - fastest"], [2, "2 - balanced"], [3, "3 - light"], [4, "4 - lightest"]], { num: true, get: (v) => v || 2 })),
       fld("Screenshot method", sel(c, "screenshot_mode", ["auto", "png"]))),
-    h("div", { class: "row", style: { marginTop: "14px", gap: "26px" } }, tog(c, "log_timers", "Log the timers it reads"), tog(c, "auto_launch_emulator", "Start the emulator if it is closed"),
+    h("div", { class: "row", style: { marginTop: "14px", gap: "26px" } }, tog(c, "log_timers", "Log the timers it reads"), tog(c, "auto_launch_emulator", "Start the instance if it is closed"),
       tog(c, "auto_launch_game", "Start Evony if it is not open and wait until it is loaded")),
     note("Spare time = rally countdown minus your march time. 'Buttons to tap' are template names (default rally_icon); add more, e.g. alliance_button, war_button, if the rally list needs several taps. Any template named popup_something is tapped whenever it appears. Click delay scales every pause after a click; below ~500 ms the bot may click before a screen has loaded. A lighter load level scans less often."));
   const lr = panel("Low RAM / weak PC", h("div", { id: "ramInfo", class: "hint", style: { marginBottom: "10px" } }, "PC memory: ..."),
-    tog(c, "low_memory", "Low-memory mode (no live picture, shorter logs, one text reading at a time, lower priority, slower emulator start-up)"),
+    tog(c, "low_memory", "Low-memory mode (no live picture, shorter logs, one text reading at a time, lower priority, slower instance start-up)"),
     h("div", { style: { marginBottom: "8px" } }, tog(c, "keep_running_on_close", "Keep the bots running in the background when I close this window (off = closing the window stops everything)")),
-    h("div", { style: { marginBottom: "12px" } }, tog(c, "auto_start", "Start all emulators by itself whenever the app opens (default for every emulator - each one can override it on its own page)")),
-    grid2(fld("Gap between starting one emulator and the next (seconds)", inp(c, "start_gap_seconds", { type: "int", cls: "short" })),
-      fld("Run at most this many emulators at once (0 = no limit)", inp(c, "max_running_emulators", { type: "int", cls: "short" })),
-      fld("Wait for this much free RAM before starting an emulator (MB, 0 = off)", inp(c, "min_free_ram_mb", { type: "int", cls: "short" }))),
-    h("div", { style: { marginTop: "12px" } }, tog(c, "close_emulator_on_stop", "Close an emulator when its instance is stopped (frees its RAM; needs MuMu / LDPlayer or a stop command)")),
-    note("The bot itself needs roughly 100 MB; the emulators are what fill the RAM (about 1.5-4 GB each). Extra emulators beyond the limit wait in a queue and start when another one stops. Set the emulators to 540x960, 2 GB or less of memory and 1-2 CPU cores in their own settings. Closing this window frees even more memory: the bots keep running."));
+    h("div", { style: { marginBottom: "12px" } }, tog(c, "auto_start", "Start all instances by itself whenever the app opens (default for every instance - each one can override it on its own page)")),
+    grid2(fld("Gap between starting one instance and the next (seconds)", inp(c, "start_gap_seconds", { type: "int", cls: "short" })),
+      fld("Run at most this many instances at once (0 = no limit)", inp(c, "max_running_emulators", { type: "int", cls: "short" })),
+      fld("Wait for this much free RAM before starting an instance (MB, 0 = off)", inp(c, "min_free_ram_mb", { type: "int", cls: "short" }))),
+    h("div", { style: { marginTop: "12px" } }, tog(c, "close_emulator_on_stop", "Close an instance when its instance is stopped (frees its RAM; needs MuMu / LDPlayer or a stop command)")),
+    note("The bot itself needs roughly 100 MB; the instances are what fill the RAM (about 1.5-4 GB each). Extra instances beyond the limit wait in a queue and start when another one stops. Set the instances to 540x960, 2 GB or less of memory and 1-2 CPU cores in their own settings. Closing this window frees even more memory: the bots keep running."));
   const lg = panel("Log (for support)", h("div", { class: "hint", style: { marginBottom: "10px" } }, "The full technical log. Use Save or Copy to share it when something goes wrong."),
     h("div", { class: "row", style: { marginBottom: "10px" } },
       btn("Save log", saveLog, "sm pri"), btn("Copy log", copyLog, "sm"), btn("Save report for support...", saveReportFlow, "sm"),
@@ -579,7 +579,7 @@ PAGES.settings = function () {
 };
 
 
-// ---- per-emulator scope for the Monsters / Tasks pages: returns {c, bar, own, locked}
+// ---- per-instance scope for the Monsters / Tasks pages: returns {c, bar, own, locked}
 S.scope = S.scope || {};
 function scopeBar(page, keys, what, fixed) {
   const serial = fixed !== undefined ? fixed : (S.scope[page] || "");
@@ -587,18 +587,18 @@ function scopeBar(page, keys, what, fixed) {
   const ov = serial ? (S.cfg.per_device[serial] = S.cfg.per_device[serial] || {}) : null;
   const own = !!ov && keys.some((k) => ov[k] !== undefined);
   const pick = h("select", { onchange: (e) => { S.scope[page] = e.target.value; rerender(); } },
-    [h("option", { value: "", selected: serial === "" }, "All emulators (default)")].concat((S.devices || []).filter((d) => d.id).map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || d.id))));
+    [h("option", { value: "", selected: serial === "" }, "All instances (default)")].concat((S.devices || []).filter((d) => d.id).map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || d.id))));
   const items = fixed !== undefined ? [] : [h("span", { class: "lab" }, "Settings for"), pick];
   if (serial && own) {
     items.push(h("span", { class: "chip" }, "own " + what));
     items.push(btn("Use the global " + what, () => { keys.forEach((k) => delete ov[k]); rerender(); }, "sm"));
   } else if (serial) {
-    items.push(btn("Give this emulator its own " + what, () => { keys.forEach((k) => { if (S.cfg[k] !== undefined) ov[k] = clone(S.cfg[k]); }); rerender(); }, "sm pri"));
+    items.push(btn("Give this instance its own " + what, () => { keys.forEach((k) => { if (S.cfg[k] !== undefined) ov[k] = clone(S.cfg[k]); }); rerender(); }, "sm pri"));
   }
-  const msg = !serial ? "These are the defaults for every emulator that has no own " + what + "."
-    : own ? "Changes here apply to this emulator only."
-    : "This emulator uses the global " + what + " (shown below, read-only). Press the button to give it its own.";
-  const bar = fixed !== undefined ? h("div", {}, h("div", { class: "row", style: { marginBottom: "8px" } }, ...items), note(msg)) : panel("Which emulator?", h("div", { class: "row" }, ...items), note(msg));
+  const msg = !serial ? "These are the defaults for every instance that has no own " + what + "."
+    : own ? "Changes here apply to this instance only."
+    : "This instance uses the global " + what + " (shown below, read-only). Press the button to give it its own.";
+  const bar = fixed !== undefined ? h("div", {}, h("div", { class: "row", style: { marginBottom: "8px" } }, ...items), note(msg)) : panel("Which instance?", h("div", { class: "row" }, ...items), note(msg));
   return { c: own ? ov : S.cfg, bar, locked: !!serial && !own };
 }
 function lockedWrap(el, locked) { if (locked) { el.style.opacity = "0.55"; el.style.pointerEvents = "none"; } return el; }
@@ -743,7 +743,7 @@ PAGES.tasks = function (fixed) {
       btn("Delete", () => { if (selIdx !== null) { c.city_tasks.splice(selIdx, 1); selIdx = null; draw(); } })));
   const xy = (key, def) => inp(c, key, { cls: "short", get: xyText, set: (t) => parseXY(t, def) });
   const mapper = panel("City mapper",
-    note("The bot drags the map to the top-left corner, sweeps the whole city, reads the building names and saves where each one is. Open the city screen on the emulator first. It takes a few minutes."),
+    note("The bot drags the map to the top-left corner, sweeps the whole city, reads the building names and saves where each one is. Open the city screen on the instance first. It takes a few minutes."),
     h("div", { class: "row", style: { marginBottom: "14px" } }, btn("Scan the city now", scanCityFlow, "pri"), cityInfo),
     grid2(fld("Tap to leave the rally list for the city (x,y)", xy("city_to_tap", [35, 35])),
       fld("Tap to go back from the city to the rally list (x,y, if no rally_icon picture)", xy("rally_nav_tap", [])),
@@ -834,16 +834,16 @@ PAGES.reliability = function () {
   return panel("Reliability: slow down after failures, restart when stuck", tog(c, "adaptive_delay", "Slow down after a failed click, speed up again after a success"),
     h("div", { style: { height: "14px" } }),
     grid2(fld("Slowest it goes (x click delay)", inp(c, "adaptive_max", { type: "float", cls: "short" })), fld("Restart Evony if the screen is frozen for (s, 0 = off)", inp(c, "frozen_seconds", { type: "int", cls: "short" })),
-      fld("Restart the emulator if stuck / not answering for (s, 0 = off)", inp(c, "stuck_seconds", { type: "int", cls: "short" })), fld("Give up after this many emulator restarts per hour", inp(c, "max_emulator_restarts", { type: "int", cls: "short" }))),
-    note("'Frozen' = Join buttons or a non-rally screen that has not changed at all. 'Stuck' = no screenshot from the emulator, a frozen screen that came back after restarting Evony, or not getting back to the rally list. The emulator is closed with its own command (MuMu and LDPlayer are known; otherwise set 'Command that closes this emulator' for that emulator), then started again."));
+      fld("Restart the instance if stuck / not answering for (s, 0 = off)", inp(c, "stuck_seconds", { type: "int", cls: "short" })), fld("Give up after this many instance restarts per hour", inp(c, "max_emulator_restarts", { type: "int", cls: "short" }))),
+    note("'Frozen' = Join buttons or a non-rally screen that has not changed at all. 'Stuck' = no screenshot from the instance, a frozen screen that came back after restarting Evony, or not getting back to the rally list. The instance is closed with its own command (MuMu and LDPlayer are known; otherwise set 'Command that closes this instance' for that instance), then started again."));
 };
 PAGES.schedule = function () {
   const c = S.cfg;
-  const sched = panel("Schedules: start and stop emulators by the clock", h("div", { class: "row", style: { gap: "20px" } }, tog(c, "schedules_on", "Enable schedules"), h("div", { style: { flex: 1, minWidth: "260px" } }, fld("Default schedule", inp(c, "schedule")))),
-    note("Examples:  08:00-12:00, 18:00-23:30   |   Mon-Fri 08:00-22:00; Sat,Sun 10:00-14:00   |   22:00-02:00 (past midnight). An emulator can have its own schedule in its page. The bot starts an emulator when its window opens and stops it when the window ends; starting or stopping it yourself in between is respected."));
+  const sched = panel("Schedules: start and stop instances by the clock", h("div", { class: "row", style: { gap: "20px" } }, tog(c, "schedules_on", "Enable schedules"), h("div", { style: { flex: 1, minWidth: "260px" } }, fld("Default schedule", inp(c, "schedule")))),
+    note("Examples:  08:00-12:00, 18:00-23:30   |   Mon-Fri 08:00-22:00; Sat,Sun 10:00-14:00   |   22:00-02:00 (past midnight). An instance can have its own schedule in its page. The bot starts an instance when its window opens and stops it when the window ends; starting or stopping it yourself in between is respected."));
   const alerts = panel("Alerts to your phone (Telegram and / or Discord)",
     grid2(fld("Telegram bot token", inp(c, "telegram_token", { type: "password" })), fld("Telegram chat id", inp(c, "telegram_chat", { get: (v) => v ?? "" })), fld("Discord webhook URL", inp(c, "discord_webhook", { type: "password" }))),
-    h("div", { class: "row", style: { margin: "14px 0", gap: "26px" } }, tog(c, "notify_problems", "Message me about problems (restarts, stuck emulator, stopped instance)"), tog(c, "notify_joins", "Message me for every joined rally")),
+    h("div", { class: "row", style: { margin: "14px 0", gap: "26px" } }, tog(c, "notify_problems", "Message me about problems (restarts, stuck instance, stopped instance)"), tog(c, "notify_joins", "Message me for every joined rally")),
     btn("Send a test message", async () => { const j = await act(api("test_alert", { cfg: c })); if (j) toast(j.msg, j.ok_send ? "ok" : "error"); }),
     note("The token and webhook are saved in your settings file. They are removed when build_exe.bat bundles your settings into the exe."));
   return h("div", {}, sched, alerts);
@@ -854,7 +854,7 @@ PAGES.updates = function () {
     grid2(fld("Update address (link to version.json)", inp(c, "update_url")), fld("When a new version is found", sel(c, "update_mode", ["off", "ask", "auto"])),
       fld("Update key (optional, recommended)", inp(c, "update_key", { type: "password" }))),
     h("div", { style: { marginTop: "14px", display: "flex", gap: "10px" } }, btn("Check for updates now", async () => { if (await act(api("check_updates", { cfg: c }))) toast("Checking for updates..."); }, "pri"), btn("What's new", () => showWhatsNew(true))),
-    note("off = never check, ask = ask before installing, auto = install by itself. The app checks when it opens and every few hours. A new version starts after the app restarts; if emulators are running the restart waits until they are stopped. With an update key, only updates signed with the same key (make_update.py --key) are accepted. Updates only work when the app was started through launcher.py / the exe built from it."));
+    note("off = never check, ask = ask before installing, auto = install by itself. The app checks when it opens and every few hours. A new version starts after the app restarts; if instances are running the restart waits until they are stopped. With an update key, only updates signed with the same key (make_update.py --key) are accepted. Updates only work when the app was started through launcher.py / the exe built from it."));
 };
 
 // ====================================================================== themes
@@ -891,7 +891,7 @@ PAGES.themes = function () {
       row("Buttons", segOf("ui_btn", [["raised", "Plain"], ["tinted", "Accent tint"]], "raised"), "Tint the buttons with the accent colour."),
       row("Borders", segOf("ui_border", [["subtle", "Subtle"], ["accent", "Accent"]], "subtle"), "Outline of cards, buttons and boxes."),
       row("Text size", segOf("ui_text", [[85, "Small"], [100, "Normal"], [115, "Large"], [130, "Extra large"]], 100), "Makes everything in the window bigger or smaller."),
-      row("Emulator name", segOf("ui_name", [[20, "Small"], [24, "Medium"], [30, "Large"], [38, "Huge"]], 24), "Size of the name at the top of each emulator page."),
+      row("Instance name", segOf("ui_name", [[20, "Small"], [24, "Medium"], [30, "Large"], [38, "Huge"]], 24), "Size of the name at the top of each instance page."),
       row("Corners", segOf("ui_round", [["sharp", "Sharp"], ["normal", "Soft"], ["round", "Round"]], "normal"), "How round the cards and buttons are."));
   };
   picker.oninput = () => { setLook({ ui_accent: picker.value }); hexIn.value = picker.value; };
@@ -900,7 +900,7 @@ PAGES.themes = function () {
   return h("div", {},
     panel("Themes", h("div", { class: "row", style: { gap: "16px" } }, h("span", { class: "lab" }, "Appearance"), segs, h("span", { class: "hint" }, "One switch: every theme follows it.")), thumbs,
       note("Click a theme to switch to it at once. The sun / moon button at the top right flips between dark and light from any tab.")),
-    panel("Accent colour", note("Pick a colour for the highlights: the active tab, switches, the selected emulator and the focus outlines. The text colour on top of it is chosen automatically so it stays readable."),
+    panel("Accent colour", note("Pick a colour for the highlights: the active tab, switches, the selected instance and the focus outlines. The text colour on top of it is chosen automatically so it stays readable."),
       h("div", { class: "row", style: { gap: "12px" } }, sw, picker, hexIn)),
     panel("Look", look,
       h("div", { class: "row", style: { marginTop: "6px" } }, btn("Reset look", () => { setLook({ ui_accent: "", ui_btn: "raised", ui_border: "subtle", ui_round: "normal", ui_text: 100, ui_name: 24 }); drawLook(); }, "", "refresh"))));
@@ -914,7 +914,7 @@ PAGES.license = function () {
     h("div", { style: { fontWeight: 600, marginBottom: "10px", color: L.valid ? "var(--accent2)" : "var(--bad)" } },
       L.valid ? "Logged in as " + (L.user || L.buyer || "") : (L.error || "Not logged in.")),
     L.valid ? h("div", { class: "hint", style: { marginBottom: "12px" } },
-      `Up to ${L.instances} emulator${L.instances > 1 ? "s" : ""} running at the same time` + (L.expires ? `  |  valid until ${L.expires}` + (left != null ? ` (${left} day${left === 1 ? "" : "s"} left)` : "") : "  |  no expiry") + `  |  emulators in your list: ${S.devices.filter((d) => d.id).length}`) : null,
+      `Up to ${L.instances} instance${L.instances > 1 ? "s" : ""} running at the same time` + (L.expires ? `  |  valid until ${L.expires}` + (left != null ? ` (${left} day${left === 1 ? "" : "s"} left)` : "") : "  |  no expiry") + `  |  instances in your list: ${S.devices.filter((d) => d.id).length}`) : null,
     h("div", { class: "row", style: { margin: "12px 0" } },
       btn("Log out", async () => { if (await confirmBox("Log out", "Log out? All bots will stop.")) { const j = await act(api("logout")); if (j) { S.license = j.license; showLogin(); } } }),
       L.buy_url ? btn("Buy / extend", () => window.open(L.buy_url, "_blank")) : null),
@@ -925,20 +925,20 @@ PAGES.license = function () {
 // ====================================================================== duties
 PAGES.duties = function (fixed, only) {
   const root = h("div", {});
-  let serial = fixed || "";                       // "" = all emulators (the default); an emulator id = that emulator's own copy
+  let serial = fixed || "";                       // "" = all instances (the default); an instance id = that instance's own copy
   let rows = [], own = {};
   const GROUPS = ["Reward claims", "Daily activities", "Common tasks"];
   const draw = () => {
     root.innerHTML = "";
     if (fixed === undefined) root.appendChild(hist);
     const pick = h("select", { onchange: (e) => { serial = e.target.value; load(); loadCe(); loadCh(); } },
-      [h("option", { value: "", selected: serial === "" }, "All emulators (default)")].concat(S.devices.map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || short(d.id)))));
+      [h("option", { value: "", selected: serial === "" }, "All instances (default)")].concat(S.devices.map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || short(d.id)))));
     if (!only) root.appendChild(panel("Duties",
       note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes, retries 3 times a day if it fails, then waits for the next reset. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
       h("div", { class: "row" }, fixed !== undefined ? null : h("span", { class: "lab" }, "Settings for"), fixed !== undefined ? null : pick,
         serial && own.duties ? h("span", { class: "chip" }, "own settings") : null,
         serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the global setting") : null),
-      note(serial ? "Changes here apply to this emulator only and replace the global list for it. Pick 'All emulators' to change the default for every emulator that has no own settings." : "These are the defaults for every emulator. Pick one emulator to give it different settings."),
+      note(serial ? "Changes here apply to this instance only and replace the global list for it. Pick 'All instances' to change the default for every instance that has no own settings." : "These are the defaults for every instance. Pick one instance to give it different settings."),
     ));
     for (const g of GROUPS) {
       const list = rows.filter((r) => r.group === g && (!only || r.id === only));
@@ -946,13 +946,13 @@ PAGES.duties = function (fixed, only) {
       root.appendChild(panel(only ? list[0].title || g : g, list.flatMap((r) => [h("div", { class: "row", style: { justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid var(--line)" } },
         h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" }), h("b", {}, r.title)),
         h("span", { class: "hint", style: { flex: "1", margin: "0 14px" } }, r.note, " · ", r.schedule),
-        r.verified ? null : h("span", { class: "chip", title: "Steps are a first guess and have not been watched on a real emulator yet" }, "untested"),
+        r.verified ? null : h("span", { class: "chip", title: "Steps are a first guess and have not been watched on a real instance yet" }, "untested"),
         h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text)),
         (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null,
-        (only && !r.on) ? note("Switch it on above and its settings open here. " + (serial ? "This emulator can have its own settings." : "")) : null].filter(Boolean))));
+        (only && !r.on) ? note("Switch it on above and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean))));
     }
   };
-  // what the bot did: today's state per emulator + the latest task events
+  // what the bot did: today's state per instance + the latest task events
   const hist = h("div", {});
   const fmtT = (t) => { const d = new Date(t * 1000); return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
   const loadHist = async () => {
@@ -961,7 +961,7 @@ PAGES.duties = function (fixed, only) {
     if (!j) return;
     hist.innerHTML = "";
     hist.appendChild(panel("Today at a glance",
-      note("One line per emulator. A duty shows done, waiting (with the time it comes back), due, retrying or gave up. If an emulator has 'Do the tasks' switched off, nothing runs there."),
+      note("One line per instance. A duty shows done, waiting (with the time it comes back), due, retrying or gave up. If an instance has 'Do the tasks' switched off, nothing runs there."),
       j.matrix.map((r) => h("div", { class: "row", style: { padding: "6px 0", borderTop: "1px solid var(--line)", flexWrap: "wrap", gap: "6px" } },
         h("b", { style: { minWidth: "110px" } }, r.emu),
         r.tasks ? null : h("span", { class: "chip pill-bad" }, "tasks are off"),
@@ -981,7 +981,7 @@ PAGES.duties = function (fixed, only) {
     ce.innerHTML = "";
     const c = j.conf;
     const set = async (o) => { const r = await act(api("crazy_eggs_set", { serial, ...o })); if (r) drawCe(r); };
-    ce.appendChild(subset(serial ? "Crazy Eggs \u2013 this emulator" : "Crazy Eggs \u2013 all emulators",
+    ce.appendChild(subset(serial ? "Crazy Eggs \u2013 this instance" : "Crazy Eggs \u2013 all instances",
       serial && j.own && j.own.crazy_eggs ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "crazy_eggs" })); loadCe(); } }, "Use the global setting")) : null,
       note("Event Center > Activities > Crazy Eggs. The bot smashes every ready egg you switch on, closes the reward panel, and comes back when the next timer ends. The Lucky Hammer (1 a day) skips an egg's wait, so give it to the egg with the longest wait."),
@@ -1004,14 +1004,14 @@ PAGES.duties = function (fixed, only) {
         h("span", { class: "chip" }, j.lucky_used ? "Lucky Hammer used today" : (c.lucky ? "Lucky Hammer ready" : "Lucky Hammer off")))));
   };
   const loadCe = async () => { const j = await act(api("crazy_eggs", { serial })); if (j) drawCe(j); };
-  // Champions: how many of the daily 15 taps and 10 greetings each champion gets (this emulator or all)
+  // Champions: how many of the daily 15 taps and 10 greetings each champion gets (this instance or all)
   const ch = h("div", {});
   const drawCh = (j) => {
     ch.innerHTML = "";
     const set = async (o) => { const r = await act(api("champions_set", { serial, ...o })); if (r) drawCh(r); };
     const sumT = Object.values(j.plan).reduce((a, v) => a + (v.taps || 0), 0), sumG = Object.values(j.plan).reduce((a, v) => a + (v.greets || 0), 0);
     const usedT = Object.values(j.taps || {}).reduce((a, v) => a + v, 0), usedG = Object.values(j.greets || {}).reduce((a, v) => a + v, 0);
-    ch.appendChild(subset(serial ? "Champions – this emulator" : "Champions – all emulators",
+    ch.appendChild(subset(serial ? "Champions – this instance" : "Champions – all instances",
       serial && j.own && j.own.champions ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "champions" })); loadCh(); } }, "Use the global setting")) : null,
       note("Keep > Champions. Every account has the same champions but only a few are active; the bot skips the ones that are not (grey button at the bottom). The daily limit is " + j.max_taps + " taps and " + j.max_greets + " greetings for all champions together - put them all on one champion or share them out. Leave everything empty to use the champion the page opens on. Turn the 'Champions' duty on above. Needs the city map (the Keep)."),
