@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.37"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.38"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -333,7 +333,7 @@ def build_report(path, include_debug=True, description="", devices=None):
         z.writestr("info.txt", info)
         dbg = USER / "debug"
         if include_debug and dbg.exists():
-            for img in sorted(dbg.glob("*.png"))[-5:]:
+            for img in sorted(dbg.glob("*.png"), key=lambda f: f.stat().st_mtime)[-8:]:      # the newest ones
                 z.write(img, f"debug/{img.name}")
 
 
@@ -3079,9 +3079,11 @@ def choose_general(dev, name, cfg, log, stop, role="main"):
 
     pressed = False
     if view == "list" and has_template("select_button"):  # list rows have their own Select button; the portrait opens the info page
-        y0 = max(int(hit[1]) - 80, 0)
+        name_y = int(hit[1]) - 100                         # find_general_text puts the hit 100 px below the name line
+        y0 = max(name_y - 90, 0)
         shot0 = dev.screenshot()
-        sb = find(shot0, "select_button", th, (0, y0, 540, 160)) or find(shot0, "select_button", 0.7, (0, y0, 540, 160))
+        cands = find_all(shot0, "select_button", 0.7, (0, y0, 540, 270))   # the whole row around the name, above and below
+        sb = min(cands, key=lambda c: abs(c[1] - name_y)) if cands else None
         if not sb:
             try:                                           # keep the screen so the list-view Select button can be fixed
                 save_debug("general_list_" + re.sub(r"\W", "_", name), shot0)
@@ -7284,6 +7286,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 # One sweep = jump to the bottom, then one page up at a time until the top.
                 max_sc = cfg["max_scrolls"]
                 x1, y1, x2, y2, ms = cfg["swipe"]
+                if not max_sc:
+                    sweep_no[0] += 1                           # no scrolling: every look at the list is a new pass
                 if max_sc and not at_bottom[0]:
                     for _ in range(max_sc):                    # down to the end of the list (the oldest rallies)
                         dev.swipe(x1, y1, x2, y2, ms)
@@ -7328,15 +7332,24 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             mon_name = last_dn[0] or (mon if mon and mon != "hidden" else "?")
             base_name = last_base[0] or "?"
 
+            # a rally closing soon has no second chance: stay on it (try again straight away) until it is too late.
+            # One with plenty of time can wait: after 30 s without a march the others go first, back on the next pass.
+            priority = left <= 90
+
             def fail(why):
-                act("fail", mon=mon_name, rally=left, took=round(time.time() - t_join, 1), why=why)
+                if priority and time.time() < t_deadline:
+                    act("fail", mon=mon_name, rally=left, took=round(time.time() - t_join, 1),
+                        why=why + " - closing soon, trying again straight away")
+                    return                                     # not set aside: the next look picks it again first
+                act("fail", mon=mon_name, rally=left, took=round(time.time() - t_join, 1),
+                    why=why + " - the other rallies first, this one is tried again on the next pass")
+                remember_rally(base_name, t_join + left, "failed")      # never given up: retried every pass while it shows "Join"
             act("step", text=f"Joining {mon_name} rally ({left}s left)")
             tap_hit(dev, hit)
             nap(1.0, 1.5)
 
             if has_template("march_screen") and not wait_state("march", 3):
                 log("[!] March screen did not open (rally ended?) - skipping")
-                remember_rally(base_name, t_join + left, "failed")   # tried again in 20 s, given up after 2 failures
                 fail("March screen did not open (rally ended?)")
                 slower("The march screen did not open")
                 continue
@@ -7354,6 +7367,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     if not rest:
                         break
                     cand = rest[0]
+                if not priority and time.time() - t_join > 30:  # plenty of time left: let the other rallies go first
+                    log("[*] 30 s on this rally without marching - moving on to the other rallies, back to this one on the next pass")
+                    break
                 tried.add(cand)
                 log(f"[*] Trying preset {cand}")
                 act("step", text=f"Trying preset {cand}")
@@ -7446,8 +7462,6 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     used.bad.pop(p, None)                  # full or over, so do not bench them
                 log("[!] No preset could march - going back")
                 fail("No preset could march")
-                if time_skips:                             # too little time for these presets: do not come back to this rally
-                    remember_rally(base_name, t_join + left, "failed")
                 if screen_state(dev.screenshot(), cfg) == "march":
                     dev.back()
                     nap(1, 2)

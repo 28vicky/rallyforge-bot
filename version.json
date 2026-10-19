@@ -1,9 +1,9 @@
 {
-  "version": "2.4.37",
-  "notes": "Goes by the game's own Join / Joined buttons; a rally that did not open is tried again on the next pass",
+  "version": "2.4.38",
+  "notes": "Never gives up on a rally: rallies closing soon get priority, longer ones wait their turn and are retried every pass; listed generals by name can be picked again; reports include the newest pictures",
   "files": {
     "rally_bot.py": {
-      "sha256": "f089598f47b415d4674ab8eac6c8f8b0be1098e2c7b3e3d857cca26b91e049ae"
+      "sha256": "3c6e32b382967b3952d378ba9ebc614bc72c4d459afa37e48ca102d6cceccdb3"
     },
     "web_app.py": {
       "sha256": "e344cf5ab91c1527942d3a51d5f11373afd0becdfe062a4abeecd5f35c53b10c"
@@ -18,7 +18,7 @@
       "sha256": "a63be466b7e68e44d179ada9c5e009caa95e5f8c9c4b68aef123c5a0cadcddb2"
     },
     "ui/changelog.js": {
-      "sha256": "772b27e1b0e626606f076c890156fa625be6e57645f08f011207cf88eda169ad"
+      "sha256": "efbe900ecf3651952f70ad5bfcc86fcbfc2f4c879c3de01781f85bc9ef62b6fb"
     },
     "ui/dialogs.js": {
       "sha256": "e094cbaeedb72d17ded8c04c298720af1f5c75340e845b99eeed03d7d01310f2"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "199fad20e5e13a95c03a6b66a9977e9d8d8eec512d27ebeed692414ae8695a3c"
+  "sig": "7aa92a0860771dce4d5936cdbcdaa64939770bab41e973dda555e13aa8d65cf8"
 }
