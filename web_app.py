@@ -262,7 +262,11 @@ class Controller:
         """Merge what the interface sends into the saved settings (checked first), keep it for the bots."""
         with self.lock:
             cfg = rb.load_config()
-            cfg.update(posted or {})
+            posted = dict(posted or {})
+            if not (rb.USER / "admin.txt").exists():           # testers and buyers can neither see nor change where updates come from or the key that signs them
+                posted.pop("update_url", None)
+                posted.pop("update_key", None)
+            cfg.update(posted)
             if devices is not None:
                 self.set_devices(devices)
             ids = [d["id"] for d in self.devices]
@@ -1068,6 +1072,9 @@ class Api:
         cfg = dict(c.cfg)
         for k in ("telegram_token", "telegram_chat"):
             cfg.setdefault(k, "")
+        if not (rb.USER / "admin.txt").exists():
+            cfg["update_key"] = ""                              # never sent to the window of a tester / buyer
+            cfg["update_url"] = ""
         return {
             "version": rb.VERSION, "author": rb.AUTHOR, "copyright": rb.COPYRIGHT, "cfg": cfg, "devices": c.devices, "first_run": c.first_run,
             "generals": c.generals_info(), "monsters": rb.list_monsters(refresh=True), "catalog": rb.MONSTER_CATALOG,

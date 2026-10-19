@@ -809,8 +809,9 @@ PAGES.schedule = function () {
 PAGES.updates = function () {
   const c = S.cfg;
   return panel(`Updates (this is version ${S.version})`,
-    grid2(fld("Update address (link to version.json)", inp(c, "update_url")), fld("When a new version is found", sel(c, "update_mode", ["off", "ask", "auto"])),
-      fld("Update key (optional, recommended)", inp(c, "update_key", { type: "password" }))),
+    S.dev ? grid2(fld("Update address (link to version.json)", inp(c, "update_url")), fld("When a new version is found", sel(c, "update_mode", ["off", "ask", "auto"])),
+      fld("Update key (optional, recommended)", inp(c, "update_key", { type: "password" })))
+      : grid2(fld("When a new version is found", sel(c, "update_mode", ["off", "ask", "auto"]))),
     h("div", { style: { marginTop: "14px", display: "flex", gap: "10px" } }, btn("Check for updates now", async () => { if (await act(api("check_updates", { cfg: c }))) toast("Checking for updates..."); }, "pri"), btn("What's new", () => showWhatsNew(true))),
     note("off = never check, ask = ask before installing, auto = install by itself. The app checks when it opens and every few hours. A new version starts after the app restarts; if emulators are running the restart waits until they are stopped. With an update key, only updates signed with the same key (make_update.py --key) are accepted. Updates only work when the app was started through launcher.py / the exe built from it."));
 };
