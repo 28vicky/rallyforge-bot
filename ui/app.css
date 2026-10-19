@@ -400,3 +400,6 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 /* left list: drag to reorder */
 .inst[draggable="true"] { cursor: grab; }
 .inst.dragging { opacity: .45; outline: 1px dashed var(--accent2); }
+
+/* status bar: update available */
+.sb-upd { cursor: pointer; color: var(--accent2); font-weight: 700; text-decoration: underline; }

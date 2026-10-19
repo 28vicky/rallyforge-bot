@@ -197,7 +197,7 @@ function layout() {
       h("div", { class: "pages", id: "pages" })),
     h("div", { class: "status" },
       h("span", { class: "l", title: S.copyright || "" }, "RallyForge Bot " + S.version + "  \u00b7  by " + (S.author || "Kiravik")), h("span", { id: "sbRun" }, "0 running"), h("span", { id: "sbLic" }),
-      h("span", { id: "sbRam" }), h("span", { id: "sbTg" }))));
+      h("span", { id: "sbRam" }), h("span", { id: "sbTg" }), h("span", { id: "sbUpd", class: "sb-upd", style: { display: "none" } }))));
   buildRibbon();
   paintRunState();
   renderModeIcon();
@@ -299,6 +299,13 @@ async function saveReportFlow() {
     h("label", {}, "What went wrong? (a few words are enough)"), text,
     h("label", { class: "tgl", style: { marginTop: "6px" } }, shots, h("span", { class: "sw" }), "Include the last screenshots the bot saved (they can show your account name)"),
     h("p", { class: "note" }, "The app collects the log and settings for you. Nothing is sent automatically.")) });
+}
+// The update in the status bar: one click installs it, restarts the app and starts the running emulators again
+async function updateNow() {
+  S.updClicked = true;
+  if (S.update) S.update.installing = true;
+  toast("Installing the update - the app restarts by itself and the running emulators start again.", "ok");
+  await act(api("install_update", { restart: true }));
 }
 async function restartFlow() { if (await confirmBox("Restart", "Restart the app now? Running bots are stopped.")) act(api("restart")); }
 async function quitFlow() {
@@ -566,6 +573,7 @@ async function poll() {
     S.seq = j.seq;
     S.ram = j.ram || {};
     S.tg = j.tg;
+    S.update = j.update || null;
     S.genScan = j.gen_scan;
     S.catScan = j.catalog || { running: false, count: 0 };
     S.city = j.city;
@@ -609,6 +617,16 @@ function updateSummary() {
   const m = $("#sbRam");
   if (m && S.ram && S.ram.total_mb) m.textContent = `App: ${(S.ram.proc_mb || 0).toFixed(0)} MB  |  PC free: ${S.ram.free_mb.toFixed(0)} MB`;
   const t = $("#sbTg"); if (t) t.textContent = "Telegram: " + (S.tg.ready ? "connected" : "not connected");
+  const u = $("#sbUpd");
+  if (u) {
+    const U = S.update;
+    u.style.display = U ? "" : "none";
+    if (U) {
+      u.textContent = U.installing ? `Installing ${U.version}\u2026` : `\u2B06 Update ${U.version} available \u2013 click to install`;
+      u.title = (U.notes || "") + (U.installing ? "" : "\nClick: install it, restart the app and start the running emulators again");
+      u.onclick = U.installing ? null : updateNow;
+    }
+  }
   const ts = $("#tgStatus"); if (ts) ts.textContent = S.tg.status;
   const ram = $("#ramInfo");
   if (ram && S.ram.total_mb) ram.textContent = `PC memory: ${(S.ram.total_mb - S.ram.free_mb).toFixed(0)} MB used of ${S.ram.total_mb.toFixed(0)} MB (${S.ram.free_mb.toFixed(0)} MB free)  |  this app: ${(S.ram.proc_mb || 0).toFixed(0)} MB`;
@@ -626,11 +644,13 @@ async function handleEvent(ev) {
   else if (ev.k === "scan_done") scanGeneralsDone(d);
   else if (ev.k === "catalog_done") catalogDone(d);
   else if (ev.k === "update_none") toast(`You are up to date (version ${d.version}).`, "ok");
-  else if (ev.k === "update_found") {
+  else if (ev.k === "update_found" && d.manual) {
     const ok = await confirmBox("Update available", `Version ${d.version} is available (you have ${S.version}).${d.notes ? "\n\n" + d.notes : ""}\n\nInstall it now?`, "Install");
-    if (ok) { toast("Installing the update..."); act(api("install_update")); }
+    if (ok) updateNow();
   } else if (ev.k === "update_installed") {
-    if (await confirmBox("Update installed", `Version ${d.version} is installed. Restart the app now?`, "Restart")) act(api("restart"));
+    if (S.updClicked) toast(`Version ${d.version} is installed. The app restarts in a moment and the running emulators start again.`, "ok");
+    else if (d.auto) toast(`Version ${d.version} is installed. The app restarts by itself in a moment and the running emulators carry on.`, "ok");
+    else if (await confirmBox("Update installed", `Version ${d.version} is installed. Restart the app now?`, "Restart")) act(api("restart"));
   }
 }
 

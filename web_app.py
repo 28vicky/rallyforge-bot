@@ -114,6 +114,12 @@ class Controller:
             if msg.startswith("@act "):                  # structured activity: shown on the Activity screen, not in the log
                 try:
                     d = json.loads(msg[5:])
+                    rec = self.dev.get(serial)
+                    if rec is not None:                  # in the middle of a join? (an update restart waits for it)
+                        if d.get("k") == "step" and str(d.get("text", "")).startswith(("Joining", "Trying preset", "Choosing generals", "Checking stamina", "Marching")):
+                            rec["busy_until"] = time.time() + 60
+                        elif d.get("k") in ("join", "fail") or (d.get("k") == "step" and str(d.get("text", "")).startswith(("Looking", "Idle"))):
+                            rec["busy_until"] = 0
                     d["t"] = time.strftime("%H:%M:%S")
                     self.acts.append((self.seq, serial, name, d))
                 except Exception:
@@ -551,7 +557,7 @@ class Controller:
                 if now - last["tg"] > 30:
                     last["tg"] = now
                     self._tg_tick()
-                if now - last["upd"] > 6 * 3600 or (last["upd"] == 0 and now - t0 > 12):
+                if now - last["upd"] > 1800 or (last["upd"] == 0 and now - t0 > 12):
                     last["upd"] = now
                     if self.cfg.get("update_mode") != "off" and ((self.cfg.get("update_url") or "").strip() or rb.DEFAULT_UPDATE_URL):
                         self.check_updates(False)
@@ -1142,38 +1148,75 @@ class Controller:
                         self.event("update_none", {"version": rb.VERSION})
                     return
                 self.log(f"[+] Version {info['version']} is available.")
-                if self.cfg.get("update_mode") == "auto" and not manual:
-                    self.install_update(info)
-                else:
-                    self.event("update_found", {"version": info["version"], "notes": info.get("notes", ""),
-                                                "manual": manual})
-                    self._pending_update = info
+                self._pending_update = info                 # shown in the status bar: "Update x available" (click = install + restart)
+                rel = str((info.get("manifest") or {}).get("mode", "")).lower()
+                if rel == "auto" and self.cfg.get("update_mode") == "auto" and not manual:
+                    self.install_update(info, auto=True)    # only if the user chose fully automatic updates
+                elif manual:
+                    self.event("update_found", {"version": info["version"], "notes": info.get("notes", ""), "manual": True})
             except Exception as e:
                 if manual:
                     self.toast("error", f"Update: {e}")
                 self.log(f"[!] Update: {e}")
         threading.Thread(target=work, daemon=True).start()
 
-    def install_update(self, info=None):
+    def install_update(self, info=None, auto=None):
         info = info or getattr(self, "_pending_update", None)
         if not info:
             raise ApiError("No update is waiting.")
 
+        self._installing = True
+
         def work():
             try:
                 rb.install_update(info, lambda m: self.log(m))
+                self._installing = False
                 self.log(f"[+] Version {info['version']} is installed. Restart the app to use it.")
                 self.restart_pending = True
-                self.event("update_installed", {"version": info["version"]})
+                self._pending_since = time.time()
+                self._auto_restart = bool(auto)
+                self.event("update_installed", {"version": info["version"], "auto": bool(auto)})
+                if auto:
+                    self.log("[*] The app restarts by itself in a moment (when no emulator is joining) and carries on")
             except Exception as e:
+                self._installing = False
                 self.toast("error", f"Could not install {info['version']}: {e}")
                 self.log(f"[!] Update: {e}")
         threading.Thread(target=work, daemon=True).start()
 
+    RESUME_FILE = rb.USER / "resume.json"
+
     def _maybe_restart(self):
-        if self.restart_pending and not self.n_running() and self.cfg.get("update_mode") == "auto":
-            self.restart_pending = False
-            self.restart_app()
+        """An update was installed: restart by itself at a quiet moment (no emulator in the middle of a join, or after
+        3 minutes at the latest). The emulators that were running start again on their own after the restart."""
+        if not self.restart_pending or not getattr(self, "_auto_restart", False):
+            return
+        now = time.time()
+        since = getattr(self, "_pending_since", None) or now
+        self._pending_since = since
+        busy = [d["name"] or s for s, d in self.dev.items() if self.running(s) and d.get("busy_until", 0) > now]
+        if busy and now - since < 180:
+            return
+        running = [s for s in self.dev if self.running(s)]
+        try:
+            self.RESUME_FILE.write_text(json.dumps({"serials": running, "t": now}), encoding="utf-8")
+        except OSError:
+            pass
+        self.log(f"[+] Restarting to use the new version - {len(running)} emulator(s) start again by themselves")
+        self.restart_pending = False
+        self.restart_app()
+
+    def take_resume(self):
+        """Emulators to start again after an update restart (only if that restart was minutes ago)."""
+        try:
+            d = json.loads(self.RESUME_FILE.read_text(encoding="utf-8"))
+            self.RESUME_FILE.unlink()
+        except (OSError, ValueError):
+            return []
+        if time.time() - float(d.get("t", 0)) > 900:
+            return []
+        ids = {x["id"] for x in self.devices}
+        return [s for s in d.get("serials", []) if s in ids]
 
     def restart_app(self):
         env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
@@ -1398,7 +1441,10 @@ class Api:
                 "ram": ram, "city": c.jobs["city"]["running"], "city_progress": c.jobs["city"].get("progress"),
                 "gen_scan": {"running": c.jobs["generals"]["running"], "count": c.jobs["generals"].get("count", 0)},
                 "catalog": {"running": c.jobs["catalog"]["running"], "count": c.jobs["catalog"].get("count", 0)},
-                "lic": c.lic.info() if c.lic.on else None}
+                "lic": c.lic.info() if c.lic.on else None,
+                "update": ({"version": c._pending_update["version"], "notes": c._pending_update.get("notes", ""),
+                            "installing": bool(getattr(c, "_installing", False))}
+                           if getattr(c, "_pending_update", None) and not c.restart_pending else None)}
 
     # ---- settings / devices
     def save(self, p):
@@ -1758,7 +1804,7 @@ class Api:
         return {}
 
     def install_update(self, p):
-        self.c.install_update()
+        self.c.install_update(auto=bool(p.get("restart")))       # from the status bar: install, then restart by itself
         return {}
 
     def test_alert(self, p):
@@ -2042,7 +2088,15 @@ def main():
         (rb.USER / "startup.log").open("a", encoding="utf-8").write(f"server up on port {port}\n")
     except Exception:
         pass
-    if ctl.cfg.get("auto_start") or any(v.get("auto_start") for v in (ctl.cfg.get("per_device") or {}).values()):
+    resume = ctl.take_resume()
+    if resume:
+        def _resume():                                  # restarted for an update: carry on where we were
+            time.sleep(4)
+            ctl.log(f"[+] Updated to version {rb.VERSION} - starting the {len(resume)} emulator(s) that were running")
+            for i, s in enumerate(resume):
+                threading.Timer(i * 5 + 0.5, lambda s=s: ctl._safe(ctl.start_instance, s)).start()
+        threading.Thread(target=_resume, daemon=True).start()
+    elif ctl.cfg.get("auto_start") or any(v.get("auto_start") for v in (ctl.cfg.get("per_device") or {}).values()):
         def _auto():                                    # 'start by itself when the app opens' (global switch + per-emulator switches)
             time.sleep(6)
             ctl.log("[+] Auto-start is on - starting the chosen emulators, one after the other")

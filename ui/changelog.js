@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.33", date: "2026-10-19",
+    new: ["New updates show up in the status bar at the bottom (\u201cUpdate x available \u2013 click to install\u201d) instead of a pop-up. One click installs it, the app restarts by itself when no emulator is in the middle of a join, and the emulators that were running start again on their own, even without \u201cstart by itself\u201d. The app looks for updates every 30 minutes; \u201cCheck for updates\u201d still shows the answer straight away."],
+    fixed: ["A general found by name in the list view (e.g. Cleopatra) is now picked with the Select button of its row, and the portrait is never tapped in that view. Before, the bot tapped the portrait, which opens the general\u2019s info page, and got stuck there; the instance then never joined. If the general cannot be picked, the bot marches with the generals already in the preset. If any other page opens, the bot presses Back instead of staying on it."] },
   { v: "2.4.32", date: "2026-10-19",
     new: [],
     fixed: ["March time is no longer read: the game does not show it on the rally list or on the march screen, so every rally showed \u201cmarch ?\u201d and cost a text read for nothing. Scanning is a little faster. If a rally leader is far away, raise \u201cJoin if spare time >=\u201d.", "Epic Hydra and Mythical Hydra count as Hydra, so the Hydra settings and levels apply to them."] },

@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--templates", default="", help="folder with .png pictures to publish too")
     ap.add_argument("--monsters", default="", help="folder with monster .png pictures to publish too")
     ap.add_argument("--extra", nargs="*", default=[], help="more .py files that belong to the update")
+    ap.add_argument("--auto", action="store_true", help="let apps whose owner chose 'automatic updates' install this one by themselves (default: they only show 'Update available' in the status bar)")
     ap.add_argument("--catalog", default="", help="the general catalogue folder (catalog.json + art) to publish too, e.g. %%APPDATA%%\\RallyForgeBot\\catalog")
     a = ap.parse_args()
 
@@ -64,7 +65,7 @@ def main():
             cat["catalog.json"] = {"sha256": hashlib.sha256((root / "catalog.json").read_bytes()).hexdigest(), "url": "catalog/catalog.json"}
         for p in sorted((root / "art").glob("*.png")):
             cat["art/" + p.name] = {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "url": "catalog/art/" + quote(p.name)}
-        manifest = {"version": m.group(1), "notes": a.notes, "files": files}
+        manifest = {"version": m.group(1), "notes": a.notes, "files": files, "mode": "auto" if a.auto else "ask"}
     if cat:
         manifest["catalog"] = cat
     if mons:
@@ -74,7 +75,8 @@ def main():
     if a.key:
         manifest["sig"] = hmac.new(a.key.encode("utf-8"), canonical(manifest).encode("utf-8"), hashlib.sha256).hexdigest()
     (HERE / "version.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    print(f"version.json written for version {m.group(1)}" + (" (signed)" if a.key else " (NOT signed)"))
+    print(f"version.json written for version {m.group(1)}" + (" (signed)" if a.key else " (NOT signed)")
+          + (" - may install by itself where the user chose automatic updates" if a.auto else " - shown as 'Update available' in the status bar"))
     print("Upload:", ", ".join(list(files) + ["version.json"] + list(pics)))
     if cat:
         print(f"Also upload the catalogue folder as catalog/ (catalog.json + art/, {len(cat)} files) next to version.json.")

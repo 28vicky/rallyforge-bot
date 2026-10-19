@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.32"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.33"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -114,7 +114,7 @@ DEFAULTS = {
     "max_running_emulators": 0,             # run at most this many instances at once, queue the rest (0 = no limit)
     "close_emulator_on_stop": False,        # close the emulator when its instance is stopped (frees its RAM)
     "update_url": "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json",                       # address of version.json (https://...). Empty = no update checks
-    "update_mode": "ask",                   # off | ask | auto
+    "update_mode": "ask",                   # off | ask | auto. Each release also says itself: "auto" (beta) or "ask" (live)
     "update_key": "",                       # optional secret: updates must be signed with it (make_update.py --key)
     "telegram_token": "", "telegram_chat": "", "discord_webhook": "",
     "notify_problems": True,                # restarts, stuck emulator, stopped instance
@@ -2996,9 +2996,27 @@ def choose_general(dev, name, cfg, log, stop, role="main"):
             pass
         return False
 
-    tap_hit(dev, hit)
+    pressed = False
+    if view == "list" and has_template("select_button"):  # list rows have their own Select button; the portrait opens the info page
+        y0 = max(int(hit[1]) - 80, 0)
+        sb = find(dev.screenshot(), "select_button", th, (0, y0, 540, 160))
+        if sb:
+            tap_hit(dev, sb)
+            pressed = True
+    if not pressed:
+        if view == "list":                                # never tap the portrait in list view: it opens the info page
+            log(f"[!] Found {name} in the list but not its Select button - not tapping the portrait")
+            return False
+        tap_hit(dev, hit)
     nap(1.0, 1.5)
     shot = dev.screenshot()
+    st_now = screen_state(shot, cfg)
+    if st_now not in ("march", "general") and not (has_template("general_screen") and find(shot, "general_screen", th)) \
+            and not (has_template("select_button") and find(shot, "select_button", th)):
+        log(f"[!] Tapping {name} opened another page (the general's info page?) - pressing Back")
+        dev.back()                                       # never stay stuck on the info page
+        nap(1.0, 1.5)
+        return False
     if has_template("select_button"):                    # tapping a card may open a detail panel
         sb = find(shot, "select_button", th)
         if sb:
