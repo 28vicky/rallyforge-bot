@@ -128,7 +128,7 @@ class License:
         return int(self.payload["n"]) if self.payload else 0
 
     def info(self):
-        p = self.payload or {}
+        p, error, user = self.payload or {}, self.error, self.user
         left = None
         if p.get("exp"):
             try:
@@ -182,6 +182,7 @@ class AccountLicense:
         self.payload, self.error = None, ""
         self.user = ""
         self.fetched = 0
+        self.loaded = 0
         self.load()
 
     def set_source(self, update_url):
@@ -217,18 +218,20 @@ class AccountLicense:
             return False
 
     def load(self):
-        self.payload, self.error, self.user = None, "", ""
-        if not self.on:
-            return
-        uid, pw = self._creds()
-        if not uid:
-            self.error = "Please log in."
-            return
-        try:
-            self.payload = self._check(uid, pw)
-            self.user = uid
-        except ValueError as e:
-            self.error = str(e)
+        """Re-evaluate the account. The result replaces the old state in one step, so other threads never see a half-empty state."""
+        payload, error, user = None, "", ""
+        if self.on:
+            uid, pw = self._creds()
+            if not uid:
+                error = "Please log in."
+            else:
+                try:
+                    payload = self._check(uid, pw)
+                    user = uid
+                except ValueError as e:
+                    error = str(e)
+        self.payload, self.error, self.user = payload, error, user
+        self.loaded = time.time()
 
     def _check(self, uid, pw):
         accts, fetched = self._list()
@@ -286,8 +289,10 @@ class AccountLicense:
     def limit(self):
         if not self.on:
             return None
-        self.load() if self.payload else None
-        return int(self.payload["n"]) if self.payload else 0
+        if self.payload and time.time() - self.loaded > 60:      # re-check at most once a minute (expiry still takes effect)
+            self.load()
+        p = self.payload
+        return int(p["n"]) if p else 0
 
     def info(self):
         p = self.payload or {}
@@ -298,5 +303,5 @@ class AccountLicense:
             except ValueError:
                 left = None
         return {"mode": "account", "required": self.on, "valid": bool(p) or not self.on, "instances": p.get("n"), "buyer": p.get("to", ""),
-                "user": self.user, "expires": p.get("exp", ""), "days_left": left, "bound": False, "error": self.error,
+                "user": user, "expires": p.get("exp", ""), "days_left": left, "bound": False, "error": error,
                 "machine_id": machine_id(), "buy_url": BUY_URL}

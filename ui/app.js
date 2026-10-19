@@ -462,8 +462,10 @@ async function poll() {
     S.cityProg = j.city_progress || null;
     if (j.lic) {
       const wasOk = S.license && S.license.valid;
-      S.license = j.lic;
-      if (S.license.required && !S.license.valid && wasOk) showLogin(S.license.error);
+      const bad = j.lic.required && !j.lic.valid;
+      S.licBad = bad ? (S.licBad || 0) + 1 : 0;           // only react to a login problem that lasts (two polls in a row)
+      if (!bad || S.licBad >= 2 || !wasOk) S.license = j.lic;
+      if (bad && wasOk && S.licBad >= 2) showLogin(j.lic.error);
     }
     const key = JSON.stringify(j.devs);
     if (key !== lastState) { lastState = key; S.devStatus = j.devs; renderSide(); refreshInstanceControls(); }

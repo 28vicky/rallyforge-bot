@@ -1,24 +1,24 @@
 {
-  "version": "2.4.10",
-  "notes": "Fix: missing Join button picture on fresh installs (pictures are delivered by this update). Includes account login and Champions.",
+  "version": "2.4.11",
+  "notes": "Fix: the login window no longer reappears when you save changes on an emulator.",
   "files": {
     "rally_bot.py": {
-      "sha256": "00f41acf83385d89801c6e659bf2eb574a01a41ed18c8341eaa963efe9e08077"
+      "sha256": "019a7ea83c7018d85ac1e2beab51c5c615071fdd3046e4ce2d8acc9899936fba"
     },
     "web_app.py": {
       "sha256": "cf30087e96fd56d530488a7c99421e555d16bdf0b74f3ba7906787a5287162c3"
     },
     "rf_license.py": {
-      "sha256": "27710f01381ba73b23c28173d724c8cd0cb8858fe782eca468a43d1666cb5a67"
+      "sha256": "d0a63d405eb24237e94b9e20b90cf9029c58976be76ab31f78ce2f9db2bd4387"
     },
     "ui/app.css": {
       "sha256": "8469f0071476ff2f26acab8a8624e30accd93ccea0f5b6398f070676cdbf1034"
     },
     "ui/app.js": {
-      "sha256": "8ac2eb3d307ad58580ed013d2bae82519f88b0b80eb9d87b119e6fffb126bc24"
+      "sha256": "91274939a9302582fdf1815bfe5f4b7312717d60f3666d14c79e403bd1d73464"
     },
     "ui/changelog.js": {
-      "sha256": "b40bd27f599b91bc789488ff7c0b4d4dda7b4fb3e34289dc1a1a6901a5644077"
+      "sha256": "948b95cdf3088bf5351c0302dfa39e2bf64f53721a4e74239385c60a2512365f"
     },
     "ui/dialogs.js": {
       "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
@@ -44,5 +44,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "6942dec72b335d58010a7bc6a8f522547b9c4174c330e91cbd2e7fa055da885e"
+  "sig": "2ac65a6e298cbcf65f0e664983ca4989d96f75cc16a8c3b3bccc42703859b2b6"
 }
