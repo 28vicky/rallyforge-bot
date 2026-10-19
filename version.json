@@ -1,28 +1,31 @@
 {
-  "version": "2.4.4",
-  "notes": "Stamina options (items, order, amount; full = slide to the end); Alliance-page recovery; per-emulator Start by itself.",
+  "version": "2.4.5",
+  "notes": "New 'What's new' window after every update; stamina options; Alliance-page recovery; per-emulator Start by itself.",
   "files": {
     "rally_bot.py": {
-      "sha256": "6b3915057091337d4668d1776ad88df2d892d61439aeded3dc9eaa0147064788"
+      "sha256": "b165c537a7af77b1ad085f634ea5403a9d8336acf7b97c9e62bb3d430b840ae7"
     },
     "web_app.py": {
       "sha256": "3ddc6208cf6c0aa65b2baa665fcce9bd60a1b8544e014aeb68f7fcf6cae651f7"
     },
     "ui/app.js": {
-      "sha256": "a59a3d606f41b78b066c23e5611e7c4b92fc23b22c700e93a4f484be457cc018"
+      "sha256": "81bcbc5b94fd7e19876f4e666d2e9d015f483e9962f5da20415936fc485359af"
     },
     "ui/dialogs.js": {
-      "sha256": "37255a092830e075a619a4a2e699bf026cf09f618097ca68b9f4372ac96cc2b9"
+      "sha256": "13ef7aa731df970e6628155470d218b2e7a54dc537c9b94a883724f4dad48e45"
     },
     "ui/pages.js": {
-      "sha256": "462fc79ab121c732cdcc134508ab80cfb12453d7c71919513c2a7cccb57a52b9"
+      "sha256": "fb394eed6d01cfab9bd144ed1b6f65d1432f4751915490f96379f0daa4066b6d"
     },
     "ui/app.css": {
       "sha256": "8469f0071476ff2f26acab8a8624e30accd93ccea0f5b6398f070676cdbf1034"
     },
     "ui/index.html": {
-      "sha256": "0bdacb95df93177098c07b570662efa58ff126596afad42b2ff992ad1c4cd65c"
+      "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
+    },
+    "ui/changelog.js": {
+      "sha256": "c130d7d6d9df799a313871214ccaea9545200c637035ffbcdd114c29eceb5ab0"
     }
   },
-  "sig": "59087e1fcb0d02ae454e848bc29adbb9a8b70fd72d98f5e5e39f4ee9b5cd2f59"
+  "sig": "dbf1fd94d3cf688afd6df6dc800701fd9435b0888d8cfde0aa0fd7ab92db2e66"
 }

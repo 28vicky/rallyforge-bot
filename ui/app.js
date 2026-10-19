@@ -534,5 +534,6 @@ async function boot() {
   document.title = "RallyForge Bot " + S.version;
   layout();
   poll();
+  checkWhatsNew();
   if (S.firstRun) { if (!S.devices.length) S.devices.push({ id: "", name: "" }); setTimeout(() => detectDevices(), 900); }
 }

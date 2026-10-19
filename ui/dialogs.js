@@ -522,3 +522,34 @@ async function cityCaptureFlow() {
   scanBox = modal({ title: "Recording the city", focus: false, buttons: [{ label: "Stop and save what was found", cls: "pri", onclick: () => { act(api("scan_city_stop")); return false; } }],
     body: h("div", { style: { minWidth: "380px" } }, "The bot is dragging the city around... Progress is in the log on the Dashboard.") });
 }
+
+
+// ---- What's new: shown once after an update, and from Updates > What's new
+function vtuple(v) { return String(v || "0").split(".").map((x) => parseInt(x, 10) || 0); }
+function vnewer(a, b) { const x = vtuple(a), y = vtuple(b); for (let i = 0; i < 4; i++) { const p = x[i] || 0, q = y[i] || 0; if (p !== q) return p > q; } return false; }
+function whatsNewBody(list) {
+  const box = h("div", { style: { maxWidth: "520px", maxHeight: "60vh", overflow: "auto" } });
+  list.forEach((e) => {
+    box.appendChild(h("h3", { style: { margin: "14px 0 6px" } }, "Version " + e.v + (e.date ? "  \u00b7  " + e.date : "")));
+    if ((e.new || []).length) { box.appendChild(h("b", {}, "New")); box.appendChild(h("ul", { style: { margin: "4px 0 8px 18px" } }, e.new.map((t) => h("li", {}, t)))); }
+    if ((e.fixed || []).length) { box.appendChild(h("b", {}, "Fixed")); box.appendChild(h("ul", { style: { margin: "4px 0 8px 18px" } }, e.fixed.map((t) => h("li", {}, t)))); }
+  });
+  return box;
+}
+function showWhatsNew(all) {
+  const log = (window.CHANGELOG || []).slice();
+  if (!log.length) return;
+  const seen = (S.cfg || {}).last_seen_version || "";
+  const list = all ? log.slice(0, 8) : (seen ? log.filter((e) => vnewer(e.v, seen) && !vnewer(e.v, S.version)).slice(0, 5) : log.slice(0, 1));
+  if (!list.length) return;
+  modal({ title: "What's new in RallyForge Bot", body: whatsNewBody(list), wide: true, buttons: [{ label: "OK", cls: "pri" }] });
+}
+function checkWhatsNew() {
+  try {
+    const seen = (S.cfg || {}).last_seen_version || "";
+    if (seen === S.version) return;
+    if (!S.firstRun) setTimeout(() => showWhatsNew(false), 1200);
+    S.cfg.last_seen_version = S.version;
+    api("save", { cfg: { last_seen_version: S.version } }).catch(() => {});
+  } catch (e) {}
+}
