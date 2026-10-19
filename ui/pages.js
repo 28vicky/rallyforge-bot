@@ -469,6 +469,7 @@ PAGES.settings = function () {
     note("Spare time = rally countdown minus your march time. 'Buttons to tap' are template names (default rally_icon); add more, e.g. alliance_button, war_button, if the rally list needs several taps. Any template named popup_something is tapped whenever it appears. Click delay scales every pause after a click; below ~500 ms the bot may click before a screen has loaded. A lighter load level scans less often."));
   const lr = panel("Low RAM / weak PC", h("div", { id: "ramInfo", class: "hint", style: { marginBottom: "10px" } }, "PC memory: ..."),
     tog(c, "low_memory", "Low-memory mode (no live picture, shorter logs, one text reading at a time, lower priority, slower emulator start-up)"),
+    h("div", { style: { marginBottom: "8px" } }, tog(c, "keep_running_on_close", "Keep the bots running in the background when I close this window (off = closing the window stops everything)")),
     h("div", { style: { marginBottom: "12px" } }, tog(c, "auto_start", "Start all emulators by itself whenever the app opens (after a restart or update too)")),
     grid2(fld("Gap between starting one emulator and the next (seconds)", inp(c, "start_gap_seconds", { type: "int", cls: "short" })),
       fld("Run at most this many emulators at once (0 = no limit)", inp(c, "max_running_emulators", { type: "int", cls: "short" })),

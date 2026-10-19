@@ -1,12 +1,12 @@
 {
-  "version": "2.3.4",
-  "notes": "Fix: join without a general now works; Knight Bayard / Viking skips; per-emulator monsters, tasks and duties; staggered start and auto-start; freeze and error recovery.",
+  "version": "2.3.5",
+  "notes": "Closing the window now stops all bots (option to keep them running); auto-start; join-without-general fix; per-emulator monsters, tasks, duties.",
   "files": {
     "rally_bot.py": {
-      "sha256": "02d9afdee2cc9f8bb393f36a201f3242a75e45ff405f2ef8da19dc8262f47c0d"
+      "sha256": "10233bf437cf6a10c606989b43f1379d490b25bb6fa76df33b6017adf07b7ef1"
     },
     "web_app.py": {
-      "sha256": "8e129fbcf73deef58711eec56dea2f952e3d2643a0d06cade2a2ebaedb271281"
+      "sha256": "b2295530eb3264efcc583655120d4b4a1ac70e435e8782e94c3f70a9637cf743"
     },
     "ui/app.js": {
       "sha256": "a59a3d606f41b78b066c23e5611e7c4b92fc23b22c700e93a4f484be457cc018"
@@ -15,7 +15,7 @@
       "sha256": "37255a092830e075a619a4a2e699bf026cf09f618097ca68b9f4372ac96cc2b9"
     },
     "ui/pages.js": {
-      "sha256": "63d0732333c25c48ffd6507c420446542c3feddaa4d0cdb1211998ad008297fc"
+      "sha256": "b273d871c83806d9bed95d5760d93718540666b44ee57142eb93ae4b5fe58a9c"
     },
     "ui/app.css": {
       "sha256": "8469f0071476ff2f26acab8a8624e30accd93ccea0f5b6398f070676cdbf1034"
@@ -24,5 +24,5 @@
       "sha256": "0bdacb95df93177098c07b570662efa58ff126596afad42b2ff992ad1c4cd65c"
     }
   },
-  "sig": "2752d6b3047343aef9b3d88220cbb9e468e362c43a9f08f989c4965517ec82ea"
+  "sig": "8d2624ec6a088a2d02791aaddc6faf5e24dae411b640a8c3c9f2ba6b8b73dcbb"
 }

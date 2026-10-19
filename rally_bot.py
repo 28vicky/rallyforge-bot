@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.3.4"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.3.5"                       # shown in the window; the updater compares this with the published version
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
 def _user_dir():
@@ -107,6 +107,7 @@ DEFAULTS = {
     "ocr_parallel": 0,                      # text readings at the same time (0 = automatic: 2, or 1 in low-memory mode)
     "min_free_ram_mb": 0,                   # wait for this much free RAM before starting an emulator (0 = off)
     "ram_wait_seconds": 600,                # ...for at most this long
+    "keep_running_on_close": False,         # False = closing the window stops every bot and quits; True = bots keep running in the background
     "auto_start": False,                    # start every emulator by itself whenever the app opens
     "start_gap_seconds": 40,                # pause between starting one emulator and the next (spreads the load)
     "max_running_emulators": 0,             # run at most this many instances at once, queue the rest (0 = no limit)

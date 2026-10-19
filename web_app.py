@@ -1520,6 +1520,7 @@ class Api:
         return {}
 
     def hide_window(self, p):
+        self.c.hide_requested = True                  # "keep running in the background" was chosen on purpose
         self.c.event("close_window")
         return {}
 
@@ -1770,6 +1771,20 @@ def main():
         ctl.quit_event.wait()
         return
     shown = open_window(url, ctl)
+    if shown and not ctl.cfg.get("keep_running_on_close") and not getattr(ctl, "hide_requested", False):       # closing the window = stop everything and quit
+        try:
+            ctl.log("[*] Window closed - stopping all bots")
+        except Exception:
+            pass
+        ctl.shutdown()
+        t1 = time.time()
+        while ctl.n_running() and time.time() - t1 < 8:
+            time.sleep(0.3)
+        try:
+            STATE_FILE.unlink()
+        except OSError:
+            pass
+        os._exit(0)
     # window closed: keep the bots running quietly until they all stop (or the user quits from the window)
     t0 = time.time()
     while not ctl.quit_event.is_set():
