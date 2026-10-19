@@ -1120,6 +1120,8 @@ class Api:
     def crazy_eggs_set(self, p):
         scope = self._scope(p)
         c = rb.ce_conf(self._eff(scope))
+        if "min_gap" in p:
+            c["min_gap"] = max(0, min(int(float(p["min_gap"] or 0)), 600))
         if "min_hammers" in p:
             c["min_hammers"] = max(0, min(int(float(p["min_hammers"] or 0)), 10000000))
         if "lucky" in p:

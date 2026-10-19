@@ -898,6 +898,9 @@ PAGES.duties = function (fixed) {
           h("input", { type: "number", class: "short", min: 0, max: 99, value: e.daily || "", placeholder: "no limit", title: "Empty = no limit", onchange: (ev) => set({ egg: k, daily: ev.target.value }) }),
           h("button", { class: "btn" + (lucky ? " primary" : ""), title: "Use the daily Lucky Hammer on this egg", onclick: () => set({ lucky: lucky ? "" : k }) }, lucky ? "Lucky Hammer \u2713" : "Lucky Hammer"));
       }),
+      h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Visit at most every"),
+        h("input", { type: "number", class: "short", min: 0, max: 600, value: c.min_gap == null ? 30 : c.min_gap, onchange: (ev) => set({ min_gap: ev.target.value }) }),
+        h("span", { class: "hint" }, "minutes. The bot goes back after this long and smashes every ready egg together. 0 = as soon as an egg is ready. When all four eggs are activated it stops for the day.")),
       h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Hammers to keep"),
         h("input", { type: "number", class: "short", min: 0, value: c.min_hammers || "", placeholder: "0", onchange: (ev) => set({ min_hammers: ev.target.value }) }),
         h("span", { class: "hint" }, "never smash if it would leave fewer hammers than this"),

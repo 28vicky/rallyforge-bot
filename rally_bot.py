@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.16"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.17"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -5451,7 +5451,9 @@ def ce_conf(cfg):
     eggs = {k: {"on": True, "daily": 0} for k in CE_COSTS}
     for k, v in (c.get("eggs") or {}).items():
         eggs.setdefault(str(k), {"on": True, "daily": 0}).update(v or {})
-    return {"eggs": eggs, "lucky": str(c.get("lucky", "max") or ""), "min_hammers": int(c.get("min_hammers", 0) or 0)}
+    gap = c.get("min_gap")
+    return {"eggs": eggs, "lucky": str(c.get("lucky", "max") or ""), "min_hammers": int(c.get("min_hammers", 0) or 0),
+            "min_gap": 30 if gap in (None, "") else max(0, min(int(float(gap)), 600))}      # minutes between visits (0 = as soon as an egg is ready)
 
 
 def ce_row(serial):
@@ -5672,8 +5674,9 @@ def run_crazy_eggs(dev, cfg, log, stop):
         ce_save(serial, all_done_day=day, next_at=0)
         log("[+]  Crazy Eggs: all four eggs are activated")
     elif waits:
-        ce_save(serial, next_at=time.time() + min(waits) + 15)
-        log(f"[i]   Crazy Eggs: next egg ready in {min(waits) // 60} min")
+        gap = conf["min_gap"] * 60
+        ce_save(serial, next_at=time.time() + max(min(waits) + 15, gap))
+        log(f"[i]   Crazy Eggs: next egg ready in {min(waits) // 60} min" + (f"; next visit in {max(min(waits) + 15, gap) // 60} min (visit gap {conf['min_gap']} min)" if gap > min(waits) + 15 else ""))
     else:
         ce_save(serial, next_at=time.time() + 1800)
 

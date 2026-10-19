@@ -1,12 +1,12 @@
 {
-  "version": "2.4.16",
-  "notes": "Fix: Viking groups switched off before the update stay off.",
+  "version": "2.4.17",
+  "notes": "Crazy Eggs: visit gap setting (default 30 min) so eggs are smashed together.",
   "files": {
     "rally_bot.py": {
-      "sha256": "7147e10313c4579f93d45669bd3a875b246fb2913b181c6171950376ff3d1483"
+      "sha256": "cb73dd7fb448c0f2b54b68f9b2ba41766ac15ccb7459110f9ec0cd68b3e3e8ae"
     },
     "web_app.py": {
-      "sha256": "4262f00f8e5b061be6873b030fadd2dcd0b27444a9de4a65bd4f7f147ea634d8"
+      "sha256": "081cf18e293f8a37d37f4f04201db2c53b053ef8d1c163bcb06b9419e3c021d7"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "91274939a9302582fdf1815bfe5f4b7312717d60f3666d14c79e403bd1d73464"
     },
     "ui/changelog.js": {
-      "sha256": "b59286a56844542a4e396a37ecee4640c85737c838f1e0f970461e30b31bde93"
+      "sha256": "7a3826e210e68119cbb5971e398907d51f4151c1b80a950d6138ea80d02aec06"
     },
     "ui/dialogs.js": {
       "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
@@ -27,7 +27,7 @@
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "fdf573ad2563a0b3dc0b1e68055478e74c283ebc58f8abbb100eaded60cd33e5"
+      "sha256": "70f2d3a0bac5da20d4aaa9bad5beb594ac915880d78b341e0eb779c0eca67ea9"
     }
   },
   "monsters": {
@@ -114,5 +114,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "86db7a0f0e32b2e1b043afe8e6cf0b00719199e80432ae200b9c95d112bd7fa8"
+  "sig": "1c5d434d8fb88c23021a7df484531e183ca5a3f6441325a9c711b31021434d3a"
 }
