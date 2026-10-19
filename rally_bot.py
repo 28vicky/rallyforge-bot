@@ -4273,6 +4273,7 @@ def settle_game(dev, cfg, log, stop):
 
 
 
+KICKED = {}                       # serial -> time (epoch s) when the wait after being kicked ends (shown in the emulator list)
 TAKEBACK = {}                     # serial -> Event: set from the interface to end the wait after being kicked
 
 
@@ -4290,6 +4291,7 @@ def reclaim_if_kicked(dev, cfg, log, stop, screen):
     t_end = time.time() + mins * 60
     ev = TAKEBACK.setdefault(dev.serial, threading.Event())
     ev.clear()
+    KICKED[dev.serial] = t_end
     while time.time() < t_end and not stop.is_set() and not ev.is_set():
         left = max(0, int(t_end - time.time()))
         try:
@@ -4298,6 +4300,7 @@ def reclaim_if_kicked(dev, cfg, log, stop, screen):
         except Exception:
             pass
         ev.wait(2)
+    KICKED.pop(dev.serial, None)
     if stop.is_set():
         return True
     if ev.is_set():

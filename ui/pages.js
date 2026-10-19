@@ -445,10 +445,12 @@ function refreshInstanceControls() {
   const d = S.devStatus.find((x) => x.id === S.sel);
   if (d) {
     const G = { run: "\u25B6 ", pause: "\u275A\u275A ", stop: "\u25A0 ", error: "! ", idle: "\u25CB " };
-    const ns = d.state === "run" && d.no_stamina;
-    s.className = "state-pill st-" + (ns ? "pause" : d.state);
-    s.textContent = ns ? "\u26A0 NO STAMINA" + (d.joins ? `   |   joins ${d.joins}` : "") : (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
+    const kk = d.state === "run" && d.kicked_at;
+    const ns = d.state === "run" && d.no_stamina && !kk;
+    s.className = "state-pill st-" + ((ns || kk) ? "pause" : d.state);
+    s.textContent = kk ? "\u26A0 KICKED - game opened on another device" : ns ? "\u26A0 NO STAMINA" + (d.joins ? `   |   joins ${d.joins}` : "") : (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
     const w = $("#instWarn"); if (w) w.style.display = ns ? "" : "none";
+    if (kk) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at), "data-pre": "   |   taking it back in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
     if (d.state === "pause" && d.resume_at) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.resume_at), "data-pre": " - runs again in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
   }
   if (typeof paintRunState === "function") paintRunState();
