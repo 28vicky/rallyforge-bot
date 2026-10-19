@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.42"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.43"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -7354,10 +7354,23 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             nap(1.0, 1.5)
 
             if has_template("march_screen") and not wait_state("march", 3):
-                log("[!] March screen did not open (rally ended?) - skipping")
-                fail("March screen did not open (rally ended?)")
-                slower("The march screen did not open")
-                continue
+                try:                                           # one more try at once when the same green Join is still there (a tap that did not register)
+                    sh2 = dev.screenshot()
+                    again = [h2 for h2 in find_all(sh2, "join_button", cfg["threshold"], cfg["search_region"])
+                             if abs(h2[1] - hit[1]) <= 30 and not joined_button(sh2, h2)]
+                except Exception:
+                    again = []
+                if again:
+                    log("[i] The rally is still shown with Join - tapping it once more")
+                    tap_hit(dev, min(again, key=lambda h2: abs(h2[1] - hit[1])))
+                    nap(1.0, 1.5)
+                    if wait_state("march", 3):
+                        again = "ok"
+                if again != "ok":
+                    log("[!] March screen did not open (rally ended?) - skipping")
+                    fail("March screen did not open (rally ended?)")
+                    slower("The march screen did not open")
+                    continue
 
             # Take the next preset in the rotation. A preset that has no general (or does not march) is
             # skipped and the next preset is tried straight away, on the same march screen.

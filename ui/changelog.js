@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.43", date: "2026-10-20",
+    new: [],
+    fixed: ["About one rally in four did not open the march screen (a tap that did not register, or the list moved a little). The bot now looks again at once and, if the same green Join is still there, taps it a second time instead of waiting for the next pass over the list."] },
   { v: "2.4.42", date: "2026-10-20",
     new: [],
     fixed: ["A preset was passed over (and then every preset looked \u201cresting\u201d, so rallies were skipped) when the troop count was read while the march screen was still loading. The count is now read again twice before a preset is skipped.", "Using stamina items failed on some accounts (\u201cthe amount window did not open\u201d for every size). The window check is a little more forgiving, looks again after a moment, and Use is tapped once more before giving up."] },

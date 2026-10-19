@@ -1,9 +1,9 @@
 {
-  "version": "2.4.42",
-  "notes": "Troop count re-read before skipping a preset; more forgiving stamina window.",
+  "version": "2.4.43",
+  "notes": "Taps Join again at once when the march screen did not open.",
   "files": {
     "rally_bot.py": {
-      "sha256": "120af3ee8f2ea7827a180f8ed428b843416b13569e4d4244b00c6add0e293ad9"
+      "sha256": "e70ff6cff6515d9fb642223c707281e9054c039c260a3d15c08bef7ef3252d25"
     },
     "web_app.py": {
       "sha256": "16ff8e1cfdace8f50d055397c2ffbb81d5b3cc681041b5d984f0746636ec3c49"
@@ -18,7 +18,7 @@
       "sha256": "09a26609ec60e055867c0ae5b4ab7afafc36890832938e52c9248cfe523a6a1e"
     },
     "ui/changelog.js": {
-      "sha256": "7cd8dbe8f143c75d57cbcd23620cd65d3b3cf0114af2967b9e39e4319355b5e1"
+      "sha256": "7b9e04d2d645d8d31b07331c7f40758316b91f95bd672141e693a6291df3b343"
     },
     "ui/dialogs.js": {
       "sha256": "93b85f9748c2d4841661e449f9475108f64da23dc46165c5470327f2a38aebf0"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "3a390799ff101164c0bf7e8c155b7d143bcceb13953e2bcbcd8a64fd0942f484"
+  "sig": "63595601dac9d8564d8d682192107f28ba99e3debf1f0fc13d94eeea2c6c555e"
 }
