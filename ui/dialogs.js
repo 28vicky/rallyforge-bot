@@ -536,10 +536,10 @@ function whatsNewBody(list) {
   });
   return box;
 }
-function showWhatsNew(all) {
+function showWhatsNew(all, seenOverride) {
   const log = (window.CHANGELOG || []).slice();
   if (!log.length) return;
-  const seen = (S.cfg || {}).last_seen_version || "";
+  const seen = seenOverride !== undefined ? seenOverride : ((S.cfg || {}).last_seen_version || "");
   const list = all ? log.slice(0, 8) : (seen ? log.filter((e) => vnewer(e.v, seen) && !vnewer(e.v, S.version)).slice(0, 5) : log.slice(0, 1));
   if (!list.length) return;
   modal({ title: "What's new in RallyForge Bot", body: whatsNewBody(list), wide: true, buttons: [{ label: "OK", cls: "pri" }] });
@@ -548,7 +548,7 @@ function checkWhatsNew() {
   try {
     const seen = (S.cfg || {}).last_seen_version || "";
     if (seen === S.version) return;
-    if (!S.firstRun) setTimeout(() => showWhatsNew(false), 1200);
+    if (!S.firstRun) setTimeout(() => showWhatsNew(false, seen), 1200);
     S.cfg.last_seen_version = S.version;
     api("save", { cfg: { last_seen_version: S.version } }).catch(() => {});
   } catch (e) {}

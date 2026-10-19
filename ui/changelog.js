@@ -1,5 +1,6 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.6", date: "2026-10-19", new: [], fixed: ["The What\u2019s new window now really appears after an update."] },
   { v: "2.4.5", date: "2026-10-19",
     new: ["'What's new' window (this one) after every update, and a 'What's new' button on the Updates tab."],
     fixed: [] },
