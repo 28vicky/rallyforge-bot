@@ -72,6 +72,10 @@ class Controller:
 
     def __init__(self):
         self.lock = threading.RLock()
+        try:
+            rb.backup_before_new_version()                     # a copy of your settings before this version changes anything
+        except Exception:
+            pass
         self.cfg = rb.load_config()
         self.lic = rf_license.AccountLicense(rb.USER, rb.RES)
         self.lic.set_source(self.cfg.get("update_url"))
@@ -366,14 +370,19 @@ class Controller:
         """Merge what the interface sends into the saved settings (checked first), keep it for the bots."""
         with self.lock:
             cfg = rb.load_config()
+            disk_pd = dict(cfg.get("per_device") or {})
             cfg.update(posted or {})
+            # an emulator's own settings are never lost: what the page did not send stays as saved on disk
+            pd = dict(disk_pd)
+            pd.update((posted or {}).get("per_device") or {})
+            cfg["per_device"] = pd
             if devices is not None:
                 self.set_devices(devices)
             ids = [d["id"] for d in self.devices]
             cfg["devices"] = ids
             cfg["device_id"] = ids[0] if ids else cfg.get("device_id", "")
             cfg["device_names"] = {d["id"]: d["name"] for d in self.devices if d["name"]}
-            cfg["per_device"] = {s: ov for s, ov in (cfg.get("per_device") or {}).items() if s in ids and ov}
+            cfg["per_device"] = {s: ov for s, ov in (cfg.get("per_device") or {}).items() if ov}   # kept for removed emulators too: add one back and its settings return
             cfg["removed_devices"] = list(self.removed)       # kept by the app, not by the page
             self.fix_general_tabs(cfg)
             self.sync_presets(cfg)
@@ -557,6 +566,9 @@ class Controller:
                 if now - last["tg"] > 30:
                     last["tg"] = now
                     self._tg_tick()
+                if now - last.get("backup", 0) > 24 * 3600 and now - t0 > 120:    # one settings backup a day
+                    last["backup"] = now
+                    rb.auto_backup("daily")
                 if now - last.get("clean", 0) > 6 * 3600 and now - t0 > 30:     # keep the data folder small
                     last["clean"] = now
                     rb.housekeeping(lambda m: self.log(m))
@@ -650,30 +662,38 @@ class Controller:
             found = [f for f in found if f not in dupes]
             skipped = [f for f in found if f in self.removed and f not in listed]
             new = [f for f in found if f not in listed and f not in skipped]
-            msg = f"[+] Found {len(found)}: {', '.join(found)}"
-            self.log(msg)
+            self.log(f"[+] Found {len(found)}: {', '.join(found)}")
             if dupes:
-                self.log(f"[i] Same emulator under two names, kept one: {', '.join(dupes)} not added")
-            if skipped:
-                self.log(f"[i] Not added because you removed them earlier: {', '.join(skipped)} (type the ID in to add one back)")
+                self.log(f"[i] Same emulator under two names, kept one: {', '.join(dupes)}")
+            # nothing is added by itself: the found emulators are offered with an Add button each
+            self.available = [{"id": f, "name": names.get(f, ""), "removed": f in skipped} for f in new + skipped]
             by_id = {d["id"]: d for d in self.devices}
-            if new and len(self.devices) == 1 and not self.devices[0]["id"]:
-                self.devices = []                             # replace the empty first row
-                by_id = {}
-            for dev in new:
-                row = {"id": dev, "name": ""}
-                self.devices.append(row)
-                by_id[dev] = row
-            for dev in found:
+            changed = False
+            for dev in found:                                 # emulators already in the list: fill in a missing name
                 if dev in by_id and not by_id[dev]["name"] and names.get(dev):
                     by_id[dev]["name"] = names[dev]
-            self.sync_devices()
-        if new:
+                    changed = True
+            if changed:
+                self.sync_devices()
+        if changed:
             self._persist_devices()
-        lim = self.lic.limit()
-        if lim and len(self.devices) > lim:
-            self.log(f"[i] {len(self.devices)} emulators in the list - your plan runs {lim} at the same time, the others wait their turn.")
-        return {"found": found, "new": new, "skipped": skipped, "dupes": dupes, "devices": self.devices}
+        if self.available:
+            self.log(f"[i] {len(self.available)} emulator(s) not in your list yet - press Add next to the ones you want")
+        return {"found": found, "available": self.available, "dupes": dupes, "devices": self.devices}
+
+    def add_found(self, ids):
+        """Add emulators from the 'Found emulators' list (one click each, or all)."""
+        with self.lock:
+            rows = [d for d in self.devices if d["id"]]
+            have = {d["id"] for d in rows}
+            names = {a["id"]: a["name"] for a in getattr(self, "available", [])}
+            for i in ids:
+                if i and i not in have:
+                    rows.append({"id": i, "name": names.get(i, "")})
+                    have.add(i)
+            self.available = [a for a in getattr(self, "available", []) if a["id"] not in have]
+        self.set_devices(rows)                                # saves at once and takes them off the removed list
+        return self.devices
 
     # ------------------------------------------------------------------ screenshots
     def keep_shot(self, img):
@@ -1460,6 +1480,11 @@ class Api:
 
     def detect(self, p):
         return self.c.detect()
+
+    def add_found(self, p):
+        ids = [str(x) for x in (p.get("ids") or [])]
+        devs = self.c.add_found(ids)
+        return {"devices": devs, "available": getattr(self.c, "available", [])}
 
     def restore_removed(self, p):
         n = self.c.restore_removed()

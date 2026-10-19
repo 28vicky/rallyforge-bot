@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.34"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.35"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -3895,6 +3895,54 @@ def load_profile(name):
     cfg = dict(DEFAULTS)
     cfg.update(json.loads((profiles_dir() / f"{name}.json").read_text(encoding="utf-8")))
     return migrate_cfg(cfg)
+
+
+AUTO_BACKUP_PREFIX = "Auto backup "
+
+
+def auto_backup(reason, log=None, keep=10):
+    """Save the settings exactly as they are on disk as a profile 'Auto backup <date> - <reason>' (Profiles > Load restores
+    it), plus a copy of the generals list. Only the newest `keep` auto backups are kept; your own profiles are never touched."""
+    try:
+        if not CONFIG.exists():
+            return None
+        raw = json.loads(CONFIG.read_text())
+        name = save_profile(f"{AUTO_BACKUP_PREFIX}{time.strftime('%Y-%m-%d %H-%M')} - {reason}", raw)
+        bdir = USER / "backups"
+        bdir.mkdir(exist_ok=True)
+        gm = USER / "generals" / "generals.json"
+        if gm.exists():
+            shutil.copy2(gm, bdir / f"generals_{time.strftime('%Y%m%d_%H%M')}.json")
+        for pattern, d in ((f"{AUTO_BACKUP_PREFIX}*.json", profiles_dir()), ("generals_*.json", bdir)):
+            old = sorted(d.glob(pattern), key=lambda f: f.stat().st_mtime, reverse=True)[keep:]
+            for f in old:
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+        if log:
+            log(f"[i] Settings backed up as profile '{name}' (Profiles > Load to restore)")
+        return name
+    except Exception as e:
+        if log:
+            log(f"[!] Could not back up the settings: {e}")
+        return None
+
+
+def backup_before_new_version(log=None):
+    """The first time a new version starts, back up the settings before it changes anything."""
+    marker = USER / "backups" / "last_version.txt"
+    try:
+        last = marker.read_text().strip()
+    except OSError:
+        last = ""
+    if last != VERSION:
+        auto_backup(f"before {VERSION}", log)
+        try:
+            marker.parent.mkdir(exist_ok=True)
+            marker.write_text(VERSION)
+        except OSError:
+            pass
 
 
 def delete_profile(name):

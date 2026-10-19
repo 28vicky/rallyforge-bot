@@ -447,9 +447,10 @@ async function detectDevices() {
   const j = await act(api("detect"));
   if (!j) return;
   S.devices = j.devices;
+  S.avail = j.available || [];
   if (j.found === null) toast("ADB not found. Set the ADB path in Settings.", "error");
   else if (!j.found.length) toast("No emulators found. Start them and enable ADB.", "error");
-  else toast(`Found ${j.found.length}` + (j.new && j.new.length ? `, added ${j.new.length} new` : ", nothing new to add") + (j.skipped && j.skipped.length ? `. ${j.skipped.length} you removed earlier stay hidden.` : "."), "ok");
+  else toast(S.avail.length ? `Found ${j.found.length} emulator(s). ${S.avail.length} are not in your list yet - press Add next to the ones you want.` : `Found ${j.found.length} emulator(s) - all of them are already in your list.`, "ok");
   if (S.sel === "control" && S.tab === "dashboard") rerender();
 }
 

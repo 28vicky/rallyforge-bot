@@ -1,12 +1,12 @@
 {
-  "version": "2.4.34",
-  "notes": "Monster power and Viking levels read correctly; cut-off cards scrolled into view; power remembered per rally; keeps the data folder small",
+  "version": "2.4.35",
+  "notes": "Detect shows found emulators with an Add button; settings are backed up before every new version and per-emulator settings are never lost",
   "files": {
     "rally_bot.py": {
-      "sha256": "a576f1e4eb62a62fb4c0ae742778eaa9a657784ba16e9269909782d227e893df"
+      "sha256": "eec8a18d5afa55e45424676136cc4f95fdd079ad068aba2c429c08337e84ccce"
     },
     "web_app.py": {
-      "sha256": "0246355484083e58de355b2b7cca35666483a802cc731e4e847b8573443a627f"
+      "sha256": "e344cf5ab91c1527942d3a51d5f11373afd0becdfe062a4abeecd5f35c53b10c"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,16 +18,16 @@
       "sha256": "0e5bb98812f4b12562b8ca9438ba49e8e1765495d1015915ae43d10da510b687"
     },
     "ui/changelog.js": {
-      "sha256": "a9999274cb1fc6765fc7139c8f1f244c52b1ec3638d016269042ba9bde736d41"
+      "sha256": "f94d64edc0e2c891505923d9fa567b3890ba249f6714ce68c916a5e363bb1dd0"
     },
     "ui/dialogs.js": {
-      "sha256": "ad85eb3b236e6554bce7cbf428f8d73f062f3c6ca244c74e8cfa3b33b7962709"
+      "sha256": "e094cbaeedb72d17ded8c04c298720af1f5c75340e845b99eeed03d7d01310f2"
     },
     "ui/index.html": {
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "106c8ef3f6bcdcc63e266b1ce4469dc4c0512a929dcf674c088af003eda9ac67"
+      "sha256": "9ca74097da0fd15d5b0b81d346201f4aacba3b6a1e1fb3e17961cbf76e0be55b"
     }
   },
   "mode": "ask",
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "9b97f0e9fd8e236e2d7ddae253789a867df6b7938bcba4831154871ed3e1c590"
+  "sig": "a69073e187e4ca193cec4cd8d4011aba5351b5a3c8e90a1da60d14922871d7ca"
 }

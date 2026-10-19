@@ -114,13 +114,26 @@ PAGES.dashboard = function () {
     btn("Clear empty rows", () => { S.devices = S.devices.filter((d) => d.id); if (!S.devices.length) S.devices.push({ id: "", name: "" }); draw(); applyDevs(); }),
     btn("Update emulator list", applyDevs),
     btn("Show removed emulators again", async () => { if (!(await confirmBox("Removed emulators", "Emulators you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) { toast(j.restored ? `${j.restored} emulator(s) can be detected again. Press Detect emulators.` : "No emulators were removed.", "ok"); } }, "sm")),
-    note("Any number of emulators can be in this list. Drag them in the left list to change the order. Emulators you remove stay removed, even after a restart."));
+    note("Any number of emulators can be in this list. Detect shows the emulators it finds - you add the ones you want. Drag them in the left list to change the order. Emulators you remove stay removed, even after a restart."));
+  // ---- emulators found by Detect but not added: one click each (nothing is added by itself)
+  const addFound = async (ids) => {
+    const j = await act(api("add_found", { ids }));
+    if (j) { S.devices = j.devices; S.avail = j.available; toast(ids.length > 1 ? `${ids.length} emulators added.` : "Emulator added.", "ok"); rerender(); poll1(); }
+  };
+  const avail = (S.avail || []).filter((a) => !S.devices.some((d) => d.id === a.id));
+  const found = avail.length ? panel("Found emulators (not in your list yet)",
+    note("Detect only shows what it found. Press Add for each emulator you want the bot to use."),
+    ...avail.map((a) => h("div", { class: "row", style: { marginBottom: "6px", gap: "14px" } },
+      h("span", { style: { minWidth: "170px", fontFamily: "var(--mono)" } }, a.id),
+      h("span", { class: "mute", style: { minWidth: "140px" } }, (a.name || "") + (a.removed ? "  (removed earlier)" : "")),
+      btn("Add", () => addFound([a.id]), "sm pri"))),
+    avail.length > 1 ? h("div", { class: "row", style: { marginTop: "8px" } }, btn("Add all " + avail.length, () => addFound(avail.map((a) => a.id)), "sm")) : null) : null;
   const ctl = h("div", { class: "row", style: { marginBottom: "16px" } },
     btn("Start all", () => collectAndRun("start", { serial: "all" }), "pri"), btn("Pause all", () => act(api("pause", { serial: "all" }))),
     btn("Resume all", () => act(api("resume"))), btn("Stop all", () => act(api("stop", { serial: "all" })), "bad"),
     btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
   const log = panel(null, activityBox(null, "Activity - all emulators"));
-  return h("div", {}, dev, ctl, log);
+  return h("div", {}, dev, found, ctl, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
