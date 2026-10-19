@@ -1,12 +1,12 @@
 {
-  "version": "2.4.33",
-  "notes": "Listed generals work again (Select button only, never the portrait; march with the preset's general if needed). Updates now show in the status bar - click to install and restart.",
+  "version": "2.4.34",
+  "notes": "Monster power and Viking levels read correctly; cut-off cards scrolled into view; power remembered per rally; keeps the data folder small",
   "files": {
     "rally_bot.py": {
-      "sha256": "8fbd833306afc9892d74d9198ca4c8ffec55c88d475559d3a86e1801964ba1cb"
+      "sha256": "a576f1e4eb62a62fb4c0ae742778eaa9a657784ba16e9269909782d227e893df"
     },
     "web_app.py": {
-      "sha256": "0166fd44c87ea45cf0dbe7bb23c123f980faa9690136a9c38941b77dc1b27787"
+      "sha256": "0246355484083e58de355b2b7cca35666483a802cc731e4e847b8573443a627f"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "0e5bb98812f4b12562b8ca9438ba49e8e1765495d1015915ae43d10da510b687"
     },
     "ui/changelog.js": {
-      "sha256": "b75babc439d45eb4d939f88c4c23f6cf6bd4edd98d5b75845bc0dde11ee5b8cf"
+      "sha256": "a9999274cb1fc6765fc7139c8f1f244c52b1ec3638d016269042ba9bde736d41"
     },
     "ui/dialogs.js": {
       "sha256": "ad85eb3b236e6554bce7cbf428f8d73f062f3c6ca244c74e8cfa3b33b7962709"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "79a2c5a7f26a4a9d3c23fabad13a6d6f44018f5aab5a64c6e6a1bec2f635fa88"
+  "sig": "9b97f0e9fd8e236e2d7ddae253789a867df6b7938bcba4831154871ed3e1c590"
 }

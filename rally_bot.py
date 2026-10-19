@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.33"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.34"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -1216,7 +1216,26 @@ def read_monster_power(screen, hit, hard=False):
     if crop.size == 0:
         return None, ""
     raw = ""
-    for scale in ((3.0, 2.0, 4.0) if hard else (3.0,)):          # quick read first; the hard read also tries other sizes
+    # 1) just the number: the text line only (no dark band under it), right of the crossed-swords icon, digits + K/M/B
+    band = crop[0:28, 55:160] if crop.shape[0] >= 20 and crop.shape[1] >= 120 else None
+    if band is not None and band.size:
+        g = cv2.resize(cv2.cvtColor(band, cv2.COLOR_BGR2GRAY), None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+        for thr in ((150, "otsu", 175) if hard else (150,)):
+            if thr == "otsu":
+                _, b = cv2.threshold(g, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+            else:
+                _, b = cv2.threshold(g, thr, 255, cv2.THRESH_BINARY_INV)
+            b = cv2.copyMakeBorder(b, 12, 12, 12, 12, cv2.BORDER_CONSTANT, value=255)
+            try:
+                with _ocr_gate:
+                    txt = pytesseract.image_to_string(b, config="--psm 7 -c tessedit_char_whitelist=0123456789.KMB").strip()
+            except Exception:
+                txt = ""
+            v = _power_num(txt)
+            if v:
+                return v, txt
+            raw = raw or txt
+    for scale in ((3.0, 2.0, 4.0) if hard else (3.0,)):          # older way: whole box, all characters
         for bright in (True, False):
             try:
                 lines = ocr_lines(crop, scale=scale, bright=bright)
@@ -1258,6 +1277,18 @@ def level_from_power(name, power):
 def viking_resolve(power, level=None):
     """A rally card says 'Lv.N Viking' and shows a power. The same level has a different power in each set (Easy / Normal /
     Hard / Hell), so (level, power) names the set. -> ('Viking (Hell)', 3) or (None, level)."""
+    import math
+    if level is not None and power:                       # the card's own level is right: the power only has to tell the SET
+        near = None                                      # (Easy / Normal / Hard / Hell differ 2-3x), so a rough match is enough
+        for name, lv in VIKING_SETS.items():
+            v = next((_power_num(p) for l, p in lv if l == level), None)
+            if not v:
+                continue
+            d = abs(math.log(power / v))
+            if near is None or d < near[0]:
+                near = (d, name)
+        if near and near[0] < math.log(1.5):
+            return near[1], level
     best = None
     for name, lv in VIKING_SETS.items():
         for l, p in lv:
@@ -1765,6 +1796,41 @@ def save_debug(serial, screen, limit=40):
             pass
     safe = re.sub(r"\W", "_", serial)
     cv2.imwrite(str(d / f"{safe}_{int(time.time())}.png"), screen)
+
+
+def housekeeping(log=None):
+    """Keep the data folder small on PCs that run for weeks:
+    debug pictures: only the newest 60 and nothing older than 3 days; old program versions: only the current and the
+    previous one (also after a hand-made install); the log files clean themselves (5 days)."""
+    freed, n = 0, 0
+    d = USER / "debug"
+    if d.exists():
+        files = sorted((f for f in d.iterdir() if f.is_file()), key=lambda f: f.stat().st_mtime, reverse=True)
+        cutoff = time.time() - 3 * 86400
+        for i, f in enumerate(files):
+            try:
+                st = f.stat()
+                if i >= 60 or st.st_mtime < cutoff:
+                    freed += st.st_size
+                    f.unlink()
+                    n += 1
+            except OSError:
+                pass
+    try:
+        cur = (APP_DIR / "current.txt").read_text().strip() if (APP_DIR / "current.txt").exists() else ""
+        prev = (APP_DIR / "previous.txt").read_text().strip() if (APP_DIR / "previous.txt").exists() else ""
+        for v in APP_DIR.glob("v*"):
+            if v.is_dir() and v.name not in (cur, prev):
+                freed += sum(f.stat().st_size for f in v.rglob("*") if f.is_file())
+                shutil.rmtree(v, ignore_errors=True)
+                n += 1
+        for t in APP_DIR.glob(".tmp-*"):                    # half-finished downloads
+            shutil.rmtree(t, ignore_errors=True)
+    except Exception:
+        pass
+    if log and n:
+        log(f"[i] Cleaned up {n} old file(s)/version(s), {freed / 1048576:.0f} MB freed")
+    return freed
 
 
 # ------------------------------------------------------------------ helpers
@@ -2999,7 +3065,13 @@ def choose_general(dev, name, cfg, log, stop, role="main"):
     pressed = False
     if view == "list" and has_template("select_button"):  # list rows have their own Select button; the portrait opens the info page
         y0 = max(int(hit[1]) - 80, 0)
-        sb = find(dev.screenshot(), "select_button", th, (0, y0, 540, 160))
+        shot0 = dev.screenshot()
+        sb = find(shot0, "select_button", th, (0, y0, 540, 160)) or find(shot0, "select_button", 0.7, (0, y0, 540, 160))
+        if not sb:
+            try:                                           # keep the screen so the list-view Select button can be fixed
+                save_debug("general_list_" + re.sub(r"\W", "_", name), shot0)
+            except Exception:
+                pass
         if sb:
             tap_hit(dev, sb)
             pressed = True
@@ -6478,7 +6550,30 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     def mtxt(march):
         return f", march {fmt(march)}" if cfg.get("march_timer_source") else ""
 
-    def find_target(screen):
+    power_mem = []                       # [(monster, rally end time, power)]: a rally keeps its power, read it once
+    nudge_t = [0.0]
+
+    def power_of(screen, hit, mon, hard):
+        """The monster power of this rally: remembered from an earlier scan of the same rally (same monster, same end
+        time), else read now. -> (power | None, raw text)."""
+        now = time.time()
+        power_mem[:] = [m for m in power_mem if m[1] > now - 30]
+        left = read_seconds(screen, hit, cfg["rally_timer_source"])
+        end = now + left if left is not None else None
+        if end is not None:
+            for m, e, pw in power_mem:
+                if m == mon and abs(e - end) <= 6:
+                    return pw, "remembered"
+        pw, raw = read_monster_power(screen, hit, hard)
+        if pw and end is not None:
+            power_mem.append((mon, end, pw))
+        return pw, raw
+
+    def cut_off(hit):
+        """True when the power box of this card is hidden under the top bar of the list."""
+        return int(hit[1]) - 258 < 125
+
+    def find_target(screen, nudged=False):
         hits = find_all(screen, "join_button", cfg["threshold"], cfg["search_region"])
         hits = sorted(hits, key=lambda h0: -h0[1])                    # bottom of the list first: those rallies have the least time left
         deferred = []                                                 # rallies whose power could not be read at the first try
@@ -6514,7 +6609,13 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 if mon == "Viking":                                   # which set is it? level on the card + power decide
                     nx, ny = int(hit[0] - 21), int(hit[1] - 113)
                     st = screen[max(ny - 18, 0):ny + 18, max(nx - 150, 0):nx + 150]
-                    pw, praw = read_monster_power(screen, hit, hard)
+                    pw, praw = power_of(screen, hit, "Viking", hard)
+                    if pw is None and cut_off(hit) and not nudged and time.time() - nudge_t[0] > 4:
+                        nudge_t[0] = time.time()                       # unreadable because the card is cut off at the top:
+                        say(f"[{mon}] card is cut off at the top - scrolling it into view")      # scroll it into view, look again
+                        dev.swipe(270, 380, 270, 560, 400)
+                        nap(0.7, 1.0)
+                        return find_target(dev.screenshot(), nudged=True)
                     lv0 = read_monster_level(st) if st.size else None
                     vname, vlv = viking_resolve(pw, lv0)
                     if vname is None and lv0 is not None:
@@ -6536,7 +6637,13 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 elif monster_needs_level(mon, cfg):
                     nx, ny = int(hit[0] - 21), int(hit[1] - 113)
                     st = screen[max(ny - 18, 0):ny + 18, max(nx - 150, 0):nx + 150]
-                    pw, praw = read_monster_power(screen, hit, hard)
+                    pw, praw = power_of(screen, hit, mon, hard)
+                    if pw is None and cut_off(hit) and not nudged and time.time() - nudge_t[0] > 4:
+                        nudge_t[0] = time.time()                       # unreadable because the card is cut off at the top:
+                        say(f"[{mon}] card is cut off at the top - scrolling it into view")      # scroll it into view, look again
+                        dev.swipe(270, 380, 270, 560, 400)
+                        nap(0.7, 1.0)
+                        return find_target(dev.screenshot(), nudged=True)
                     mlv = level_from_power(mon, pw) if pw else None
                     if mlv is None and st.size:
                         mlv = read_monster_level(st)

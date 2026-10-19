@@ -557,6 +557,9 @@ class Controller:
                 if now - last["tg"] > 30:
                     last["tg"] = now
                     self._tg_tick()
+                if now - last.get("clean", 0) > 6 * 3600 and now - t0 > 30:     # keep the data folder small
+                    last["clean"] = now
+                    rb.housekeeping(lambda m: self.log(m))
                 if now - last["upd"] > 1800 or (last["upd"] == 0 and now - t0 > 12):
                     last["upd"] = now
                     if self.cfg.get("update_mode") != "off" and ((self.cfg.get("update_url") or "").strip() or rb.DEFAULT_UPDATE_URL):
