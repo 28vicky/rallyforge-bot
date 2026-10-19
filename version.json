@@ -1,9 +1,9 @@
 {
-  "version": "2.4.13",
-  "notes": "Fix: error in the account check (NameError user). Login no longer reappears when saving; updates work with a blank address.",
+  "version": "2.4.14",
+  "notes": "Vikings in four groups (Easy/Normal/Hard/Hell) with level and power.",
   "files": {
     "rally_bot.py": {
-      "sha256": "4a36ef9d16e864f6d9f522f58445ad9959b159adbafed6c0f7721b488f8ca120"
+      "sha256": "5875264491f0e81a09a1d216faf46a1cef3c1d8bb2cac414ee9a470f93542dbc"
     },
     "web_app.py": {
       "sha256": "e68c6b1f7b4f5606ee038dfb9813b6eff3fe92529fab86a76923200abaf3bef9"
@@ -18,7 +18,7 @@
       "sha256": "91274939a9302582fdf1815bfe5f4b7312717d60f3666d14c79e403bd1d73464"
     },
     "ui/changelog.js": {
-      "sha256": "a81b2ab629d3fbbca0f699b9d34431a8459af1e11a28b50ed7686e162eefd585"
+      "sha256": "afb98fd9d534b7666c399e6e6bb4e3a8064389b5b0bebd87cc1dd6afddc636c3"
     },
     "ui/dialogs.js": {
       "sha256": "aa72de251564628d7ec7f8f40d689af0c64704283109e99be1adfc081377a928"
@@ -44,5 +44,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "4827a0217132434c297226a9bdf571da58974b27520af8e292b1ad35567ab4ae"
+  "sig": "434f8bfa6f1c4174a8c39dafcf6eba48988c77f2995aa8f4675a6552a241e04e"
 }
