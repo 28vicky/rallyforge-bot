@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.32", date: "2026-10-19",
+    new: [],
+    fixed: ["March time is no longer read: the game does not show it on the rally list or on the march screen, so every rally showed \u201cmarch ?\u201d and cost a text read for nothing. Scanning is a little faster. If a rally leader is far away, raise \u201cJoin if spare time >=\u201d.", "Epic Hydra and Mythical Hydra count as Hydra, so the Hydra settings and levels apply to them."] },
   { v: "2.4.31", date: "2026-10-19",
     new: [],
     fixed: ["A Listed preset whose general could not be set no longer drops the whole rally: if the game preset already holds a general the bot marches with it, if it is empty the next preset is tried (or it marches anyway when \u201cIf choosing a general fails\u201d is set to march). Before, one missing general meant that emulator never joined.", "Listed generals without a saved picture (e.g. Cleopatra) are looked for by name instead of being refused.", "In \u201cStart from first\u201d mode a preset skipped for lack of time is no longer tried again and again on the same rally: the next preset is tried.", "A rally given up because the presets need more time than is left is not picked again a few seconds later.", "Quiet rally list: if tapping the Event War tab does not prove the game is alive, the bot also presses Back and checks the screen changes. Only when the game reacts to neither is Evony (or the emulator) restarted."] },

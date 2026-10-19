@@ -1,9 +1,9 @@
 {
-  "version": "2.4.31",
-  "notes": "Listed preset failures march with the preset's general instead of dropping the rally; generals found by name; quiet-list check uses Back too",
+  "version": "2.4.32",
+  "notes": "No more march time reading (the game does not show it); Epic and Mythical Hydra count as Hydra",
   "files": {
     "rally_bot.py": {
-      "sha256": "82c05b7efffff2089ee87a3e426820d5db41a5680002f367c72e6d8df50e1547"
+      "sha256": "7976093dbdae90335c6996134781b1026a1f7fe3bb99de531376aff0d14999ec"
     },
     "web_app.py": {
       "sha256": "99a5bdb712a46c5d48e5113dd87129c9985c60b4e3a3cf98830fad4be3d32564"
@@ -18,7 +18,7 @@
       "sha256": "d7296d0d1abb4506ed9c341e1fe28657e444ab7e330b4d757b257bb9d2cde380"
     },
     "ui/changelog.js": {
-      "sha256": "92544d7494fcdf7c399dda125aa944bcc3034a06b64d3564970a570de84f84d9"
+      "sha256": "f271f9a03a476f03a99f6a89904fffdaa0247e5f7dea1896008d1c7c73828f13"
     },
     "ui/dialogs.js": {
       "sha256": "ad85eb3b236e6554bce7cbf428f8d73f062f3c6ca244c74e8cfa3b33b7962709"
@@ -27,7 +27,7 @@
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "4c8c7dd9d5965cdd94d87e0eaa6f93ee0198207c1375bf1e723717a3dff8a55f"
+      "sha256": "106c8ef3f6bcdcc63e266b1ce4469dc4c0512a929dcf674c088af003eda9ac67"
     }
   },
   "catalog": {
@@ -132,5 +132,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "f60a4da4356fc0b570867e40b3cad355be82cbfb11dc64cc7214786caa833f8f"
+  "sig": "3e90a64f8b17288478e0f63663385869d57c3dcc9b2734d7298101388ecfd08a"
 }

@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.31"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.32"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -129,7 +129,7 @@ DEFAULTS = {
     "max_joins": 0,                      # per device, 0 = unlimited
     # timing: read the RALLY countdown and YOUR march travel time, join only if there is enough spare time
     "rally_timer_source": "progress_bar",   # where the rally countdown is read
-    "march_timer_source": "join_button",    # where your march travel time is read ("" = ignore it)
+    "march_timer_source": "",               # the game shows no march time on the rally list or the march screen: not read ("Spare time" covers it)
     "safety_margin": 4,                     # join only if rally_left - march_time >= this many seconds
     "max_rally_seconds": 0,                 # skip rallies with MORE than this left (0 = no limit)
     "log_timers": True,                     # log what was read for every Join button
@@ -367,6 +367,9 @@ def migrate_cfg(cfg):
                     d.setdefault("Hydra", v)
     except Exception:
         pass
+    for box in [cfg] + [v for v in (cfg.get("per_device") or {}).values() if isinstance(v, dict)]:
+        if box.get("march_timer_source") == "join_button":    # nothing is there to read (always 'march ?'); 'Spare time' covers the march
+            box["march_timer_source"] = ""
     if cfg.get("bad_preset_seconds") == 120:             # the old default was far too long for a 5-minute rally
         cfg["bad_preset_seconds"] = 20
     return cfg
@@ -898,6 +901,8 @@ def _base_monster(stem):
     """'Kraken #2' (another look of the same monster) counts as 'Kraken'."""
     n = re.sub(r"\s#\d+$", "", stem)
     n = {"Bayar Knight": "Knight Bayard", "Bayard Knight": "Knight Bayard"}.get(n, n)
+    if n in ("Epic Hydra", "Mythical Hydra"):                                   # the two extra Hydra names in the rally list
+        return "Hydra"
     m = re.fullmatch(r"(?:Junior|Medium|Senior|Legendary)\s+(.+)", n)       # 'Senior Hydra' is a level of 'Hydra'
     if m:
         rest = {"Bayar Knight": "Knight Bayard", "Bayard Knight": "Knight Bayard", "Knight Bayard": "Knight Bayard", "Bayar": "Knight Bayard"}.get(m.group(1), m.group(1))
@@ -1051,7 +1056,7 @@ def read_monster_label(strip):
             lines = []
         for text, _ in lines:
             t = re.sub(r"[^A-Za-z ]", " ", text)
-            t = re.sub(r"\b(Legendary|Epic|Rare|Lv|Level)\b", " ", t, flags=re.I)
+            t = re.sub(r"\b(Legendary|Epic|Rare|Mythical|Lv|Level)\b", " ", t, flags=re.I)
             t = " ".join(t.split())
             if len(t) > len(best_raw):
                 best_raw = t
@@ -6452,6 +6457,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 mlv = None
         return f"{mon} {mlv}" if mlv else mon
 
+    def mtxt(march):
+        return f", march {fmt(march)}" if cfg.get("march_timer_source") else ""
+
     def find_target(screen):
         hits = find_all(screen, "join_button", cfg["threshold"], cfg["search_region"])
         hits = sorted(hits, key=lambda h0: -h0[1])                    # bottom of the list first: those rallies have the least time left
@@ -6549,10 +6557,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     else "every preset for this monster is resting"
                 act_skip(level_name(screen, hit, mon, mlv), why_b, rally, march)
                 if cfg["log_timers"]:
-                    say(f"{label}rally {fmt(rally)}, march {fmt(march)} -> skip ({why_b})")
+                    say(f"{label}rally {fmt(rally)}{mtxt(march)} -> skip ({why_b})")
                 continue
             if cfg["log_timers"]:
-                say(f"{label}rally {fmt(rally)}, march {fmt(march)}, bot needs ~{need:.0f}s -> "
+                say(f"{label}rally {fmt(rally)}{mtxt(march)}, bot needs ~{need:.0f}s -> "
                     f"{'JOIN' if ok else 'skip'} ({why})")
             if not ok:
                 act_skip(level_name(screen, hit, mon, mlv), why, rally, march)

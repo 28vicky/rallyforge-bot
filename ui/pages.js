@@ -192,7 +192,7 @@ const FIELD_HELP = {
   cpu_level: "1 = fastest but heaviest on the PC, 4 = slowest and lightest.",
   screenshot_mode: "auto is fastest; png is a slower fallback if screenshots look wrong.",
   rally_timer_source: "Where the bot reads the rally countdown from.",
-  march_timer_source: "Where the bot reads the march time from. none = ignore the march time.",
+  march_timer_source: "Leave on none: the game shows no march time on the rally list. If a rally leader is far away, raise 'Join if spare time >=' instead.",
   poll_seconds: "Pause between scans of the rally list, as min,max seconds (e.g. 1,2).",
   cooldown_after_join: "Pause after a successful join, as min,max seconds (e.g. 4,7).",
   bad_preset_seconds: "A preset that failed is left out for this many seconds.",
