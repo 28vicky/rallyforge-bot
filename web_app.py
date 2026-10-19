@@ -666,7 +666,13 @@ class Controller:
             if dupes:
                 self.log(f"[i] Same emulator under two names, kept one: {', '.join(dupes)}")
             # nothing is added by itself: the found emulators are offered with an Add button each
-            self.available = [{"id": f, "name": names.get(f, ""), "removed": f in skipped} for f in new + skipped]
+            def _label(f):                                # no name found for this emulator: a readable one from its address
+                n = names.get(f, "")
+                if n:
+                    return n
+                m = re.search(r"(\d+)$", f)
+                return f"Emulator {m.group(1)}" if m else ""
+            self.available = [{"id": f, "name": _label(f), "removed": f in skipped} for f in new + skipped]
             by_id = {d["id"]: d for d in self.devices}
             changed = False
             for dev in found:                                 # emulators already in the list: fill in a missing name

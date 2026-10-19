@@ -133,7 +133,7 @@ PAGES.dashboard = function () {
     btn("Resume all", () => act(api("resume"))), btn("Stop all", () => act(api("stop", { serial: "all" })), "bad"),
     btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
   const log = panel(null, activityBox(null, "Activity - all emulators"));
-  return h("div", {}, dev, found, ctl, log);
+  return h("div", {}, found, dev, ctl, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 

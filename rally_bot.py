@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.43"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.44"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -445,9 +445,46 @@ def setup_tesseract():
     return shutil.which("tesseract") is not None
 
 
-BLUESTACKS_CONFS = (r"C:\ProgramData\BlueStacks_nxt\bluestacks.conf",
-                    r"C:\ProgramData\BlueStacks_nxt_cn\bluestacks.conf",
-                    r"C:\ProgramData\BlueStacks\bluestacks.conf")
+_BS_DEFAULT = (r"C:\ProgramData\BlueStacks_nxt\bluestacks.conf",
+               r"C:\ProgramData\BlueStacks_nxt_cn\bluestacks.conf",
+               r"C:\ProgramData\BlueStacks\bluestacks.conf")
+
+
+def bluestacks_confs():
+    """Every bluestacks.conf that can be found: the usual places, any BlueStacks* folder under ProgramData, the data folder
+    BlueStacks wrote into the registry (it can be on another drive), and the other drives' ProgramData."""
+    out = list(_BS_DEFAULT)
+    try:
+        import glob
+        for root in (os.environ.get("ProgramData", r"C:\ProgramData"),):
+            out += glob.glob(os.path.join(root, "BlueStacks*", "bluestacks.conf"))
+    except Exception:
+        pass
+    try:
+        import winreg
+        for key in ("SOFTWARE\\BlueStacks_nxt", "SOFTWARE\\BlueStacks_nxt_cn", "SOFTWARE\\BlueStacks", "SOFTWARE\\BlueStacks_msi5"):
+            for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+                try:
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key, 0, winreg.KEY_READ | view) as k:
+                        for val in ("DataDir", "UserDefinedDir"):
+                            try:
+                                d = winreg.QueryValueEx(k, val)[0]
+                                out += [os.path.join(d, "bluestacks.conf"), os.path.join(os.path.dirname(d.rstrip("\\/")), "bluestacks.conf")]
+                            except OSError:
+                                pass
+                except OSError:
+                    pass
+    except Exception:
+        pass
+    seen, res = set(), []
+    for c in out:
+        if c.lower() not in seen and os.path.isfile(c):
+            seen.add(c.lower())
+            res.append(c)
+    return res
+
+
+BLUESTACKS_CONFS = tuple(_BS_DEFAULT)
 
 
 def mumu_names(adb=None):
@@ -480,7 +517,7 @@ def mumu_names(adb=None):
 def emulator_names(adb=None):
     """Best effort: map device id -> the instance name shown in the emulator (MuMu, BlueStacks, LDPlayer)."""
     names = dict(mumu_names(adb))
-    for conf in BLUESTACKS_CONFS:
+    for conf in bluestacks_confs():
         try:
             txt = Path(conf).read_text(errors="ignore")
         except Exception:
@@ -513,7 +550,7 @@ def emulator_names(adb=None):
 
 def candidate_ports():
     ports = set()
-    for conf in BLUESTACKS_CONFS:
+    for conf in bluestacks_confs():
         try:
             ports |= {int(p) for p in re.findall(r'adb_port="(\d+)"', Path(conf).read_text(errors="ignore"))}
         except Exception:

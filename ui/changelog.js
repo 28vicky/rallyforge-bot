@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.44", date: "2026-10-20",
+    new: [],
+    fixed: ["The \u201cFound emulators\u201d panel is now at the top of the Emulators page, so it cannot be missed below a long list.", "Emulator names are looked up more thoroughly (every BlueStacks folder, also when BlueStacks keeps its data on another drive), and an emulator whose name cannot be found gets a readable one from its address (e.g. \u201cEmulator 5595\u201d) instead of an empty box."] },
   { v: "2.4.43", date: "2026-10-20",
     new: [],
     fixed: ["About one rally in four did not open the march screen (a tap that did not register, or the list moved a little). The bot now looks again at once and, if the same green Join is still there, taps it a second time instead of waiting for the next pass over the list."] },
