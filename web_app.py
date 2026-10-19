@@ -180,12 +180,13 @@ class Controller:
                 self.dev[s]["idx"], self.dev[s]["name"] = i, d["name"]
 
     def allowed(self, serial):
-        """License check: only the first N emulators of the list may run (N = instances of the license)."""
+        """License check: at most N emulators run at the same time (N = instances of the license) - any of the listed ones, not just the first N."""
         lim = self.lic.limit()
         if lim is None:
             return True
-        ids = [d["id"] for d in self.devices]
-        return serial in ids and ids.index(serial) < lim
+        if serial not in [d["id"] for d in self.devices]:
+            return False
+        return self.running(serial) or self.n_running() < lim
 
     def set_devices(self, rows):
         out, seen = [], set()
@@ -300,7 +301,7 @@ class Controller:
         if not self.allowed(serial):
             lim = self.lic.limit()
             self.log("[!] No valid license - open the License tab." if not lim else
-                     f"[!] Your license allows {lim} emulator(s); this one is over the limit.", serial)
+                     f"[!] Your account allows {lim} emulator(s) running at the same time - stop one first.", serial)
             return
         cfg = cfg or self.cfg
         cap = int(cfg.get("max_running_emulators", 0) or 0)
@@ -378,11 +379,16 @@ class Controller:
         self.log("[*] Stopping...", serial)
 
     def start_all(self, auto=False):
-        todo = [d["id"] for d in self.devices if not self.running(d["id"]) and self.allowed(d["id"])]
+        todo = [d["id"] for d in self.devices if not self.running(d["id"]) and (self.lic.limit() is None or self.lic.limit() > 0)]
         if auto:      # app just opened: each emulator follows its own 'start by itself' switch (falls back to the global one)
             todo = [s for s in todo if rb.merge_device_cfg(self.cfg, s).get("auto_start")]
-        if not self.lic.limit() and self.lic.limit() is not None:
+        lim = self.lic.limit()
+        if lim is not None and not lim:
             self.log("[!] No valid license - open the License tab.")
+        elif lim is not None and len(todo) > max(0, lim - self.n_running()):
+            room = max(0, lim - self.n_running())
+            self.log(f"[!] Your account allows {lim} emulators at a time - starting the first {room} of {len(todo)}. Start the others by hand after stopping one.")
+            todo = todo[:room]
         self.log(f"[+] Starting {len(todo)} emulator(s)...")
         cfg = self.cfg
         for i, s in enumerate(todo):
