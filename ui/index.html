@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" data-pal="amber" data-mode="dark">
+<head>
+<meta charset="utf-8">
+<title>RallyForge Bot</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/assets/logo.png">
+<link rel="stylesheet" href="/app.css">
+<script>
+  window.KEY = "__KEY__";
+  try {                                   // apply the last theme before anything is drawn (no flash)
+    var t = JSON.parse(localStorage.getItem("rf_theme") || "null");
+    if (t) {
+      var m = t.mode === "auto" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : t.mode;
+      document.documentElement.dataset.pal = t.pal || "amber";
+      document.documentElement.dataset.mode = m || "dark";
+    }
+  } catch (e) {}
+</script>
+</head>
+<body>
+<div id="root"></div>
+<div class="toasts" id="toasts"></div>
+<script src="/app.js"></script>
+<script src="/dialogs.js"></script>
+<script src="/pages.js"></script>
+<script>boot();</script>
+</body>
+</html>

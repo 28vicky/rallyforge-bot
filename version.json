@@ -1,0 +1,27 @@
+{
+  "version": "2.3.3",
+  "notes": "Per-emulator monsters/tasks/duties, Knight Bayard + Viking monsters, staggered start + auto-start, Lucky Hammer confirm, freeze/error recovery, task history, report button.",
+  "files": {
+    "rally_bot.py": {
+      "sha256": "f1e6981074687517e9dd7724d83f390949d2246207c5c2ca8ab9bbf6dddd7055"
+    },
+    "web_app.py": {
+      "sha256": "8e129fbcf73deef58711eec56dea2f952e3d2643a0d06cade2a2ebaedb271281"
+    },
+    "ui/app.js": {
+      "sha256": "a59a3d606f41b78b066c23e5611e7c4b92fc23b22c700e93a4f484be457cc018"
+    },
+    "ui/dialogs.js": {
+      "sha256": "37255a092830e075a619a4a2e699bf026cf09f618097ca68b9f4372ac96cc2b9"
+    },
+    "ui/pages.js": {
+      "sha256": "63d0732333c25c48ffd6507c420446542c3feddaa4d0cdb1211998ad008297fc"
+    },
+    "ui/app.css": {
+      "sha256": "8469f0071476ff2f26acab8a8624e30accd93ccea0f5b6398f070676cdbf1034"
+    },
+    "ui/index.html": {
+      "sha256": "0bdacb95df93177098c07b570662efa58ff126596afad42b2ff992ad1c4cd65c"
+    }
+  }
+}
