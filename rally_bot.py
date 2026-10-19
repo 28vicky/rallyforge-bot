@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.0"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.4"                       # shown in the window; the updater compares this with the published version
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
 def _user_dir():
@@ -236,6 +236,11 @@ DEFAULTS = {
     "stamina_auto": True,
     "stamina_sizes": [10, 25, 50, 100],      # which stamina items may be used
     "stamina_largest_first": True,
+    "stamina_items": "all",                  # which items may be used: all / 100 only / 50 only / 10 only / 50 + 100
+    "stamina_order": "large first",          # large first / small first
+    "stamina_amount": "game default",        # game default (2 items) / full (Max) / exact number
+    "stamina_count": 2,                      # how many items when 'exact number'
+
     "stamina_xy": [385, 854],                # the stamina number on the march screen (opens the Use Item screen)
     # list scrolling: swipe x1,y1,x2,y2,ms ; go back to top after N scrolls (0 = never)
     "swipe": [270, 750, 270, 350, 300],
@@ -1525,10 +1530,17 @@ def read_stamina(shot):
 
 
 def refill_stamina(dev, cfg, log, stop, needed):
+    """Use stamina items. 'full' presses the game's Max button (the game itself limits how much one use can add)."""
+    return _refill_once(dev, cfg, log, stop, needed)
+
+
+def _refill_once(dev, cfg, log, stop, needed):
     """On the march screen: open the stamina Use Item screen and use stamina items (never gems, never the Buy banner)
     until the march can go. -> True if the stamina now covers `needed`."""
     nap = lambda lo, hi=None: _nap(stop, lo, hi)
-    sizes = sorted({int(x) for x in cfg.get("stamina_sizes", [])}, reverse=bool(cfg.get("stamina_largest_first", True)))
+    _items = {"100 only": [100], "50 only": [50], "10 only": [10], "50 + 100": [50, 100]}.get(str(cfg.get("stamina_items", "all")), None)
+    _large = (str(cfg.get("stamina_order", "large first")) != "small first")
+    sizes = sorted({int(x) for x in (_items or cfg.get("stamina_sizes", [10, 25, 50, 100]))}, reverse=_large)
     if not sizes:
         return False
     before = read_stamina(dev.screenshot())
@@ -1580,6 +1592,47 @@ def refill_stamina(dev, cfg, log, stop, needed):
             log(f"[i] Stamina: the amount window for {size} did not open - trying the next size")
             continue
         _stamina_snap(shot, "dialog")
+        mode = str(cfg.get("stamina_amount", "game default"))
+        def _count(sh):
+            try:
+                for _, ws in ocr_lines(sh[540:590, 130:410]):
+                    m = re.search(r"(\d+)\s*/\s*(\d+)", " ".join(w[0] for w in ws))
+                    if m:
+                        return int(m.group(1)), int(m.group(2))
+            except Exception:
+                pass
+            return None
+        if mode.startswith("full"):                          # slide the bar all the way to the right end (as far as the game lets this item go)
+            for _sw in range(3):
+                dev.swipe(137, 503, 432, 503, 700)
+                nap(0.6, 0.9)
+                _shot_max = dev.screenshot()
+                cnt = _count(_shot_max)
+                if cnt and cnt[0] >= cnt[1]:
+                    break
+            _stamina_snap(_shot_max, "after_slide")
+            log(f"[i] Stamina: slid to the end - using {cnt[0] if cnt else '?'} of {cnt[1] if cnt else '?'} item(s)")
+        elif mode.startswith("exact"):
+            want = max(1, int(cfg.get("stamina_count", 2) or 1))
+            def _count(sh):
+                try:
+                    for _, ws in ocr_lines(sh[540:590, 130:410]):
+                        m = re.search(r"(\d+)\s*/\s*(\d+)", " ".join(w[0] for w in ws))
+                        if m:
+                            return int(m.group(1)), int(m.group(2))
+                except Exception:
+                    pass
+                return None
+            cnt = _count(shot)
+            for _t in range(60):
+                if not cnt or cnt[0] == want or stop.is_set():
+                    break
+                if cnt[0] < want and cnt[0] >= cnt[1]:
+                    break                                    # cannot go higher
+                dev.tap(*((451, 505) if cnt[0] < want else (83, 505)))
+                nap(0.25, 0.4)
+                cnt = _count(dev.screenshot())
+            log(f"[i] Stamina: using {cnt[0] if cnt else '?'} item(s) (wanted {want})")
         for attempt in range(3):                            # the slider already sits at 2 items; press the green Use inside the window
             dev.tap(383 + random.randint(-12, 12), 685 + random.randint(-6, 6))
             nap(1.2, 1.7)

@@ -368,7 +368,7 @@ function instancePage(serial) {
     det.addEventListener("toggle", () => { if (det.open && !box.children.length) box.appendChild(fn()); });
     return det;
   };
-  const wrap = h("div", {}, head, bar, panel("Activity", activityBox(serial)), phone, autoStart, autoJoin, ...ownP,
+  const wrap = h("div", {}, head, bar, panel("Activity", activityBox(serial)), phone, autoStart, autoJoin, staminaPanel(ov, S.cfg), ...ownP,
     sect("Monsters for this emulator (which monsters it joins)", () => PAGES.monsters(serial)),
     sect("Tasks for this emulator", () => PAGES.tasks(serial)),
     sect("Duties for this emulator (Crazy Eggs, daily claims...)", () => PAGES.duties(serial)),
@@ -458,6 +458,20 @@ async function captureTemplate() {
 }
 
 // ====================================================================== settings (+ low RAM)
+function staminaPanel(store, base) {
+  // base = where the value comes from when this emulator has none of its own (the global settings)
+  const g = (k, d) => (store[k] !== undefined ? store[k] : base[k] !== undefined ? base[k] : d);
+  const S_ = (k, opts, d) => sel(store, k, opts, { get: () => g(k, d) });
+  return panel("Stamina (when a march needs more than you have)",
+    h("div", { class: "hint", style: { marginBottom: "10px" } }, "The bot uses stamina ITEMS only (never gems). Choose which items it may use, in which order, and how many."),
+    h("div", { style: { marginBottom: "10px" } }, tog({ stamina_auto: g("stamina_auto", true) }, "stamina_auto", "Use stamina items automatically", { after: (v) => { store.stamina_auto = v; } })),
+    grid2(
+      fld("Items it may use", S_("stamina_items", ["all", "100 only", "50 only", "10 only", "50 + 100"], "all")),
+      fld("Order", S_("stamina_order", ["large first", "small first"], "large first")),
+      fld("How many", S_("stamina_amount", ["game default", "full (Max)", "exact number"], "game default")),
+      fld("Exact number of items (when 'exact number')", inp(store, "stamina_count", { type: "int", cls: "short", get: (v) => g("stamina_count", 2) }))),
+    note("Game default = the amount the game suggests (2 items, so 100 stamina with the 50 item). Full = the Max button (uses all of that item). Exact number = the number you type."));
+}
 PAGES.settings = function () {
   const c = S.cfg;
   const g = panel("Global settings (every emulator, unless it has its own)",
@@ -488,7 +502,7 @@ PAGES.settings = function () {
       btn("Open logs folder", () => act(api("open_logs")), "sm"),
       btn("Clear", async () => { await act(api("clear_log")); S.logs = []; logViews.forEach((v) => (v.el.innerHTML = "")); }, "sm")), logBox(null, true));
   setTimeout(updateSummary, 0);
-  return h("div", {}, g, lr, lg);
+  return h("div", {}, g, staminaPanel(c, c), lr, lg);
 };
 
 

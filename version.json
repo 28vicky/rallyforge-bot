@@ -1,9 +1,9 @@
 {
-  "version": "2.4.0",
-  "notes": "Stamina refill fixed (uses the right item and presses Use); Alliance page / full pages no longer mistaken for pop-ups; per-emulator \"Start by itself\" switch.",
+  "version": "2.4.4",
+  "notes": "Stamina options (items, order, amount; full = slide to the end); Alliance-page recovery; per-emulator Start by itself.",
   "files": {
     "rally_bot.py": {
-      "sha256": "a84afca7e7ec394a165139e095bc4fe1fb1c0e60973cbd8eb2750e80ca48f521"
+      "sha256": "6b3915057091337d4668d1776ad88df2d892d61439aeded3dc9eaa0147064788"
     },
     "web_app.py": {
       "sha256": "3ddc6208cf6c0aa65b2baa665fcce9bd60a1b8544e014aeb68f7fcf6cae651f7"
@@ -15,7 +15,7 @@
       "sha256": "37255a092830e075a619a4a2e699bf026cf09f618097ca68b9f4372ac96cc2b9"
     },
     "ui/pages.js": {
-      "sha256": "47b983b4c12ecf970a5f79622bafb1b62e48843c0eb75ad52932a44f5f303b09"
+      "sha256": "462fc79ab121c732cdcc134508ab80cfb12453d7c71919513c2a7cccb57a52b9"
     },
     "ui/app.css": {
       "sha256": "8469f0071476ff2f26acab8a8624e30accd93ccea0f5b6398f070676cdbf1034"
@@ -24,5 +24,5 @@
       "sha256": "0bdacb95df93177098c07b570662efa58ff126596afad42b2ff992ad1c4cd65c"
     }
   },
-  "sig": "5f7ffffa844bf1e594f749dd5242b9029470d72756f09e873be1a0a47e37e032"
+  "sig": "59087e1fcb0d02ae454e848bc29adbb9a8b70fd72d98f5e5e39f4ee9b5cd2f59"
 }
