@@ -1,12 +1,12 @@
 {
-  "version": "2.4.40",
-  "notes": "Looks for emulators at every start; joins rallies whose level is blurry.",
+  "version": "2.4.41",
+  "notes": "Fixes repeated update downloads while waiting to restart.",
   "files": {
     "rally_bot.py": {
-      "sha256": "f374671dd4ddfbb8b46b4c546d42fc0c5abb4da65a23ac3811873cb55d140418"
+      "sha256": "54444225fe025dde26544cdb050fd755b0349f4b3f6df4bfa316078fa1c3a545"
     },
     "web_app.py": {
-      "sha256": "e344cf5ab91c1527942d3a51d5f11373afd0becdfe062a4abeecd5f35c53b10c"
+      "sha256": "16ff8e1cfdace8f50d055397c2ffbb81d5b3cc681041b5d984f0746636ec3c49"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "09a26609ec60e055867c0ae5b4ab7afafc36890832938e52c9248cfe523a6a1e"
     },
     "ui/changelog.js": {
-      "sha256": "639c6ec8c4bb21099b583389a720271866f04036362d5eab7c9f52512d445edd"
+      "sha256": "d0a4dbff321c89d6c1f47f2f2ec9e5210de4c31cb52a41a48c25dc6795b64fe8"
     },
     "ui/dialogs.js": {
       "sha256": "93b85f9748c2d4841661e449f9475108f64da23dc46165c5470327f2a38aebf0"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "aae68d846f588f0d91776b5bed514672fbb5957de9b83fa32ae75fa3e0703513"
+  "sig": "b9ca163d8a2113e8a48dbbafc8b86dc1d751820dce07f3c22ad2e4150da6d3f8"
 }

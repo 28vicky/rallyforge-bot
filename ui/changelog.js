@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.41", date: "2026-10-20",
+    new: [],
+    fixed: ["An update that is already installed is no longer downloaded again when you press Check for updates or click the status bar a second time while the app waits for a quiet moment to restart. It just restarts."] },
   { v: "2.4.40", date: "2026-10-20",
     new: [],
     fixed: ["Emulators are looked for every time the app starts, so the \u201cFound emulators\u201d panel is ready with an Add button for each one (before, it only looked on the very first run, so a list that was empty or out of date stayed that way until you pressed Detect).", "A rally is no longer missed because the monster level could not be read (blurry number on the card, as seen on Witch rallies: \u201clevel could not be read - the rally is missed\u201d). After the second, harder read the bot now joins anyway.", "A Viking rally whose set could not be recognised is now joined when at least one Viking group is switched on; it is only skipped when all of them are switched off."] },

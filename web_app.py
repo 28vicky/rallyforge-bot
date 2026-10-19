@@ -1170,6 +1170,11 @@ class Controller:
                     if manual:
                         self.event("update_none", {"version": rb.VERSION})
                     return
+                if getattr(self, "restart_pending", False) and info.get("version") == getattr(self, "_installed_version", None):
+                    self.log(f"[i] Version {info['version']} is already installed - the app restarts at the next quiet moment (no emulator in the middle of a join)")
+                    if manual:
+                        self._auto_restart = True
+                    return
                 self.log(f"[+] Version {info['version']} is available.")
                 self._pending_update = info                 # shown in the status bar: "Update x available" (click = install + restart)
                 rel = str((info.get("manifest") or {}).get("mode", "")).lower()
@@ -1188,12 +1193,16 @@ class Controller:
         if not info:
             raise ApiError("No update is waiting.")
 
+        if getattr(self, "restart_pending", False) and info.get("version") == getattr(self, "_installed_version", None):
+            self._auto_restart = True                     # already installed: just let it restart
+            return
         self._installing = True
 
         def work():
             try:
                 rb.install_update(info, lambda m: self.log(m))
                 self._installing = False
+                self._installed_version = info["version"]
                 self.log(f"[+] Version {info['version']} is installed. Restart the app to use it.")
                 self.restart_pending = True
                 self._pending_since = time.time()
