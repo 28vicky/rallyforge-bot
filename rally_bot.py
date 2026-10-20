@@ -7231,6 +7231,11 @@ def ch_open_page(dev, stop, log):
             return True
         p = find_text(shot, ["Champions", "Champion"], region=(0, 150, 540, 450), cutoff=0.7)
         if not p:
+            d_ = find_detail_icon(shot)                      # the caption is hard to read on a busy picture: the Champion icon sits up-right of the Detail (i) icon
+            if d_:
+                log("[i]   Champions: caption not readable - using the place above the Detail icon")
+                p = (d_[0] + 25, d_[1] - 88 + 42)
+        if not p:
             log("[i]   Champions: the Champions icon is not in the Keep's menu")
             return False
         dev.tap(p[0], p[1] - 42)                             # the icon sits just above its caption
