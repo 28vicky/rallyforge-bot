@@ -6094,7 +6094,7 @@ def run_step(dev, cfg, log, stop, step):
         except Exception:
             pass
         got = ring_label_free(shot)
-        log(f"[i]   the menu that opened is called: {got[0] if got else 'no name read'} (expected {arg})")
+        log(f"[i]   the menu that opened is called: {got[0] if got else 'no name read'}" + (f" (expected {arg})" if arg else ""))
         return
     if cmd == "market":
         run_market(dev, cfg, log, stop)
@@ -6185,17 +6185,19 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(p[0], p[1] - 38)                           # the icon sits just above its caption
         return True
-    if kind == "building" and picture_items(dev) is not None and str(name).lower().split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
+    if kind == "building" and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
         pitems = picture_items(dev)                          # the camera is found by the whole-city picture; positions come from the mapper or the built-in default
-        want = str(name).lower()
-        pkeys = sorted(k for k in pitems if k.split("#")[0].lower() == want.split("#")[0] and (("#" not in want) or k.lower() == want))
+        pkeys = []
+        for nm in str(name).lower().split("+"):                # "Keep+Tavern" = visit the Keep, then the Tavern
+            want = nm.strip()
+            pkeys += sorted(k for k in pitems if k.split("#")[0].lower() == want.split("#")[0] and (("#" not in want) or k.lower() == want))[:int(task.get("count", 1) or 1)]
         nav = nav_state.get("anav")
         if nav is None:
             nav = CityNav(dev, stop, log)
             nav.absolute = True
             nav_state["anav"] = nav
         done_any = False
-        for k in pkeys[:int(task.get("count", 1) or 1)]:
+        for k in pkeys:
             tx, ty = pitems[k]
             log(f"[*] Going to {k} by the city picture")
             nav.goto(tx, ty)
@@ -6813,6 +6815,9 @@ DUTY_LIBRARY = [
     {"id": "collect_resources", "group": "Common tasks", "title": "Collect resources", "every_min": 180, "verified": False,
      "note": "Taps every mapped farm / sawmill / quarry / mine. Needs the city mapper.",
      "target": "building:Farm", "count": 6, "steps": ["wait 1", "tap_text Collect|Claim"]},
+    {"id": "reach_keep_tavern", "group": "Common tasks", "title": "Test: Keep, then Tavern", "every_min": 60, "verified": False,
+     "note": "Walks to the Keep, opens its menu, then walks to the Tavern and opens its menu (nothing is pressed).",
+     "target": "building:Keep+Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name"]},
     {"id": "reach_tavern", "group": "Common tasks", "title": "Test: go to Tavern", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Tavern and opens its menu (nothing is pressed).",
      "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern"]},
