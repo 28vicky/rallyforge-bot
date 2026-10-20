@@ -1,9 +1,9 @@
 {
-  "version": "2.4.59",
-  "notes": "More fixed buildings found by the city picture without mapping",
+  "version": "2.4.60",
+  "notes": "Pause really pauses (also during start-up and game loading)",
   "files": {
     "rally_bot.py": {
-      "sha256": "f3248ca8739977c08749d7953a282366908e655e28d3fe2f7c636f8b42aea59f"
+      "sha256": "882aef9f990a320dc3af705c3fd31c27dcac73e2e0d90a5d0dc00276de8d5dbe"
     },
     "web_app.py": {
       "sha256": "7975800cdf579b8726c334d84cde23e684e896fb127e4d6699b11d695f23cdc3"
@@ -18,7 +18,7 @@
       "sha256": "c39281368962c67e3d6e5f30e8d98930a4ae1c4bae1341b4546c89480ccb228a"
     },
     "ui/changelog.js": {
-      "sha256": "b0cd54177bb8684e4fb547bdd81041198d8124e7228a4f5f75f6dfff92ff7fd6"
+      "sha256": "7ad5d81ac792acb946a816a63ca751c71051fee3a50de9f8520042482f87c851"
     },
     "ui/dialogs.js": {
       "sha256": "6f6438682092c6db775f9b91a5aa7f94cd55fdfb73cb53a42119ded7e6a674d6"
@@ -136,5 +136,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "4689b2f24e1ca0783e6bf3695fa4dfbd5de464e3f2be4e7e0e8614338a5e8f14"
+  "sig": "c13a8a95def05c360443f6b11530e86ec7526fa70277ffa877571cb93f1a22dd"
 }
