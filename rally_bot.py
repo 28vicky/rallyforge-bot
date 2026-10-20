@@ -6366,23 +6366,43 @@ def capture_city_pictures(dev, cfg, log, stop, progress=None):
             except Exception:
                 pass
 
-    def pan_measure(dx, dy):
-        before = dev.screenshot()
-        pan_content(dev, stop, dx, dy)
+    def match_shift(before, after, cdx, cdy):
+        """How far the content really moved, by finding a piece of the first picture in the second one. -> (dx, dy, score)"""
         x, y, w, h = CITY_VIEW
-        for attempt in range(3):
+        gb = cv2.cvtColor(before[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+        ga = cv2.cvtColor(after[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+        # the piece: the part of the first picture that is still on screen after the expected move (plus a margin)
+        mx, my = int(abs(cdx)) + 40, int(abs(cdy)) + 40
+        px0, px1 = (mx if cdx < 0 else 0) + 0, w - (mx if cdx > 0 else 0)
+        py0, py1 = (my if cdy < 0 else 0) + 0, h - (my if cdy > 0 else 0)
+        px0, px1 = (0 if cdx >= 0 else mx), (w if cdx <= 0 else w - mx)
+        py0, py1 = (0 if cdy >= 0 else my), (h if cdy <= 0 else h - my)
+        if px1 - px0 < 90 or py1 - py0 < 90:
+            px0, px1, py0, py1 = w // 2 - 60, w // 2 + 60, h // 2 - 100, h // 2 + 100
+        piece = gb[py0:py1, px0:px1]
+        res = cv2.matchTemplate(ga, piece, cv2.TM_CCOEFF_NORMED)
+        _mn, mxv, _a, loc = cv2.minMaxLoc(res)
+        return float(loc[0] - px0), float(loc[1] - py0), float(mxv)
+
+    def pan_measure(dx, dy):
+        """Pan, then measure. -> None when the map did not move (edge), else (real dx, real dy, score, picture)"""
+        try:                                                   # a building menu or pop-up from an earlier tap swallows the swipe: clear it first
+            ensure_view(dev, cfg, stop, lambda *_: None, "city", tries=3)
+        except Exception:
+            pass
+        before = dev.screenshot()
+        cdx, cdy = dx * 1.0, dy * 1.0
+        for attempt in range(2):
+            pan_content(dev, stop, dx, dy)
             _nap(stop, 0.8, 1.0)
             after = dev.screenshot()
-            diff = float(cv2.absdiff(before[y:y + h, x:x + w], after[y:y + h, x:x + w]).mean())
-            if diff >= 2.0:
-                break
-            log(f"[i] City pictures: pan {dx:.0f},{dy:.0f} - picture changed {diff:.2f} (try {attempt + 1})")
-        mx, my, resp = city_shift(before, after)
-        if diff < 2.0:
-            return None
-        if not (resp >= 0.05 and abs(mx) < 2.0 * abs(dx) / GAIN * GAIN + 30 and abs(my) < 2.0 * abs(dy) + 30):
-            mx, my = dx * 1.0, dy * 1.0
-        return mx, my, resp, after
+            mx, my, sc = match_shift(before, after, cdx, cdy)
+            if sc >= 0.55 and (abs(mx) > 3 or abs(my) > 3):
+                return mx, my, sc, after
+            if sc >= 0.55:
+                break                                          # sure it is the same picture: the edge
+            log(f"[i] City pictures: pan {dx:.0f},{dy:.0f} - match {sc:.2f} at {mx:.0f},{my:.0f} (try {attempt + 1})")
+        return None
 
     def snap(tag, mx, my, resp):
         shot = dev.screenshot()
