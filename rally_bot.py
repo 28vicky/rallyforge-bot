@@ -3614,7 +3614,11 @@ def run_tavern_catalog(dev, cfg, log, stop):
     the general library. Nothing is recruited and the shop is not refreshed (the Refresh button is never touched)."""
     shot = dev.screenshot()
     if not find_text(shot, ["Recruit General"], region=(60, 0, 420, 120)):
-        dev.tap(295, 262)                                   # 'Recruit' in the Tavern's ring menu
+        p = find_text(shot, ["Recruit"], region=(100, 120, 340, 230), cutoff=0.85)     # the ring sits a little differently on every view: find the word, the icon is just above it
+        if p:
+            dev.tap(p[0], p[1] - 38)
+        else:
+            dev.tap(295, 222)
         _nap(stop, 2.2, 3.0)
         shot = dev.screenshot()
         if not find_text(shot, ["Recruit General"], region=(60, 0, 420, 120)):
