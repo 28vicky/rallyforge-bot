@@ -1,9 +1,9 @@
 {
-  "version": "2.4.60",
-  "notes": "Pause really pauses (also during start-up and game loading)",
+  "version": "2.4.61",
+  "notes": "Recovery from unexpected windows, right-building check, other city styles, general library fixes",
   "files": {
     "rally_bot.py": {
-      "sha256": "882aef9f990a320dc3af705c3fd31c27dcac73e2e0d90a5d0dc00276de8d5dbe"
+      "sha256": "916a248792055d05d7d8b0aa454a6bee9eb9154ab53104bbd7887364e15edac1"
     },
     "web_app.py": {
       "sha256": "7975800cdf579b8726c334d84cde23e684e896fb127e4d6699b11d695f23cdc3"
@@ -18,7 +18,7 @@
       "sha256": "c39281368962c67e3d6e5f30e8d98930a4ae1c4bae1341b4546c89480ccb228a"
     },
     "ui/changelog.js": {
-      "sha256": "7ad5d81ac792acb946a816a63ca751c71051fee3a50de9f8520042482f87c851"
+      "sha256": "c7370945878971cab13cd701a3f72746716d887fc7a937eac30ea3d1fe957a3a"
     },
     "ui/dialogs.js": {
       "sha256": "6f6438682092c6db775f9b91a5aa7f94cd55fdfb73cb53a42119ded7e6a674d6"
@@ -136,5 +136,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "c13a8a95def05c360443f6b11530e86ec7526fa70277ffa877571cb93f1a22dd"
+  "sig": "a183cdf738602dda994ea7b1554e1f2ffec2ae4e4ce4e8fca050dec00b02ca70"
 }
