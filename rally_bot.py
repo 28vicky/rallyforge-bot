@@ -6255,6 +6255,13 @@ def scan_city_names(dev, cfg, log, stop, progress=None):
         report()
         return labs
 
+    # 0. the scan must start on the CITY view (the game may show the rally list, a march screen or a pop-up)
+    stats["text"] = "Opening the city view"
+    report()
+    if not ensure_view(dev, cfg, stop, log, "city", tries=14):
+        dev.guard_city = False
+        raise ValueError("Could not get the game to the city view - open the city by hand and try again.")
+    log("[i] City mapper: the city view is showing")
     # 1. top-left corner: push the map down and to the right until it stops moving
     stats["text"] = "Going to the top-left corner of the city"
     report()
@@ -6306,8 +6313,42 @@ def scan_city_names(dev, cfg, log, stop, progress=None):
     return items
 
 
+def find_building_test(dev, cfg, log, stop, name, progress=None):
+    """Step-by-step test of the aiming: get to the city view, then find ONE building by reading names. Reports looks and seconds."""
+    dev.arm_guard(cfg, log, stop)
+    t0 = time.time()
+    if progress:
+        try:
+            progress({"phase": "sweeping", "pct": 5, "left": None, "text": f"Test: finding the {name}", "stops": 0, "total": 1, "row": 0,
+                      "mapped": [], "missing": [name], "expected": [name], "seconds": 0})
+        except Exception:
+            pass
+    if not ensure_view(dev, cfg, stop, log, "city", tries=14):
+        log(f"[!] Find {name}: could not get to the city view")
+        return {}
+    log(f"[i] Find {name}: the city view is showing ({int(time.time() - t0)} s)")
+    dev.guard_city = True
+    try:
+        pos = aim_by_labels(dev, cfg, log, stop, name)
+    finally:
+        dev.guard_city = False
+    secs = int(time.time() - t0)
+    if pos:
+        log(f"[+] Find {name}: FOUND at screen {pos[0]},{pos[1]} after {secs} s ({getattr(dev, '_looks', '?')} looks)")
+        return {name: list(pos)}
+    log(f"[!] Find {name}: NOT found after {secs} s")
+    return {}
+
+
 def scan_city(dev, cfg, log, stop, progress=None):
-    """The city mapper: reads the building names (works in every city style)."""
+    """The city mapper: reads the building names (works in every city style). Test mode: a file city_test.txt with a building
+    name next to the settings runs only the search for that one building."""
+    try:
+        want = (USER / "city_test.txt").read_text(encoding="utf-8").strip()
+    except OSError:
+        want = ""
+    if want:
+        return find_building_test(dev, cfg, log, stop, want, progress)
     return scan_city_names(dev, cfg, log, stop, progress)
 
 
@@ -7165,6 +7206,7 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=14):
         if stop.is_set():
             return None
         labs = labels_on_screen(dev, stop)
+        dev._looks = i + 1
         learn_offsets(getattr(dev, "serial", ""), labs)
         hit = [l for l in labs if l[0] == want]
         if hit:
@@ -7206,6 +7248,7 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
         return True                                          # nothing to recognise the views by: do not press anything blindly
     toggled = 0
     unknown = 0
+    backs = 0
     for i in range(tries):
         if stop.is_set():
             return False
@@ -7220,6 +7263,12 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             return True
         if ring:
             close_ring(dev, stop, (270, 430))
+            continue
+        if v == "landscape" and want == "city" and backs < 4:          # the rally list (Alliance War page) is a full page on top of the city: Back leads to the city
+            backs += 1
+            say("[*] Recovery: the rally list is open - pressing Back to reach the city")
+            dev.back()
+            _nap(stop, 1.2, 1.8)
             continue
         if v in ("city", "landscape"):                      # the other main view: switch (twice at most)
             if toggled >= 2:
