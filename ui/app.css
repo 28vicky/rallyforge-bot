@@ -703,3 +703,12 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 .note.clamp{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:0}
 .morelnk{background:none;border:0;padding:0 0 8px;color:var(--accent1);font:inherit;font-size:13px;cursor:pointer;display:block}
 .morelnk:hover{text-decoration:underline}
+
+/* ===== design base: one type family, one spacing scale, one motion curve, visible keyboard focus ===== */
+:root{--font:Inter,"Segoe UI",system-ui,-apple-system,sans-serif;--sp1:4px;--sp2:8px;--sp3:12px;--sp4:16px;--sp5:24px;--sp6:32px;--ease:cubic-bezier(.2,.7,.2,1)}
+body{font-size:15px;font-feature-settings:"cv11","ss01","kern";letter-spacing:-.003em;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+:root .btn,:root .tab,:root .sub,:root .inst,:root .iconbtn{transition:background-color .14s var(--ease),border-color .14s var(--ease),color .14s var(--ease),opacity .14s var(--ease)}
+:focus-visible{outline:2px solid var(--accent1);outline-offset:2px;border-radius:6px}
+input:focus-visible,select:focus-visible{outline-offset:0}
+:root .panel{padding:var(--sp5);margin-bottom:var(--sp4)}
+:root .panel h3{font-size:15px;margin-bottom:var(--sp3)}
