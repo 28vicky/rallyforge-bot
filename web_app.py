@@ -2001,6 +2001,13 @@ class Api:
         self.c._tg_listen_feed(self.c.tg)
         return self.coords(p)
 
+    def coords_library(self, p):
+        return {"items": rb.lib_get(), "now": time.time()}
+
+    def coords_library_clear(self, p):
+        rb.lib_clear()
+        return self.coords_library(p)
+
     def coords_keep(self, p):
         """How long the live list keeps a coordinate (minutes, 0 = until cleared): saved and applied at once."""
         m = max(0, int(p.get("minutes") or 0))

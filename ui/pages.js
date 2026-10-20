@@ -876,7 +876,20 @@ PAGES.telegram = function () {
       btn("Clear list", async () => { drawFeed(await act(api("coords_clear"))); }), liveMax));
     feedBox.appendChild(t.el);
   };
-  const loadFeed = async () => { if (!feedBox.isConnected) return; const j = await api("coords", {}, { quiet: true }).catch(() => null); drawFeed(j); };
+  const libBox = h("div", {});
+  const drawLib = (j) => {
+    if (!j) return;
+    const ago = (t) => { const s = Math.max(0, Math.round(j.now - t)); return s < 60 ? s + " s" : s < 3600 ? Math.round(s / 60) + " min" : s < 86400 ? Math.round(s / 3600) + " h" : Math.round(s / 86400) + " d"; };
+    libBox.innerHTML = "";
+    libBox.appendChild(h("div", { class: "row", style: { gap: "10px", flexWrap: "wrap", margin: "8px 0" } },
+      h("span", { class: "chip" }, "saved: " + j.items.length),
+      btn("Copy all X Y", async () => { try { await navigator.clipboard.writeText(j.items.map((b) => `${b.name} ${b.x} ${b.y}`).join("\n")); toast("Copied.", "ok"); } catch (e) { toast("Could not copy."); } }),
+      btn("Clear library", async () => { if (confirm("Delete every saved coordinate?")) drawLib(await act(api("coords_library_clear"))); })));
+    libBox.appendChild(listTable(["First seen", "Last seen", "Seen", "Level", "Name", "X", "Y"], j.items.map((b) => ({ cells: [ago(b.first) + " ago", ago(b.last) + " ago", (b.n || 1) + "x", b.level || "", b.name, b.x, b.y] })), null, null).el);
+  };
+  let libTick = 0;
+  const loadLib = async () => { if (!libBox.isConnected) return; const j = await api("coords_library", {}, { quiet: true }).catch(() => null); drawLib(j); };
+  const loadFeed = async () => { if (!feedBox.isConnected) return; const j = await api("coords", {}, { quiet: true }).catch(() => null); drawFeed(j); if (j && j.stats.messages !== libTick) { libTick = j.stats.messages; loadLib(); } };
   const feedTimer = setInterval(() => { if (!feedBox.isConnected && feedBox.dataset.shown) clearInterval(feedTimer); else loadFeed(); }, 3000);
   setTimeout(() => { feedBox.dataset.shown = "1"; loadFeed(); }, 300);
   const live = panel("Live coordinates (everything that appears in the chats you watch)",
@@ -886,7 +899,9 @@ PAGES.telegram = function () {
       btn("Start watching", async () => { c.tg_feed_chats = feedChats.value; const j = await act(api("coords_watch", { cfg: c })); if (j) { drawFeed(j); toast("Watching.", "ok"); } }, "pri")),
     note("Log in above first. Use the chat's name exactly as in your Telegram list, or its @username. Every new or edited message there is read for lines like 'Lv7 Witch (xy: 719 539) 94km' (also when another bot wrote it); each coordinate is listed here with the time it was seen. Messages without that form are counted but not listed."),
     h("div", { class: "pmax-fill" }, feedBox));
-  return h("div", {}, login, live, boss);
+  const lib = panel("Coordinate library (every coordinate ever seen, kept for good so tasks can use them later)", libBox);
+  setTimeout(loadLib, 400);
+  return h("div", {}, login, live, lib, boss);
 };
 
 // ====================================================================== reliability / schedule & alerts / updates

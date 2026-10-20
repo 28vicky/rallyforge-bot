@@ -4883,6 +4883,55 @@ _feed, _feed_stats = [], {"messages": 0, "with_coords": 0, "chats": [], "last": 
 _feed_lock = threading.Lock()
 
 
+LIB_FILE = USER / "coords_library.json"      # every coordinate ever seen; never removed by the timer (only by "Clear library")
+_lib, _lib_loaded = [], [False]
+
+
+def _lib_load():
+    if not _lib_loaded[0]:
+        _lib_loaded[0] = True
+        try:
+            _lib[:] = json.loads(LIB_FILE.read_text(encoding="utf-8")).get("items", [])
+        except Exception:
+            pass
+
+
+def lib_add(items, chat, now):
+    """Remember every coordinate for good: same name + X,Y only refreshes 'last seen' and counts."""
+    with _feed_lock:
+        _lib_load()
+        for it in items:
+            for f in _lib:
+                if f["x"] == it["x"] and f["y"] == it["y"] and f.get("name") == it.get("name"):
+                    f["last"] = now
+                    f["n"] = f.get("n", 1) + 1
+                    if it.get("level"):
+                        f["level"] = it["level"]
+                    break
+            else:
+                _lib.insert(0, {"name": it.get("name"), "level": it.get("level"), "x": it["x"], "y": it["y"], "km": it.get("km"),
+                                "chat": chat, "first": now, "last": now, "n": 1})
+        del _lib[5000:]
+        try:
+            LIB_FILE.write_text(json.dumps({"items": _lib}), encoding="utf-8")
+        except Exception:
+            pass
+
+
+def lib_get(name=None, min_level=0):
+    """For the bot (kill-a-monster tasks): every saved coordinate, newest first; filter by monster name / level."""
+    with _feed_lock:
+        _lib_load()
+        return [dict(f) for f in _lib if (not name or name.lower() in str(f.get("name") or "").lower()) and (f.get("level") or 0) >= min_level]
+
+
+def lib_clear():
+    with _feed_lock:
+        _lib[:] = []
+        _lib_loaded[0] = True
+        LIB_FILE.unlink(missing_ok=True)
+
+
 _feed_keep = [None]                  # how long (min) the live list keeps a coordinate; set from the settings, 0 = until cleared
 
 
@@ -4897,6 +4946,7 @@ def feed_add(items, chat="", keep_min=60):
     now = time.time()
     if _feed_keep[0] is not None:
         keep_min = _feed_keep[0]
+    lib_add(items, chat, now)
     with _feed_lock:
         if keep_min:
             _feed[:] = [f for f in _feed if now - f["t"] <= keep_min * 60]
