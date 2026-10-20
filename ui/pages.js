@@ -580,7 +580,7 @@ function staminaPanel(store, base) {
     })(),
     note("Full = slides the bar to the very end, so stamina fills up to the game's limit (9,999) - the default. The game's own Max button is not used (it stops at 100). Game default = the amount the game suggests (2 items). Exact number = the number of items you type."));
 }
-PAGES.settings = function () {
+PAGES.settings0 = function () {
   const c = S.cfg;
   const g = panel("Global settings (every instance, unless it has its own)",
     grid2(
@@ -833,7 +833,7 @@ PAGES.market = function () {
 };
 
 // ====================================================================== telegram
-PAGES.telegram = function () {
+PAGES.telegram0 = function () {
   const c = S.cfg;
   const panel = (title, ...kids) => h("div", { class: "tgview" }, title ? h("h3", {}, title) : null, kids);   // one view of the single Telegram window
   const code = h("input", { type: "text", class: "short" });
@@ -1173,3 +1173,21 @@ PAGES.duties = function (fixed, only) {
   draw(); load(); loadCe(); loadCh(); loadWh(); loadRn(); loadHist();
   return root;
 };
+
+// ====================================================================== quick theme picker, shown at the top of Settings and Telegram
+function themeQuick() {
+  const c = S.cfg;
+  const box = h("div", { class: "row", style: { gap: "10px", flexWrap: "wrap", alignItems: "center" } });
+  const draw = () => {
+    box.innerHTML = "";
+    [["ivory", "Ivory"], ["midnight", "Midnight"], ["amber", "Amber"], ["sage", "Sage"]].forEach(([p, n]) =>
+      box.appendChild(h("button", { class: "btn" + ((c.ui_pal || "ivory") === p ? " on" : ""), onclick: () => { setTheme(p, null); draw(); } }, n)));
+    box.appendChild(h("span", { class: "hint", style: { margin: "0 4px" } }, "|"));
+    [["light", "Light"], ["dark", "Dark"], ["auto", "Follow Windows"]].forEach(([m, l]) =>
+      box.appendChild(h("button", { class: "btn" + ((c.ui_mode || "light") === m ? " on" : ""), onclick: () => { setTheme(null, m); draw(); } }, l)));
+  };
+  draw();
+  return panel("Theme", box, note("More colours and sizes are on the App > Themes tab."));
+}
+PAGES.settings = function () { const r = PAGES.settings0(); r.insertBefore(themeQuick(), r.firstChild); return r; };
+PAGES.telegram = function () { const r = PAGES.telegram0(); r.insertBefore(themeQuick(), r.firstChild); return r; };
