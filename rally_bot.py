@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.63"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.64"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -1462,8 +1462,19 @@ def viking_resolve(power, level=None):
     return (best[1], best[2]) if best else (None, level)
 
 
+# Point bosses: hit once for alliance points, nobody needs to join them. Never joined, whatever the monster list says.
+NEVER_JOIN = {"silver lionheart knight"}
+
+
+def never_join_present():
+    """True when a picture of a never-join boss is installed (then every rally row is checked against it)."""
+    return any(n.lower() in NEVER_JOIN for n in list_monsters())
+
+
 def monster_allowed(name, cfg, level=None):
     """Apply the skip / only rule. -> (allowed, reason)."""
+    if name and str(name).lower() in NEVER_JOIN:
+        return False, f"{name} is a points boss - never joined"
     why = monster_rule_skip(name, cfg, level)
     if why:
         return False, why
@@ -8530,7 +8541,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 if cfg["log_timers"]:
                     say(f"skip ({c_why})")
                 continue
-            if cfg["monster_mode"] != "off" or mon_presets or cfg.get("monster_skip"):
+            if cfg["monster_mode"] != "off" or mon_presets or cfg.get("monster_skip") or never_join_present():
                 mon, _ = identify_monster(screen, hit, cfg)
                 if mon is None and cfg.get("monster_skip"):        # no picture yet: read the name under the portrait instead
                     try:
