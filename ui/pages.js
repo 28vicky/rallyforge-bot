@@ -957,15 +957,15 @@ PAGES.updates = function () {
 // ====================================================================== themes
 PAGES.themes = function () {
   const c = S.cfg;
-  const mode = () => c.ui_mode || "dark";
+  const mode = () => c.ui_mode || "light";
   const segs = h("div", { class: "seg" });
   const drawSeg = () => { segs.innerHTML = ""; [["dark", "Dark"], ["light", "Light"], ["auto", "Follow Windows"]].forEach(([m, l]) => segs.appendChild(h("button", { class: mode() === m ? "on" : "", onclick: () => { setTheme(null, m); renderModeIcon(); drawSeg(); drawThumbs(); } }, l))); };
   const thumbs = h("div", { class: "thumbs" });
-  const PALS = [["amber", "Amber", "Warm copper"], ["sage", "Sage", "Calm teal-green"]];
+  const PALS = [["ivory", "Ivory", "Warm and calm, clay accent"], ["midnight", "Midnight", "Cool, sharp, indigo accent"], ["amber", "Amber", "Warm copper (classic)"], ["sage", "Sage", "Calm teal-green (classic)"]];
   const drawThumbs = () => {
     thumbs.innerHTML = "";
     const m = resolvedMode();
-    PALS.forEach(([p, name, sub]) => thumbs.appendChild(h("div", { class: "thumb" + ((c.ui_pal || "amber") === p ? " on" : ""), onclick: () => { setTheme(p, null); drawThumbs(); } },
+    PALS.forEach(([p, name, sub]) => thumbs.appendChild(h("div", { class: "thumb" + ((c.ui_pal || "ivory") === p ? " on" : ""), onclick: () => { setTheme(p, null); drawThumbs(); } },
       h("div", { class: "pv", "data-t": `${p}-${m}` }, h("i", { class: "a" }), h("i", { class: "b" }), h("i", { class: "c" }), h("i", { class: "d" })), h("b", {}, name), h("small", {}, sub))));
   };
   drawSeg(); drawThumbs();

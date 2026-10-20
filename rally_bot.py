@@ -204,8 +204,8 @@ DEFAULTS = {
     "tg_feed_chats": "",                    # chats / channels / bots to watch for coordinates (comma separated: @username, link or the name in your chat list)
     "tg_keep_min": 60,                      # forget a coordinate in the live list after this many minutes (0 = keep until cleared)
     "sidebar_open": True,                   # emulator list on the left (toggle with the header button, Ctrl+B or F9)
-    "ui_pal": "amber",                      # amber | sage
-    "ui_mode": "dark",                      # dark | light | auto
+    "ui_pal": "ivory",                      # ivory | midnight | amber | sage
+    "ui_mode": "light",                     # dark | light | auto
     "ui_accent": "",                        # "" = the theme's own colour, else #rrggbb
     "ui_btn": "raised", "ui_border": "subtle", "ui_round": "normal",   # raised|tinted, subtle|accent, sharp|normal|round
     "ui_text": 100,                         # whole-window text size in percent (85-150)

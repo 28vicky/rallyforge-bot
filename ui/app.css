@@ -45,6 +45,51 @@
   --appsh:0 30px 70px rgba(30,50,46,.35);--overlay:rgba(30,50,46,.35);
 }
 
+/* ---------- ivory / light (default): warm paper, one clay accent, flat cards */
+[data-pal="ivory"][data-mode="light"]{
+  --fg:#141413;--mute:#6b6860;--accfg:#ffffff;--bd:1px solid #e8e5db;
+  --bg:#faf9f5;--bgc:#faf9f5;
+  --side:#f3f1ea;--card:#ffffff;
+  --btn:#ffffff;--field:#f3f1ea;--line:#e3dfd2;--off:#cfcbbd;
+  --accent:#b5532f;--accent1:#b5532f;--accent2:#a34a29;--bad:#b3392f;--good:#1f6b40;--warn:#8a5a14;
+  --sh:0 1px 2px rgba(20,20,19,.05),0 6px 18px rgba(20,20,19,.05);--sh2:0 1px 2px rgba(20,20,19,.08);
+  --glow:none;--inset:inset 0 1px 2px rgba(20,20,19,.14);--knob:#fff;
+  --appsh:0 30px 70px rgba(20,20,19,.25);--overlay:rgba(20,20,19,.35);
+}
+/* ---------- ivory / dark: the same look after dark */
+[data-pal="ivory"][data-mode="dark"]{
+  --fg:#edeae0;--mute:#a09b8e;--accfg:#1b120d;--bd:1px solid #34322e;
+  --bg:#1a1917;--bgc:#1a1917;
+  --side:#151413;--card:#222120;
+  --btn:#2a2927;--field:#151413;--line:#34322e;--off:#3a3835;
+  --accent:#d9805a;--accent1:#d9805a;--accent2:#e39a78;--bad:#e58a95;--good:#5fc08f;--warn:#e0b066;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.28);--sh2:0 1px 2px rgba(0,0,0,.4);
+  --glow:none;--inset:inset 0 1px 3px rgba(0,0,0,.5);--knob:#f4f1e8;
+  --appsh:0 40px 90px #000;--overlay:rgba(5,5,4,.62);
+}
+/* ---------- midnight / dark: near-black, thin borders, one indigo accent */
+[data-pal="midnight"][data-mode="dark"]{
+  --fg:#e7e9ee;--mute:#8a90a0;--accfg:#ffffff;--bd:1px solid #23262e;
+  --bg:#0b0c0f;--bgc:#0b0c0f;
+  --side:#0f1115;--card:#14161b;
+  --btn:#1b1e25;--field:#0f1115;--line:#23262e;--off:#2a2e38;
+  --accent:#5b5fef;--accent1:#8f93ff;--accent2:#a5a9ff;--bad:#ff8a93;--good:#5fd08f;--warn:#e0b066;
+  --sh:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px rgba(0,0,0,.35);--sh2:0 1px 2px rgba(0,0,0,.5);
+  --glow:none;--inset:inset 0 1px 3px rgba(0,0,0,.6);--knob:#f4f5f9;
+  --appsh:0 40px 90px #000;--overlay:rgba(3,4,8,.66);
+}
+/* ---------- midnight / light: crisp white with the same indigo */
+[data-pal="midnight"][data-mode="light"]{
+  --fg:#14161b;--mute:#5b6170;--accfg:#ffffff;--bd:1px solid #e1e4ea;
+  --bg:#f6f7f9;--bgc:#f6f7f9;
+  --side:#ffffff;--card:#ffffff;
+  --btn:#ffffff;--field:#eef0f4;--line:#e1e4ea;--off:#cbd0da;
+  --accent:#4448db;--accent1:#4448db;--accent2:#3a3ec4;--bad:#b3392f;--good:#1f6b40;--warn:#8a5a14;
+  --sh:0 1px 2px rgba(20,22,27,.06),0 6px 18px rgba(20,22,27,.06);--sh2:0 1px 2px rgba(20,22,27,.08);
+  --glow:none;--inset:inset 0 1px 2px rgba(20,22,27,.14);--knob:#fff;
+  --appsh:0 30px 70px rgba(20,22,27,.28);--overlay:rgba(20,22,27,.4);
+}
+
 *{box-sizing:border-box;margin:0}
 html,body{height:100%}
 body{font:16px/1.45 var(--font);color:var(--fg);background:var(--bgc);overflow:hidden}
@@ -180,6 +225,11 @@ table.t td{padding:2px 8px 2px 0;vertical-align:middle}
 .pv[data-t="amber-light"]{background:#efe6d8}.pv[data-t="amber-light"] .a{background:#f6eee1}.pv[data-t="amber-light"] .b{background:#fffdf9}.pv[data-t="amber-light"] .c{background:#fffdf8}
 .pv[data-t="sage-dark"]{background:#101417}.pv[data-t="sage-dark"] .a{background:#161b1f}.pv[data-t="sage-dark"] .b{background:#2a3238}.pv[data-t="sage-dark"] .c{background:#20272c}
 .pv[data-t="sage-light"]{background:#e3ecea}.pv[data-t="sage-light"] .a{background:#eef5f3}.pv[data-t="sage-light"] .b{background:#fdfffe}.pv[data-t="sage-light"] .c{background:#fcfffe}
+.pv[data-t="ivory-light"]{background:#faf9f5}.pv[data-t="ivory-light"] .a{background:#f3f1ea}.pv[data-t="ivory-light"] .b{background:#ffffff}.pv[data-t="ivory-light"] .c{background:#ffffff}
+.pv[data-t="ivory-dark"]{background:#1a1917}.pv[data-t="ivory-dark"] .a{background:#151413}.pv[data-t="ivory-dark"] .b{background:#2a2927}.pv[data-t="ivory-dark"] .c{background:#222120}
+.pv[data-t="midnight-dark"]{background:#0b0c0f}.pv[data-t="midnight-dark"] .a{background:#0f1115}.pv[data-t="midnight-dark"] .b{background:#1b1e25}.pv[data-t="midnight-dark"] .c{background:#14161b}
+.pv[data-t="midnight-light"]{background:#f6f7f9}.pv[data-t="midnight-light"] .a{background:#ffffff}.pv[data-t="midnight-light"] .b{background:#ffffff}.pv[data-t="midnight-light"] .c{background:#eef0f4}
+.pv[data-t^="ivory"] .d{background:#b5532f}.pv[data-t^="midnight"] .d{background:#5b5fef}
 .pv[data-t^="amber"] .d{background:linear-gradient(135deg,#d9a566,#c4825a)}.pv[data-t^="sage"] .d{background:linear-gradient(135deg,#6fb5a6,#4f9488)}
 
 /* ---------- modal + toast */

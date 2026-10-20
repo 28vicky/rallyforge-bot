@@ -108,7 +108,7 @@ const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: 
 
 // ------------------------------------------------------------------ theme
 function resolvedMode() {
-  const m = S.cfg.ui_mode || "dark";
+  const m = S.cfg.ui_mode || "light";
   return m === "auto" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : m;
 }
 const ACCENTS = [["#d9a566", "Amber"], ["#e0c25a", "Gold"], ["#e07a5a", "Coral"], ["#e58a95", "Rose"], ["#a58be0", "Violet"], ["#7aa7e0", "Sky"], ["#6fb5a6", "Sage"], ["#8fc46a", "Lime"]];
@@ -144,9 +144,9 @@ function applyCustom() {
   if (R) { st.setProperty("--r1", R[0] + "px"); st.setProperty("--r2", R[1] + "px"); st.setProperty("--rad", R[2] + "px"); }
 }
 function applyTheme() {
-  document.documentElement.dataset.pal = S.cfg.ui_pal || "amber";
+  document.documentElement.dataset.pal = S.cfg.ui_pal || "ivory";
   document.documentElement.dataset.mode = resolvedMode();
-  try { localStorage.setItem("rf_theme", JSON.stringify({ pal: S.cfg.ui_pal || "amber", mode: S.cfg.ui_mode || "dark" })); } catch (e) {}
+  try { localStorage.setItem("rf_theme", JSON.stringify({ pal: S.cfg.ui_pal || "ivory", mode: S.cfg.ui_mode || "light" })); } catch (e) {}
   applyCustom();
 }
 function setLook(o) {
@@ -339,7 +339,7 @@ async function loadProfileFlow() {
         const r = await act(api("profile_load", { name: chosen })).finally(() => {});
         if (!r) AUTO.busy = false;
         if (r) { const j = await api("state").finally(() => (AUTO.busy = false)); S.cfg = j.cfg; S.devices = j.devices; AUTO.saved = AUTO.seen = cfgSnap(); S.generals = j.generals; S.monsters = j.monsters; S.profiles = j.profiles;
-          S.cfg.ui_pal = S.cfg.ui_pal || "amber"; S.cfg.ui_mode = S.cfg.ui_mode || "dark"; applyTheme(); layout(); toast(`Profile '${chosen}' loaded.`); }
+          S.cfg.ui_pal = S.cfg.ui_pal || "ivory"; S.cfg.ui_mode = S.cfg.ui_mode || "light"; applyTheme(); layout(); toast(`Profile '${chosen}' loaded.`); }
       } }] });
 }
 
@@ -732,8 +732,8 @@ async function boot() {
   S.generals = j.generals; S.monsters = j.monsters; S.catalog = j.catalog || S.catalog || []; S.profiles = j.profiles; S.cityInfo = j.city_info; S.bosses = j.bosses;
   S.meta = { buildings: j.building_names, icons: j.icons, examples: j.example_tasks, botPresets: j.default_bot_presets };
   S.devStatus = (await api("poll", { since: 0 })).devs;
-  S.cfg.ui_pal = S.cfg.ui_pal || "amber";
-  S.cfg.ui_mode = S.cfg.ui_mode || "dark";
+  S.cfg.ui_pal = S.cfg.ui_pal || "ivory";
+  S.cfg.ui_mode = S.cfg.ui_mode || "light";
   applyTheme();
   document.title = "RallyForge Bot " + S.version;
   layout();

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-pal="amber" data-mode="dark">
+<html lang="en" data-pal="ivory" data-mode="light">
 <head>
 <meta charset="utf-8">
 <title>RallyForge Bot</title>
@@ -12,8 +12,8 @@
     var t = JSON.parse(localStorage.getItem("rf_theme") || "null");
     if (t) {
       var m = t.mode === "auto" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : t.mode;
-      document.documentElement.dataset.pal = t.pal || "amber";
-      document.documentElement.dataset.mode = m || "dark";
+      document.documentElement.dataset.pal = t.pal || "ivory";
+      document.documentElement.dataset.mode = m || "light";
     }
   } catch (e) {}
 </script>
