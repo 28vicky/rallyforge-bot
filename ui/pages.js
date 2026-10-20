@@ -442,23 +442,24 @@ function instancePage(serial) {
       h("label", { class: "tgl" }, asOn, h("span", { class: "sw" }), "Start this instance automatically when the app opens")));
   // ---- tabs (same look as the Control settings tabs). The chosen tab is remembered, also when another instance is opened.
   const ITABS = [
+    ["dash", "Dashboard", () => {
+      const a = activityBox(serial, "Activity");
+      const L = a.querySelector(".actleft"), R = a.querySelector(".actright");
+      return [h("div", { class: "dutygrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
+    }],
     ["run", "Run & phone", () => [phone, autoStart, autoJoin, staminaPanel(ov, S.cfg)]],
     ["settings", "Settings", () => [panelEl]],
     ["presets", "Presets & generals", () => ownP],
     ["monsters", "Monsters", () => [PAGES.monsters(serial)]],
     ["tasks", "Tasks", () => [PAGES.tasks(serial)]],
-    ["duties", "Duties", () => {
-      const a = activityBox(serial, "Activity");
-      const L = a.querySelector(".actleft"), R = a.querySelector(".actright");
-      return [h("div", { class: "dutygrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial)))];
-    }],
+    ["duties", "Duties", () => [PAGES.duties(serial)]],
     ["crazy_eggs", "Crazy Eggs", () => [PAGES.duties(serial, "crazy_eggs")]],
     ["champions", "Champions", () => [PAGES.duties(serial, "champions")]],
     ["itinerary", "Itinerary", () => [instItinerary(serial)]],
     ["history", "Log history", () => [instHistory(serial)]],
   ];
   if (!S.instTab) { try { S.instTab = localStorage.getItem("rf_inst_tab") || ""; } catch (e) { S.instTab = ""; } }
-  if (!ITABS.some((t) => t[0] === S.instTab)) S.instTab = "run";
+  if (!ITABS.some((t) => t[0] === S.instTab)) S.instTab = "dash";
   const body = h("div", {});
   const tabRow = h("div", { class: "tabs", style: { margin: "4px 0 14px" } });
   const showTab = (k) => {
@@ -466,7 +467,7 @@ function instancePage(serial) {
     try { localStorage.setItem("rf_inst_tab", k); } catch (e) {}
     [...tabRow.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
     body.innerHTML = "";
-    if (k !== "duties") {
+    if (k !== "dash") {
       const nv = h("span", { class: "nowtxt" }, actNow(serial));
       body.appendChild(h("div", { class: "nowstrip" }, h("span", { class: "actlab" }, "Now"), nv));
       const iv = setInterval(() => { if (!nv.isConnected) clearInterval(iv); else nv.textContent = actNow(serial); }, 2000);
@@ -476,6 +477,7 @@ function instancePage(serial) {
   };
   for (const [k, l] of ITABS) tabRow.appendChild(h("button", { class: "tab", "data-k": k, onclick: () => showTab(k) }, l));
   const wrap = h("div", {}, h("div", { class: "stickyhead" }, h("div", { class: "stickybox" }, head, warn)), tabRow, body);
+  S.gotoInstTab = showTab;
   showTab(S.instTab);
   setTimeout(refreshInstanceControls, 0);
   return wrap;
@@ -1083,7 +1085,7 @@ PAGES.license = function () {
 
 
 // ====================================================================== duties
-PAGES.duties = function (fixed, only) {
+PAGES.duties = function (fixed, only, compact) {
   const root = h("div", {});
   let serial = fixed || "";                       // "" = all instances (the default); an instance id = that instance's own copy
   let rows = [], own = {};
@@ -1093,6 +1095,18 @@ PAGES.duties = function (fixed, only) {
     if (fixed === undefined) root.appendChild(hist);
     const pick = h("select", { onchange: (e) => { serial = e.target.value; load(); loadCe(); loadCh(); loadWh(); loadRn(); } },
       [h("option", { value: "", selected: serial === "" }, "All instances (default)")].concat(S.devices.map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || short(d.id)))));
+    if (compact) {
+      root.appendChild(rn);
+      const onRows = rows.filter((r) => r.on);
+      root.appendChild(panel("Daily duties", h("div", { class: "dlist" }, onRows.slice(0, 7).map((r) => h("div", { class: "drow" },
+        h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" })),
+        h("div", { class: "dtx" }, h("b", {}, r.title), h("small", {}, (r.note || "") + (r.schedule ? " \u00b7 " + r.schedule : ""))),
+        h("span", { class: "dst " + (r.status === "done" ? "ok" : r.status === "gaveup" ? "bad" : "") }, r.on ? r.status_text : "Off"))).concat(onRows.length ? [] : [note("No duty is switched on yet.")])),
+        h("div", { class: "row", style: { marginTop: "10px", justifyContent: "space-between" } },
+          h("span", { class: "hint" }, onRows.length > 7 ? "+" + (onRows.length - 7) + " more switched on" : onRows.length + " switched on"),
+          h("button", { class: "btn sm", onclick: () => S.gotoInstTab && S.gotoInstTab("duties") }, "Manage all duties \u2192"))));
+      return;
+    }
     if (!only) root.appendChild(panel("Duties",
       note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes, retries 3 times a day if it fails, then waits for the next reset. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
       h("div", { class: "row" }, fixed !== undefined ? null : h("span", { class: "lab" }, "Settings for"), fixed !== undefined ? null : pick,
