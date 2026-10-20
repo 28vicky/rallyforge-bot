@@ -1,9 +1,9 @@
 {
-  "version": "2.4.63",
-  "notes": "New cleaner look: new sidebar, instance header and tabs, Light/Dark, page-size slider, Global/Own monster switch, Telegram live coordinates",
+  "version": "2.4.64",
+  "notes": "Points bosses (Silver Lionheart Knight) are never joined",
   "files": {
     "rally_bot.py": {
-      "sha256": "3e54cad31c10dc9447e793cc9b338ca168df8bee2b854497ec61602de302532f"
+      "sha256": "9cc32b405729e3095cf1fbadf59f45037f63b9e0aeda6843563f431a2f2b5dfa"
     },
     "web_app.py": {
       "sha256": "891199c5803a1de779e1d668b2e15e6eeb21bcd93f58f76769c716158cbd26e2"
@@ -18,7 +18,7 @@
       "sha256": "fecdb35f6bd865136680c04b23e41dd0d96c2a1d5137d13a6b6e1bf0cb089f77"
     },
     "ui/changelog.js": {
-      "sha256": "183e2be9060f24735b55c19703eec7ca92c54db0e64582499e8852727dd5f0f1"
+      "sha256": "5816dec1bfdc60c4750b28924e0bf78fada73e7a5405f22fd6b8bc0de9877ce7"
     },
     "ui/dialogs.js": {
       "sha256": "40549bd7764a94cf5129436895741a90d80d7fa051fd8948742d18f28e841df7"
@@ -93,6 +93,14 @@
       "sha256": "4ad9ff94e3889c26f99f0058bdff35ea4ba1a2d0f1930e6bdd8711e1af46013a",
       "url": "monsters/Phoenix.png"
     },
+    "Silver Lionheart Knight #2.png": {
+      "sha256": "2e97a2bd411fa671999b1a823793c8baf3d8a240bb499b06844ffcec91c63d06",
+      "url": "monsters/Silver%20Lionheart%20Knight%20%232.png"
+    },
+    "Silver Lionheart Knight.png": {
+      "sha256": "a859a128150097d395f38de55e4f3e2fbf621fe4c08898c0cc5fb455580db1b7",
+      "url": "monsters/Silver%20Lionheart%20Knight.png"
+    },
     "Sphinx.png": {
       "sha256": "80ed9e22b3da441f270c93bd458c72d936db28e70a33254b37a2800104c2f584",
       "url": "monsters/Sphinx.png"
@@ -139,5 +147,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "48a8f26692b3671b34c460247720d7c70c00bf45cd8fb941d6417d10f9b0de01"
+  "sig": "eb2d2b379b133c8fa6bf87455a157192afb80eac62f7e34639e4bc60bcc74710"
 }
