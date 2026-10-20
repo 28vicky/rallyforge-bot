@@ -6891,6 +6891,8 @@ FIXED_BUILDINGS = {"Keep#1": [1141, 609]}
 ANCHOR_TO_KEEP = {"Tavern": (90, -135), "Shrine": (313, -139)}   # Keep label minus anchor label (emulator pixels; measured on Kiravik's city picture and cross-checked on the PC client view)
 # Fixed buildings: label position minus the Shrine label (emulator pixels). The Shrine, Tavern and Keep never move, so any one of them gives the rest.
 FIXED_OFFSETS_FROM_SHRINE = {"Victory Column": [-681, -363], "Council of State": [74, -439], "Ideal Land": [324, -449], "Dragon Cliff": [651, -447], "Arsenal": [-91, -352], "Triumphal Arch": [219, -357], "Academy": [65, -272], "Military Academy": [492, -267], "Research Factory": [-451, -182], "Barracks": [-205, -178], "Wisdom Dome": [681, -159], "Warehouse": [-19, -133], "Keep": [314, -139], "Art Hall": [-628, -101], "Prison": [-381, -88], "Holy Palace": [528, -73], "Tavern": [223, -3], "Trap Factory": [-203, -6], "Shrine": [0, 0], "Archer Camp": [657, 27], "Pasture": [-808, -10], "Stables": [-577, 51], "Market": [-425, 132], "Workshop": [89, 141], "War Hall": [405, 126], "Embassy": [231, 211], "Hospital": [-72, 311], "Rally Spot": [644, 234], "Walls": [-406, 291], "Battlefield": [-701, 357], "Bounty Cave": [-471, 455]}
+# Squares the bot does not need for now (owner, 20 Oct): Bounty Cave, Wonder, Watchtower, Archer Tower 1 and 2. Parked for a future build; ask for them with numbers (square:N).
+PARKED_SQUARES = {31, 32, 34, 35, 36}
 UNIQUE_BUILDINGS = {k.lower() for k in FIXED_OFFSETS_FROM_SHRINE}                # one of each in the city: a second read of the same name means the camera was somewhere else
 
 # Numbered squares of the default city map (city_map/city_map_default.png): number -> [name, centre of the square minus the Shrine label, emulator pixels]. 1 = Keep.
@@ -7178,7 +7180,7 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
     dev.guard_city = True
     t0 = time.time()
     nav = CityNav(dev, stop, log)
-    order = list(numbers or sorted(CITY_SQUARES))
+    order = list(numbers or [n for n in sorted(CITY_SQUARES) if n not in PARKED_SQUARES])
     got, bad, items, levels = {}, [], {}, {}
     prog_f = USER / "squares_progress.json"
     try:                                                     # an unfinished run (stopped, crashed, lost): carry on from where it stopped
@@ -7192,7 +7194,7 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
         if order:
             log(f"[*] Squares: carrying on from the last run - {len(done_before)} squares already read, {len(order)} to go")
         else:
-            order = list(sorted(CITY_SQUARES))
+            order = [n for n in sorted(CITY_SQUARES) if n not in PARKED_SQUARES]
             mine = {}
     done_list = list(mine.get("done", [])) if mine else []
     wipe = not done_list                                    # a fresh run starts from a blank map; a resumed run keeps what it already read
