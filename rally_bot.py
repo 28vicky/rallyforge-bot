@@ -3567,6 +3567,53 @@ def crawl_portraits(dev, cfg, log, stop, progress=None):
     return found
 
 
+def merge_catalog(found, log=print):
+    """Add the generals of a crawl that the library does not have yet to USER/catalog (catalog.json + art/ + labels/).
+    Generals already in the library are left as they are. -> number added."""
+    root = USER / "catalog"
+    (root / "art").mkdir(parents=True, exist_ok=True)
+    (root / "labels").mkdir(exist_ok=True)
+    try:
+        data = json.loads((root / "catalog.json").read_text(encoding="utf-8"))
+    except Exception:
+        data = {"generals": []}
+    have = {g["name"]: g for g in data.get("generals", [])}
+    added = 0
+    for name, g in sorted(found.items(), key=lambda kv: kv[0].lower()):
+        safe = _clean_general_name(name)
+        old = have.get(safe)
+        if old:                                            # known: only add the region / troop types it was seen under
+            old["region"] = sorted(set(old.get("region", [])) | set(g["region"]))
+            old["troops"] = sorted(set(old.get("troops", [])) | set(g["troops"]))
+            continue
+        cv2.imwrite(str(root / "art" / f"{safe}.png"), g["image"])
+        if g.get("label") is not None:
+            cv2.imwrite(str(root / "labels" / f"{safe}.png"), g["label"])
+        have[safe] = {"name": safe, "region": g["region"], "troops": g["troops"], "art": f"{safe}.png"}
+        added += 1
+    (root / "catalog.json").write_text(json.dumps({"built": time.strftime("%Y-%m-%d"), "generals": sorted(have.values(), key=lambda g: g["name"].lower())}, indent=1), encoding="utf-8")
+    log(f"[+] General library: {added} new general(s) added, {len(have)} in total ({root})")
+    return added
+
+
+def run_tavern_catalog(dev, cfg, log, stop):
+    """The Tavern's ring menu is open: Recruit > Portraits, read every general (picture + name) and add the new ones to
+    the general library. Nothing is recruited and the shop is not refreshed (the Refresh button is never touched)."""
+    shot = dev.screenshot()
+    if not find_text(shot, ["Recruit General"], region=(60, 0, 420, 120)):
+        dev.tap(295, 262)                                   # 'Recruit' in the Tavern's ring menu
+        _nap(stop, 2.2, 3.0)
+        shot = dev.screenshot()
+        if not find_text(shot, ["Recruit General"], region=(60, 0, 420, 120)):
+            raise RuntimeError("the Recruit General page did not open")
+    found = crawl_portraits(dev, cfg, log, stop, progress=lambda n: None)
+    if found:
+        merge_catalog(found, log)
+    else:
+        log("[!]  General library: no generals were read")
+    return len(found)
+
+
 def save_catalog(found, log=print):
     """Write the crawl result to USER/catalog (catalog.json + art/<name>.png). Copy that folder next to the app to ship it."""
     root = USER / "catalog"
@@ -6160,6 +6207,9 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "champions":
         run_champions(dev, cfg, log, stop)
         return
+    if cmd == "tavern_catalog":
+        run_tavern_catalog(dev, cfg, log, stop)
+        return
     if cmd == "market_capture":
         run_market_capture(dev, cfg, log, stop)
         return
@@ -6975,6 +7025,9 @@ DUTY_LIBRARY = [
     {"id": "market_capture", "group": "Common tasks", "title": "Test: Black Market pictures", "every_min": 60, "verified": False,
      "note": "Walks to the Market, opens the Black Market and saves a picture of every item on sale into the item library (nothing is bought or refreshed).",
      "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market", "market_capture"]},
+    {"id": "tavern_catalog", "group": "Common tasks", "title": "General library (Tavern portraits)", "every_min": 1440, "verified": False,
+     "note": "Tavern > Recruit > Portraits: reads every general (picture + name) and adds the new ones to the general library. Nothing is recruited.",
+     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "tavern_catalog"]},
     {"id": "reach_tavern", "group": "Common tasks", "title": "Test: go to Tavern", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Tavern and opens its menu (nothing is pressed).",
      "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern"]},
