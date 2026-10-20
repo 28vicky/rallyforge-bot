@@ -1,9 +1,9 @@
 {
-  "version": "2.4.52",
-  "notes": "BlueStacks emulators the bot closed can be started again when BlueStacks keeps its data on another drive (e.g. E:).",
+  "version": "2.4.53",
+  "notes": "Stamina fills all the way up (slider to the end) by default; Exact number box only shows when chosen.",
   "files": {
     "rally_bot.py": {
-      "sha256": "0bcd4d7a47cbd7445388326c17fd41639a5bf0a7c5bcf8ba7e4a6bbafd9bf414"
+      "sha256": "3f46914e455bd42dbd59a940e9763103f926087ec1d5b0884506c1ade7c97248"
     },
     "web_app.py": {
       "sha256": "35c7fee927ede0f0891c5ced224c0a8cb8cc7acdd307ebf8e7614287952ce6a2"
@@ -18,7 +18,7 @@
       "sha256": "c39281368962c67e3d6e5f30e8d98930a4ae1c4bae1341b4546c89480ccb228a"
     },
     "ui/changelog.js": {
-      "sha256": "feff0b66904f7d23ea76c9fccd58dacc3cb001dff59b7ffd0e2abc2b5d9a18b8"
+      "sha256": "c1164cd7497cd2084504130cae0e450677d89ae257f5c85169dde89ed569ed1c"
     },
     "ui/dialogs.js": {
       "sha256": "6f6438682092c6db775f9b91a5aa7f94cd55fdfb73cb53a42119ded7e6a674d6"
@@ -27,7 +27,7 @@
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "3d3a0d1274f2e61713d26faf76cc22cc9ac7f855eed98716e612d60db59cf521"
+      "sha256": "1eeba7cf361558995acc38c85e47e7b99f6fc3d6feec708142e0d2132bb326d3"
     }
   },
   "mode": "ask",
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "135e7fa4561130cc26071cb33f3dc2f3289ea39139c28d24ba08840f4ddb1a79"
+  "sig": "715c5fabb14c8d908c4ad194d727d5707d8da428cd946f3306e699015a1b0415"
 }

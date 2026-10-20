@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.53", date: "2026-10-20",
+    new: ["Stamina items now fill stamina all the way up (slider to the very end, up to 9,999) by default. Settings that were still on \u201cgame default\u201d are switched to \u201cFull\u201d once; if you change it afterwards, your choice stays.", "The \u201cExact number of items\u201d box only shows when \u201cexact number\u201d is chosen."],
+    fixed: ["Full stamina: if a quick slide of the bar did not move it (one refill used just 2 items), the bot now tries again with a slower slide. The game's own Max button is not used, because it stops at 100 stamina."] },
   { v: "2.4.52", date: "2026-10-20",
     new: [],
     fixed: ["A BlueStacks emulator that the bot closed (for example after the game did not load) could not be started again (\u201cno launcher found for this emulator type\u201d) when BlueStacks keeps its data on another drive such as E:. The bot now finds BlueStacks\u2019 settings on every drive, and it also notes how each running BlueStacks instance was started, so it can always start that instance again."] },

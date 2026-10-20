@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.52"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.53"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -243,7 +243,7 @@ DEFAULTS = {
     "stamina_largest_first": True,
     "stamina_items": "all",                  # which items may be used: all / 100 only / 50 only / 10 only / 50 + 100
     "stamina_order": "large first",          # large first / small first
-    "stamina_amount": "game default",        # game default (2 items) / full (Max) / exact number
+    "stamina_amount": "full (Max)",          # full (Max) = slide to the end (up to 9,999) / game default (2 items) / exact number
     "stamina_count": 2,                      # how many items when 'exact number'
 
     "stamina_xy": [385, 854],                # the stamina number on the march screen (opens the Use Item screen)
@@ -374,6 +374,10 @@ def migrate_cfg(cfg):
             box["march_timer_source"] = ""
     if cfg.get("bad_preset_seconds") == 120:             # the old default was far too long for a 5-minute rally
         cfg["bad_preset_seconds"] = 20
+    if not cfg.get("_stamina_full_default"):             # 2.4.53: stamina items fill up to Max by default (once; a later change by the user stays)
+        cfg["_stamina_full_default"] = True
+        if cfg.get("stamina_amount", "game default") == "game default":
+            cfg["stamina_amount"] = "full (Max)"
     return cfg
 
 
@@ -1747,7 +1751,7 @@ def _refill_once(dev, cfg, log, stop, needed):
         if find_text(shot, ["You can receive", "can receive"], region=(40, 410, 440, 100), cutoff=0.72):
             return True
         return bool(find_text(shot, ["Own:", "Own"], region=(60, 310, 300, 80), cutoff=0.6)) and \
-            bool(find_text(shot, ["Max"], region=(60, 650, 420, 70), cutoff=0.8))
+            bool(find_text(shot, ["Max", "Minimum"], region=(60, 650, 420, 70), cutoff=0.8))
 
     for size in sizes:
         if stop.is_set():
@@ -1772,7 +1776,7 @@ def _refill_once(dev, cfg, log, stop, needed):
             log(f"[i] Stamina: the amount window for {size} did not open - trying the next size")
             continue
         _stamina_snap(shot, "dialog")
-        mode = str(cfg.get("stamina_amount", "game default"))
+        mode = str(cfg.get("stamina_amount", "full (Max)"))
         def _count(sh):
             try:
                 for _, ws in ocr_lines(sh[540:590, 130:410]):
@@ -1782,9 +1786,13 @@ def _refill_once(dev, cfg, log, stop, needed):
             except Exception:
                 pass
             return None
-        if mode.startswith("full"):                          # slide the bar all the way to the right end (as far as the game lets this item go)
-            for _sw in range(3):
-                dev.swipe(137, 503, 432, 503, 700)
+        if mode.startswith("full"):                          # slide the bar all the way to the right end. NOT the game's Max button: it stops at 100 stamina
+            for _sw in range(4):
+                _shot_max = dev.screenshot()
+                cnt = _count(_shot_max)
+                if cnt and cnt[0] >= cnt[1]:
+                    break
+                dev.swipe(137, 503, 440, 503, 700 if _sw % 2 == 0 else 1300)   # a slower drag when a quick one did not move the thumb
                 nap(0.6, 0.9)
                 _shot_max = dev.screenshot()
                 cnt = _count(_shot_max)

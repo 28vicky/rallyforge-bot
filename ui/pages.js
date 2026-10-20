@@ -538,12 +538,19 @@ function staminaPanel(store, base) {
   return panel("Stamina (when a march needs more than you have)",
     h("div", { class: "hint", style: { marginBottom: "10px" } }, "The bot uses stamina ITEMS only (never gems). Choose which items it may use, in which order, and how many."),
     h("div", { style: { marginBottom: "10px" } }, tog({ stamina_auto: g("stamina_auto", true) }, "stamina_auto", "Use stamina items automatically", { after: (v) => { store.stamina_auto = v; } })),
-    grid2(
-      fld("Items it may use", S_("stamina_items", ["all", "100 only", "50 only", "10 only", "50 + 100"], "all")),
-      fld("Order", S_("stamina_order", ["large first", "small first"], "large first")),
-      fld("How many", S_("stamina_amount", ["game default", "full (Max)", "exact number"], "game default")),
-      fld("Exact number of items (when 'exact number')", inp(store, "stamina_count", { type: "int", cls: "short", get: (v) => g("stamina_count", 2) }))),
-    note("Game default = the amount the game suggests (2 items, so 100 stamina with the 50 item). Full = the Max button (uses all of that item). Exact number = the number you type."));
+    (() => {
+      const cntFld = fld("Exact number of items", inp(store, "stamina_count", { type: "int", cls: "short", get: (v) => g("stamina_count", 2) }));
+      const showCnt = () => { cntFld.style.display = g("stamina_amount", "full (Max)") === "exact number" ? "" : "none"; };
+      const amt = sel(store, "stamina_amount", [["full (Max)", "Full - slide to the end (up to 9,999)"], "game default", "exact number"],
+                      { get: () => g("stamina_amount", "full (Max)"), after: showCnt });
+      showCnt();
+      return grid2(
+        fld("Items it may use", S_("stamina_items", ["all", "100 only", "50 only", "10 only", "50 + 100"], "all")),
+        fld("Order", S_("stamina_order", ["large first", "small first"], "large first")),
+        fld("How many", amt),
+        cntFld);
+    })(),
+    note("Full = slides the bar to the very end, so stamina fills up to the game's limit (9,999) - the default. The game's own Max button is not used (it stops at 100). Game default = the amount the game suggests (2 items). Exact number = the number of items you type."));
 }
 PAGES.settings = function () {
   const c = S.cfg;
