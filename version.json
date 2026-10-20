@@ -1,9 +1,9 @@
 {
-  "version": "2.4.61",
-  "notes": "Recovery from unexpected windows, right-building check, other city styles, general library fixes",
+  "version": "2.4.62",
+  "notes": "Building tasks work in every city style; Champions fixes",
   "files": {
     "rally_bot.py": {
-      "sha256": "916a248792055d05d7d8b0aa454a6bee9eb9154ab53104bbd7887364e15edac1"
+      "sha256": "729590010f649b8593f53664c06d32c98de0bd6c447b87a82338e19df90738a0"
     },
     "web_app.py": {
       "sha256": "7975800cdf579b8726c334d84cde23e684e896fb127e4d6699b11d695f23cdc3"
@@ -18,7 +18,7 @@
       "sha256": "c39281368962c67e3d6e5f30e8d98930a4ae1c4bae1341b4546c89480ccb228a"
     },
     "ui/changelog.js": {
-      "sha256": "c7370945878971cab13cd701a3f72746716d887fc7a937eac30ea3d1fe957a3a"
+      "sha256": "cf30a3e21a6fd81290e71fa3e9c23ed83554afab993d76176b162e50322e9adf"
     },
     "ui/dialogs.js": {
       "sha256": "6f6438682092c6db775f9b91a5aa7f94cd55fdfb73cb53a42119ded7e6a674d6"
@@ -136,5 +136,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "a183cdf738602dda994ea7b1554e1f2ffec2ae4e4ce4e8fca050dec00b02ca70"
+  "sig": "137a511a39cb62b35a04c9a9bf9ab34d67e2c3a5f8722aa0f7fdd723c9f15182"
 }
