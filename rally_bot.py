@@ -6793,6 +6793,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
     return False
 
 
+ALLIANCE_BTN_DEFAULT = (492, 722)                            # the round Alliance button in the right-hand icon column of the city view (540x960)
 GAIN = 1.45                                               # the map follows a finger ~1.45x as far (measured on a real city)
 
 
@@ -8831,6 +8832,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         """Get back to the rally list: close pop-ups, follow the navigation steps, use Back where it is safe."""
         at_bottom[0] = False                  # the list reopens at the top: the next sweep jumps to the bottom first
         outside_taps = [0]
+        blind_taps = [0]
         back_taps = [0]
         war_row_taps = [0]
         view_toggles = [0]
@@ -8935,6 +8937,12 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             elif st == "city" and cfg.get("rally_nav_tap"):
                 dev.tap(*cfg["rally_nav_tap"])
                 log("[*] Tapped the saved spot to reach the rally list")
+            elif st == "city" and blind_taps[0] < 2:         # the Alliance button sits in the same place of the right-hand icon column in every city: tap it when the picture and the word were not found (a 'FOR SALE' tag or a badge over it breaks both)
+                blind_taps[0] += 1
+                dev.tap(*ALLIANCE_BTN_DEFAULT)
+                log(f"[*] Alliance button not recognised - tapped where it normally sits {ALLIANCE_BTN_DEFAULT}")
+                nap(1.5, 2.2)
+                continue
             elif st == "city" and outside_taps[0] < 2:       # the navigation button is hidden: probably a card-style pop-up (no X) over the city
                 outside_taps[0] += 1
                 prev = screen
