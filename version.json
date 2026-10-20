@@ -1,9 +1,9 @@
 {
-  "version": "2.4.50",
-  "notes": "",
+  "version": "2.4.51",
+  "notes": "Stamina items: the amount window is recognised even when the Own line cannot be read; missing item sizes are skipped instead of opening the wrong item.",
   "files": {
     "rally_bot.py": {
-      "sha256": "dc190a7bc5a0470f8cae2d3264d4b431ba324e1ce2c0d2d43aaa225aa888346e"
+      "sha256": "8ba3dff81d04459b209800dccd0f03bb7eb52e9d1ab45bc1155a9ccbaa6163aa"
     },
     "web_app.py": {
       "sha256": "35c7fee927ede0f0891c5ced224c0a8cb8cc7acdd307ebf8e7614287952ce6a2"
@@ -18,7 +18,7 @@
       "sha256": "c39281368962c67e3d6e5f30e8d98930a4ae1c4bae1341b4546c89480ccb228a"
     },
     "ui/changelog.js": {
-      "sha256": "82cc6fed939c00cf5449116d08f941d6a948bc7ef5cdf724f3246c571bedf42f"
+      "sha256": "afc686fbe87463000b2f8154cc0802a5e6cfc3861d09320d1a0351ace3dae6a2"
     },
     "ui/dialogs.js": {
       "sha256": "6f6438682092c6db775f9b91a5aa7f94cd55fdfb73cb53a42119ded7e6a674d6"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "c97c570f6d2aff54e364b9d00ea88c61dcdc6a3d5bedddce8bd00097bb389b78"
+  "sig": "bb2b2b7c1ef6ef1f08c96316f46e4f267e1ae2117dacebefb63e29336e153aea"
 }

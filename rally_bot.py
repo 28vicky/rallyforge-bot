@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.50"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.51"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -1719,19 +1719,28 @@ def _refill_once(dev, cfg, log, stop, needed):
     ROW_Y = {10: 442, 50: 604, 100: 766}                     # the title line of each item row on the Use Item screen (the Use button is ~49 px lower)
 
     def _row_y(shot, size):
-        """Exact-number match ('100' must not match '10' or '50'), then the fixed spot."""
+        """Exact-number match ('100' must not match '10' or '50'), then the fixed spot - but only when no item row could
+        be read at all. If other rows were read and this size is not among them, the account has none of it (the fixed
+        spot would then open a different item, e.g. the 50 row when looking for 100)."""
+        seen_rows = False
         try:
             for _, ws in ocr_lines(shot[300:940, 0:340]):
                 for k, w in enumerate(ws):
-                    if re.sub(r"\D", "", w[0]) == str(size) and k + 1 < len(ws) and ws[k + 1][0].lower().startswith("stam"):
-                        return int(w[2]) + 300
+                    if k + 1 < len(ws) and ws[k + 1][0].lower().startswith("stam") and re.sub(r"\D", "", w[0]):
+                        seen_rows = True
+                        if re.sub(r"\D", "", w[0]) == str(size):
+                            return int(w[2]) + 300
         except Exception:
             pass
-        return ROW_Y.get(size)
+        return None if seen_rows else ROW_Y.get(size)
 
     def _dialog_open(shot):
+        """The amount window (item picture, 'Own: n', 'You can receive', slider, Max / Use). Either text line is enough:
+        the OCR sometimes cannot read 'Own: 7,218' at all (seen on Oogly), and then the open window was taken as closed."""
+        if find_text(shot, ["You can receive", "can receive"], region=(40, 410, 440, 100), cutoff=0.72):
+            return True
         return bool(find_text(shot, ["Own:", "Own"], region=(60, 310, 300, 80), cutoff=0.6)) and \
-            bool(find_text(shot, ["You can receive", "can receive"], region=(40, 410, 440, 100), cutoff=0.72))
+            bool(find_text(shot, ["Max"], region=(60, 650, 420, 70), cutoff=0.8))
 
     for size in sizes:
         if stop.is_set():
