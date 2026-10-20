@@ -101,8 +101,8 @@ const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", mon
 
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
-  ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["telegram", "Telegram"], ["reliability", "Reliability"],
-  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Themes"], ["license", "Account"],
+  ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["telegram", "Telegram & Discord"], ["reliability", "Reliability"],
+  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
 
@@ -228,7 +228,7 @@ function renderModeIcon() {
 function quickMode() {
   setTheme(null, resolvedMode() === "dark" ? "light" : "dark");
   renderModeIcon();
-  if (S.sel === "control" && S.tab === "themes") renderPage();
+  if (S.sel === "control" && S.tab === "settings") renderPage();
 }
 
 // ------------------------------------------------------------------ ribbon
@@ -435,8 +435,8 @@ const TAB_GROUPS = [
   ["tasks", "Tasks", null],
   ["duties", "Duties", null],
   ["market", "Market", null],
-  ["setup", "Setup", ["settings", "reliability", "schedule", "telegram"]],
-  ["app", "App", ["updates", "themes", "license"]],
+  ["setup", "Setup", ["settings", "reliability", "schedule"]],
+  ["app", "App", ["updates", "telegram", "license"]],
 ];
 function closeTabMenu() { const m = document.getElementById("tabmenu"); if (m) m.remove(); document.removeEventListener("mousedown", tabMenuOutside, true); document.removeEventListener("keydown", tabMenuKey, true); }
 function tabMenuOutside(e) { const m = document.getElementById("tabmenu"); if (m && !m.contains(e.target) && !e.target.closest(".tab.grp")) closeTabMenu(); }
