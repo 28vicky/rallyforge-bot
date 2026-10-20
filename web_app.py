@@ -1448,7 +1448,12 @@ class Api:
         scope = self._scope(p)
         plan = {k: dict(v) for k, v in rb.ch_conf(self._eff(scope))["plan"].items()}
         name = str(p.get("name", ""))
-        if name in rb.CHAMPIONS:
+        if name in rb.CHAMPIONS and "main" in p:                # the switch on a champion: ON = this champion gets the whole day (all taps + all greetings), OFF = none
+            if p["main"]:
+                plan = {name: {"taps": rb.CH_TAPS, "greets": rb.CH_GREETS}}
+            else:
+                plan.pop(name, None)
+        elif name in rb.CHAMPIONS:
             e = plan.setdefault(name, {"taps": 0, "greets": 0})
             if "taps" in p:
                 e["taps"] = max(0, min(int(float(p["taps"] or 0)), rb.CH_TAPS))

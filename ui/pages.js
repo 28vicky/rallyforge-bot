@@ -1021,7 +1021,7 @@ PAGES.duties = function (fixed, only) {
     ch.appendChild(subset(serial ? "Champions – this instance" : "Champions – all instances",
       serial && j.own && j.own.champions ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "champions" })); loadCh(); } }, "Use the global setting")) : null,
-      note("Keep > Champions. Every account has the same champions but only a few are active; the bot skips the ones that are not (grey button at the bottom). The daily limit is " + j.max_taps + " taps and " + j.max_greets + " greetings for all champions together - put them all on one champion or share them out. Leave everything empty to use the champion the page opens on. Turn the 'Champions' duty on above. Needs the city map (the Keep)."),
+      note("Keep > Champions. Every account has the same champions but only a few are active; the bot skips the ones that are not (grey button at the bottom). The daily limit is " + j.max_taps + " taps and " + j.max_greets + " greetings for all champions together - put them all on one champion or share them out. Switch a champion on to make it the main one: it gets all the taps and greetings of the day in one click (the numbers can still be edited). Leave everything empty to use the champion the page opens on. Turn the 'Champions' duty on above. Needs the city map (the Keep)."),
       h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } },
         h("span", { class: "chip " + (sumT > j.max_taps ? "pill-bad" : "") }, "taps planned " + sumT + " / " + j.max_taps),
         h("span", { class: "chip " + (sumG > j.max_greets ? "pill-bad" : "") }, "greets planned " + sumG + " / " + j.max_greets),
@@ -1029,7 +1029,10 @@ PAGES.duties = function (fixed, only) {
         Object.keys(j.plan).length ? h("button", { class: "btn sm", onclick: () => set({ clear: true }) }, "Clear all") : null),
       j.names.map((n) => {
         const e = j.plan[n] || {};
+        const full = (e.taps || 0) >= j.max_taps && (e.greets || 0) >= j.max_greets;
+        const mainSw = h("input", { type: "checkbox", checked: full, title: "Main champion: gets all " + j.max_taps + " taps and " + j.max_greets + " greetings every day (you can still change the numbers)", onchange: (ev) => set({ name: n, main: ev.target.checked }) });
         return h("div", { class: "row", style: { justifyContent: "space-between", padding: "6px 0", borderTop: "1px solid var(--line)", gap: "10px" } },
+          h("label", { class: "tgl", title: "Main champion: one click gives this champion all the daily taps and greetings" }, mainSw, h("span", { class: "sw" }), ""),
           h("b", { style: { flex: "1" } }, n),
           h("span", { class: "hint" }, (j.taps && j.taps[n] ? "tapped " + j.taps[n] + " " : "") + (j.greets && j.greets[n] ? "greeted " + j.greets[n] : "")),
           h("span", { class: "lab" }, "Taps"),
