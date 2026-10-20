@@ -403,7 +403,7 @@ async function manualMapFlow(arg) {
 async function scanCityTapsFlow() {
   const serial = await chooseDevice("Tap-test the city with which instance?");
   if (!serial) return;
-  if (!(await confirmBox("City mapper - tap test", "TEST RUN. The bot goes to every building on the saved city map, taps it, opens Detail > More Information and reads its name and level. Run the normal city scan first. Open the CITY screen and leave the instance alone.", "OK, ready"))) return;
+  if (!(await confirmBox("City mapper - tap test", "TEST RUN. The bot goes to each numbered square of the default city map, taps the building, presses its i (Detail) icon, opens More Information and reads its name and level. Squares that read correctly are saved on this instance's city map. Open the CITY screen and leave the instance alone.", "OK, ready"))) return;
   await act(api("save", { cfg: S.cfg, devices: S.devices }, { quiet: true }));
   if (!(await act(api("scan_city_taps_start", { serial })))) return;
   S.cityScanSerial = serial;

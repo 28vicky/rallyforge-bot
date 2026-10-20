@@ -5517,8 +5517,12 @@ def read_building_level(dev, cfg, log, stop, pos):
 
 
 def scan_city_taps(dev, cfg, log, stop, progress=None):
-    """Test run: for every building on the saved city map go to it (saved picture), tap it and read its name and level
-    from the Detail page. Writes 'level' next to each building in the city map. Buildings that are not there are left out."""
+    """Test run: the numbered squares of the default city map replace the old per-building taps."""
+    return scan_squares(dev, cfg, log, stop, progress=progress)
+
+
+def scan_city_taps_old(dev, cfg, log, stop, progress=None):
+    """(old) for every building on the saved city map go to it (saved picture), tap it and read its name and level."""
     serial = dev.serial if hasattr(dev, "serial") else "default"
     data = load_city()
     items = (data.get(serial) or {}).get("items", {})
@@ -6816,49 +6820,177 @@ def locate_shrine(dev, stop, log, nav):
     return None
 
 
+_DETAIL_TPL = {}
+# The yellow "i" (Detail) icon of the building ring menu, cut from Kiravik (48x48 px, emulator size). It looks the same on every building.
+DETAIL_ICON_B64 = "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"
+
+
+def detail_template():
+    """The i icon picture: the one learned on this PC (templates/detail_icon.png) wins over the built-in one."""
+    if "t" not in _DETAIL_TPL:
+        import base64
+        t = None
+        p = template_path("detail_icon")
+        if p:
+            t = cv2.imread(str(p))
+        if t is None:
+            t = cv2.imdecode(np.frombuffer(base64.b64decode(DETAIL_ICON_B64), np.uint8), cv2.IMREAD_COLOR)
+        _DETAIL_TPL["t"] = t
+    return _DETAIL_TPL["t"]
+
+
+def find_detail_icon(shot, thr=0.8):
+    """Look for the i (Detail) icon of an open ring menu by its PICTURE. -> (x, y, score) or None."""
+    t = detail_template()
+    th, tw = t.shape[:2]
+    area = shot[100:800, 0:540]
+    if area.shape[0] < th or area.shape[1] < tw:
+        return None
+    res = cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED)
+    _, mv, _, ml = cv2.minMaxLoc(res)
+    if mv < thr:
+        return None
+    return ml[0] + tw // 2, ml[1] + 100 + th // 2, float(mv)
+
+
+def read_square(dev, cfg, log, stop, pos, expected=""):
+    """Tap the building at pos, tap its i (Detail) icon (found by its picture), then More Information and read the
+    header ("Keep Level 48"). Every step first checks that the screen it expects is really there. Buildings without a
+    More Information button (Arsenal) are read from the name on the Detail picture. Everything is closed again.
+    -> (name, level) or None."""
+    nap = lambda lo, hi=None: _nap(stop, lo, hi)
+    ic = None
+    for attempt in (1, 2):                                  # a bubble over the building can eat the first tap
+        dev.tap(int(pos[0]), int(pos[1]))
+        nap(0.9, 1.2)
+        ring = dev.screenshot()
+        ic = find_detail_icon(ring)
+        if ic:
+            break
+    if not ic:
+        log("[!]   no Detail (i) icon after tapping - nothing opened")
+        return None
+    dev.tap(ic[0], ic[1])
+    nap(1.1, 1.5)
+    shot = dev.screenshot()
+    result = None
+    more = find_text(shot, ["More Information"], region=(60, 780, 420, 150))
+    if more:
+        dev.tap(*more)
+        nap(0.9, 1.3)
+        shot = dev.screenshot()
+        for text, _ in ocr_lines(shot[130:210, 60:480]):
+            m = re.search(r"([A-Za-z' ]+?)\s+Level\s*(\d+)", text)
+            if m:
+                result = (m.group(1).strip(), int(m.group(2)))
+                break
+            nm = match_building(text)                       # no level in the header (Triumphal Arch...)
+            if nm:
+                result = (nm, 0)
+                break
+    else:                                                    # Detail page without More Information: read the name on the picture
+        for text, _ in ocr_lines(shot[430:520, 100:440]):
+            nm = match_building(text)
+            if nm:
+                result = (nm, 0)
+                break
+    if result:
+        try:                                                 # learn this PC's real i icon once
+            if not template_path("detail_icon"):
+                save_template("detail_icon", ring[ic[1] - 24:ic[1] + 24, ic[0] - 24:ic[0] + 24])
+        except Exception:
+            pass
+    for _ in range(4):                                       # close the panel / Detail page, back to the city
+        if screen_state(dev.screenshot(), cfg) == "city":
+            break
+        dev.back()
+        nap(0.7, 1.0)
+    return result
+
+
 def open_square(dev, cfg, log, stop, nav, shrine, number):
-    """Go to numbered square N of the default city map, tap its middle and read the building (name, level) from the
-    Detail page. -> (expected name, read name, level) or None."""
+    """Go to numbered square N of the default city map (by coordinates), tap it and read the building.
+    -> (expected name, read name, level, map x, map y) or None."""
     sq = CITY_SQUARES.get(int(number))
     if not sq:
         log(f"[!] Square {number} does not exist (1-{len(CITY_SQUARES)})")
         return None
     name, ox, oy = sq
     tx, ty = shrine[0] + ox, shrine[1] + oy
-    sx, sy = nav.goto(tx, ty)
+    nav.goto(tx, ty)
     px, py = tx - nav.cx, ty - nav.cy
     x0, y0, w, h = CITY_VIEW
     if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
         log(f"[!] Square {number} ({name}): the camera did not reach it (it is at {round(px)},{round(py)} on screen)")
         return None
     log(f"[*] Square {number} ({name}): tapping {round(px)},{round(py)}")
-    res = read_building_level(dev, cfg, log, stop, (px, py))
+    before = dev.screenshot()
+    res = read_square(dev, cfg, log, stop, (px, py), name)
+    leave_to_city(dev, cfg, stop)
+    nap_after = dev.screenshot()
+    try:                                                     # the camera can jump when the pages close: measure and correct
+        dx, dy, resp = city_shift(before, nap_after)
+        if resp >= 0.05 and (abs(dx) > 3 or abs(dy) > 3):
+            nav.cx -= dx
+            nav.cy -= dy
+            log(f"[i]   the camera moved by {round(dx)},{round(dy)} while the pages were open - corrected")
+    except Exception:
+        pass
     if not res:
-        log(f"[!] Square {number} ({name}): tapped, but nothing could be read")
+        log(f"[!] Square {number} ({name}): nothing could be read")
         return None
-    same = res[0].lower().replace(" ", "") == name.lower().replace(" ", "") or BUILDING_ALIASES.get(res[0], res[0]).lower() == name.lower()
-    log(f"[+] Square {number} ({name}) -> '{res[0]}'" + (f" level {res[1]}" if res[1] else "") + ("" if same else "  (DIFFERENT NAME - check the square)"))
-    return name, res[0], res[1]
+    got = BUILDING_ALIASES.get(res[0], res[0])
+    same = got.lower().replace(" ", "") == BUILDING_ALIASES.get(name, name).lower().replace(" ", "") or name.lower().startswith(got.lower())
+    log(f"[+] Square {number} ({name}) -> '{res[0]}'" + (f" level {res[1]}" if res[1] else "") + ("" if same else "  (DIFFERENT NAME - check this square)"))
+    return name, res[0], res[1], tx, ty, same
 
 
-def scan_squares(dev, cfg, log, stop, numbers=None):
-    """Test run: visit the numbered squares one by one (default: all that are buildings with a Detail page) and read them."""
+def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
+    """Map the city by the numbered squares: go to each square, tap it, read its name and level. Squares that read
+    correctly are saved on this emulator's city map. -> {number: result}"""
+    serial = dev.serial if hasattr(dev, "serial") else "default"
     dev.arm_guard(cfg, log, stop)
     dev.guard_city = True
+    t0 = time.time()
     nav = CityNav(dev, stop, log)
+    order = list(numbers or sorted(CITY_SQUARES))
+    got, bad, items, levels = {}, [], {}, {}
     shrine = locate_shrine(dev, stop, log, nav)
-    got = {}
     if shrine:
-        for n in (numbers or sorted(CITY_SQUARES)):
+        for i, n in enumerate(order):
             if stop.is_set():
                 break
-            got[n] = open_square(dev, cfg, log, stop, nav, shrine, n)
-            leave_to_city(dev, cfg, stop)
+            r = open_square(dev, cfg, log, stop, nav, shrine, n)
+            got[n] = r
+            nm = CITY_SQUARES[n][0]
+            if r and r[5]:
+                key = re.sub(r" (\d)$", r"#\1", nm) if re.search(r" \d$", nm) else nm + "#1"
+                items[key] = [round(r[3]), round(r[4])]
+                levels[key] = {"name": r[1], "level": r[2]}
+            else:
+                bad.append(nm)
+            if progress:
+                try:
+                    progress({"phase": "sweeping", "pct": int(100 * (i + 1) / len(order)), "left": int((time.time() - t0) / (i + 1) * (len(order) - i - 1)),
+                              "text": f"Square {n} ({nm}) done", "mapped": [k.split("#")[0] for k in items], "expected": [CITY_SQUARES[x][0] for x in order],
+                              "missing": bad, "seconds": int(time.time() - t0), "stops": i + 1, "total": len(order), "row": 0})
+                except Exception:
+                    pass
     dev.guard_city = False
-    ok = [n for n, v in got.items() if v]
-    log(f"[+] Squares: read {len(ok)} of {len(got)}. Not read: {', '.join(str(n) for n in got if not got[n]) or 'none'}")
+    if items:
+        data = load_city()
+        ent = data.setdefault(serial, {"items": {}})
+        ent.setdefault("items", {}).update(items)
+        ent.setdefault("levels", {}).update(levels)
+        save_city(data)
+    log(f"[+] Squares: read {len(items)} of {len(order)} in {int(time.time() - t0)}s. Not read: {', '.join(bad) if bad else 'none'}")
+    if progress:
+        try:
+            progress({"phase": "done", "pct": 100, "left": 0, "text": "Done", "mapped": [k.split("#")[0] for k in items], "expected": [CITY_SQUARES[x][0] for x in order],
+                      "missing": bad, "seconds": int(time.time() - t0), "stops": len(order), "total": len(order), "row": 0})
+        except Exception:
+            pass
     return got
-
 
 
 def task_needs_city_map(t):
