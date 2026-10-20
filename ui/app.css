@@ -712,3 +712,10 @@ body{font-size:15px;font-feature-settings:"cv11","ss01","kern";letter-spacing:-.
 input:focus-visible,select:focus-visible{outline-offset:0}
 :root .panel{padding:var(--sp5);margin-bottom:var(--sp4)}
 :root .panel h3{font-size:15px;margin-bottom:var(--sp3)}
+/* polish after first look */
+.dutygrid .morelnk{display:none}
+:root .panel h3{font-family:var(--font);font-size:15px;font-weight:600}
+:root .stile b{font-family:var(--font);font-size:22px;font-weight:600;letter-spacing:-.01em}
+:root .instbar .btn.bad.greyed,:root .instbar .btn.bad:disabled{background:transparent;color:var(--mute);border:var(--bd);opacity:.6}
+:root .actnow{font-family:var(--font);font-size:15px;font-weight:500}
+:root .insthead h2{font-weight:500;letter-spacing:-.02em}
