@@ -5255,6 +5255,7 @@ class CityNav:
 
 
 _CITY_PIC = {}
+SAFE_TAP_AREA = (95, 215, 335, 470)                        # x, y, w, h of the screen where a tap can only hit the city (emulator px)
 SHRINE_LABEL_IN_PICTURE = (1372.2, 576.9)                    # the Shrine label in the whole-city picture (emulator px); the square offsets count from here
 
 
@@ -7068,11 +7069,10 @@ def read_square(dev, cfg, log, stop, pos, expected="", levels=False):
         nap(0.5, 0.7)
         ring = dev.screenshot()
         lab = _read(ring)
-    if not levels:
-        if not lab:
-            log("[!]   ring menu is open but the building name could not be read")
-            return None
+    if not levels and lab:
         return lab[0], 0, (lab[1], lab[2])
+    if not lab:
+        log("[i]   name on the ring not clear - pressing the i icon to read it on the Detail page")
     dev.tap(ic[0], ic[1])
     nap(1.1, 1.5)
     shot = dev.screenshot()
@@ -7122,8 +7122,10 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     nav.goto(tx, ty)
     px, py = tx - nav.cx, ty - nav.cy
     x0, y0, w, h = CITY_VIEW
+    if nav.absolute:                                         # only tap where nothing but the city is: not the top bar, bubbles or the side icon columns
+        x0, y0, w, h = SAFE_TAP_AREA
     if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
-        log(f"[!] Square {number} ({name}): the camera did not reach it (it is at {round(px)},{round(py)} on screen)")
+        log(f"[!] Square {number} ({name}): cannot be brought into the safe tap area (it is at {round(px)},{round(py)} on screen, city edge?) - left blank, map it by hand")
         return None
     log(f"[*] Square {number} ({name}): tapping {round(px)},{round(py)}")
     levels = bool(cfg.get("squares_levels", False))
@@ -7142,7 +7144,12 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
         if not close_ring(dev, stop, res[2]):
             log("[!]   the ring menu would not close - stopping so nothing is pressed by mistake")
             stop.set()
-    elif levels:
+    elif levels or res is not None:                          # read on the Detail page (i icon): back out to the city and make sure the ring is gone
+        leave_to_city(dev, cfg, stop)
+        _nap(stop, 0.6, 0.9)
+        if find_detail_icon(dev.screenshot()):
+            close_ring(dev, stop, (270, 465))
+    elif res is None and not levels:
         leave_to_city(dev, cfg, stop)
     if not res:
         log(f"[!] Square {number} ({name}): nothing could be read")
