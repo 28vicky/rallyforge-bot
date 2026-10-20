@@ -461,7 +461,7 @@ function instancePage(serial) {
   if (!S.instTab) { try { S.instTab = localStorage.getItem("rf_inst_tab") || ""; } catch (e) { S.instTab = ""; } }
   if (!ITABS.some((t) => t[0] === S.instTab)) S.instTab = "dash";
   const body = h("div", {});
-  const tabRow = h("div", { class: "tabs", style: { margin: "4px 0 14px" } });
+  const tabRow = h("div", { class: "tabs", style: { margin: "4px 0 0" } });
   const showTab = (k) => {
     S.instTab = k;
     try { localStorage.setItem("rf_inst_tab", k); } catch (e) {}
@@ -476,7 +476,7 @@ function instancePage(serial) {
     for (const el of t[2]()) if (el) body.appendChild(el);
   };
   for (const [k, l] of ITABS) tabRow.appendChild(h("button", { class: "tab", "data-k": k, onclick: () => showTab(k) }, l));
-  const wrap = h("div", {}, h("div", { class: "stickyhead" }, h("div", { class: "stickybox" }, head, warn)), tabRow, body);
+  const wrap = h("div", {}, h("div", { class: "stickyhead" }, h("div", { class: "stickybox" }, head, warn, tabRow)), body);
   S.gotoInstTab = showTab;
   showTab(S.instTab);
   setTimeout(refreshInstanceControls, 0);

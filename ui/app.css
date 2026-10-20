@@ -664,3 +664,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 /* quieter fields everywhere */
 :root input:not([type=checkbox]):not([type=color]),:root select{background:var(--card);border:var(--bd);box-shadow:none}
 .dutygrid .dcol .note{display:none}
+/* the pinned instance header is solid, so the page never shows through it */
+.stickyhead{background:var(--bgc);padding:2px 0 0;margin:-2px 0 14px;z-index:30}
+.stickyhead::before{display:none}
+.stickyhead.stuck{box-shadow:0 1px 0 var(--line)}
