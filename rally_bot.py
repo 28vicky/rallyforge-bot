@@ -212,7 +212,7 @@ DEFAULTS = {
     "city_enabled": False,                  # run the tasks (Tasks tab) while no rally is waiting
     "city_tasks": [],                       # [{name, enabled, target, steps, every_min}], see run_step()
     "duties": {},                           # {duty_id: {on, every_min}} - ready-made duties, see DUTY_LIBRARY
-    "wheel": {"button": 100, "spins": 100, "reserve": 0},   # Tavern > Wheel of Fortune: biggest button (1/10/100), spins to do (0 = until the coins are used up), coins to keep
+    "wheel": {"button": 1, "spins": 10, "reserve": 0},   # Tavern > Wheel of Fortune: biggest button (1/10/100), spins to do (0 = until the coins are used up), coins to keep
     "champions": {"plan": {}},                      # plan {champion: {taps, greets}}; empty = all on the champion the page opens on
     "crazy_eggs": {"eggs": {}, "lucky": "max", "min_hammers": 0},   # eggs {cost: {on, daily}}, lucky = egg cost / "max" / "" (none)
     "city_icons": {},                       # extra / changed right-side icon positions {name: [x, y]}
@@ -6652,7 +6652,7 @@ def run_wheel(dev, cfg, log, stop):
     """Tavern's ring menu is open: open the Wheel of Fortune and spin with the button the user picked until the number
     of spins is done, the coins run out (or fall to the reserve to keep) or something unexpected is on the screen.
     The reward panel is closed by tapping its Continue / empty ground. Only the three Spin buttons are ever pressed."""
-    conf = {**{"button": 100, "spins": 100, "reserve": 0}, **(cfg.get("wheel") or {})}
+    conf = {**{"button": 1, "spins": 10, "reserve": 0}, **(cfg.get("wheel") or {})}
     big = int(conf["button"]) if int(conf["button"]) in WHEEL_BTN else 100
     target = int(conf["spins"] or 0)                       # 0 = until the coins are used up
     reserve = int(conf["reserve"] or 0)
