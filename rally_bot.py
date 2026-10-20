@@ -7049,8 +7049,18 @@ def read_square(dev, cfg, log, stop, pos, expected="", levels=False):
     if not ic:
         log("[!]   no ring menu after tapping - nothing opened")
         return None
-    def _read(img):                                         # any building name the game prints (spelled the way the bot knows it), else the raw text
-        return ring_label(img, "", pos) or ring_label_free(img)
+    known_names = {n.lower() for n in BUILDING_NAMES} | {BUILDING_ALIASES.get(n, n).lower() for n in BUILDING_NAMES}
+
+    def _read(img):                                         # a building name the game prints, spelled the way the bot knows it
+        r = ring_label(img, "", pos)
+        if r:
+            return r
+        r = ring_label_free(img)
+        if r and r[0].lower() in known_names:
+            return r
+        if r:
+            log(f"[i]   text on the ring that is not a building name: '{r[0]}' - left blank (map this square by hand)")
+        return None
     lab = _read(ring)
     for _ in range(3):                                      # the label may still be drawing: look again
         if lab or stop.is_set():
