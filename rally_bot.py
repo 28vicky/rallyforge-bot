@@ -5284,6 +5284,8 @@ def safe_shift(before, after, cmd_dx, cmd_dy):
 def match_building(text, cutoff=0.82):
     import difflib
     t = " ".join(text.split()).strip(" .,:;|-_")
+    if t.lower() == "inn":                                 # the Tavern is called Inn in one city style
+        return "Tavern"
     if len(t) < 4:
         return None
     low = {n.lower(): n for n in BUILDING_NAMES}
@@ -6636,53 +6638,46 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             want = nm.strip()
             pkeys += sorted(k for k in pitems if k.split("#")[0].lower() == want.split("#")[0] and (("#" not in want) or k.lower() == want))[:int(task.get("count", 1) or 1)]
         serial_ = getattr(dev, "serial", "")
+        if "mode" not in nav_state:                         # 'labels' = read the names under the buildings (works in every city style); 'picture' = find the camera by the stored whole-city picture (own style)
+            forced = str(cfg.get("city_nav", "auto")).lower() in ("labels", "squares") or _flag_on() or bool(PICTURE_BAD.get(serial_))
+            nav_state["mode"] = "labels" if forced else "picture"
         nav = nav_state.get("anav")
         if nav is None:
             nav = CityNav(dev, stop, log)
-            _force = str(cfg.get("city_nav", "auto")).lower() == "squares" or _flag_on()     # a test switch file (city_nav_squares.txt starting with "test") makes every instance walk by squares
-            nav.absolute = not _force and not PICTURE_BAD.get(serial_)    # squares = never use the picture (another city style); remembered per instance once the picture did not fit
+            nav.absolute = True
             nav.quiet = True
             nav_state["anav"] = nav
-            if nav.absolute:
-                learn_corner(nav, log)
-            else:
-                nav.to_origin()
-                cp = corner_pic()
-                if cp:
-                    nav.cx, nav.cy = cp
-                if _flag_on():
-                    gain_probe(dev, stop, log)
+        x0, y0, w, h = SAFE_TAP_AREA
         done_any = False
+
+        def aim(k, tx, ty, first=False):
+            """-> (x, y) on the screen where the building is, inside the safe tap area, or None."""
+            if nav_state["mode"] == "labels":
+                return aim_by_labels(dev, cfg, log, stop, k)
+            nav.seen_city = False
+            nav.goto(tx, ty)
+            if first and not nav.seen_city:                 # the stored picture does not fit this city style
+                PICTURE_BAD[serial_] = True
+                if city_map_items(dev):                     # this account has its own city map: the closed-loop older way
+                    nav_state["picture_bad"] = True
+                    return "older"
+                nav_state["mode"] = "labels"
+                log("[i] Finding the buildings by their names")
+                return aim_by_labels(dev, cfg, log, stop, k)
+            px_, py_ = tx - nav.cx, ty - nav.cy
+            return (px_, py_) if (x0 <= px_ <= x0 + w and y0 <= py_ <= y0 + h) else None
+
         for k in pkeys:
             tx, ty = pitems[k]
             log(f"[*] Going to {k}")
-            nav.seen_city = False
             dev.expect_city = True
-            nav.goto(tx, ty)
-            if nav.absolute and not nav.seen_city and city_map_items(dev):     # the picture does not fit this city style but this account has its own city map: use that (the closed-loop older way)
-                PICTURE_BAD[serial_] = True
-                nav_state["picture_bad"] = True
+            pos = aim(k, tx, ty, first=True)
+            if pos == "older":
                 break
-            if nav.absolute and not nav.seen_city:          # the picture does not fit this city style: count the squares from the corner instead (remembered for this instance)
-                PICTURE_BAD[serial_] = True
-                nav.absolute = False
-                nav.to_origin()
-                cp = corner_pic()
-                if cp:
-                    nav.cx, nav.cy = cp
-                nav.goto(tx, ty)
-            if not nav.absolute:                              # test aid: when the picture happens to fit, say how far the counted position is from the real one
-                try:
-                    r_ = locate_in_city(dev.screenshot())
-                    if r_:
-                        log(f"[i]   squares check: counted camera {round(nav.cx)},{round(nav.cy)} - picture says {round(r_[0])},{round(r_[1])} (off by {round(nav.cx - r_[0])},{round(nav.cy - r_[1])})")
-                except Exception:
-                    pass
-            px, py = tx - nav.cx, ty - nav.cy
-            x0, y0, w, h = SAFE_TAP_AREA
-            if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
-                log(f"[!] Task '{task.get('name')}': {k} could not be brought into view (it is at {round(px)},{round(py)}) - skipped")
+            if not pos:
+                log(f"[!] Task '{task.get('name')}': {k} could not be brought into view - skipped")
                 continue
+            px, py = pos
             opened = False
             for attempt in range(3):                        # tap the building; when no ring menu opens (a reward panel came up, the tap landed beside it) look again and retry
                 close_reward_panel(dev, stop, log)
@@ -6695,7 +6690,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 except Exception:
                     pass
                 dev.expect_city = False                     # from the tap on, a window opening is expected
-                lower = (int(cfg.get("city_tap_dy", 22) or 0), 44, 0)[attempt]      # aim at the LOWER part of the building: a tall Keep / Wonder in another city style must not move the tap off it
+                lower = ((0, -30, 18) if nav_state["mode"] == "labels" else (int(cfg.get("city_tap_dy", 22) or 0), 44, 0))[attempt]      # labels sit at the building's foot; picture mode aims at the LOWER part so a tall Keep does not move the tap off it
                 dev.tap(int(px), int(py + float(task.get("tap_dy", 0)) + lower))
                 _nap(stop, 1.0, 1.4)
                 shot = dev.screenshot()
@@ -6709,19 +6704,20 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                             close_ring(dev, stop, (px, py + 35))
                             leave_to_city(dev, cfg, stop, log)
                             dev.expect_city = True
-                            nav.goto(tx, ty)
-                            px, py = tx - nav.cx, ty - nav.cy
-                            if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+                            pos = aim(k, tx, ty)
+                            if not pos or pos == "older":
                                 break
+                            px, py = pos
                             continue
                     opened = True
                     break
                 log(f"[i]   no building menu opened at {k} (try {attempt + 1}/3) - looking again")
                 close_reward_panel(dev, stop, log)
-                nav.goto(tx, ty)
-                px, py = tx - nav.cx, ty - nav.cy
-                if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+                dev.expect_city = True
+                pos = aim(k, tx, ty)
+                if not pos or pos == "older":
                     break
+                px, py = pos
             if not opened:
                 log(f"[!] Task '{task.get('name')}': the menu of {k} did not open - skipped")
                 if find_detail_icon(dev.screenshot()):
@@ -6782,6 +6778,86 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         return None
     log(f"[!] Task '{task.get('name')}': target must look like icon:Mail, building:Quarry or xy:100,200")
     return False
+
+
+GAIN = 1.45                                               # the map follows a finger ~1.45x as far (measured on a real city)
+
+
+def building_priors():
+    """Where each building sits relative to the others (the built-in default squares). City styles differ by some tens of
+    pixels, which the closed loop in aim_by_labels corrects as the real names come into view."""
+    pr = {}
+    for _n, (nm, x, y) in CITY_SQUARES.items():
+        pr.setdefault(re.sub(r"\s*\d+$", "", nm), (x, y))
+    return pr
+
+
+def labels_on_screen(dev, stop):
+    """Show the building names (a finger that has moved is held down) and read them -> [(name, x, y), ...] where x, y are
+    the screen position AFTER the finger was lifted (the map may have moved a little)."""
+    nav = CityNav(dev, stop, lambda *_: None)
+    cx0, cy0 = nav.cx, nav.cy
+    look_with_names(dev, stop, nav)
+    dxa, dya = cx0 - nav.cx, cy0 - nav.cy                      # how far the map content moved between the rest picture and now
+    return [(n, x + dxa, y + dya) for n, x, y in getattr(nav, "last_rest_labels", [])]
+
+
+def pan_content(dev, stop, dx, dy):
+    """Move the map content by about (dx, dy) screen px. Short finger moves can be read by the game as a TAP, so a small
+    move is made as a long drag past the target and a second drag back."""
+    fx, fy = dx / GAIN, dy / GAIN
+    fx, fy = max(-210, min(210, fx)), max(-320, min(320, fy))
+    ln = (fx * fx + fy * fy) ** 0.5
+    if ln < 1:
+        return
+    if ln < 110:
+        ux, uy = fx / ln, fy / ln
+        ax, ay = fx + ux * 110, fy + uy * 110                  # first beyond, then back
+        dev.swipe(270 - ax / 2, 440 - ay / 2, 270 + ax / 2, 440 + ay / 2, 450)
+        _nap(stop, 0.9, 1.2)
+        dev.swipe(270 + ux * 55, 440 + uy * 55, 270 - ux * 55, 440 - uy * 55, 450)
+    else:
+        dev.swipe(270 - fx / 2, 440 - fy / 2, 270 + fx / 2, 440 + fy / 2, 450)
+    _nap(stop, 0.9, 1.2)
+
+
+def aim_by_labels(dev, cfg, log, stop, name, tries=14):
+    """Bring a building into the safe tap area by reading the names written under the buildings - works in every city
+    style, no picture and no counting needed. Whatever names are in view tell where the wanted building should be
+    (their relative places are known); the map is moved that way and the names are read again, until the wanted
+    building's own name is in view. -> (x, y) of its name on the screen, or None."""
+    pri = building_priors()
+    want = name.split("#")[0]
+    if want not in pri:
+        return None
+    x0, y0, w, h = SAFE_TAP_AREA
+    lost = 0
+    for i in range(tries):
+        if stop.is_set():
+            return None
+        labs = labels_on_screen(dev, stop)
+        hit = [l for l in labs if l[0] == want]
+        if hit:
+            n_, x, y = hit[0]
+            if x0 <= x <= x0 + w and y0 <= y <= y0 + h:
+                log(f"[i]   {want} found on screen at {x},{y}")
+                return x, y
+            pan_content(dev, stop, 270 - x, 440 - y)
+            continue
+        ests = [(lx + pri[want][0] - pri[ln][0], ly + pri[want][1] - pri[ln][1]) for ln, lx, ly in labs if ln in pri]
+        if not ests:
+            lost += 1
+            if lost > 2:
+                if not ensure_view(dev, cfg, stop, log, "city", tries=4):
+                    return None
+            pan_content(dev, stop, 0, 150 if lost % 2 else -150)   # nothing readable here: look somewhere else
+            continue
+        lost = 0
+        ex = sum(e[0] for e in ests) / len(ests)
+        ey = sum(e[1] for e in ests) / len(ests)
+        log(f"[i]   names in view: {', '.join(l[0] for l in labs)} -> {want} should be at about {round(ex)},{round(ey)}")
+        pan_content(dev, stop, 270 - ex, 440 - ey)
+    return None
 
 
 def view_of(shot, cfg):
