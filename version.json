@@ -1,9 +1,9 @@
 {
-  "version": "2.4.64",
-  "notes": "Points bosses (Silver Lionheart Knight) are never joined",
+  "version": "2.4.65",
+  "notes": "Walkthrough question, monster levels 1-2, instance card hover buttons",
   "files": {
     "rally_bot.py": {
-      "sha256": "9cc32b405729e3095cf1fbadf59f45037f63b9e0aeda6843563f431a2f2b5dfa"
+      "sha256": "546b0486afabe7374ded48f999901de9e8bd7970ee49d1c38eb7581a23b291c1"
     },
     "web_app.py": {
       "sha256": "891199c5803a1de779e1d668b2e15e6eeb21bcd93f58f76769c716158cbd26e2"
@@ -12,13 +12,13 @@
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "5e51a018e5ab48f867a9520f4d804e4d34567a02c2eb5b0a31c68e608ced1f6c"
+      "sha256": "b6b8300dbb3735ca8785808fdc51369d1e4c33bbf6e514ecd99924eb1515f8bd"
     },
     "ui/app.js": {
-      "sha256": "fecdb35f6bd865136680c04b23e41dd0d96c2a1d5137d13a6b6e1bf0cb089f77"
+      "sha256": "fe6023bd746daf614a1813647817199d99f1014107fcd788fdccd0b4a2463028"
     },
     "ui/changelog.js": {
-      "sha256": "5816dec1bfdc60c4750b28924e0bf78fada73e7a5405f22fd6b8bc0de9877ce7"
+      "sha256": "5fd1552238dfbc261bccfd38b69410f80089347c091bd37ec77a00985f759457"
     },
     "ui/dialogs.js": {
       "sha256": "40549bd7764a94cf5129436895741a90d80d7fa051fd8948742d18f28e841df7"
@@ -27,10 +27,13 @@
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
     },
     "ui/index.html": {
-      "sha256": "6325f039aee1381b49874784046d3d4ece41e64b5eaf8352b58a06e358fb811c"
+      "sha256": "a3f4da00c3578367f379516ccf7be16b4d594bb21091d14856f6a25983409dd9"
     },
     "ui/pages.js": {
       "sha256": "a782a74f37bd3aab5caf82bd4ca6807740978a7416a24c3187cd72fa571d3b3c"
+    },
+    "ui/tour.js": {
+      "sha256": "d548d1510058cf04ade2a5a6c9166fe04ba37e24e2a4effab60fc7ab4e82acbb"
     }
   },
   "mode": "ask",
@@ -147,5 +150,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "eb2d2b379b133c8fa6bf87455a157192afb80eac62f7e34639e4bc60bcc74710"
+  "sig": "e29649627df94143cb626701d140963283d50cc02f09257bc869f1444fc08eab"
 }
