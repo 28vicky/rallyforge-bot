@@ -7008,6 +7008,16 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
             if stop.is_set():
                 break
             r = open_square(dev, cfg, log, stop, nav, shrine, n)
+            if not r and not stop.is_set():                  # an ad / pop-up may have covered the city: close it, find our place again, retry once
+                try:
+                    shut = clear_popups(dev, cfg, log, stop, rounds=4)
+                except Exception:
+                    shut = 0
+                if shut:
+                    log(f"[*] Square {n}: closed {shut} pop-up(s) - finding the way again and retrying")
+                    nav = CityNav(dev, stop, log)
+                    shrine = locate_shrine(dev, stop, log, nav) or shrine
+                    r = open_square(dev, cfg, log, stop, nav, shrine, n)
             got[n] = r
             nm = CITY_SQUARES[n][0]
             if r and r[5]:
