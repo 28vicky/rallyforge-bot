@@ -778,8 +778,87 @@ class Device:
     def hold_end(self):
         h = getattr(self, "_held", None)
         if h:
+            for k in (1, 2, 3):                                  # keep dragging a little before lifting, so the game never reads it as a tap
+                self._run("shell", "input", "motionevent", "MOVE", str(int(h[0] * self.sx)),
+                          str(int((h[1] - 14 * k) * self.sy)))
+            h = (h[0], h[1] - 42)
             self._run("shell", "input", "motionevent", "UP", str(int(h[0] * self.sx)), str(int(h[1] * self.sy)))
             self._held = None
+
+    def _touch_dev(self):
+        """Find the emulator's touch screen device and its raw ranges (cached). -> (path, maxx, maxy, slots) or None."""
+        t = getattr(self, "_touch", 0)
+        if t != 0:
+            return t
+        info = None
+        try:
+            out = self._run("shell", "getevent", "-p", timeout=10).stdout.decode("utf-8", "ignore")
+            for blk in re.split(r"(?m)^add device \d+:", out)[1:]:
+                path = blk.strip().split()[0]
+                mx = re.search(r"(?:0035|ABS_MT_POSITION_X)\s*:[^\n]*?max (\d+)", blk)
+                my = re.search(r"(?:0036|ABS_MT_POSITION_Y)\s*:[^\n]*?max (\d+)", blk)
+                if mx and my:
+                    sl = re.search(r"(?:002f|ABS_MT_SLOT)\s*:[^\n]*?max (\d+)", blk)
+                    info = (path, int(mx.group(1)), int(my.group(1)), bool(sl))
+                    break
+        except Exception:
+            info = None
+        self._touch = info
+        return info
+
+    def pinch_in(self, cx=270, cy=480, start=230, end=45, steps=12, delay=0.04, tilt=0.6, pressure=0, major=0, fingers=2, dev_path=None):
+        """Two fingers move TOWARD each other (the game zooms OUT). Raw multi-touch events sent in one shell
+        command. (cx, cy, start, end) are in 540x960 screen pixels. -> True when the events were sent."""
+        t = self._touch_dev()
+        if not t:
+            return False
+        path, mx, my, has_slot = t
+        if dev_path:
+            path = dev_path
+        w, h = EXPECTED_SIZE
+        fx, fy = mx / float(w), my / float(h)
+        cmds = []
+
+        def ev(a, b, c):
+            cmds.append(f"sendevent {path} {a} {b} {c}")
+
+        def pos(slot, x, y):
+            if has_slot:
+                ev(3, 47, slot)
+            ev(3, 53, int(x * fx))
+            ev(3, 54, int(y * fy))
+            if pressure:
+                ev(3, 58, pressure)
+            if major:
+                ev(3, 48, major)
+            if not has_slot:
+                ev(0, 2, 0)                                  # SYN_MT_REPORT
+        d = start
+        for i in range(steps + 1):
+            d = start + (end - start) * i / steps
+            if i == 0:
+                if has_slot:
+                    ev(3, 47, 0); ev(3, 57, 801)
+                    pos(0, cx - d, cy - d * tilt)
+                    if fingers > 1:
+                        ev(3, 47, 1); ev(3, 57, 802)
+                else:
+                    pass
+                ev(1, 330, 1)
+            pos(0, cx - d, cy - d * tilt)
+            if fingers > 1:
+                pos(1, cx + d, cy + d * tilt)
+            ev(0, 0, 0)
+            cmds.append(f"sleep {delay}")
+        if has_slot:
+            ev(3, 47, 0); ev(3, 57, -1)
+            if fingers > 1:
+                ev(3, 47, 1); ev(3, 57, -1)
+        ev(1, 330, 0)
+        ev(0, 0, 0)
+        r = self._run("shell", "sh", "-c", "'" + "; ".join(cmds) + "'", timeout=30)
+        self.last_pinch = f"touch {path} max {mx}x{my} slots={has_slot} rc={r.returncode} {(r.stderr or b'')[:120]!r}"
+        return r.returncode == 0
 
     def back(self):
         self._run("shell", "input", "keyevent", "4")
@@ -4988,6 +5067,75 @@ def read_building_labels(img):
     return out
 
 
+def _view_scale(a, b):
+    """How much bigger things look in picture b than in picture a (ORB features) -> scale or None."""
+    try:
+        ga, gb = cv2.cvtColor(a, cv2.COLOR_BGR2GRAY), cv2.cvtColor(b, cv2.COLOR_BGR2GRAY)
+        orb = cv2.ORB_create(1500)
+        ka, da = orb.detectAndCompute(ga[90:700, 60:480], None)
+        kb, db = orb.detectAndCompute(gb[90:700, 60:480], None)
+        if da is None or db is None:
+            return None
+        m = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(da, db)
+        if len(m) < 12:
+            return None
+        pa = np.float32([ka[x.queryIdx].pt for x in m])
+        pb = np.float32([kb[x.trainIdx].pt for x in m])
+        M, inl = cv2.estimateAffinePartial2D(pa, pb, method=cv2.RANSAC, ransacReprojThreshold=4)
+        if M is None or inl is None or int(inl.sum()) < 10:
+            return None
+        return float(np.hypot(M[0, 0], M[1, 0]))
+    except Exception:
+        return None
+
+
+def zoom_out_city(dev, stop, log, max_tries=3):
+    """Zoom the city view out with a two-finger pinch (done once per emulator session). -> True when the view got wider."""
+    if getattr(dev, "zoomed_out", False):
+        return True
+    ok_any = False
+    lab = {}
+    try:                                                  # developer aid: %APPDATA%\\RallyForgeBot\\pinch_lab.json
+        lab = json.loads((USER / "pinch_lab.json").read_text(encoding="utf-8"))
+    except Exception:
+        lab = {}
+    if lab.get("shell"):
+        for c in ([lab["shell"]] if isinstance(lab["shell"], str) else lab["shell"]):
+            r = dev._run("shell", "sh", "-c", "'" + c + "'", timeout=40)
+            out = ((r.stdout or b"") + (r.stderr or b"")).decode("utf-8", "ignore")
+            for i in range(0, min(len(out), 3000), 300):
+                log(f"[i] lab> {out[i:i + 300]!r}")
+    kw = lab.get("params") or {}
+    for vi, var in enumerate(lab.get("variants") or []):
+        b = dev.screenshot()
+        ok = dev.pinch_in(**var)
+        _nap(stop, 1.5, 1.8)
+        a = dev.screenshot()
+        sc = _view_scale(b, a)
+        log(f"[i] lab variant {vi} {var}: sent={ok} scale={sc} {getattr(dev, 'last_pinch', '')}")
+    for i in range(max_tries):
+        if stop.is_set():
+            return False
+        before = dev.screenshot()
+        sent = dev.pinch_in(**kw)
+        log(f"[i] Zoom out: {getattr(dev, 'last_pinch', 'no touch device found')}")
+        if not sent:
+            log("[!] Zoom out: this emulator did not accept the two-finger pinch (no touch device or sendevent refused)")
+            return False
+        _nap(stop, 1.2, 1.5)
+        after = dev.screenshot()
+        sc = _view_scale(before, after)
+        log(f"[i] Zoom out pinch {i + 1}: view scale {sc:.2f}" if sc else f"[i] Zoom out pinch {i + 1}: scale not measurable")
+        if sc and sc < 0.93:
+            ok_any = True
+            if sc > 0.97:
+                break
+        elif sc and sc >= 0.97:
+            break                                        # nothing changed: already as far out as it goes (or pinch ignored)
+    dev.zoomed_out = ok_any
+    return ok_any
+
+
 class CityNav:
     """Moves around the city map and remembers where the camera is (relative to the top-left corner)."""
 
@@ -5025,8 +5173,18 @@ class CityNav:
                 break
             sx = max(-120, min(120, rx))              # bigger drags leave too little overlap to measure
             sy = max(-240, min(240, ry))
-            # dragging the finger left/up moves the camera right/down
-            dx, dy, _ = self._drag(270 + sx / 2, 440 + sy / 2, 270 - sx / 2, 440 - sy / 2)
+            # dragging the finger left/up moves the camera right/down.
+            # A short drag can be read by the game as a TAP on a building (that opened Prison, Rare Books ...), so a
+            # short move is done as one long drag past the target and a second long drag back.
+            ln = (sx * sx + sy * sy) ** 0.5
+            if ln < 80:
+                ux, uy = (sx / ln, sy / ln) if ln else (0.0, 1.0)
+                ax, ay = sx + ux * 90, sy + uy * 90
+                d1x, d1y, _ = self._drag(270 + ax / 2, 440 + ay / 2, 270 - ax / 2, 440 - ay / 2)
+                d2x, d2y, _ = self._drag(270 - ux * 45, 440 - uy * 45, 270 + ux * 45, 440 + uy * 45)
+                dx, dy = d1x + d2x, d1y + d2y
+            else:
+                dx, dy, _ = self._drag(270 + sx / 2, 440 + sy / 2, 270 - sx / 2, 440 - sy / 2)
             if abs(dx) < 3 and abs(dy) < 3:
                 break
             mx -= dx
@@ -5225,7 +5383,7 @@ def look_with_names(dev, stop, nav, shots=3):
     nav.last_rest_labels = [(n, int(sx - dxh), int(sy - dyh)) for n, sx, sy in best_labels]
     _nap(stop, 0.35, 0.5)                                   # let the map settle, then keep the camera position right
     after = dev.screenshot()
-    dxa, dya = safe_shift(rest, after, 0, -10)
+    dxa, dya = safe_shift(rest, after, 0, -52 if held else -10)
     nav.cx -= dxa
     nav.cy -= dya
     return labels, best, rest
@@ -5258,22 +5416,17 @@ def capture_city_frames(dev, cfg, log, stop, out_dir):
         log(f"[*] City capture: frame {n}: {len(labels)} names ({', '.join(a for a, _, _ in labels)})")
         n += 1
 
-    rows, direction = 0, 1
-    while rows < 16 and not stop.is_set():
-        for i in range(24):
-            if stop.is_set():
-                break
-            snap(f"row{rows}")
-            mx, _ = nav.pan(direction * 240, 0)
-            if abs(mx) < 10:
-                break
-        snap(f"row{rows}-end")
-        _, my = nav.pan(0, 480)
-        rows += 1
-        log(f"[*] City capture: row {rows}, {n} frames")
-        if abs(my) < 20:
+    xs = [260, 500, 740, 980, 1220, 1460]
+    ys = [280, 560, 840]
+    order = []
+    for r, y in enumerate(ys):                                # serpentine over the city, going to each stop (goto copes with the diamond shape)
+        order += [(x, y) for x in (xs if r % 2 == 0 else xs[::-1])]
+    for (x, y) in order:
+        if stop.is_set():
             break
-        direction = -direction
+        nav.goto(x, y)
+        log(f"[*] City capture: stop {n + 1}/{len(order)} wanted {x},{y} camera {round(nav.cx)},{round(nav.cy)}")
+        snap(f"{x},{y}")
     dev.guard_city = False
     (out / "meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     log(f"[+] City capture: {n} frames saved to {out}")
@@ -5882,6 +6035,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         if not keys:
             log(f"[!] Task '{task.get('name')}': '{name}' is not on the city map. {CITY_MAP_HELP}")
             return False
+        if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
+            zoom_out_city(dev, stop, log)
         nav = nav_state.get("nav") or CityNav(dev, stop, log)
         if not nav_state.get("nav"):
             nav.to_origin()
