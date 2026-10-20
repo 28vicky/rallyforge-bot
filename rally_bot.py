@@ -6225,8 +6225,29 @@ def scan_city_names(dev, cfg, log, stop, progress=None):
             ax, ay = dx, dy
         return True, ax, ay
 
+    cap_dir = USER / "citycap" / re.sub(r"[^0-9A-Za-z]+", "_", serial)
+    try:
+        import shutil
+        shutil.rmtree(cap_dir, ignore_errors=True)
+        cap_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    cap_meta = []
+
     def look(pred):
-        labs = labels_on_screen(dev, stop)
+        nav_ = CityNav(dev, stop, lambda *_: None)
+        cx0, cy0 = nav_.cx, nav_.cy
+        _l, held, rest = look_with_names(dev, stop, nav_)
+        dxa, dya = cx0 - nav_.cx, cy0 - nav_.cy
+        labs = [(n, x + dxa, y + dya) for n, x, y in getattr(nav_, "last_rest_labels", [])]
+        try:                                                  # every look is kept: the whole city can be re-read and stitched offline, as often as needed
+            i = len(cap_meta)
+            cv2.imwrite(str(cap_dir / f"{i:03d}_rest.png"), rest)
+            cv2.imwrite(str(cap_dir / f"{i:03d}_drag.png"), held)
+            cap_meta.append({"i": i, "pred": [round(pred[0], 1), round(pred[1], 1)] if pred else None, "labels": [[a, b, c] for a, b, c in labs]})
+            (cap_dir / "meta.json").write_text(json.dumps(cap_meta), encoding="utf-8")
+        except Exception:
+            pass
         labs = [l for l in labs if l[0] not in RESOURCE_BUILDINGS]
         new, how = st.add(labs, pred)
         mapped, _m = city_report({k: 0 for k in st.pts})
