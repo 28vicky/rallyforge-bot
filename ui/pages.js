@@ -92,25 +92,27 @@ function listTable(cols, rows, onSel, selected) {
 }
 
 
-// A "Maximize" switch for a panel: it covers the whole right section (everything right of the instance list); press again to shrink it back.
+// A "Maximize" switch for a panel: the other panels on the page are hidden and this one fills the whole right section (in place, no popup); press again to bring everything back.
 function maxToggle(panelEl) {
   if (!document.getElementById("maxStyle")) {
     const st = document.createElement("style"); st.id = "maxStyle";
-    st.textContent = ".panel.pmax{position:fixed;z-index:60;margin:0;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;background:var(--bg,#12141f)}" +
+    st.textContent = ".pmax-host>.panel:not(.pmax){display:none}.panel.pmax{display:flex;flex-direction:column;box-sizing:border-box;margin-bottom:0}" +
       ".panel.pmax .tlist{max-height:none;flex:1;min-height:0}.panel.pmax .pmax-fill{flex:1;min-height:0;display:flex;flex-direction:column}.panel.pmax .pmax-fill>div{flex:1;min-height:0;display:flex;flex-direction:column}";
     document.head.appendChild(st);
   }
-  const place = () => {
+  const fit = () => {
     const m = document.querySelector(".main");
     if (!panelEl.classList.contains("pmax") || !m) return;
-    const r = m.getBoundingClientRect();
-    Object.assign(panelEl.style, { top: r.top + "px", left: r.left + "px", width: r.width + "px", height: Math.max(200, r.height - 30) + "px" });
+    m.scrollTop = 0;
+    panelEl.style.height = Math.max(200, m.getBoundingClientRect().bottom - panelEl.getBoundingClientRect().top - 24) + "px";
   };
-  window.addEventListener("resize", place);
+  window.addEventListener("resize", fit);
   const b = h("button", { class: "btn" }, "\u2922 Maximize");
   b.onclick = () => {
+    const host = panelEl.parentElement;
     const on = panelEl.classList.toggle("pmax");
-    if (on) place(); else ["top", "left", "width", "height"].forEach((k) => (panelEl.style[k] = ""));
+    if (host) host.classList.toggle("pmax-host", on);
+    if (on) fit(); else panelEl.style.height = "";
     b.textContent = on ? "\u2921 Minimize" : "\u2922 Maximize";
   };
   return b;
