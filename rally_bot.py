@@ -624,6 +624,7 @@ class Device:
         self.sx = self.sy = 1.0              # real / 540x960 scale used for taps
         self.guard = None                    # (cfg, log, stop): the universal pop-up closer (see arm_guard)
         self.guard_city = False              # True while a task works on the city screen: an unknown screen = a pop-up
+        self.expect_city = False             # True while a duty walks over the city: any window that is not the city = unauthorised, closed at once
         self._guard_t = 0.0
         self._guard_busy = False
         self._guard_unknown = 0
@@ -656,6 +657,13 @@ class Device:
                     self._guard_unknown = 0
                     if clear_popups(self, cfg, log, stop, rounds=3):
                         return self.screenshot()
+            elif getattr(self, "expect_city", False) and has_template("city_screen") and screen_state(img, cfg) == "unknown":
+                self._guard_unknown += 1
+                if self._guard_unknown >= 2:                    # two looks in a row at something that is not the city: an unauthorised window
+                    self._guard_unknown = 0
+                    log("[!] An unexpected window is open while walking over the city - closing it")
+                    ensure_view(self, cfg, stop, log, "city", tries=6)
+                    return self.screenshot()
             else:
                 self._guard_unknown = 0
         except Exception:
@@ -6576,6 +6584,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             tx, ty = pitems[k]
             log(f"[*] Going to {k} by the city picture")
             nav.seen_city = False
+            dev.expect_city = True
             nav.goto(tx, ty)
             if not nav.seen_city:                           # this city does not look like the picture: use the old way for this run
                 log("[i] The whole-city picture does not match this screen - using the older way to find the building")
@@ -6597,6 +6606,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                     cv2.imwrite(str(USER / "debug" / "before_tap.png"), pre)
                 except Exception:
                     pass
+                dev.expect_city = False                     # from the tap on, a window opening is expected
                 dev.tap(int(px), int(py + float(task.get("tap_dy", 0))))
                 _nap(stop, 1.0, 1.4)
                 shot = dev.screenshot()
@@ -6608,7 +6618,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                         if got and got[0] and want_nm not in got[0].lower() and any(b.lower() in got[0].lower() for b in BUILDING_NAMES):
                             log(f"[!]   the menu that opened is {got[0]}, not {k} (try {attempt + 1}/3) - closing it and aiming again")
                             close_ring(dev, stop, (px, py + 35))
-                            leave_to_city(dev, cfg, stop)
+                            leave_to_city(dev, cfg, stop, log)
+                            dev.expect_city = True
                             nav.goto(tx, ty)
                             px, py = tx - nav.cx, ty - nav.cy
                             if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
@@ -6628,9 +6639,10 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                     close_ring(dev, stop, (px, py + 35))
                 leave_to_city(dev, cfg, stop)
                 continue
+            dev.expect_city = False
             for st in task.get("steps", []):
                 run_step(dev, cfg, log, stop, st)
-            leave_to_city(dev, cfg, stop)
+            leave_to_city(dev, cfg, stop, log)
             if find_detail_icon(dev.screenshot()):          # leave the city clean: close the ring menu the task opened
                 close_ring(dev, stop, (px, py + 35))
             done_any = True
@@ -6683,28 +6695,80 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
     return False
 
 
-def leave_to_city(dev, cfg, stop):
-    """Close whatever a task opened (a building's panel, stacked pages, a ring menu). Back is only pressed while we are not
-    on the city screen (on the city screen it would open the quit dialog); a pop-up's round X is used when there is one."""
-    for i in range(10):
+def view_of(shot, cfg):
+    """Which view the game shows: 'city', 'landscape' (the rally-list / world view) or 'other' (a window, a page, a pop-up)."""
+    st = screen_state(shot, cfg)
+    return "city" if st == "city" else "landscape" if st == "rally_list" else "other"
+
+
+def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
+    """THE universal recovery routine. Whatever is on the screen - a building's window, stacked pages, a pop-up, a ring menu,
+    a reward panel, the 'exit the game?' box - get out of it and land on the wanted view: 'city' or 'landscape'.
+    Already there = nothing is pressed. Already in the other main view = the round city / landscape button is tapped.
+    Back is never pressed on the city (it would ask to quit the game). -> True when the wanted view shows."""
+    say = (lambda m: log(m)) if log else (lambda m: None)
+    if not has_template("city_screen") and not has_template("rally_screen") and not has_template("join_button"):
+        return True                                          # nothing to recognise the views by: do not press anything blindly
+    toggled = 0
+    unknown = 0
+    for i in range(tries):
         if stop.is_set():
             return False
         shot = dev.screenshot()
-        if screen_state(shot, cfg) in ("city", "rally_list") and not find_detail_icon(shot):
-            return True
         if cancel_quit_dialog(dev, shot, lambda *_: None):
+            say("[*] Recovery: the game asked to exit - tapped Cancel")
             _nap(stop, 0.8, 1.2)
             continue
-        if find_detail_icon(shot) and screen_state(shot, cfg) == "city":
+        v = view_of(shot, cfg)
+        ring = v == "city" and find_detail_icon(shot)
+        if v == want and not ring:
+            return True
+        if ring:
             close_ring(dev, stop, (270, 430))
             continue
-        cx = find_close_x(shot) if i % 2 == 0 else []
+        if v in ("city", "landscape"):                      # the other main view: switch (twice at most)
+            if toggled >= 2:
+                return False
+            toggled += 1
+            say(f"[*] Recovery: showing the {v} view - switching to the {want} view")
+            dev.tap(*VIEW_TOGGLE)
+            _nap(stop, 2.2, 3.0)
+            continue
+        if close_reward_panel(dev, stop, None):
+            continue
+        hit = None
+        th = min(cfg.get("threshold", 0.85), 0.85)
+        for name in list_templates("popup_"):
+            if name == "popup_exit_cancel":
+                continue
+            h = find(shot, name, th)
+            if h:
+                hit = (name, h)
+                break
+        if hit:
+            tap_hit(dev, hit[1])
+            say(f"[*] Recovery: closed a pop-up ({hit[0]})")
+            _nap(stop, 0.8, 1.2)
+            continue
+        unknown += 1
+        cx = find_close_x(shot) if unknown % 2 == 1 else []
         if cx:
             dev.tap(cx[0][0], cx[0][1])
+            say(f"[*] Recovery: closed a window with its X button ({cx[0][0]},{cx[0][1]})")
+        elif unknown >= 5 and toggled < 2:                  # backing out leads nowhere known: maybe the other main view is showing without being recognised
+            toggled += 1
+            dev.tap(*VIEW_TOGGLE)
+            say("[*] Recovery: screen not recognised - tapped the city / landscape button")
         else:
             dev.back()
+            say("[*] Recovery: unexpected window - pressed Back")
         _nap(stop, 0.8, 1.2)
     return False
+
+
+def leave_to_city(dev, cfg, stop, log=None):
+    """Close whatever a task opened and land on the city view (see ensure_view)."""
+    return ensure_view(dev, cfg, stop, log, "city")
 
 
 # ------------------------------------------------------------ Crazy Eggs (Event Center > Activities > Crazy Eggs)
@@ -8035,25 +8099,37 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                 duty_record(getattr(dev, "serial", ""), duty_id, False, "run the City Mapper first")
             task_event(getattr(dev, 'serial', ''), shown, False, 'needs the city map')
             continue
-        try:
-            clear_popups(dev, cfg, log, stop)                # close offers / pop-ups first, then do the task
-            ok = city_task_target(dev, cfg, log, stop, t, nav_state)
-            if not ok and clear_popups(dev, cfg, log, stop):  # a pop-up was in the way: try the same task again
+        RESTARTS = 1                                         # universal protocol: a stray window / failure = back to the city, then the whole operation starts again
+        for attempt in range(RESTARTS + 1):
+            try:
+                if attempt:
+                    log(f"[*] Restarting '{shown}' from the city view (attempt {attempt + 1})")
+                    nav_state.clear()
+                if not ensure_view(dev, cfg, stop, log, "city") and not stop.is_set():
+                    log("[!] Could not get back to the city view")
+                clear_popups(dev, cfg, log, stop)            # close offers / pop-ups first, then do the task
                 ok = city_task_target(dev, cfg, log, stop, t, nav_state)
-            if ok:
-                _nap(stop, 1.2, 1.8)
-                for st in t.get("steps", []):
-                    run_step(dev, cfg, log, stop, st)
-                leave_to_city(dev, cfg, stop)
-            result = (ok is not False, "" if ok is not False else "could not open it")
-        except Exception as e:
-            log(f"[!] {'Duty' if duty_id else 'City task'} '{shown}' failed: {e}")
-            result = (False, str(e)[:120])
+                if not ok and clear_popups(dev, cfg, log, stop):  # a pop-up was in the way: try the same task again
+                    ok = city_task_target(dev, cfg, log, stop, t, nav_state)
+                if ok:
+                    _nap(stop, 1.2, 1.8)
+                    for st in t.get("steps", []):
+                        run_step(dev, cfg, log, stop, st)
+                    leave_to_city(dev, cfg, stop, log)
+                result = (ok is not False, "" if ok is not False else "could not open it")
+            except Exception as e:
+                log(f"[!] {'Duty' if duty_id else 'City task'} '{shown}' failed: {e}")
+                result = (False, str(e)[:120])
+            if stop.is_set() or (result and result[0]):
+                break
+            dev.expect_city = False
+            leave_to_city(dev, cfg, stop, log)               # failed or a wrong window opened: close everything, then (once) start over
+        dev.expect_city = False
         if result is not None and not stop.is_set():
             task_event(getattr(dev, "serial", ""), shown, *result)
         if duty_id and result is not None and not stop.is_set():
             duty_record(getattr(dev, "serial", ""), duty_id, *result)
-        leave_to_city(dev, cfg, stop)
+        leave_to_city(dev, cfg, stop, log)
 
 
 def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
