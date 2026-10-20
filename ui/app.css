@@ -663,3 +663,4 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 :root .inst .qact button.dim{opacity:.3}
 /* quieter fields everywhere */
 :root input:not([type=checkbox]):not([type=color]),:root select{background:var(--card);border:var(--bd);box-shadow:none}
+.dutygrid .dcol .note{display:none}
