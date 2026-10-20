@@ -6356,10 +6356,32 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
                 log(f"[!] Task '{task.get('name')}': {k} could not be brought into view (it is at {round(px)},{round(py)}) - skipped")
                 continue
-            if find_detail_icon(dev.screenshot()):          # a ring menu is still open from before: tapping the building would close it
-                close_ring(dev, stop, (px, py + 35))
-            dev.tap(int(px), int(py + float(task.get("tap_dy", 0))))
-            _nap(stop, 1.0, 1.4)
+            opened = False
+            for attempt in range(3):                        # tap the building; when no ring menu opens (a reward panel came up, the tap landed beside it) look again and retry
+                close_reward_panel(dev, stop, log)
+                if find_detail_icon(dev.screenshot()):      # a ring menu is still open from before: tapping the building would close it
+                    close_ring(dev, stop, (px, py + 35))
+                try:
+                    pre = dev.screenshot()
+                    cv2.circle(pre, (int(px), int(py + float(task.get("tap_dy", 0)))), 14, (0, 0, 255), 2)
+                    cv2.imwrite(str(USER / "debug" / "before_tap.png"), pre)
+                except Exception:
+                    pass
+                dev.tap(int(px), int(py + float(task.get("tap_dy", 0))))
+                _nap(stop, 1.0, 1.4)
+                shot = dev.screenshot()
+                if find_detail_icon(shot) or not any(str(t).split()[0] in ("ring_name", "champions", "tavern_catalog", "market_capture", "wheel") for t in task.get("steps", []) if str(t).strip()):
+                    opened = True
+                    break
+                log(f"[i]   no building menu opened at {k} (try {attempt + 1}/3) - looking again")
+                close_reward_panel(dev, stop, log)
+                nav.goto(tx, ty)
+                px, py = tx - nav.cx, ty - nav.cy
+                if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+                    break
+            if not opened:
+                log(f"[!] Task '{task.get('name')}': the menu of {k} did not open - skipped")
+                continue
             for st in task.get("steps", []):
                 run_step(dev, cfg, log, stop, st)
             leave_to_city(dev, cfg, stop)
@@ -6388,6 +6410,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             if not pos:
                 log(f"[!] Task '{task.get('name')}': {k} not found on screen - skipped")
                 continue
+            close_reward_panel(dev, stop, log)
             dev.tap(pos[0], pos[1] + float(task.get("tap_dy", 0)))
             _nap(stop, 1.0, 1.4)
             for st in task.get("steps", []):
@@ -6794,6 +6817,24 @@ def wheel_on_page(img):
 
 def wheel_reward_panel(img):
     return bool(find_text(img, ["Congratulations", "Continue"], region=(30, 150, 480, 650), cutoff=0.7))
+
+
+def close_reward_panel(dev, stop, log=None):
+    """A "Congratulations! / Continue" reward panel is lying over the city (left from an earlier task): close it,
+    otherwise the next tap lands on the panel. -> True when one was closed."""
+    closed = False
+    for _ in range(4):
+        if stop.is_set() or not wheel_reward_panel(dev.screenshot()):
+            break
+        closed = True
+        dev.tap(270, 754)
+        _nap(stop, 0.8, 1.1)
+        if wheel_reward_panel(dev.screenshot()):
+            dev.tap(270, 110)
+            _nap(stop, 0.6, 0.9)
+    if closed and log:
+        log("[i]   closed a reward panel that was in the way")
+    return closed
 
 
 def run_wheel(dev, cfg, log, stop):
