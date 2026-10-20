@@ -94,6 +94,7 @@ class Controller:
         self.events = collections.deque(maxlen=60)      # (id, kind, data) the interface should react to once
         self.shots = collections.OrderedDict()          # token -> screenshot (540x960)
         self.scan_found = []
+        self.city_jobs = {}                                   # serial -> {"running", "stop", "progress"}: every instance maps its own city, the others stay free
         self.jobs = {"city": {"running": False, "stop": None}, "generals": {"running": False, "stop": None, "count": 0}, "catalog": {"running": False, "stop": None, "count": 0}}
         self.tg = None
         self.tg_ready = False
@@ -887,16 +888,31 @@ class Controller:
                 self.event("city_done")
         threading.Thread(target=work, daemon=True).start()
 
+    def city_job(self, serial, start=False):
+        """The city-mapper job of one instance. start=True checks that this instance can be mapped now and claims it."""
+        job = self.city_jobs.setdefault(serial, {"running": False, "stop": None, "progress": None})
+        if start:
+            if job["running"]:
+                raise ApiError("This instance is already mapping its city.")
+            d = self.dev.get(serial)
+            if d and d.get("state") == "run":
+                raise ApiError("Stop (or pause) this instance first - the mapper and the bot would both use its screen. The other instances can keep running.")
+        return job
+
+    def city_any_running(self):
+        return any(j["running"] for j in self.city_jobs.values())
+
+    def city_jobs_state(self):
+        return {k: {"running": j["running"], "progress": j.get("progress")} for k, j in self.city_jobs.items() if j["running"]}
+
     def scan_city(self, serial):
-        job = self.jobs["city"]
-        if job["running"]:
-            raise ApiError("The city mapper is already running.")
+        job = self.city_job(serial, start=True)
         adb = rb.find_adb(self.cfg.get("adb_path") or "auto")
         if not adb:
             raise ApiError("ADB not found. Set the ADB path in Settings.")
         stop = threading.Event()
         job.update(running=True, stop=stop, progress=None)
-        cfg = dict(self.cfg)
+        cfg = rb.merge_device_cfg(rb.load_config(), serial)          # this instance's own settings
 
         def work():
             try:
@@ -906,19 +922,18 @@ class Controller:
                 self.log(f"[!] City mapper: {e}")
             finally:
                 job["running"] = False
-                self.event("city_done")
+                job["progress"] = None
+                self.event("city_done", {"serial": serial})
         threading.Thread(target=work, daemon=True).start()
 
     def scan_city_taps(self, serial):
-        job = self.jobs["city"]
-        if job["running"]:
-            raise ApiError("The city mapper is already running.")
+        job = self.city_job(serial, start=True)
         adb = rb.find_adb(self.cfg.get("adb_path") or "auto")
         if not adb:
             raise ApiError("ADB not found. Set the ADB path in Settings.")
         stop = threading.Event()
         job.update(running=True, stop=stop, progress=None)
-        cfg = dict(self.cfg)
+        cfg = rb.merge_device_cfg(rb.load_config(), serial)          # this instance's own settings
 
         def work():
             try:
@@ -928,13 +943,14 @@ class Controller:
                 self.log(f"[!] City tap test: {e}")
             finally:
                 job["running"] = False
-                self.event("city_done")
+                job["progress"] = None
+                self.event("city_done", {"serial": serial})
         threading.Thread(target=work, daemon=True).start()
 
     # ---- map the city by hand: the user clicks each building in a live picture of the emulator
     def manual_open(self, serial):
-        if self.jobs["city"]["running"]:
-            raise ApiError("The city mapper is already running.")
+        if self.city_job(serial)["running"]:
+            raise ApiError("This instance is already mapping its city.")
         adb = rb.find_adb(self.cfg.get("adb_path") or "auto")
         if not adb:
             raise ApiError("ADB not found. Set the ADB path in Settings.")
@@ -1105,6 +1121,18 @@ class Controller:
 
     def _tg_listen(self, tg):
         tg.listen(self.cfg.get("tg_boss_bot") or "@EvonyBossBot", on_update=lambda items: self.event("bosses"))
+        self._tg_listen_feed(tg)
+
+    def _tg_listen_feed(self, tg):
+        chats = str(self.cfg.get("tg_feed_chats") or "").strip()
+        rb._feed_keep[0] = int(self.cfg.get("tg_keep_min", 60) or 0)
+        if chats:
+            try:
+                labels = tg.listen_feed(chats, on_update=lambda items: self.event("coords"), keep_min=int(self.cfg.get("tg_keep_min", 60) or 0))
+                self.tg_status = "Logged in - watching " + ", ".join(labels or [chats])
+            except Exception as e:
+                self.tg_status = f"Problem: {e}"
+                self.log(f"[!] Telegram: {e}")
 
     def tg_connect(self):
         def fn(tg):
@@ -1550,7 +1578,7 @@ class Api:
         ram = getattr(c, "ram", None) or rb.memory_info()
         return {"seq": last, "logs": logs, "acts": acts, "events": events, "devs": c.status_list(),
                 "tg": {"status": c.tg_status, "ready": c.tg_ready},
-                "ram": ram, "city": c.jobs["city"]["running"], "city_progress": c.jobs["city"].get("progress"),
+                "ram": ram, "city": c.city_any_running() or c.jobs["city"]["running"], "city_progress": None, "city_jobs": c.city_jobs_state(),
                 "gen_scan": {"running": c.jobs["generals"]["running"], "count": c.jobs["generals"].get("count", 0)},
                 "catalog": {"running": c.jobs["catalog"]["running"], "count": c.jobs["catalog"].get("count", 0)},
                 "lic": c.lic.info() if c.lic.on else None,
@@ -1930,8 +1958,13 @@ class Api:
         return {"rows": rows, "extra": extra, "scanned": data.get("scanned"), "seconds": data.get("seconds")}
 
     def scan_city_stop(self, p):
+        serial = p.get("serial")
+        jobs = [self.c.city_jobs.get(serial)] if serial else list(self.c.city_jobs.values())
+        for j in jobs:
+            if j and j.get("stop"):
+                j["stop"].set()
         st = self.c.jobs["city"].get("stop")
-        if st:
+        if st and not serial:
             st.set()
         return {}
 
@@ -1954,6 +1987,42 @@ class Api:
     def tg_logout(self, p):
         self.c.tg_logout()
         return {}
+
+    def coords(self, p):
+        items, stats = rb.feed_get(int(self.c.cfg.get("tg_keep_min", 60) or 0))
+        return {"items": items, "stats": stats, "now": time.time(), "chats": str(self.c.cfg.get("tg_feed_chats") or ""),
+                "status": self.c.tg_status, "ready": bool(self.c.tg_ready)}
+
+    def coords_watch(self, p):
+        """Save the chats to watch and start watching them (the Telegram login must be done)."""
+        self.c.apply_config(p.get("cfg"))
+        if not self.c.tg_ready or self.c.tg is None:
+            raise ApiError("Log in to Telegram first (above).")
+        self.c._tg_listen_feed(self.c.tg)
+        return self.coords(p)
+
+    def coords_library(self, p):
+        return {"items": rb.lib_get(), "now": time.time()}
+
+    def coords_library_clear(self, p):
+        rb.lib_clear()
+        return self.coords_library(p)
+
+    def coords_chats(self, p):
+        """Remember the watched chats as soon as they are typed (kept in the settings for good)."""
+        self.c.apply_config({"tg_feed_chats": str(p.get("chats") or "").strip()})
+        return {}
+
+    def coords_keep(self, p):
+        """How long the live list keeps a coordinate (minutes, 0 = until cleared): saved and applied at once."""
+        m = max(0, int(p.get("minutes") or 0))
+        self.c.apply_config({"tg_keep_min": m})
+        rb.feed_set_keep(m)
+        return self.coords(p)
+
+    def coords_clear(self, p):
+        rb.feed_clear()
+        return self.coords(p)
 
     def tg_fetch(self, p):
         self.c.apply_config(p.get("cfg"))

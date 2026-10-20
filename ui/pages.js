@@ -91,6 +91,34 @@ function listTable(cols, rows, onSel, selected) {
   return { el: wrap, get: () => sel, set: (i) => { sel = i; draw(); } };
 }
 
+
+// A "Maximize" switch for a panel: the other panels on the page are hidden and this one fills the whole right section (in place, no popup); press again to bring everything back.
+function maxToggle(panelEl) {
+  if (!document.getElementById("maxStyle")) {
+    const st = document.createElement("style"); st.id = "maxStyle";
+    st.textContent = ".pmax-host>.panel:not(.pmax){display:none}.panel.pmax{display:flex;flex-direction:column;box-sizing:border-box;margin-bottom:0}" +
+      ".hint{font-size:12.5px;opacity:.7;margin:2px 0 8px;line-height:1.4}.tgview{display:none}.tgview.on{display:block}.panel.pmax .tgviews{flex:1;min-height:0;display:flex;flex-direction:column}.panel.pmax .tgview.on{flex:1;min-height:0;display:flex;flex-direction:column}" +
+      ".panel.pmax .tlist{max-height:none;flex:1;min-height:0}.panel.pmax .pmax-fill{flex:1;min-height:0;display:flex;flex-direction:column}.panel.pmax .pmax-fill>div{flex:1;min-height:0;display:flex;flex-direction:column}";
+    document.head.appendChild(st);
+  }
+  const fit = () => {
+    const m = document.querySelector(".main");
+    if (!panelEl.classList.contains("pmax") || !m) return;
+    m.scrollTop = 0;
+    panelEl.style.height = Math.max(200, m.getBoundingClientRect().bottom - panelEl.getBoundingClientRect().top - 24) + "px";
+  };
+  window.addEventListener("resize", fit);
+  const b = h("button", { class: "btn" }, "\u2922 Maximize");
+  b.onclick = () => {
+    const host = panelEl.parentElement;
+    const on = panelEl.classList.toggle("pmax");
+    if (host) host.classList.toggle("pmax-host", on);
+    if (on) fit(); else panelEl.style.height = "";
+    b.textContent = on ? "\u2921 Minimize" : "\u2922 Maximize";
+  };
+  return b;
+}
+
 const PAGES = {};
 
 // ====================================================================== dashboard
@@ -266,14 +294,15 @@ function instancePage(serial) {
               if (r) { S.cfg.per_device[serial] = r.settings || {}; AUTO.saved = AUTO.seen = cfgSnap(); rerender(); toast(`Profile '${chosen}' loaded into this instance.`, "ok"); }
             } }] });
   };
-  const stBtn = (t, fn) => h("button", { class: "btn", "data-act": t.toLowerCase(), onclick: fn }, t);
-  const bar = h("div", { class: "row", style: { marginBottom: "14px" } },
-    stBtn("Start", () => collectAndRun("start", { serial })), stBtn("Pause", () => act(api("pause", { serial }))), stBtn("Stop", () => act(api("stop", { serial }))), btn("Take game back now", () => act(api("takeback", { serial }))),
-    btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"),
-    btn("Profile \u25BE", (e) => menu(e.currentTarget, [{ label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "sm"));
-  const head = h("div", { class: "row", style: { margin: "0 0 14px", gap: "16px", alignItems: "center" } },
-    h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", color: "var(--accent2)", margin: "0" } }, dev.name || "Instance " + d.idx),
-    status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial));
+  const stBtn = (t, fn, cls) => h("button", { class: "btn" + (cls ? " " + cls : ""), "data-act": t.toLowerCase(), onclick: fn }, t);
+  const moreBtn = btn("More \u25BE", (e) => menu(e.currentTarget, [
+    { label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "");
+  const bar = h("div", { class: "row instbar" },
+    btn("Take game back now", () => act(api("takeback", { serial }))),
+    stBtn("Start", () => collectAndRun("start", { serial })), stBtn("Pause", () => act(api("pause", { serial }))), stBtn("Stop", () => act(api("stop", { serial })), "bad"), moreBtn);
+  const head = h("div", { class: "row insthead", style: { margin: "0 0 12px", gap: "14px", alignItems: "center" } },
+    h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx),
+    status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial), h("span", { style: { flex: "1" } }), bar);
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
@@ -411,34 +440,118 @@ function instancePage(serial) {
     h("div", { class: "row", style: { gap: "22px", alignItems: "center" } },
       h("label", { class: "tgl" }, asOn, h("span", { class: "sw" }), "Start this instance automatically when the app opens")));
   // ---- tabs (same look as the Control settings tabs). The chosen tab is remembered, also when another instance is opened.
+  // section switcher inside one screen: pills on top, one section at a time (less scrolling)
+  const sections = (key, list) => {
+    S.sec = S.sec || {};
+    if (!list.some((x) => x[0] === S.sec[key])) S.sec[key] = list[0][0];
+    const wrapS = h("div", {}), pills = h("div", { class: "subnav" }), area = h("div", {});
+    const show = (k) => {
+      S.sec[key] = k;
+      [...pills.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
+      area.innerHTML = "";
+      const el = list.find((x) => x[0] === k)[2]();
+      for (const e of (Array.isArray(el) ? el : [el])) if (e) area.appendChild(e);
+    };
+    list.forEach(([k, l]) => pills.appendChild(h("button", { class: "sub", "data-k": k, onclick: () => show(k) }, l)));
+    wrapS.append(pills, area); show(S.sec[key]);
+    return [wrapS];
+  };
+  const mapPanel = () => panel("Map the city",
+    note("The bot needs to know where the buildings are. Scan city reads the names while it holds a finger on the screen. Map by hand and Map by squares are the manual ways when scanning does not fit your city style."),
+    h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } }, btn("Scan city", () => scanCityFlow(serial)), btn("Map by hand", () => manualMapFlow(serial)), btn("Map by squares", () => scanCityTapsFlow(serial))));
   const ITABS = [
-    ["run", "Run & phone", () => [phone, autoStart, autoJoin, staminaPanel(ov, S.cfg)]],
-    ["settings", "Settings", () => [panelEl]],
-    ["presets", "Presets & generals", () => ownP],
-    ["monsters", "Monsters", () => [PAGES.monsters(serial)]],
-    ["tasks", "Tasks", () => [PAGES.tasks(serial)]],
-    ["duties", "Duties", () => [PAGES.duties(serial)]],
-    ["crazy_eggs", "Crazy Eggs", () => [PAGES.duties(serial, "crazy_eggs")]],
-    ["champions", "Champions", () => [PAGES.duties(serial, "champions")]],
+    ["dash", "Dashboard", () => {
+      const a = activityBox(serial, "Activity");
+      const L = a.querySelector(".actleft"), R = a.querySelector(".actright");
+      return [h("div", { class: "dutygrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
+    }],
+    ["rallies", "Rallies", () => sections("rallies", [
+      ["mon", "Monsters", () => [PAGES.monsters(serial)]],
+      ["gen", "Generals & presets", () => ownP],
+      ["sta", "Stamina", () => [staminaPanel(ov, S.cfg)]],
+      ["aj", "Auto-Join", () => [autoJoin]]])],
+    ["activities", "Activities", () => [PAGES.duties(serial)]],
+    ["city", "City", () => sections("city", [
+      ["tasks", "Tasks", () => [PAGES.tasks(serial)]],
+      ["market", "Market", () => [PAGES.market()]],
+      ["map", "Map the city", () => [mapPanel()]]])],
+    ["itinerary", "Plan", () => [instItinerary(serial)]],
+    ["history", "Log", () => [instHistory(serial)]],
+    ["settings", "Settings", () => sections("settings", [
+      ["phone", "Phone and start", () => [phone, autoStart]],
+      ["all", "All other settings", () => [panelEl]]])],
   ];
   if (!S.instTab) { try { S.instTab = localStorage.getItem("rf_inst_tab") || ""; } catch (e) { S.instTab = ""; } }
-  if (!ITABS.some((t) => t[0] === S.instTab)) S.instTab = "run";
+  if (!ITABS.some((t) => t[0] === S.instTab)) S.instTab = "dash";
   const body = h("div", {});
-  const tabRow = h("div", { class: "tabs", style: { margin: "4px 0 14px" } });
+  const tabRow = h("div", { class: "tabs", style: { margin: "4px 0 0" } });
   const showTab = (k) => {
     S.instTab = k;
     try { localStorage.setItem("rf_inst_tab", k); } catch (e) {}
     [...tabRow.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
     body.innerHTML = "";
+    if (k !== "dash" && k !== "activities") {
+      const nv = h("span", { class: "nowtxt" }, actNow(serial));
+      body.appendChild(h("div", { class: "nowstrip" }, h("span", { class: "actlab" }, "Now"), nv));
+      const iv = setInterval(() => { if (!nv.isConnected) clearInterval(iv); else nv.textContent = actNow(serial); }, 2000);
+    }
     const t = ITABS.find((x) => x[0] === k);
     for (const el of t[2]()) if (el) body.appendChild(el);
   };
   for (const [k, l] of ITABS) tabRow.appendChild(h("button", { class: "tab", "data-k": k, onclick: () => showTab(k) }, l));
-  const wrap = h("div", {}, h("div", { class: "stickyhead" }, h("div", { class: "stickybox" }, head, warn, bar)), panel(null, activityBox(serial, "Activity")), tabRow, body);
+  const wrap = h("div", {}, h("div", { class: "stickyhead" }, h("div", { class: "stickybox" }, head, warn, tabRow)), body);
+  S.gotoInstTab = showTab;
   showTab(S.instTab);
   setTimeout(refreshInstanceControls, 0);
   return wrap;
 }
+// ====================================================================== per-instance Itinerary and Log history (read only)
+function instItinerary(serial) {
+  const root = h("div", {});
+  const fmtT = (t) => new Date(t * 1000).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  const grp = (title, rows, bad) => rows.length ? h("div", { class: "itgrp" + (bad ? " bad" : "") }, h("div", { class: "ithead" }, title + " (" + rows.length + ")"),
+    ...rows.map((r) => h("div", { class: "itrow" }, h("span", { class: "itwhen" }, r.when), h("span", { class: "itname" }, r.name)))) : null;
+  const load = async () => {
+    if (!root.isConnected) return;
+    const j = await api("task_history", {}, { quiet: true }).catch(() => null);
+    if (!j) return;
+    const row = (j.matrix || []).find((m) => m.id === serial);
+    const d = (row && row.duties) || [];
+    const mk = (f) => d.filter(f).map((x) => ({ when: x.text, name: x.title }));
+    const mine = (j.events || []).filter((e) => row && e.emu === row.emu).slice(0, 12).map((e) => ({ when: fmtT(e.t), name: e.task + (e.ok ? "" : " - failed" + (e.msg ? ": " + e.msg : "")) }));
+    root.innerHTML = "";
+    const parts = [grp("Overdue - waiting to run", mk((x) => x.status === "due" || x.status === "retry"), true), grp("Gave up today", mk((x) => x.status === "gaveup"), true),
+      grp("Coming up", mk((x) => x.status === "waiting")), grp("Done today", mk((x) => x.status === "done")), grp("Latest things the bot did here", mine)].filter(Boolean);
+    root.appendChild(panel("Itinerary",
+      note("What this instance has to do, in plain order. Red = late or given up. Switch things on or off under Duties and Tasks; changes are picked up without stopping the instance."),
+      row && !row.tasks ? h("div", { class: "chip pill-bad", style: { margin: "6px 0" } }, "Tasks are off for this instance") : null,
+      ...(parts.length ? parts : [note("Nothing is switched on yet. Turn duties on under Duties and they appear here.")])));
+  };
+  root.appendChild(note("Loading..."));
+  setTimeout(load, 0);
+  const t = setInterval(() => { if (!root.isConnected) clearInterval(t); else load(); }, 10000);
+  return root;
+}
+function instHistory(serial) {
+  const root = h("div", {});
+  const q = h("input", { type: "search", placeholder: "Search this instance's log...  (for example: stamina, joined, kicked)", style: { width: "100%", marginBottom: "8px" } });
+  const only = h("label", { class: "tgl", style: { marginBottom: "8px" } }, h("input", { type: "checkbox" }), h("span", { class: "sw" }), "Only problems");
+  const body = h("div", { class: "histlog" });
+  const draw = () => {
+    if (!root.isConnected) return;
+    const f = q.value.trim().toLowerCase(), bad = only.querySelector("input").checked;
+    const rows = S.logs.filter((l) => l.s === serial && (!f || l.t.toLowerCase().includes(f)) && (!bad || l.t.startsWith("[!]") || l.t.startsWith("[-]"))).slice(-400).reverse();
+    body.innerHTML = "";
+    if (!rows.length) { body.appendChild(note("No lines yet" + (f || bad ? " for this search." : "."))); return; }
+    for (const l of rows) body.appendChild(h("div", { class: "hrow " + lineClass(l.t) }, l.t));
+  };
+  q.addEventListener("input", draw); only.querySelector("input").addEventListener("change", draw);
+  root.appendChild(panel("Log history - this instance", h("div", {}, q, only), body));
+  draw();
+  const t = setInterval(() => { if (!root.isConnected) clearInterval(t); else draw(); }, 3000);
+  return root;
+}
+
 function refreshInstanceControls() {
   const s = $("#instStatus");
   if (!s || S.sel === "control") return;
@@ -487,7 +600,7 @@ function presetPanels(c, inst) {
       h("div", { class: "lab" }, "Assistant general(s)"), genField(b, "assistant", `Preset ${ROMAN[i]} - assistant`),
       tog(b, "assistant_optional", "Join without assistant if none is free"));
     return h("div", { class: "pcard" },
-      h("div", { class: "phead" }, h("span", { class: "pbadge" }, String(b.n)), h("b", {}, "PRESET " + b.n), h("button", { class: "px", title: "Switch this preset off", onclick: () => { b.enabled = false; rerender(); } }, "\u2715")),
+      h("div", { class: "phead" }, h("span", { class: "pbadge" }, String(b.n)), h("b", {}, "Preset " + b.n), h("button", { class: "px", title: "Switch this preset off", onclick: () => { b.enabled = false; rerender(); } }, "\u2715")),
       h("div", { class: "seg small" }, h("button", { class: "segb" + (b.pick_generals ? "" : " on"), onclick: () => { b.pick_generals = false; rerender(); } }, "Game default"), h("button", { class: "segb" + (b.pick_generals ? " on" : ""), onclick: () => { b.pick_generals = true; rerender(); } }, "Listed")), tog(b, "skip_if_no_general", "Skip if no general"),
       gens);
   };
@@ -553,6 +666,9 @@ function staminaPanel(store, base) {
     note("Full = slides the bar to the very end, so stamina fills up to the game's limit (9,999) - the default. The game's own Max button is not used (it stops at 100). Game default = the amount the game suggests (2 items). Exact number = the number of items you type."));
 }
 PAGES.settings = function () {
+  const r = PAGES.settings0(); const t = PAGES.themes(); const f = r.firstChild; while (t.firstChild) r.insertBefore(t.firstChild, f); return r;
+};
+PAGES.settings0 = function () {
   const c = S.cfg;
   const g = panel("Global settings (every instance, unless it has its own)",
     grid2(
@@ -596,11 +712,12 @@ function scopeBar(page, keys, what, fixed) {
   const pick = h("select", { onchange: (e) => { S.scope[page] = e.target.value; rerender(); } },
     [h("option", { value: "", selected: serial === "" }, "All instances (default)")].concat((S.devices || []).filter((d) => d.id).map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || d.id))));
   const items = fixed !== undefined ? [] : [h("span", { class: "lab" }, "Settings for"), pick];
-  if (serial && own) {
-    items.push(h("span", { class: "chip" }, "own " + what));
-    items.push(btn("Use the global " + what, () => { keys.forEach((k) => delete ov[k]); rerender(); }, "sm"));
-  } else if (serial) {
-    items.push(btn("Give this instance its own " + what, () => { keys.forEach((k) => { if (S.cfg[k] !== undefined) ov[k] = clone(S.cfg[k]); }); rerender(); }, "sm pri"));
+  if (serial) {
+    const toOwn = () => { keys.forEach((k) => { if (S.cfg[k] !== undefined) ov[k] = clone(S.cfg[k]); }); rerender(); };
+    const toGlobal = async () => { if (await confirmBox("Use the global " + what, "This instance's own " + what + " will be discarded and it will use the global one again. Continue?")) { keys.forEach((k) => delete ov[k]); rerender(); } };
+    items.push(h("div", { class: "seg ownseg" },
+      h("button", { class: own ? "" : "on", onclick: () => { if (own) toGlobal(); } }, "Global " + what),
+      h("button", { class: own ? "on" : "", onclick: () => { if (!own) toOwn(); } }, "Own " + what + " for this instance")));
   }
   const msg = !serial ? "These are the defaults for every instance that has no own " + what + "."
     : own ? "Changes here apply to this instance only."
@@ -807,10 +924,11 @@ PAGES.market = function () {
 // ====================================================================== telegram
 PAGES.telegram = function () {
   const c = S.cfg;
+  const panel = (title, ...kids) => h("div", { class: "tgview" }, title ? h("h3", {}, title) : null, kids);   // one view of the single Telegram window
   const code = h("input", { type: "text", class: "short" });
   const pw = h("input", { type: "password" });
   const run = (name, extra) => act(api(name, Object.assign({ cfg: c }, extra || {})));
-  const login = panel("Telegram login (your own account)",
+  const login = panel(null,
     note("1) On my.telegram.org -> 'API development tools' create an app and copy the api_id and api_hash. 2) Enter them with your phone number (with country code, e.g. +911234567890) and press 'Send code'. 3) Type the code Telegram sends you (and your two-step password if you have one) and press 'Log in'. You only do this once: the login is saved on this PC."),
     grid2(fld("api_id", inp(c, "tg_api_id")), fld("api_hash", inp(c, "tg_api_hash", { type: "password" })), fld("Phone number", inp(c, "tg_phone", { ph: "+911234567890" })),
       fld("Login code", code), fld("Two-step password (if any)", pw)),
@@ -825,14 +943,75 @@ PAGES.telegram = function () {
     bosses.innerHTML = ""; bosses.appendChild(t.el);
   };
   refreshBosses();
-  const boss = panel("Boss finder bot",
+  const boss = panel(null,
     grid2(fld("Bot to read", inp(c, "tg_boss_bot")), fld("Message to send it", inp(c, "tg_boss_command")),
       fld("Ask again every (min, 0 = only on the button)", inp(c, "tg_auto_min", { type: "int", cls: "short" })),
       fld("Tasks use bosses of level at least", h("div", { class: "row" }, inp(c, "tg_min_level", { type: "int", cls: "short" }), sel(c, "tg_pick", ["nearest", "highest"])))),
     note("Type the message exactly as you do in the bot's chat (a command or a button's text, e.g. 'Barb Lv7'). Every answer the bot sends is read for lines like 'Lv7 Witch (xy: 719 539) 94km'. In a task you can use {boss_x}, {boss_y}, {boss_level} and {boss_name} in a step, and the step 'text 123' types a number into the game."),
     h("div", { class: "row", style: { marginBottom: "12px" } }, btn("Ask now", () => run("tg_fetch"), "pri"),
       btn("Copy selected X Y", async () => { if (selB === null) return; const b = S.bosses[selB]; try { await navigator.clipboard.writeText(`${b.x} ${b.y}`); toast("Copied.", "ok"); } catch (e) { toast(`${b.x} ${b.y}`); } })), bosses);
-  return h("div", {}, login, boss);
+  // live list of every coordinate that shows up in the chats you watch
+  const feedBox = h("div", {});
+  const feedChats = h("input", { type: "text", value: c.tg_feed_chats || "", placeholder: "@channel, group name as in your Telegram list", onchange: () => { c.tg_feed_chats = feedChats.value; act(api("coords_chats", { chats: feedChats.value }, { quiet: true })); } });
+  const keepOpts = [[10, "10 minutes"], [20, "20 minutes"], [30, "30 minutes"], [60, "1 hour"], [180, "3 hours"], [0, "Until I clear the list"]];
+  const keepSel = h("select", { onchange: async (e) => { c.tg_keep_min = Number(e.target.value); const j = await act(api("coords_keep", { minutes: c.tg_keep_min })); if (j) { drawFeed(j); toast("Saved.", "ok"); } } },
+    ...keepOpts.map(([v, t]) => h("option", { value: v, selected: Number(c.tg_keep_min ?? 60) === v }, t)));
+  const drawFeed = (j) => {
+    if (!j) return;
+    const ago = (t) => { const s = Math.max(0, Math.round(j.now - t)); return s < 60 ? s + " s" : s < 3600 ? Math.round(s / 60) + " min" : Math.round(s / 3600) + " h"; };
+    const t = listTable(["Seen", "Chat", "Level", "Name", "X", "Y", "km"], j.items.map((b) => ({ cells: [ago(b.t) + " ago", b.chat || "", b.level || "", b.name, b.x, b.y, b.km ?? ""] })), null, null);
+    feedBox.innerHTML = "";
+    feedBox.appendChild(h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap", margin: "6px 0", alignItems: "center" } },
+      h("span", { class: "chip" }, "messages read: " + j.stats.messages), h("span", { class: "chip" }, "with coordinates: " + j.stats.with_coords),
+      h("span", { class: "chip" }, "watching: " + ((j.stats.chats || []).join(", ") || "nothing yet")),
+      btn("Clear list", async () => { drawFeed(await act(api("coords_clear"))); })));
+    feedBox.appendChild(t.el);
+  };
+  const libBox = h("div", {});
+  const drawLib = (j) => {
+    if (!j) return;
+    const ago = (t) => { const s = Math.max(0, Math.round(j.now - t)); return s < 60 ? s + " s" : s < 3600 ? Math.round(s / 60) + " min" : s < 86400 ? Math.round(s / 3600) + " h" : Math.round(s / 86400) + " d"; };
+    libBox.innerHTML = "";
+    libBox.appendChild(h("div", { class: "row", style: { gap: "10px", flexWrap: "wrap", margin: "8px 0" } },
+      h("span", { class: "chip" }, "saved: " + j.items.length),
+      btn("Copy all X Y", async () => { try { await navigator.clipboard.writeText(j.items.map((b) => `${b.name} ${b.x} ${b.y}`).join("\n")); toast("Copied.", "ok"); } catch (e) { toast("Could not copy."); } }),
+      btn("Clear library", async () => { if (confirm("Delete every saved coordinate?")) drawLib(await act(api("coords_library_clear"))); })));
+    libBox.appendChild(listTable(["First seen", "Last seen", "Seen", "Level", "Name", "X", "Y"], j.items.map((b) => ({ cells: [ago(b.first) + " ago", ago(b.last) + " ago", (b.n || 1) + "x", b.level || "", b.name, b.x, b.y] })), null, null).el);
+  };
+  let libTick = 0;
+  const loadLib = async () => { if (!libBox.isConnected) return; const j = await api("coords_library", {}, { quiet: true }).catch(() => null); drawLib(j); };
+  const loadFeed = async () => { if (!feedBox.isConnected) return; const j = await api("coords", {}, { quiet: true }).catch(() => null); drawFeed(j); if (j && j.stats.messages !== libTick) { libTick = j.stats.messages; loadLib(); } };
+  const feedTimer = setInterval(() => { if (!feedBox.isConnected && feedBox.dataset.shown) clearInterval(feedTimer); else loadFeed(); }, 3000);
+  setTimeout(() => { feedBox.dataset.shown = "1"; loadFeed(); }, 300);
+  const live = panel(null,
+    h("div", { class: "row", style: { gap: "10px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "6px" } },
+      h("div", { style: { flex: "1 1 260px" } }, fld("Chats / channels to watch (comma separated)", feedChats)),
+      h("div", { style: { flex: "0 0 190px" } }, fld("Keep coordinates for", keepSel)),
+      btn("Start watching", async () => { c.tg_feed_chats = feedChats.value; const j = await act(api("coords_watch", { cfg: c })); if (j) { drawFeed(j); toast("Watching.", "ok"); } }, "pri")),
+    h("div", { class: "hint" }, "Use the chat's name as in your Telegram list or its @username (log in on the Login tab first). Every new or edited message is read for lines like 'Lv7 Witch (xy: 719 539) 94km'. Older coordinates stay saved in the Library."),
+    h("div", { class: "pmax-fill" }, feedBox));
+  const lib = panel(null, h("div", { class: "hint" }, "Every coordinate ever seen, kept for good so tasks can use them later."), h("div", { class: "pmax-fill" }, libBox));
+  setTimeout(loadLib, 400);
+  // ONE window: buttons on top switch between the views; Maximize makes the whole window fill the right section
+  const views = [["live", "Live coordinates", live], ["lib", "Library", lib], ["boss", "Boss finder", boss], ["login", "Login", login]];
+  let cur = "live";
+  try { cur = localStorage.getItem("rf_tg_view") || "live"; } catch (e) {}
+  if (!views.some((v) => v[0] === cur)) cur = "live";
+  const win = h("div", { class: "panel" });
+  const bar = h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap", marginBottom: "12px", alignItems: "center" } });
+  const area = h("div", { class: "tgviews" });
+  const show = (id) => {
+    cur = id;
+    try { localStorage.setItem("rf_tg_view", id); } catch (e) {}
+    views.forEach(([k, , el]) => el.classList.toggle("on", k === id));
+    [...bar.querySelectorAll("button[data-v]")].forEach((b) => b.classList.toggle("pri", b.dataset.v === id));
+  };
+  views.forEach(([k, t, el]) => { const b = btn(t, () => show(k)); b.dataset.v = k; bar.appendChild(b); area.appendChild(el); });
+  bar.appendChild(h("div", { style: { flex: 1 } }));
+  bar.appendChild(maxToggle(win));
+  win.appendChild(bar); win.appendChild(area);
+  show(cur);
+  return h("div", {}, win);
 };
 
 // ====================================================================== reliability / schedule & alerts / updates
@@ -867,15 +1046,15 @@ PAGES.updates = function () {
 // ====================================================================== themes
 PAGES.themes = function () {
   const c = S.cfg;
-  const mode = () => c.ui_mode || "dark";
+  const mode = () => c.ui_mode || "light";
   const segs = h("div", { class: "seg" });
   const drawSeg = () => { segs.innerHTML = ""; [["dark", "Dark"], ["light", "Light"], ["auto", "Follow Windows"]].forEach(([m, l]) => segs.appendChild(h("button", { class: mode() === m ? "on" : "", onclick: () => { setTheme(null, m); renderModeIcon(); drawSeg(); drawThumbs(); } }, l))); };
   const thumbs = h("div", { class: "thumbs" });
-  const PALS = [["amber", "Amber", "Warm copper"], ["sage", "Sage", "Calm teal-green"]];
+  const PALS = [["ivory", "Ivory", "Warm and calm, clay accent"]];                 // Midnight, Amber and Sage are hidden for now
   const drawThumbs = () => {
     thumbs.innerHTML = "";
     const m = resolvedMode();
-    PALS.forEach(([p, name, sub]) => thumbs.appendChild(h("div", { class: "thumb" + ((c.ui_pal || "amber") === p ? " on" : ""), onclick: () => { setTheme(p, null); drawThumbs(); } },
+    PALS.forEach(([p, name, sub]) => thumbs.appendChild(h("div", { class: "thumb" + ((c.ui_pal || "ivory") === p ? " on" : ""), onclick: () => { setTheme(p, null); drawThumbs(); } },
       h("div", { class: "pv", "data-t": `${p}-${m}` }, h("i", { class: "a" }), h("i", { class: "b" }), h("i", { class: "c" }), h("i", { class: "d" })), h("b", {}, name), h("small", {}, sub))));
   };
   drawSeg(); drawThumbs();
@@ -897,7 +1076,15 @@ PAGES.themes = function () {
     look.append(
       row("Buttons", segOf("ui_btn", [["raised", "Plain"], ["tinted", "Accent tint"]], "raised"), "Tint the buttons with the accent colour."),
       row("Borders", segOf("ui_border", [["subtle", "Subtle"], ["accent", "Accent"]], "subtle"), "Outline of cards, buttons and boxes."),
-      row("Text size", segOf("ui_text", [[85, "Small"], [100, "Normal"], [115, "Large"], [130, "Extra large"]], 100), "Makes everything in the window bigger or smaller."),
+      row("Page size", (() => {
+        const cur = Math.max(80, Math.min(200, parseInt(c.ui_text, 10) || 100));
+        const lab = h("b", { class: "pzval" }, cur + "%");
+        const sl = h("input", { type: "range", min: 80, max: 200, step: 5, value: cur, class: "pzrange" });
+        sl.addEventListener("input", () => { lab.textContent = sl.value + "%"; });
+        sl.addEventListener("change", () => { setLook({ ui_text: parseInt(sl.value, 10) }); });
+        const pre = h("div", { class: "row", style: { gap: "6px" } }, [100, 125, 150, 200].map((v) => h("button", { class: "btn sm", onclick: () => { setLook({ ui_text: v }); drawLook(); } }, v + "%")));
+        return h("div", { class: "row", style: { gap: "14px", alignItems: "center", flexWrap: "wrap" } }, sl, lab, pre);
+      })(), "Makes everything in the window bigger or smaller."),
       row("Instance name", segOf("ui_name", [[20, "Small"], [24, "Medium"], [30, "Large"], [38, "Huge"]], 24), "Size of the name at the top of each instance page."),
       row("Corners", segOf("ui_round", [["sharp", "Sharp"], ["normal", "Soft"], ["round", "Round"]], "normal"), "How round the cards and buttons are."));
   };
@@ -905,8 +1092,8 @@ PAGES.themes = function () {
   hexIn.onchange = () => { let v = hexIn.value.trim(); if (v && v[0] !== "#") v = "#" + v; if (/^#[0-9a-f]{6}$/i.test(v)) { setLook({ ui_accent: v.toLowerCase() }); drawLook(); } else toast("Type a colour like #d9a566.", "bad"); };
   drawLook();
   return h("div", {},
-    panel("Themes", h("div", { class: "row", style: { gap: "16px" } }, h("span", { class: "lab" }, "Appearance"), segs, h("span", { class: "hint" }, "One switch: every theme follows it.")), thumbs,
-      note("Click a theme to switch to it at once. The sun / moon button at the top right flips between dark and light from any tab.")),
+    panel("Appearance", h("div", { class: "row", style: { gap: "16px" } }, h("span", { class: "lab" }, "Appearance"), segs, h("span", { class: "hint" }, "Light, dark, or follow Windows.")),
+      note("The sun / moon button at the top right flips between dark and light from any tab.")),
     panel("Accent colour", note("Pick a colour for the highlights: the active tab, switches, the selected instance and the focus outlines. The text colour on top of it is chosen automatically so it stays readable."),
       h("div", { class: "row", style: { gap: "12px" } }, sw, picker, hexIn)),
     panel("Look", look,
@@ -930,7 +1117,7 @@ PAGES.license = function () {
 
 
 // ====================================================================== duties
-PAGES.duties = function (fixed, only) {
+PAGES.duties = function (fixed, only, compact) {
   const root = h("div", {});
   let serial = fixed || "";                       // "" = all instances (the default); an instance id = that instance's own copy
   let rows = [], own = {};
@@ -940,10 +1127,22 @@ PAGES.duties = function (fixed, only) {
     if (fixed === undefined) root.appendChild(hist);
     const pick = h("select", { onchange: (e) => { serial = e.target.value; load(); loadCe(); loadCh(); loadWh(); loadRn(); } },
       [h("option", { value: "", selected: serial === "" }, "All instances (default)")].concat(S.devices.map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || short(d.id)))));
+    if (compact) {
+      root.appendChild(rn);
+      const onRows = rows.filter((r) => r.on);
+      root.appendChild(panel("Daily duties", h("div", { class: "dlist" }, onRows.slice(0, 7).map((r) => h("div", { class: "drow" },
+        h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" })),
+        h("div", { class: "dtx" }, h("b", {}, r.title), h("small", {}, (r.note || "") + (r.schedule ? " \u00b7 " + r.schedule : ""))),
+        h("span", { class: "dst " + (r.status === "done" ? "ok" : r.status === "gaveup" ? "bad" : "") }, r.on ? r.status_text : "Off"))).concat(onRows.length ? [] : [note("No duty is switched on yet.")])),
+        h("div", { class: "row", style: { marginTop: "10px", justifyContent: "space-between" } },
+          h("span", { class: "hint" }, onRows.length > 7 ? "+" + (onRows.length - 7) + " more switched on" : onRows.length + " switched on"),
+          h("button", { class: "btn sm", onclick: () => S.gotoInstTab && S.gotoInstTab("activities") }, "Manage all duties \u2192"))));
+      return;
+    }
     if (!only) root.appendChild(panel("Duties",
       note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes, retries 3 times a day if it fails, then waits for the next reset. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
       h("div", { class: "row" }, fixed !== undefined ? null : h("span", { class: "lab" }, "Settings for"), fixed !== undefined ? null : pick,
-        serial && own.duties ? h("span", { class: "chip" }, "own settings") : null,
+        serial && own.duties ? h("span", { class: "chip own" }, "own settings") : null,
         serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the global setting") : null),
       note(serial ? "Changes here apply to this instance only and replace the global list for it. Pick 'All instances' to change the default for every instance that has no own settings." : "These are the defaults for every instance. Pick one instance to give it different settings."),
     ));
@@ -990,7 +1189,7 @@ PAGES.duties = function (fixed, only) {
     const c = j.conf;
     const set = async (o) => { const r = await act(api("crazy_eggs_set", { serial, ...o })); if (r) drawCe(r); };
     ce.appendChild(subset(serial ? "Crazy Eggs \u2013 this instance" : "Crazy Eggs \u2013 all instances",
-      serial && j.own && j.own.crazy_eggs ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
+      serial && j.own && j.own.crazy_eggs ? h("div", { class: "row" }, h("span", { class: "chip own" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "crazy_eggs" })); loadCe(); } }, "Use the global setting")) : null,
       note("Event Center > Activities > Crazy Eggs. The bot smashes every ready egg you switch on, closes the reward panel, and comes back when the next timer ends. The Lucky Hammer (1 a day) skips an egg's wait, so give it to the egg with the longest wait."),
       j.costs.map((k) => {
@@ -1036,7 +1235,7 @@ PAGES.duties = function (fixed, only) {
     const c = j.conf;
     const set = async (o) => { const r = await act(api("wheel_set", { serial, ...o })); if (r) drawWh(r); };
     wh.appendChild(subset(serial ? "Wheel of Fortune \u2013 this instance" : "Wheel of Fortune \u2013 all instances",
-      serial && j.own && j.own.wheel ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
+      serial && j.own && j.own.wheel ? h("div", { class: "row" }, h("span", { class: "chip own" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "wheel" })); loadWh(); } }, "Use the global setting")) : null,
       note("Tavern > Wheel of Fortune. Each spin costs coins. The bot presses only the Spin buttons and closes the reward panel after every spin. With a big button it still finishes with smaller ones so the number of spins is exact."),
       h("div", { class: "row", style: { gap: "8px" } }, h("span", { class: "lab" }, "Spin button"),
@@ -1057,7 +1256,7 @@ PAGES.duties = function (fixed, only) {
     const sumT = Object.values(j.plan).reduce((a, v) => a + (v.taps || 0), 0), sumG = Object.values(j.plan).reduce((a, v) => a + (v.greets || 0), 0);
     const usedT = Object.values(j.taps || {}).reduce((a, v) => a + v, 0), usedG = Object.values(j.greets || {}).reduce((a, v) => a + v, 0);
     ch.appendChild(subset(serial ? "Champions – this instance" : "Champions – all instances",
-      serial && j.own && j.own.champions ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
+      serial && j.own && j.own.champions ? h("div", { class: "row" }, h("span", { class: "chip own" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "champions" })); loadCh(); } }, "Use the global setting")) : null,
       note("Keep > Champions. Every account has the same champions but only a few are active; the bot skips the ones that are not (grey button at the bottom). The daily limit is " + j.max_taps + " taps and " + j.max_greets + " greetings for all champions together - put them all on one champion or share them out. Switch a champion on to make it the main one: it gets all the taps and greetings of the day in one click (the numbers can still be edited). Leave everything empty to use the champion the page opens on. Turn the 'Champions' duty on above. Needs the city map (the Keep)."),
       h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } },

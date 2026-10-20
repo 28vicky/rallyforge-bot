@@ -1,5 +1,11 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.63", date: "2026-10-21",
+    new: ["A new, cleaner look for the whole app: sidebar with your name, one header per instance (name, status, Start/Pause/Stop, More), and tabs Dashboard, Rallies, Activities, City, Plan, Log, Settings. Light and dark themes, Inter font, sentence-case text.",
+          "Page size is now a slider (80% to 200%) with quick 100 / 125 / 150 / 200% buttons.",
+          "Monsters: a Global / Own switch shows at once whether this instance uses the global list or its own.",
+          "Telegram live list of coordinates and a saved coordinate library; every instance can map its own city while the others keep running."],
+    fixed: ["Themes now live only in Settings > Appearance; Telegram & Discord sit under App."] },
   { v: "2.4.62", date: "2026-10-20",
     new: ["Building tasks now work in every city style (Europe, Russia, Japan, Arabic ...): when the city does not look like the stored picture, the bot reads the building names written under the buildings, works out where the wanted building is, moves the map there and taps it. No per-account map is needed."],
     fixed: ["Champions: the Keep is tapped on its body (tall palaces were missed), and when the Champion caption cannot be read the bot taps the icon above the Detail icon.",

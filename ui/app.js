@@ -101,14 +101,14 @@ const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", mon
 
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
-  ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["telegram", "Telegram"], ["reliability", "Reliability"],
+  ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["telegram", "Telegram & Discord"], ["reliability", "Reliability"],
   ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Themes"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
 
 // ------------------------------------------------------------------ theme
 function resolvedMode() {
-  const m = S.cfg.ui_mode || "dark";
+  const m = S.cfg.ui_mode || "light";
   return m === "auto" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : m;
 }
 const ACCENTS = [["#d9a566", "Amber"], ["#e0c25a", "Gold"], ["#e07a5a", "Coral"], ["#e58a95", "Rose"], ["#a58be0", "Violet"], ["#7aa7e0", "Sky"], ["#6fb5a6", "Sage"], ["#8fc46a", "Lime"]];
@@ -138,15 +138,17 @@ function applyCustom() {
     const base = cs.getPropertyValue("--btn").trim();
     st.setProperty("--btn", `linear-gradient(rgba(${ar},${ag},${ab},${light ? 0.2 : 0.17}),rgba(${ar},${ag},${ab},${light ? 0.2 : 0.17})), ${base}`);
   }
-  const tz = Math.max(85, Math.min(150, parseInt(c.ui_text, 10) || 100));
+  const tz = Math.max(80, Math.min(200, parseInt(c.ui_text, 10) || 100));
   try { root.style.zoom = tz === 100 ? "" : String(tz / 100); } catch (e) {}
   const R = { sharp: [6, 4, 8], round: [28, 18, 28] }[c.ui_round];
   if (R) { st.setProperty("--r1", R[0] + "px"); st.setProperty("--r2", R[1] + "px"); st.setProperty("--rad", R[2] + "px"); }
 }
+const PALS_ON = ["ivory"];                       // Midnight, Amber and Sage are kept in the code but hidden for now
+const curPal = () => (PALS_ON.includes(S.cfg.ui_pal) ? S.cfg.ui_pal : "ivory");
 function applyTheme() {
-  document.documentElement.dataset.pal = S.cfg.ui_pal || "amber";
+  document.documentElement.dataset.pal = curPal();
   document.documentElement.dataset.mode = resolvedMode();
-  try { localStorage.setItem("rf_theme", JSON.stringify({ pal: S.cfg.ui_pal || "amber", mode: S.cfg.ui_mode || "dark" })); } catch (e) {}
+  try { localStorage.setItem("rf_theme", JSON.stringify({ pal: curPal(), mode: S.cfg.ui_mode || "light" })); } catch (e) {}
   applyCustom();
 }
 function setLook(o) {
@@ -185,9 +187,10 @@ function layout() {
     h("i"), h("i"), h("i"));
   root.appendChild(h("div", { class: "app" + (S.cfg.sidebar_open === false ? " nosb" : ""), id: "app" },
     h("div", { class: "side" },
-      h("h4", {}, "INSTANCES", burger()),
+      h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }), h("span", {}, "RallyForge")),
+      h("h4", {}, "Instances", burger()),
       h("div", { class: "inst-list", id: "instList" }),
-      h("div", { class: "sidefoot" }, h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
+      h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }), h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
     h("div", { class: "main" },
       h("div", { class: "top" }, burger(), h("img", { src: "/assets/logo.png", alt: "" }),
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
@@ -228,7 +231,7 @@ function renderModeIcon() {
 function quickMode() {
   setTheme(null, resolvedMode() === "dark" ? "light" : "dark");
   renderModeIcon();
-  if (S.sel === "control" && S.tab === "themes") renderPage();
+  if (S.sel === "control" && S.tab === "settings") renderPage();
 }
 
 // ------------------------------------------------------------------ ribbon
@@ -254,7 +257,7 @@ function buildRibbon() {
     grp("Scan",
       btn("Generals", () => openGeneralManager(), "", "users"),
       ...(S.dev ? [btn("Scan generals", () => scanGeneralsFlow(), "", "scan")] : []),
-      btn("Scan city", () => scanCityFlow(S.sel === "control" ? undefined : S.sel), "", "city"), btn("Map by hand", () => manualMapFlow(S.sel === "control" ? undefined : S.sel), "", "pin")),
+      btn("Scan city", () => scanCityFlow(S.sel === "control" ? undefined : S.sel), "", "city"), btn("Map by hand", () => manualMapFlow(S.sel === "control" ? undefined : S.sel), "", "pin"), btn("Map by squares", () => scanCityTapsFlow(), "", "city")),
     grp("Data",
       btn("Profiles ▾", (e) => menu(e.currentTarget, [
         { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user"),
@@ -339,16 +342,17 @@ async function loadProfileFlow() {
         const r = await act(api("profile_load", { name: chosen })).finally(() => {});
         if (!r) AUTO.busy = false;
         if (r) { const j = await api("state").finally(() => (AUTO.busy = false)); S.cfg = j.cfg; S.devices = j.devices; AUTO.saved = AUTO.seen = cfgSnap(); S.generals = j.generals; S.monsters = j.monsters; S.profiles = j.profiles;
-          S.cfg.ui_pal = S.cfg.ui_pal || "amber"; S.cfg.ui_mode = S.cfg.ui_mode || "dark"; applyTheme(); layout(); toast(`Profile '${chosen}' loaded.`); }
+          S.cfg.ui_pal = S.cfg.ui_pal || "ivory"; S.cfg.ui_mode = S.cfg.ui_mode || "light"; applyTheme(); layout(); toast(`Profile '${chosen}' loaded.`); }
       } }] });
 }
 
 // ------------------------------------------------------------------ sidebar / tabs / pages
 function devTag(d) {
-  const t = { run: "RUNNING", pause: "PAUSED", stop: "STOPPED", error: "PROBLEM" }[d.state] || "";
-  if (d.state === "run" && d.kicked_at) return "KICKED";
-  if (d.state === "run" && d.no_stamina) return "NO STAMINA";
-  return d.queued ? "QUEUED" : t;
+  if (S.cityJobs && S.cityJobs[d.id] && S.cityJobs[d.id].running) return "Mapping city";
+  const t = { run: "Running", pause: "Paused", stop: "Stopped", error: "Problem" }[d.state] || "";
+  if (d.state === "run" && d.kicked_at) return "Kicked";
+  if (d.state === "run" && d.no_stamina) return "No stamina";
+  return d.queued ? "Queued" : t;
 }
 function renderSide() {
   const L = $("#instList");
@@ -359,12 +363,13 @@ function renderSide() {
     h("span", { class: "nm" }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   for (const d of S.devStatus) {
-    L.appendChild(item(d.id, `${d.idx}. ${d.name || short(d.id)}`, (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [devTag(d), (d.joins && !(d.state === "pause" && d.resume_at) && !d.kicked_at) ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
+    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
     sideDrag(L.lastChild, d.id);
-    L.lastChild.appendChild(h("div", { class: "qact" },
-      h("button", { title: "Start " + (d.name || short(d.id)), class: d.state === "run" && !d.paused ? "on" : "", onclick: (e) => { e.stopPropagation(); collectAndRun("start", { serial: d.id }); } }, "\u25B6"),
-      h("button", { title: "Pause / resume", class: d.state === "pause" ? "on" : "", onclick: (e) => { e.stopPropagation(); act(api("pause", { serial: d.id })); } }, "\u275A\u275A"),
-      h("button", { title: "Stop", onclick: (e) => { e.stopPropagation(); act(api("stop", { serial: d.id })); } }, "\u25A0")));
+    const qb = (t, ico, fn, dim) => h("button", { title: t, class: dim ? "dim" : "", onclick: (e) => { e.stopPropagation(); if (!dim) fn(); } }, ico);
+    const nm = d.name || short(d.id);
+    L.lastChild.appendChild(h("div", { class: "qact" }, ...(d.state === "run" || d.state === "pause"
+      ? [qb(d.state === "pause" ? "Resume " + nm : "Pause " + nm, d.state === "pause" ? "\u25B6" : "\u275A\u275A", () => act(api("pause", { serial: d.id }))), qb("Stop " + nm, "\u25A0", () => act(api("stop", { serial: d.id })))]
+      : [qb("Start " + nm, "\u25B6", () => collectAndRun("start", { serial: d.id })), qb("Stop " + nm, "\u25A0", () => {}, true)])));
     if ((d.state === "pause" && d.resume_at) || (d.state === "run" && d.kicked_at)) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at || d.resume_at), "data-pre": d.kicked_at ? " back in " : "" })); }
   }
   tickPauseTimers();
@@ -420,6 +425,9 @@ function paintRunState() {
   document.querySelectorAll("[data-act]").forEach((b) => {
     b.className = b.className.replace(/\bcur-\w+/g, "").replace(/\s+/g, " ").trim();
     if (st !== "run" && map[st] && map[st] === b.dataset.act) b.classList.add("cur-" + st);   // only Paused / Stopped stay lit; running = all normal
+    // buttons that do nothing right now are greyed out (one instance only): Start while running, Pause and Stop while stopped
+    const off = S.sel !== "control" && ((st === "run" && b.dataset.act === "start") || ((st === "stop" || st === "idle" || st === "error") && (b.dataset.act === "pause" || b.dataset.act === "stop")));
+    b.classList.toggle("greyed", !!off);
   });
 }
 function ribbonLabels() {
@@ -434,8 +442,8 @@ const TAB_GROUPS = [
   ["tasks", "Tasks", null],
   ["duties", "Duties", null],
   ["market", "Market", null],
-  ["setup", "Setup", ["settings", "reliability", "schedule", "telegram"]],
-  ["app", "App", ["updates", "themes", "license"]],
+  ["setup", "Setup", ["settings", "reliability", "schedule"]],
+  ["app", "App", ["updates", "telegram", "license"]],
 ];
 function closeTabMenu() { const m = document.getElementById("tabmenu"); if (m) m.remove(); document.removeEventListener("mousedown", tabMenuOutside, true); document.removeEventListener("keydown", tabMenuKey, true); }
 function tabMenuOutside(e) { const m = document.getElementById("tabmenu"); if (m && !m.contains(e.target) && !e.target.closest(".tab.grp")) closeTabMenu(); }
@@ -511,11 +519,11 @@ function stickyUpdate() {
     box = h("div", { id: "jumpbox", class: "jumpbox" },
       h("button", { class: "jump", id: "jumpUp", title: "Go to the top", onclick: () => { const q = $("#pages"); q.scrollTo({ top: 0, behavior: "smooth" }); } }, "\u2191"),
       h("button", { class: "jump", id: "jumpDown", title: "Go to the bottom", onclick: () => { const q = $("#pages"); q.scrollTo({ top: q.scrollHeight, behavior: "smooth" }); } }, "\u2193"));
-    document.body.appendChild(box);
+    (document.querySelector(".main") || document.body).appendChild(box);
   }
   const max = p.scrollHeight - p.clientHeight;
-  $("#jumpUp").style.display = p.scrollTop > 160 ? "" : "none";
-  $("#jumpDown").style.display = max > 300 && p.scrollTop < max - 160 ? "" : "none";
+  $("#jumpUp").classList.toggle("on", p.scrollTop > 160);
+  $("#jumpDown").classList.toggle("on", max > 200 && p.scrollTop < max - 80);
 }
 document.addEventListener("scroll", (e) => { if (e.target && e.target.id === "pages") stickyUpdate(); }, true);
 setInterval(stickyUpdate, 700);
@@ -577,6 +585,15 @@ function actStats(serial) {
   const avg = joins.length ? (joins.reduce((t, l) => t + l.a.took, 0) / joins.length).toFixed(1) + "s" : "-";
   return `Joined ${n("join")}  ·  Skipped ${n("skip")}  ·  Failed ${n("fail")}  ·  Average join time ${avg}`;
 }
+function paintStats(el, serial) {
+  const list = S.acts.filter((l) => serial === null || l.s === serial);
+  const n = (k) => list.filter((l) => l.a.k === k).length;
+  const joins = list.filter((l) => l.a.k === "join" && l.a.took != null);
+  const avg = joins.length ? (joins.reduce((t, l) => t + l.a.took, 0) / joins.length).toFixed(1) + " s" : "-";
+  el.innerHTML = "";
+  [["Joined", n("join")], ["Skipped", n("skip")], ["Failed", n("fail")], ["Average join", avg]].forEach(([l, v]) =>
+    el.appendChild(h("div", { class: "stile" }, h("b", {}, String(v)), h("span", {}, l))));
+}
 function actNow(serial) {
   if (serial !== null) { const x = S.now[serial]; return x ? `${x.t}  ${x.text}` : "Waiting for the bot to start..."; }
   const rows = Object.entries(S.now).map(([s, x]) => `${x.n}: ${x.text}`);
@@ -590,7 +607,7 @@ function activityBox(serial, title) {
   const view = { now, stats, body, wrap, serial };
   actViews.push(view);
   for (const l of S.acts.slice(-200)) if (l.a.k !== "step" && (serial === null || l.s === serial)) placeActRow(body, actRow(view, l));
-  now.textContent = actNow(serial); stats.textContent = actStats(serial);
+  now.textContent = actNow(serial); paintStats(stats, serial);
   return h("div", { class: "actsplit" },
     h("div", { class: "actleft" }, h("h3", {}, title || "Activity"), h("div", { class: "actbar" }, h("span", { class: "actlab" }, "Now"), now), stats),
     h("div", { class: "actright" }, h("h3", {}, "Monster joins"), wrap));
@@ -605,7 +622,7 @@ function pushActs(list) {
     }
   }
   if (S.acts.length > 600) S.acts.splice(0, S.acts.length - 600);
-  for (const v of actViews) { v.now.textContent = actNow(v.serial); v.stats.textContent = actStats(v.serial); }
+  for (const v of actViews) { v.now.textContent = actNow(v.serial); paintStats(v.stats, v.serial); }
 }
 function pushLogs(list) {
   for (const l of list) {
@@ -630,6 +647,9 @@ async function poll() {
     S.catScan = j.catalog || { running: false, count: 0 };
     S.city = j.city;
     S.cityProg = j.city_progress || null;
+    S.cityJobs = j.city_jobs || {};
+    const ck = Object.keys(S.cityJobs).join("|");
+    if (ck !== S.cityKey) { S.cityKey = ck; renderSide(); }
     if (j.lic) {
       const wasOk = S.license && S.license.valid;
       const bad = j.lic.required && !j.lic.valid;
@@ -656,6 +676,14 @@ function updateSummary() {
   if (c.error) parts.push(c.error + " with a problem");
   const s = $("#sum"); if (s) s.textContent = parts.join("  |  ");
   const r = $("#sbRun"); if (r) r.textContent = c.run + " running";
+  const who = $("#whoami");
+  if (who) {
+    const L = S.license || {};
+    const nm = L.required ? (L.valid ? (L.user || L.buyer || "Logged in") : "Not logged in") : "Free edition";
+    const sub = L.required && L.valid && L.days_left != null ? (L.days_left > 0 ? L.days_left + (L.days_left === 1 ? " day" : " days") + " left" : "expires today") : (L.required ? "" : "no login needed");
+    who.innerHTML = ""; who.title = L.required && L.valid ? "Logged in as " + nm : "";
+    who.append(h("span", { class: "wav" }, (nm[0] || "?").toUpperCase()), h("span", { class: "wtx" }, h("b", {}, nm), sub ? h("small", {}, sub) : null));
+  }
   const lc = $("#sbLic");
   if (lc) {
     const L = S.license || {};
@@ -693,7 +721,7 @@ async function handleEvent(ev) {
   if (ev.k === "toast") toast(d.msg, d.kind);
   else if (ev.k === "devices") { const j = await act(api("state")); if (j) { S.devices = j.devices; if (S.sel === "control" && S.tab === "dashboard") rerender(); } }
   else if (ev.k === "bosses") { const j = await act(api("state", {}, { quiet: true })); if (j) { S.bosses = j.bosses; if (window.refreshBosses) refreshBosses(); } }
-  else if (ev.k === "city_done") { closeScanBox(); if (window.showCityResult) showCityResult(); const j = await act(api("state")); if (j) { S.cityInfo = j.city_info; if (window.refreshCityInfo) refreshCityInfo(); } toast("City mapper finished.", "ok"); }
+  else if (ev.k === "city_done") { const sr = ev.d && ev.d.serial; if (sr) { S.cityDone = { ...(S.cityDone || {}), [sr]: true }; if (S.cityJobs) delete S.cityJobs[sr]; if (window.drawCityProgress) drawCityProgress(); } else { closeScanBox(); if (window.showCityResult) showCityResult(); } const j = await act(api("state")); if (j) { S.cityInfo = j.city_info; if (window.refreshCityInfo) refreshCityInfo(); } toast("City mapper finished.", "ok"); }
   else if (ev.k === "scan_done") scanGeneralsDone(d);
   else if (ev.k === "catalog_done") catalogDone(d);
   else if (ev.k === "update_none") toast(`You are up to date (version ${d.version}).`, "ok");
@@ -728,8 +756,8 @@ async function boot() {
   S.generals = j.generals; S.monsters = j.monsters; S.catalog = j.catalog || S.catalog || []; S.profiles = j.profiles; S.cityInfo = j.city_info; S.bosses = j.bosses;
   S.meta = { buildings: j.building_names, icons: j.icons, examples: j.example_tasks, botPresets: j.default_bot_presets };
   S.devStatus = (await api("poll", { since: 0 })).devs;
-  S.cfg.ui_pal = S.cfg.ui_pal || "amber";
-  S.cfg.ui_mode = S.cfg.ui_mode || "dark";
+  S.cfg.ui_pal = S.cfg.ui_pal || "ivory";
+  S.cfg.ui_mode = S.cfg.ui_mode || "light";
   applyTheme();
   document.title = "RallyForge Bot " + S.version;
   layout();
@@ -759,3 +787,23 @@ setInterval(async () => {
     if (m && m !== AUTO.err) { AUTO.err = m; toast("Not saved yet: " + m, "error"); }
   } finally { AUTO.busy = false; }
 }, 1000);
+
+// long help paragraphs fold to one line with a small "More" link (quiet screens, nothing lost)
+(function () {
+  const fold = (n) => {
+    if (n.dataset.fold || !n.isConnected) return;
+    const t = (n.textContent || "").trim();
+    if (t.length < 110 || n.closest(".warnbar,.modal,.toasts")) return;
+    n.dataset.fold = "1"; n.classList.add("clamp");
+    const b = document.createElement("button"); b.type = "button"; b.className = "morelnk"; b.textContent = "More";
+    b.onclick = () => { const o = n.classList.toggle("clamp"); b.textContent = o ? "More" : "Less"; };
+    n.insertAdjacentElement("afterend", b);
+  };
+  const scan = (root) => (root || document).querySelectorAll(".pages .note").forEach(fold);
+  const start = () => {
+    const p = document.getElementById("pages"); if (!p) return setTimeout(start, 300);
+    new MutationObserver(() => scan(p)).observe(p, { childList: true, subtree: true });
+    scan(p);
+  };
+  start();
+})();

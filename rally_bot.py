@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.62"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.63"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -201,9 +201,11 @@ DEFAULTS = {
     "tg_pick": "nearest",                   # nearest | highest
     "city_nav": "auto",                     # auto = find the camera by the whole-city picture (own city style), falling back to the squares; squares = always walk by the squares
     "city_tap_dy": 22,                      # px below the building's square that a city tap aims at (the lower part of the building; its height then does not matter)
+    "tg_feed_chats": "",                    # chats / channels / bots to watch for coordinates (comma separated: @username, link or the name in your chat list)
+    "tg_keep_min": 60,                      # forget a coordinate in the live list after this many minutes (0 = keep until cleared)
     "sidebar_open": True,                   # emulator list on the left (toggle with the header button, Ctrl+B or F9)
-    "ui_pal": "amber",                      # amber | sage
-    "ui_mode": "dark",                      # dark | light | auto
+    "ui_pal": "ivory",                      # ivory | midnight | amber | sage
+    "ui_mode": "light",                     # dark | light | auto
     "ui_accent": "",                        # "" = the theme's own colour, else #rrggbb
     "ui_btn": "raised", "ui_border": "subtle", "ui_round": "normal",   # raised|tinted, subtle|accent, sharp|normal|round
     "ui_text": 100,                         # whole-window text size in percent (85-150)
@@ -4886,6 +4888,128 @@ def set_bosses(items, source=""):
             pass
 
 
+FEED_FILE = USER / "coords_feed.json"
+_feed, _feed_stats = [], {"messages": 0, "with_coords": 0, "chats": [], "last": 0}
+_feed_lock = threading.Lock()
+
+
+LIB_FILE = USER / "coords_library.json"      # every coordinate ever seen; never removed by the timer (only by "Clear library")
+_lib, _lib_loaded = [], [False]
+
+
+def _lib_load():
+    if not _lib_loaded[0]:
+        _lib_loaded[0] = True
+        try:
+            _lib[:] = json.loads(LIB_FILE.read_text(encoding="utf-8")).get("items", [])
+        except Exception:
+            pass
+
+
+def lib_add(items, chat, now):
+    """Remember every coordinate for good: same name + X,Y only refreshes 'last seen' and counts."""
+    with _feed_lock:
+        _lib_load()
+        for it in items:
+            for f in _lib:
+                if f["x"] == it["x"] and f["y"] == it["y"] and f.get("name") == it.get("name"):
+                    f["last"] = now
+                    f["n"] = f.get("n", 1) + 1
+                    if it.get("level"):
+                        f["level"] = it["level"]
+                    break
+            else:
+                _lib.insert(0, {"name": it.get("name"), "level": it.get("level"), "x": it["x"], "y": it["y"], "km": it.get("km"),
+                                "chat": chat, "first": now, "last": now, "n": 1})
+        del _lib[5000:]
+        try:
+            LIB_FILE.write_text(json.dumps({"items": _lib}), encoding="utf-8")
+        except Exception:
+            pass
+
+
+def lib_get(name=None, min_level=0):
+    """For the bot (kill-a-monster tasks): every saved coordinate, newest first; filter by monster name / level."""
+    with _feed_lock:
+        _lib_load()
+        return [dict(f) for f in _lib if (not name or name.lower() in str(f.get("name") or "").lower()) and (f.get("level") or 0) >= min_level]
+
+
+def lib_clear():
+    with _feed_lock:
+        _lib[:] = []
+        _lib_loaded[0] = True
+        LIB_FILE.unlink(missing_ok=True)
+
+
+_feed_keep = [None]                  # how long (min) the live list keeps a coordinate; set from the settings, 0 = until cleared
+
+
+def feed_set_keep(keep_min):
+    """Change how long coordinates are kept (applies at once, also to the saved list)."""
+    _feed_keep[0] = int(keep_min or 0)
+    feed_get(_feed_keep[0])
+
+
+def feed_add(items, chat="", keep_min=60):
+    """A chat message with positions: add them to the live list (the same X,Y in the same chat only refreshes its time)."""
+    now = time.time()
+    if _feed_keep[0] is not None:
+        keep_min = _feed_keep[0]
+    lib_add(items, chat, now)
+    with _feed_lock:
+        if keep_min:
+            _feed[:] = [f for f in _feed if now - f["t"] <= keep_min * 60]
+        for it in items:
+            for f in _feed:
+                if f["x"] == it["x"] and f["y"] == it["y"] and f.get("chat") == chat and f.get("name") == it.get("name"):
+                    f["t"] = now
+                    break
+            else:
+                _feed.insert(0, {**it, "chat": chat, "t": now})
+        del _feed[500:]
+        try:
+            FEED_FILE.write_text(json.dumps({"items": _feed}, indent=1), encoding="utf-8")
+        except Exception:
+            pass
+
+
+def feed_note(chat, had_coords):
+    with _feed_lock:
+        _feed_stats["messages"] += 1
+        _feed_stats["with_coords"] += 1 if had_coords else 0
+        _feed_stats["last"] = time.time()
+
+
+def feed_get(keep_min=60):
+    now = time.time()
+    with _feed_lock:
+        if not _feed and FEED_FILE.exists():
+            try:
+                _feed[:] = json.loads(FEED_FILE.read_text(encoding="utf-8")).get("items", [])
+            except Exception:
+                pass
+        if keep_min:
+            n = len(_feed)
+            _feed[:] = [f for f in _feed if now - f["t"] <= keep_min * 60]
+            if len(_feed) != n:
+                try:
+                    FEED_FILE.write_text(json.dumps({"items": _feed}, indent=1), encoding="utf-8")
+                except Exception:
+                    pass
+        return list(_feed), dict(_feed_stats)
+
+
+def feed_clear():
+    with _feed_lock:
+        _feed.clear()
+        _feed_stats.update({"messages": 0, "with_coords": 0})
+        try:
+            FEED_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
 def get_bosses():
     with _boss_lock:
         if not _bosses and BOSS_FILE.exists():
@@ -4965,6 +5089,59 @@ class TgLink:
                 return "password"
             return "ok"
         return self._call(go(), 40)
+
+    async def _resolve(self, name):
+        """@username, t.me link, number (chat id) or the chat's name as in your Telegram list -> entity, or None."""
+        n = re.sub(r"^https?://t\.me/", "", str(name).strip()).lstrip("@")
+        if not n:
+            return None
+        try:
+            return await self.client.get_entity(int(n) if re.fullmatch(r"-?\d+", n) else n)
+        except Exception:
+            pass
+        async for d in self.client.iter_dialogs():
+            if (d.name or "").strip().lower() == n.lower():
+                return d.entity
+        return None
+
+    def listen_feed(self, chats, on_update=None, keep_min=60):
+        """Watch every message (new or edited, also from other bots) of the named chats and add each position in it to the live list."""
+        names = [t.strip() for t in re.split(r"[,;\n]+", str(chats)) if t.strip()]
+        if not names:
+            return []
+
+        async def go():
+            from telethon import events
+            await self._connect()
+            ents, labels = [], []
+            for nm in names:
+                e = await self._resolve(nm)
+                if e is None:
+                    self.log(f"[!] Telegram: no chat called '{nm}' - use the name as in your chat list, or @username")
+                    continue
+                ents.append(e)
+                labels.append(getattr(e, "title", None) or getattr(e, "username", None) or str(nm))
+            if not ents:
+                raise RuntimeError("none of the chats to watch could be found")
+
+            async def handler(event):
+                txt = event.raw_text or ""
+                items = parse_bosses(txt)
+                try:
+                    chat = (await event.get_chat())
+                    chat = getattr(chat, "title", None) or getattr(chat, "username", None) or getattr(chat, "first_name", "") or ""
+                except Exception:
+                    chat = ""
+                feed_note(chat, bool(items))
+                if items:
+                    feed_add(items, chat, keep_min)
+                if on_update:
+                    on_update(items)
+            for ev in (events.NewMessage(chats=ents), events.MessageEdited(chats=ents)):
+                self.client.add_event_handler(handler, ev)
+            _feed_stats["chats"] = labels
+            return labels
+        return self._call(go(), 60)
 
     def listen(self, bot, on_update=None):
         """Read every message the bot sends (new or edited) and keep the boss list up to date."""
@@ -7423,6 +7600,24 @@ DUTY_LIBRARY = [
     {"id": "collect_resources", "group": "Common tasks", "title": "Collect resources", "every_min": 180, "verified": False,
      "note": "Taps every mapped farm / sawmill / quarry / mine. Needs the city mapper.",
      "target": "building:Farm", "count": 6, "steps": ["wait 1", "tap_text Collect|Claim"]},
+    {"id": "reach_keep_tavern", "group": "Common tasks", "title": "Test: Keep, then Tavern", "every_min": 60, "verified": False,
+     "note": "Walks to the Keep, opens its menu, then walks to the Tavern and opens its menu (nothing is pressed).",
+     "target": "building:Keep+Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name"]},
+    {"id": "market_capture", "group": "Common tasks", "title": "Test: Black Market pictures", "every_min": 60, "verified": False,
+     "note": "Walks to the Market, opens the Black Market and saves a picture of every item on sale into the item library (nothing is bought or refreshed).",
+     "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market", "market_capture"]},
+    {"id": "tavern_catalog", "group": "Common tasks", "title": "General library (Tavern portraits)", "every_min": 1440, "verified": False,
+     "note": "Tavern > Recruit > Portraits: reads every general (picture + name) and adds the new ones to the general library. Nothing is recruited.",
+     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "tavern_catalog"]},
+    {"id": "reach_tavern", "group": "Common tasks", "title": "Test: go to Tavern", "every_min": 60, "verified": False,
+     "note": "Only checks that the bot walks to the Tavern and opens its menu (nothing is pressed).",
+     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern"]},
+    {"id": "reach_market", "group": "Common tasks", "title": "Test: go to Market", "every_min": 60, "verified": False,
+     "note": "Only checks that the bot walks to the Market and opens its menu (nothing is pressed).",
+     "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market"]},
+    {"id": "reach_embassy", "group": "Common tasks", "title": "Test: go to Embassy", "every_min": 60, "verified": False,
+     "note": "Only checks that the bot walks to the Embassy and opens its menu (nothing is pressed).",
+     "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Embassy"]},
 ]
 DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
 

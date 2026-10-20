@@ -400,49 +400,65 @@ async function manualMapFlow(arg) {
   poll();
 }
 
-async function scanCityTapsFlow() {
-  const serial = await chooseDevice("Tap-test the city with which instance?");
+async function scanCityTapsFlow(given) {
+  const serial = given || await chooseDevice("Map the city of which instance?");
   if (!serial) return;
-  if (!(await confirmBox("City mapper - tap test", "TEST RUN. The bot goes to every building on the saved city map, taps it, opens Detail > More Information and reads its name and level. Run the normal city scan first. Open the CITY screen and leave the instance alone.", "OK, ready"))) return;
+  if (!(await confirmBox("Map by squares", "The bot goes to each numbered square of the city map, taps the building and reads its name. Open the CITY screen on this instance. The instance must be stopped; the other instances and this app stay free while it runs.", "OK, start"))) return;
   await act(api("save", { cfg: S.cfg, devices: S.devices }, { quiet: true }));
   if (!(await act(api("scan_city_taps_start", { serial })))) return;
-  S.cityScanSerial = serial;
-  S.cityProg = null;
-  scanBox = modal({ title: "Tap test - reading building levels", focus: false, buttons: [{ label: "Stop", cls: "pri", onclick: () => { act(api("scan_city_stop")); return false; } }],
-    body: h("div", { id: "cityScanInfo", style: { minWidth: "380px" } },
-      h("div", { id: "cityScanTxt", class: "note" }, "Starting..."),
-      h("div", { class: "pbar" }, h("div", { id: "cityScanBar", class: "pfill" })),
-      h("div", { id: "cityScanList", class: "chk" })) });
+  S.cityJobs = { ...(S.cityJobs || {}), [serial]: { running: true, progress: null } };
+  toast("Mapping started on " + cityName(serial) + ". You can keep working - progress is in the corner.", "ok");
+  drawCityProgress();
 }
 async function scanCityFlow(arg) {
   const again = typeof arg === "string" ? arg : null;
   const serial = again || await chooseDevice("Map the city with which instance?");
   if (!serial) return;
-  if (!again && !(await confirmBox("City mapper", "Open the CITY screen (not the rally list) on that instance and leave it alone while the bot sweeps the map. Press OK when ready.", "OK, ready"))) return;
+  if (!again && !(await confirmBox("City mapper", "Open the CITY screen (not the rally list) on that instance. The instance must be stopped; the other instances and this app stay free while it sweeps the map.", "OK, start"))) return;
   await act(api("save", { cfg: S.cfg, devices: S.devices }, { quiet: true }));
   if (!(await act(api("scan_city", { serial })))) return;
-  S.cityScanSerial = serial;
-  S.cityProg = null;
-  scanBox = modal({ title: "Mapping the city", focus: false, buttons: [{ label: "Stop and save what was found", cls: "pri", onclick: () => { act(api("scan_city_stop")); return false; } }],
-    body: h("div", { id: "cityScanInfo", style: { minWidth: "380px" } },
-      h("div", { id: "cityScanTxt", class: "note" }, "Starting... the bot is going to the top-left corner of the city."),
-      h("div", { class: "pbar" }, h("div", { id: "cityScanBar", class: "pfill" })),
-      h("div", { id: "cityScanList", class: "chk" })) });
+  S.cityJobs = { ...(S.cityJobs || {}), [serial]: { running: true, progress: null } };
+  toast("Mapping started on " + cityName(serial) + ". You can keep working - progress is in the corner.", "ok");
+  drawCityProgress();
+}
+function cityName(serial) {
+  const d = (S.devStatus || []).find((x) => x.id === serial);
+  return d ? (d.name || serial) : serial;
 }
 function drawCityProgress() {
-  const t = document.getElementById("cityScanTxt");
-  if (!t) return;
-  const p = S.cityProg;
-  if (!p) return;
-  const pct = Math.max(2, Math.min(100, p.pct != null ? p.pct : Math.round(100 * p.stops / p.total)));
-  document.getElementById("cityScanBar").style.width = pct + "%";
-  const m = Math.floor(p.seconds / 60), sec = String(p.seconds % 60).padStart(2, "0");
-  const left = p.left == null ? "working out the time left..." : (p.left >= 60 ? `about ${Math.ceil(p.left / 60)} min left` : `${p.left} s left`);
-  t.textContent = `${p.text || "Reading the city"}\n${pct}% done  -  ${p.mapped.length} of ${p.expected.length} buildings found, ${p.expected.length - p.mapped.length} to go\nTime ${m}:${sec}  -  ${left}`;
-  t.style.whiteSpace = "pre-line";
-  const have = new Set(p.mapped);
-  const box = document.getElementById("cityScanList");
-  box.replaceChildren(...p.expected.map((n) => h("span", { class: have.has(n) ? "ok" : "no" }, (have.has(n) ? "\u2713 " : "\u00b7 ") + n)));
+  // A small card per instance in the bottom-right corner: it never covers the app, so other instances can be worked on meanwhile.
+  let dock = document.getElementById("cityDock");
+  const jobs = Object.entries(S.cityJobs || {}).filter(([, j]) => j && j.running);
+  const done = Object.keys(S.cityDone || {});
+  if (!jobs.length && !done.length) { if (dock) dock.remove(); return; }
+  if (!dock) {
+    dock = h("div", { id: "cityDock", style: { position: "fixed", right: "14px", bottom: "40px", zIndex: 60, display: "flex", flexDirection: "column", gap: "8px", maxWidth: "340px" } });
+    document.body.appendChild(dock);
+  }
+  const cards = [];
+  for (const [serial, j] of jobs) {
+    const p = j.progress;
+    let txt = "Starting...", pct = 2;
+    if (p) {
+      pct = Math.max(2, Math.min(100, p.pct != null ? p.pct : Math.round(100 * p.stops / p.total)));
+      const m = Math.floor(p.seconds / 60), sec = String(p.seconds % 60).padStart(2, "0");
+      const left = p.left == null ? "" : (p.left >= 60 ? ` - about ${Math.ceil(p.left / 60)} min left` : ` - ${p.left} s left`);
+      txt = `${p.text || "Reading the city"}\n${pct}%  -  ${p.mapped.length} of ${p.expected.length} buildings found\n${m}:${sec}${left}`;
+    }
+    cards.push(h("div", { class: "card", style: { padding: "10px 12px", boxShadow: "0 6px 24px rgba(0,0,0,.35)" } },
+      h("div", { style: { fontWeight: "600", marginBottom: "4px" } }, "Mapping city - " + cityName(serial)),
+      h("div", { class: "note", style: { whiteSpace: "pre-line" } }, txt),
+      h("div", { class: "pbar" }, h("div", { class: "pfill", style: { width: pct + "%" } })),
+      h("div", { style: { marginTop: "6px", textAlign: "right" } }, h("button", { class: "btn sm", onclick: () => { act(api("scan_city_stop", { serial })); } }, "Stop and save"))));
+  }
+  for (const serial of done) {
+    cards.push(h("div", { class: "card", style: { padding: "10px 12px", boxShadow: "0 6px 24px rgba(0,0,0,.35)" } },
+      h("div", { style: { fontWeight: "600", marginBottom: "6px" } }, "City mapping finished - " + cityName(serial)),
+      h("div", { style: { textAlign: "right" } },
+        h("button", { class: "btn sm", onclick: () => { delete S.cityDone[serial]; drawCityProgress(); } }, "Dismiss"), " ",
+        h("button", { class: "btn sm pri", onclick: () => { delete S.cityDone[serial]; drawCityProgress(); showCityResult(serial); } }, "See result"))));
+  }
+  dock.replaceChildren(...cards);
 }
 async function showCityResult(given) {
   const serial = given || S.cityScanSerial;
