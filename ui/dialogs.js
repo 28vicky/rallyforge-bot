@@ -200,7 +200,7 @@ function chooseGenerals(title, current) {
       h("button", { class: "btn sm", onclick: () => move(-1) }, "Up"), h("button", { class: "btn sm", onclick: () => move(1) }, "Down"),
       h("button", { class: "btn sm", onclick: () => { chosen = []; draw(); } }, "Clear all"));
     modal({ title, wide: true, oncancel: () => res(null), focus: false, buttons: [{ label: "Cancel", onclick: () => res(null) }, { label: "OK", cls: "pri", onclick: () => res(chosen) }],
-      body: h("div", {}, h("div", { class: "two" }, h("div", {}, h("div", { class: "row", style: { justifyContent: "space-between", alignItems: "center" } }, h("div", { class: "lab" }, "All generals"), viewBar), search, flt.el, A), h("div", {}, h("div", { class: "lab" }, "Tried in this order (top first)"), C)), mid) });
+      body: h("div", {}, h("div", { class: "two" }, h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "All generals"), viewBar), h("div", { class: "gbox" }, search, flt.el, A)), h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "Tried in this order (top first)")), h("div", { class: "gbox" }, C))), mid) });
   });
 }
 
@@ -273,7 +273,7 @@ function openGeneralManager() {
   const left = h("div", {}, h("div", { class: "row", style: { marginBottom: "8px" } },
     h("button", { class: "btn sm pri", onclick: async () => { await addGeneralFlow(); drawList(); } }, "+ Add from screenshot..."),
     h("button", { class: "btn sm", onclick: () => scanGeneralsFlow() }, "Scan from the game..."),
-    h("button", { class: "btn sm", onclick: del }, "Delete"), genViewBar(() => drawList())), search, flt.el, h("div", { style: { height: "8px" } }), list);
+    h("button", { class: "btn sm", onclick: del }, "Delete"), genViewBar(() => drawList())), h("div", { class: "gbox", style: { height: "470px" } }, search, flt.el, list));
   const right = h("div", { class: "field", style: { gap: "9px" } }, h("label", {}, "General name"), name, h("label", {}, "Tab in the 'Select a General' list"), tab,
     h("label", {}, "Favourites filter (heart)"), fav, h("label", {}, "If you own several copies of it"), copy,
     h("label", {}, "Category (your own group, e.g. Ground / Mounted)"), catIn, catList,

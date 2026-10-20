@@ -425,3 +425,11 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .stickyhead{position:sticky;top:-4px;z-index:20;background:var(--bgc);padding:8px 0 4px;margin-bottom:10px;box-shadow:0 8px 10px -8px rgba(0,0,0,.55)}
 .stickyhead>.row{margin-bottom:10px!important}
 .stickyhead>.warnbar{margin-bottom:10px}
+
+/* general pickers: search and list are one box; both sides the same height */
+.ghead{display:flex;justify-content:space-between;align-items:center;min-height:38px;margin-bottom:4px}
+.gbox{display:flex;flex-direction:column;height:400px;border-radius:var(--r2);background:var(--field);box-shadow:var(--inset);overflow:hidden}
+.gbox>input{border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none;margin:0;flex:none}
+.gbox>input:focus{outline:none;border-bottom-color:var(--accent1)}
+.gbox>.row{flex:none;margin:6px 8px!important}
+.gbox>.lst,.two .gbox>.lst{flex:1 1 auto;min-height:0!important;max-height:none!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;overflow:auto}
