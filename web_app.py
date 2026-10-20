@@ -432,6 +432,9 @@ class Controller:
             return
         if d is None or self.running(serial) or d.get("starting"):
             return
+        if (self.city_jobs.get(serial) or {}).get("running"):                 # the city mapper has this instance's screen: the bot would fight it
+            self.log("[i] Not started: the city mapper is working on this instance - start it when the mapping is done", serial)
+            return
         lim = self.lic.limit()
         if lim is not None and not lim:
             self.log("[!] No valid license - open the License tab.", serial)
