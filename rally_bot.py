@@ -7002,6 +7002,21 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
     nav = CityNav(dev, stop, log)
     order = list(numbers or sorted(CITY_SQUARES))
     got, bad, items, levels = {}, [], {}, {}
+    prog_f = USER / "squares_progress.json"
+    try:                                                     # an unfinished run (stopped, crashed, lost): carry on from where it stopped
+        pst = json.loads(prog_f.read_text(encoding="utf-8")) if prog_f.exists() else {}
+    except Exception:
+        pst = {}
+    mine = pst.get(serial) or {}
+    if not numbers and mine and time.time() - mine.get("t", 0) < 6 * 3600 and mine.get("done"):
+        done_before = set(mine["done"])
+        order = [n for n in order if n not in done_before]
+        if order:
+            log(f"[*] Squares: carrying on from the last run - {len(done_before)} squares already read, {len(order)} to go")
+        else:
+            order = list(sorted(CITY_SQUARES))
+            mine = {}
+    done_list = list(mine.get("done", [])) if mine else []
     shrine = locate_shrine(dev, stop, log, nav)
     if shrine:
         for i, n in enumerate(order):
@@ -7024,6 +7039,17 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
                 key = re.sub(r" (\d)$", r"#\1", nm) if re.search(r" \d$", nm) else nm + "#1"
                 items[key] = [round(r[3]), round(r[4])]
                 levels[key] = {"name": r[1], "level": r[2]}
+                done_list.append(n)
+                try:
+                    data = load_city()
+                    ent = data.setdefault(serial, {"items": {}})
+                    ent.setdefault("items", {})[key] = items[key]
+                    ent.setdefault("levels", {})[key] = levels[key]
+                    save_city(data)
+                    pst[serial] = {"done": done_list, "t": time.time()}
+                    prog_f.write_text(json.dumps(pst), encoding="utf-8")
+                except Exception:
+                    pass
             else:
                 bad.append(nm)
             if progress:
@@ -7034,6 +7060,12 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
                 except Exception:
                     pass
     dev.guard_city = False
+    if not bad and not stop.is_set():                        # finished: next run starts from square 1
+        try:
+            pst.pop(serial, None)
+            prog_f.write_text(json.dumps(pst), encoding="utf-8")
+        except Exception:
+            pass
     if items:
         data = load_city()
         ent = data.setdefault(serial, {"items": {}})
