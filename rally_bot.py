@@ -6087,6 +6087,15 @@ def run_step(dev, cfg, log, stop, step):
                 .replace("{boss_level}", str(b.get("level") or "")).replace("{boss_name}", b["name"]))
     cmd, _, arg = step.partition(" ")
     cmd, arg = cmd.lower(), arg.strip()
+    if cmd == "ring_name":
+        shot = dev.screenshot()
+        try:
+            cv2.imwrite(str(USER / "debug" / f"ring_{(arg or 'x').replace(' ', '_')}.png"), shot)
+        except Exception:
+            pass
+        got = ring_label_free(shot)
+        log(f"[i]   the menu that opened is called: {got[0] if got else 'no name read'} (expected {arg})")
+        return
     if cmd == "market":
         run_market(dev, cfg, log, stop)
         return
@@ -6806,13 +6815,13 @@ DUTY_LIBRARY = [
      "target": "building:Farm", "count": 6, "steps": ["wait 1", "tap_text Collect|Claim"]},
     {"id": "reach_tavern", "group": "Common tasks", "title": "Test: go to Tavern", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Tavern and opens its menu (nothing is pressed).",
-     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 3"]},
+     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern"]},
     {"id": "reach_market", "group": "Common tasks", "title": "Test: go to Market", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Market and opens its menu (nothing is pressed).",
-     "target": "building:Market", "tap_dy": 0, "steps": ["wait 3"]},
+     "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market"]},
     {"id": "reach_embassy", "group": "Common tasks", "title": "Test: go to Embassy", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Embassy and opens its menu (nothing is pressed).",
-     "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 3"]},
+     "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Embassy"]},
 ]
 DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
 
