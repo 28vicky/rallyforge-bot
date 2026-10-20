@@ -6054,6 +6054,22 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 run_step(dev, cfg, log, stop, st)
             leave_to_city(dev, cfg, stop)
         return None                                        # steps already ran for each building
+    if kind == "square":                                   # "square:1" = numbered square 1 (Keep) of the default city map
+        nav = nav_state.get("nav") or CityNav(dev, stop, log)
+        nav_state["nav"] = nav
+        if not nav_state.get("shrine"):
+            nav_state["shrine"] = locate_shrine(dev, stop, log, nav)
+        if not nav_state.get("shrine"):
+            return False
+        try:
+            nums = [int(v) for v in name.replace(";", ",").split(",") if v.strip()]
+        except ValueError:
+            log(f"[!] Task '{task.get('name')}': square target must be a number, e.g. square:1")
+            return False
+        for n in nums:
+            open_square(dev, cfg, log, stop, nav, nav_state["shrine"], n)
+            leave_to_city(dev, cfg, stop)
+        return None
     log(f"[!] Task '{task.get('name')}': target must look like icon:Mail, building:Quarry or xy:100,200")
     return False
 
@@ -6728,6 +6744,9 @@ ANCHOR_TO_KEEP = {"Tavern": (90, -135), "Shrine": (313, -139)}   # Keep label mi
 # Fixed buildings: label position minus the Shrine label (emulator pixels). The Shrine, Tavern and Keep never move, so any one of them gives the rest.
 FIXED_OFFSETS_FROM_SHRINE = {"Victory Column": [-681, -363], "Council of State": [74, -439], "Ideal Land": [324, -449], "Dragon Cliff": [651, -447], "Arsenal": [-91, -352], "Triumphal Arch": [219, -357], "Academy": [65, -272], "Military Academy": [492, -267], "Research Factory": [-451, -182], "Barracks": [-205, -178], "Wisdom Dome": [681, -159], "Warehouse": [-19, -133], "Keep": [314, -139], "Art Hall": [-628, -101], "Prison": [-381, -88], "Holy Palace": [528, -73], "Tavern": [223, -3], "Trap Factory": [-203, -6], "Shrine": [0, 0], "Archer Camp": [657, 27], "Pasture": [-808, -10], "Stables": [-577, 51], "Market": [-425, 132], "Workshop": [89, 141], "War Hall": [405, 126], "Embassy": [231, 211], "Hospital": [-72, 311], "Rally Spot": [644, 234], "Walls": [-406, 291], "Battlefield": [-701, 357], "Bounty Cave": [-471, 455]}
 
+# Numbered squares of the default city map (city_map/city_map_default.png): number -> [name, centre of the square minus the Shrine label, emulator pixels]. 1 = Keep.
+CITY_SQUARES = {"1": ["Keep", 319, -218], "2": ["Tavern", 232, -27], "3": ["Shrine", 30, -29], "4": ["Victory Column", -684, -334], "5": ["Council of State", 73, -452], "6": ["Ideal Land", 291, -487], "7": ["Dragon Cliff", 704, -430], "8": ["Arsenal", -85, -379], "9": ["Triumphal Arch", 222, -388], "10": ["Academy", 65, -302], "11": ["Military Academy", 502, -280], "12": ["Research Factory", -443, -204], "13": ["Barracks", -206, -199], "14": ["Wisdom Dome", 682, -177], "15": ["Warehouse", -21, -172], "16": ["Art Hall", -655, -123], "17": ["Prison", -378, -118], "18": ["Holy Palace", 515, -103], "19": ["Trap Factory", -210, -27], "20": ["Archer Camp", 658, 13], "21": ["Pasture", -810, -29], "22": ["Stables", -581, 52], "23": ["Market", -432, 116], "24": ["Workshop", 80, 111], "25": ["War Hall", 424, 103], "26": ["Embassy", 240, 190], "27": ["Hospital", -68, 280], "28": ["Rally Spot", 653, 221], "29": ["Walls", -473, 290], "30": ["Battlefield", -704, 359], "31": ["Bounty Cave", -473, 475], "32": ["Wonder", -999, -208], "33": ["Subordinate City", -1058, -523], "34": ["Watchtower", -1160, -88], "35": ["Archer Tower 1", -1085, 673], "36": ["Archer Tower 2", -990, 731], "37": ["Army Camp", 535, 421]}
+
 CALIB_STOPS = [(1141, 609), (1312, 588), (1000, 800), (1400, 800), (700, 650), (1000, 450), (1400, 450), (600, 900), (1450, 700)]
 
 
@@ -6777,6 +6796,69 @@ def calibrate_keep(dev, stop, log, nav):
         return mx - nav.cx, my - nav.cy
     log("[!] Keep calibration: could not find the Keep or the Tavern")
     return None
+
+
+def locate_shrine(dev, stop, log, nav):
+    """Find the Shrine's place on the city map by reading the name label of ANY fixed building (they all sit at a fixed
+    distance from the Shrine). -> (map x, map y) of the Shrine label, or None."""
+    nav.to_origin()
+    for sx, sy in CALIB_STOPS:
+        if stop.is_set():
+            return None
+        nav.goto(sx, sy)
+        labels, _, _ = look_with_names(dev, stop, nav)
+        for n, mx, my in labels:
+            off = FIXED_OFFSETS_FROM_SHRINE.get(BUILDING_ALIASES.get(n, n))
+            if off:
+                log(f"[i] Squares: anchor '{n}' read at {mx},{my}")
+                return mx - off[0], my - off[1]
+    log("[!] Squares: no fixed building name could be read - cannot place the squares")
+    return None
+
+
+def open_square(dev, cfg, log, stop, nav, shrine, number):
+    """Go to numbered square N of the default city map, tap its middle and read the building (name, level) from the
+    Detail page. -> (expected name, read name, level) or None."""
+    sq = CITY_SQUARES.get(int(number))
+    if not sq:
+        log(f"[!] Square {number} does not exist (1-{len(CITY_SQUARES)})")
+        return None
+    name, ox, oy = sq
+    tx, ty = shrine[0] + ox, shrine[1] + oy
+    sx, sy = nav.goto(tx, ty)
+    px, py = tx - nav.cx, ty - nav.cy
+    x0, y0, w, h = CITY_VIEW
+    if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+        log(f"[!] Square {number} ({name}): the camera did not reach it (it is at {round(px)},{round(py)} on screen)")
+        return None
+    log(f"[*] Square {number} ({name}): tapping {round(px)},{round(py)}")
+    res = read_building_level(dev, cfg, log, stop, (px, py))
+    if not res:
+        log(f"[!] Square {number} ({name}): tapped, but nothing could be read")
+        return None
+    same = res[0].lower().replace(" ", "") == name.lower().replace(" ", "") or BUILDING_ALIASES.get(res[0], res[0]).lower() == name.lower()
+    log(f"[+] Square {number} ({name}) -> '{res[0]}'" + (f" level {res[1]}" if res[1] else "") + ("" if same else "  (DIFFERENT NAME - check the square)"))
+    return name, res[0], res[1]
+
+
+def scan_squares(dev, cfg, log, stop, numbers=None):
+    """Test run: visit the numbered squares one by one (default: all that are buildings with a Detail page) and read them."""
+    dev.arm_guard(cfg, log, stop)
+    dev.guard_city = True
+    nav = CityNav(dev, stop, log)
+    shrine = locate_shrine(dev, stop, log, nav)
+    got = {}
+    if shrine:
+        for n in (numbers or sorted(CITY_SQUARES)):
+            if stop.is_set():
+                break
+            got[n] = open_square(dev, cfg, log, stop, nav, shrine, n)
+            leave_to_city(dev, cfg, stop)
+    dev.guard_city = False
+    ok = [n for n, v in got.items() if v]
+    log(f"[+] Squares: read {len(ok)} of {len(got)}. Not read: {', '.join(str(n) for n in got if not got[n]) or 'none'}")
+    return got
+
 
 
 def task_needs_city_map(t):
