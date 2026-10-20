@@ -49,7 +49,7 @@
 html,body{height:100%}
 body{font:16px/1.45 var(--font);color:var(--fg);background:var(--bgc);overflow:hidden}
 ::selection{background:var(--accent1);color:var(--accfg)}
-.app{height:100vh;display:flex;background:var(--bg);position:relative}
+.app{position:fixed;inset:0;display:flex;background:var(--bg)}
 
 /* ---------- scrollbars: thin pill */
 *{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
