@@ -573,3 +573,59 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 /* cards */
 :is([data-pal="ivory"],[data-pal="midnight"]) .panel{padding:18px 20px;margin-bottom:14px}
 :is([data-pal="ivory"],[data-pal="midnight"]) .panel h3{color:var(--fg);font-size:14.5px;font-weight:650;letter-spacing:0;text-transform:none;margin-bottom:10px}
+
+/* ===== Ivory / Midnight: the clean instance layout (header, underline tabs, Now + joins beside duties) ===== */
+:is([data-pal="ivory"],[data-pal="midnight"]){--serif:Georgia,"Iowan Old Style","Palatino Linotype",serif}
+:is([data-pal="ivory"],[data-pal="midnight"]) .brand{display:flex;align-items:center;gap:10px;padding:2px 6px 10px;font:600 20px var(--serif);color:var(--fg)}
+:is([data-pal="ivory"],[data-pal="midnight"]) .brand img{width:28px;height:28px;border-radius:8px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .side h4{font-size:12px;letter-spacing:.1em;font-weight:500;margin-top:4px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .burger{background:transparent;border-color:transparent}
+:is([data-pal="ivory"],[data-pal="midnight"]) .inst{font-size:15px;border-radius:9px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .inst{flex-wrap:nowrap}
+:is([data-pal="ivory"],[data-pal="midnight"]) .inst small{flex:0 0 auto;margin:0 0 0 auto;opacity:.65;font-size:12.5px;letter-spacing:0;text-transform:lowercase}
+:is([data-pal="ivory"],[data-pal="midnight"]) .inst.sel{background:var(--card);color:var(--fg);border-color:var(--line)}
+:is([data-pal="ivory"],[data-pal="midnight"]) .inst.sel .dot{box-shadow:none}
+:is([data-pal="ivory"],[data-pal="midnight"]) .inst .qact{display:none}
+:is([data-pal="ivory"],[data-pal="midnight"]) .sidefoot{border-top:var(--bd);display:flex;flex-direction:column;gap:10px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .sidefoot .ctlbtn{border:var(--bd);background:var(--card);color:var(--fg);font-weight:500;padding:9px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .sidefoot .ctlbtn.on{background:var(--accent);color:var(--accfg);border-color:transparent}
+.whoami{display:flex;align-items:center;gap:10px;padding:2px 4px}
+.whoami .wav{width:30px;height:30px;border-radius:50%;display:grid;place-content:center;background:var(--accent1);color:var(--accfg);font-weight:700;font-size:14px;flex:none}
+.whoami .wtx{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.whoami .wtx b{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.whoami .wtx small{color:var(--mute);font-size:12px}
+/* top row keeps only the small things */
+:is([data-pal="ivory"],[data-pal="midnight"]) .top{min-height:28px;justify-content:flex-end}
+:is([data-pal="ivory"],[data-pal="midnight"]) .top img,:is([data-pal="ivory"],[data-pal="midnight"]) .top b,:is([data-pal="ivory"],[data-pal="midnight"]) .top span.v{display:none}
+:is([data-pal="ivory"],[data-pal="midnight"]) .top .sum{margin-left:0;order:-1;font-weight:500;color:var(--mute);font-size:13px;margin-right:auto}
+/* underline tabs */
+:is([data-pal="ivory"],[data-pal="midnight"]) .tabs{background:none;border:0;border-bottom:var(--bd);border-radius:0;padding:0;gap:22px;display:flex;align-self:stretch;flex-wrap:wrap}
+:is([data-pal="ivory"],[data-pal="midnight"]) .tab{border-radius:0;padding:9px 0;margin-bottom:-1px;border-bottom:2px solid transparent;font-size:14.5px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .tab svg{display:none}
+:is([data-pal="ivory"],[data-pal="midnight"]) .tab.on{background:none;color:var(--fg);border-bottom-color:var(--accent1);font-weight:600}
+:is([data-pal="ivory"],[data-pal="midnight"]) .tab .gcur::before{content:"\00b7";margin:0 6px}
+/* instance header */
+:is([data-pal="ivory"],[data-pal="midnight"]) .insthead h2{font-family:var(--serif);font-weight:600;color:var(--fg)}
+:is([data-pal="ivory"],[data-pal="midnight"]) .instbar .btn{padding:7px 14px;background:var(--card)}
+:is([data-pal="ivory"],[data-pal="midnight"]) .instbar .btn.bad{background:var(--accent1);color:var(--accfg);border-color:transparent;font-weight:600}
+:is([data-pal="ivory"],[data-pal="midnight"]) .instbar .btn[data-act="start"].greyed{display:none}
+:is([data-pal="ivory"],[data-pal="midnight"]) .state-pill{padding:3px 12px;font-size:13px;font-weight:600}
+:is([data-pal="ivory"],[data-pal="midnight"]) .state-pill.st-run{background:color-mix(in srgb,var(--good) 14%,transparent);border-color:color-mix(in srgb,var(--good) 35%,transparent)}
+/* Duties: Now and joins on the left, duties on the right */
+.dutygrid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;align-items:start}
+.dcol{display:flex;flex-direction:column;min-width:0}
+@media (max-width:1000px){.dutygrid{grid-template-columns:1fr}}
+:is([data-pal="ivory"],[data-pal="midnight"]) .dutygrid .actleft h3{display:none}
+:is([data-pal="ivory"],[data-pal="midnight"]) .dutygrid .actright h3{font-size:15px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .actbar{background:none;border:0;box-shadow:none;padding:0 0 12px;margin:0;border-bottom:var(--bd);flex-direction:column;align-items:flex-start;gap:4px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .actlab{font-size:11.5px;letter-spacing:.1em}
+:is([data-pal="ivory"],[data-pal="midnight"]) .actnow{font:500 21px/1.3 var(--serif)}
+.actstats{display:flex;gap:30px;padding-top:12px;margin:0}
+.stile{display:flex;flex-direction:column}
+.stile b{font:500 24px var(--serif);color:var(--fg)}
+.stile span{font-size:12.5px;color:var(--mute)}
+:is([data-pal="ivory"],[data-pal="midnight"]) .actwrap{border:0;border-radius:0;max-height:360px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .acttable th{background:var(--card);font-size:12px;font-weight:500;border-bottom:var(--bd)}
+:is([data-pal="ivory"],[data-pal="midnight"]) .acttable td{border-top:1px solid var(--line);padding:9px 10px}
+/* footer: plain line */
+:is([data-pal="ivory"],[data-pal="midnight"]) .status{background:transparent;border-top:var(--bd);font-size:12.5px}

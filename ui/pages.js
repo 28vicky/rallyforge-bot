@@ -294,14 +294,16 @@ function instancePage(serial) {
               if (r) { S.cfg.per_device[serial] = r.settings || {}; AUTO.saved = AUTO.seen = cfgSnap(); rerender(); toast(`Profile '${chosen}' loaded into this instance.`, "ok"); }
             } }] });
   };
-  const stBtn = (t, fn) => h("button", { class: "btn", "data-act": t.toLowerCase(), onclick: fn }, t);
-  const bar = h("div", { class: "row", style: { marginBottom: "14px" } },
-    stBtn("Start", () => collectAndRun("start", { serial })), stBtn("Pause", () => act(api("pause", { serial }))), stBtn("Stop", () => act(api("stop", { serial }))), btn("Take game back now", () => act(api("takeback", { serial }))),
-    btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"), btn("Map by squares", () => scanCityTapsFlow(serial), "sm"),
-    btn("Profile \u25BE", (e) => menu(e.currentTarget, [{ label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "sm"));
-  const head = h("div", { class: "row", style: { margin: "0 0 14px", gap: "16px", alignItems: "center" } },
-    h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", color: "var(--accent2)", margin: "0" } }, dev.name || "Instance " + d.idx),
-    status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial));
+  const stBtn = (t, fn, cls) => h("button", { class: "btn" + (cls ? " " + cls : ""), "data-act": t.toLowerCase(), onclick: fn }, t);
+  const moreBtn = btn("More \u25BE", (e) => menu(e.currentTarget, [
+    { label: "Scan city", run: () => scanCityFlow(serial) }, { label: "Map by hand", run: () => manualMapFlow(serial) }, { label: "Map by squares", run: () => scanCityTapsFlow(serial) },
+    { label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "");
+  const bar = h("div", { class: "row instbar" },
+    btn("Take game back now", () => act(api("takeback", { serial }))),
+    stBtn("Start", () => collectAndRun("start", { serial })), stBtn("Pause", () => act(api("pause", { serial }))), stBtn("Stop", () => act(api("stop", { serial })), "bad"), moreBtn);
+  const head = h("div", { class: "row insthead", style: { margin: "0 0 12px", gap: "14px", alignItems: "center" } },
+    h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx),
+    status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial), h("span", { style: { flex: "1" } }), bar);
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
@@ -445,7 +447,11 @@ function instancePage(serial) {
     ["presets", "Presets & generals", () => ownP],
     ["monsters", "Monsters", () => [PAGES.monsters(serial)]],
     ["tasks", "Tasks", () => [PAGES.tasks(serial)]],
-    ["duties", "Duties", () => [PAGES.duties(serial)]],
+    ["duties", "Duties", () => {
+      const a = activityBox(serial, "Activity");
+      const L = a.querySelector(".actleft"), R = a.querySelector(".actright");
+      return [h("div", { class: "dutygrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial)))];
+    }],
     ["crazy_eggs", "Crazy Eggs", () => [PAGES.duties(serial, "crazy_eggs")]],
     ["champions", "Champions", () => [PAGES.duties(serial, "champions")]],
     ["itinerary", "Itinerary", () => [instItinerary(serial)]],
@@ -464,7 +470,7 @@ function instancePage(serial) {
     for (const el of t[2]()) if (el) body.appendChild(el);
   };
   for (const [k, l] of ITABS) tabRow.appendChild(h("button", { class: "tab", "data-k": k, onclick: () => showTab(k) }, l));
-  const wrap = h("div", {}, h("div", { class: "stickyhead" }, h("div", { class: "stickybox" }, head, warn, bar)), panel(null, activityBox(serial, "Activity")), tabRow, body);
+  const wrap = h("div", {}, h("div", { class: "stickyhead" }, h("div", { class: "stickybox" }, head, warn)), tabRow, body);
   showTab(S.instTab);
   setTimeout(refreshInstanceControls, 0);
   return wrap;

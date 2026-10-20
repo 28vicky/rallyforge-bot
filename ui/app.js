@@ -185,9 +185,10 @@ function layout() {
     h("i"), h("i"), h("i"));
   root.appendChild(h("div", { class: "app" + (S.cfg.sidebar_open === false ? " nosb" : ""), id: "app" },
     h("div", { class: "side" },
+      h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }), h("span", {}, "RallyForge")),
       h("h4", {}, "INSTANCES", burger()),
       h("div", { class: "inst-list", id: "instList" }),
-      h("div", { class: "sidefoot" }, h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
+      h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }), h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
     h("div", { class: "main" },
       h("div", { class: "top" }, burger(), h("img", { src: "/assets/logo.png", alt: "" }),
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
@@ -360,7 +361,7 @@ function renderSide() {
     h("span", { class: "nm" }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   for (const d of S.devStatus) {
-    L.appendChild(item(d.id, `${d.idx}. ${d.name || short(d.id)}`, (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [devTag(d), (d.joins && !(d.state === "pause" && d.resume_at) && !d.kicked_at) ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
+    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["RUNNING", "STOPPED", ""].includes(devTag(d)) ? "" : devTag(d)), (d.joins && !(d.state === "pause" && d.resume_at) && !d.kicked_at) ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
     sideDrag(L.lastChild, d.id);
     const qb = (t, ico, fn) => h("button", { title: t, onclick: (e) => { e.stopPropagation(); fn(); } }, ico);
     const nm = d.name || short(d.id);
@@ -582,6 +583,15 @@ function actStats(serial) {
   const avg = joins.length ? (joins.reduce((t, l) => t + l.a.took, 0) / joins.length).toFixed(1) + "s" : "-";
   return `Joined ${n("join")}  ·  Skipped ${n("skip")}  ·  Failed ${n("fail")}  ·  Average join time ${avg}`;
 }
+function paintStats(el, serial) {
+  const list = S.acts.filter((l) => serial === null || l.s === serial);
+  const n = (k) => list.filter((l) => l.a.k === k).length;
+  const joins = list.filter((l) => l.a.k === "join" && l.a.took != null);
+  const avg = joins.length ? (joins.reduce((t, l) => t + l.a.took, 0) / joins.length).toFixed(1) + " s" : "-";
+  el.innerHTML = "";
+  [["Joined", n("join")], ["Skipped", n("skip")], ["Failed", n("fail")], ["Average join", avg]].forEach(([l, v]) =>
+    el.appendChild(h("div", { class: "stile" }, h("b", {}, String(v)), h("span", {}, l))));
+}
 function actNow(serial) {
   if (serial !== null) { const x = S.now[serial]; return x ? `${x.t}  ${x.text}` : "Waiting for the bot to start..."; }
   const rows = Object.entries(S.now).map(([s, x]) => `${x.n}: ${x.text}`);
@@ -595,7 +605,7 @@ function activityBox(serial, title) {
   const view = { now, stats, body, wrap, serial };
   actViews.push(view);
   for (const l of S.acts.slice(-200)) if (l.a.k !== "step" && (serial === null || l.s === serial)) placeActRow(body, actRow(view, l));
-  now.textContent = actNow(serial); stats.textContent = actStats(serial);
+  now.textContent = actNow(serial); paintStats(stats, serial);
   return h("div", { class: "actsplit" },
     h("div", { class: "actleft" }, h("h3", {}, title || "Activity"), h("div", { class: "actbar" }, h("span", { class: "actlab" }, "Now"), now), stats),
     h("div", { class: "actright" }, h("h3", {}, "Monster joins"), wrap));
@@ -610,7 +620,7 @@ function pushActs(list) {
     }
   }
   if (S.acts.length > 600) S.acts.splice(0, S.acts.length - 600);
-  for (const v of actViews) { v.now.textContent = actNow(v.serial); v.stats.textContent = actStats(v.serial); }
+  for (const v of actViews) { v.now.textContent = actNow(v.serial); paintStats(v.stats, v.serial); }
 }
 function pushLogs(list) {
   for (const l of list) {
@@ -664,6 +674,14 @@ function updateSummary() {
   if (c.error) parts.push(c.error + " with a problem");
   const s = $("#sum"); if (s) s.textContent = parts.join("  |  ");
   const r = $("#sbRun"); if (r) r.textContent = c.run + " running";
+  const who = $("#whoami");
+  if (who) {
+    const L = S.license || {};
+    const nm = L.required ? (L.valid ? (L.user || L.buyer || "Logged in") : "Not logged in") : "Free edition";
+    const sub = L.required && L.valid && L.days_left != null ? (L.days_left > 0 ? L.days_left + (L.days_left === 1 ? " day" : " days") + " left" : "expires today") : (L.required ? "" : "no login needed");
+    who.innerHTML = ""; who.title = L.required && L.valid ? "Logged in as " + nm : "";
+    who.append(h("span", { class: "wav" }, (nm[0] || "?").toUpperCase()), h("span", { class: "wtx" }, h("b", {}, nm), sub ? h("small", {}, sub) : null));
+  }
   const lc = $("#sbLic");
   if (lc) {
     const L = S.license || {};
