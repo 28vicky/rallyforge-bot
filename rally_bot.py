@@ -6631,7 +6631,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(p[0], p[1] - 38)                           # the icon sits just above its caption
         return True
-    if kind == "building" and not nav_state.get("picture_bad") and not (PICTURE_BAD.get(getattr(dev, "serial", "")) and city_map_items(dev)) and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
+    if kind == "building" and not nav_state.get("picture_bad") and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
         pitems = picture_items(dev)                          # the camera is found by the whole-city picture; positions come from the mapper or the built-in default
         pkeys = []
         for nm in str(name).lower().split("+"):                # "Keep+Tavern" = visit the Keep, then the Tavern
@@ -6639,7 +6639,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             pkeys += sorted(k for k in pitems if k.split("#")[0].lower() == want.split("#")[0] and (("#" not in want) or k.lower() == want))[:int(task.get("count", 1) or 1)]
         serial_ = getattr(dev, "serial", "")
         if "mode" not in nav_state:                         # 'labels' = read the names under the buildings (works in every city style); 'picture' = find the camera by the stored whole-city picture (own style)
-            forced = str(cfg.get("city_nav", "auto")).lower() in ("labels", "squares") or _flag_on() or bool(PICTURE_BAD.get(serial_))
+            forced = str(cfg.get("city_nav", "auto")).lower() in ("labels", "squares") or _flag_on() or bool(PICTURE_BAD.get(serial_)) or picture_bad_saved(serial_)
             nav_state["mode"] = "labels" if forced else "picture"
         nav = nav_state.get("anav")
         if nav is None:
@@ -6658,12 +6658,14 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             nav.goto(tx, ty)
             if first and not nav.seen_city:                 # the stored picture does not fit this city style
                 PICTURE_BAD[serial_] = True
-                if city_map_items(dev):                     # this account has its own city map: the closed-loop older way
-                    nav_state["picture_bad"] = True
-                    return "older"
+                picture_bad_save(serial_)                   # remembered: next time this instance goes straight to the names (the picture search costs minutes)
                 nav_state["mode"] = "labels"
                 log("[i] Finding the buildings by their names")
-                return aim_by_labels(dev, cfg, log, stop, k)
+                r = aim_by_labels(dev, cfg, log, stop, k)
+                if r is None and city_map_items(dev):       # the names did not lead anywhere: this account's own city map, the closed-loop older way
+                    nav_state["picture_bad"] = True
+                    return "older"
+                return r
             px_, py_ = tx - nav.cx, ty - nav.cy
             return (px_, py_) if (x0 <= px_ <= x0 + w and y0 <= py_ <= y0 + h) else None
 
@@ -6838,6 +6840,22 @@ def _off_load():
     return _OFF_CACHE
 
 
+def picture_bad_saved(serial):
+    """True when this instance's city was found not to match the stored picture in the last 3 days (then the picture search is skipped)."""
+    with _OFF_LOCK:
+        t = (_off_load().get("_picture_bad") or {}).get(serial or "default")
+    return bool(t) and time.time() - float(t) < 3 * 86400
+
+
+def picture_bad_save(serial):
+    with _OFF_LOCK:
+        _off_load().setdefault("_picture_bad", {})[serial or "default"] = time.time()
+        try:
+            CITY_OFFSETS_FILE.write_text(json.dumps(_OFF_CACHE), encoding="utf-8")
+        except OSError:
+            pass
+
+
 def learn_offsets(serial, labs):
     """Remember the distances between the names read together in one look (labs = [(name, x, y), ...])."""
     names = {}
@@ -6939,6 +6957,7 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=14):
         est = estimate_from_names(getattr(dev, "serial", ""), want, labs, pri)
         if not est:
             lost += 1
+            log(f"[i]   look {i + 1}: {len(labs)} name(s) read" + (f" ({', '.join(l[0] for l in labs)})" if labs else "") + " - nothing to aim by, looking elsewhere")
             if lost > 2:
                 if not ensure_view(dev, cfg, stop, log, "city", tries=4):
                     return None
