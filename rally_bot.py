@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.59"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.60"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -663,6 +663,8 @@ class Device:
         return img
 
     def _run(self, *a, timeout=20):
+        if len(a) > 1 and a[0] == "shell" and a[1] == "input":      # a tap / swipe / text: never while the instance is paused
+            pause_gate()
         return subprocess.run([self.adb, "-s", self.serial, *a], capture_output=True,
                               timeout=timeout, creationflags=NOWIN)
 
@@ -2000,6 +2002,17 @@ def housekeeping(log=None):
 
 # ------------------------------------------------------------------ helpers
 _TL = threading.local()                 # per bot thread: pace + speed counters
+
+
+def pause_gate():
+    """Block while this instance is paused from the GUI (taps and swipes call it, so a pause takes effect at the very next
+    action, also during start-up, the game-loading wait and long tasks). -> True when it had to wait."""
+    ctl, stop = getattr(_TL, "ctl", None), getattr(_TL, "stop", None)
+    waited = False
+    while ctl is not None and not ctl.run.is_set() and not (stop is not None and stop.is_set()):
+        waited = True
+        time.sleep(0.3)
+    return waited
 CPU_LEVELS = {1: 1.0, 2: 1.5, 3: 2.5, 4: 4.0}      # how much longer the pause between scans gets
 
 
@@ -4596,6 +4609,9 @@ def wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
     not_ready_since, last_clear, last_kick = None, 0.0, 0.0
     end = time.time() + cfg["game_load_timeout"]
     while time.time() < end and not stop.is_set():
+        if pause_gate():                                       # paused meanwhile: no clicks, no timeout, start counting again after the resume
+            good, not_ready_since = 0, None
+            end = time.time() + cfg["game_load_timeout"]
         try:
             screen = dev.screenshot()
         except Exception:
@@ -4721,6 +4737,7 @@ _HEAVY_LOCK = threading.RLock()            # only one emulator restart / game re
 
 def restart_emulator(dev, cfg, log, stop, why=""):
     """Close a stuck emulator (nicely first, then by force), start it again and wait until Evony is loaded."""
+    pause_gate()                                                  # never restart an emulator while it is paused
     if not _HEAVY_LOCK.acquire(blocking=False):
         log("[*] Another emulator is restarting - waiting for my turn (keeps the PC from overloading)")
         while not _HEAVY_LOCK.acquire(timeout=2):
@@ -7724,6 +7741,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
 def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     cfg = merge_device_cfg(cfg, serial)                              # per-instance overrides
     set_pacing(cfg)
+    _TL.ctl, _TL.stop = ctl, stop
 
     def nap(lo, hi=None):
         stop.wait(pace(random.uniform(lo, hi if hi is not None else lo)))

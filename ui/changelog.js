@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.60", date: "2026-10-20",
+    new: [],
+    fixed: ["Pause now really pauses: the bot stops tapping at the very next action, also while it is starting up, waiting for the game to load or in the middle of a task. Before, a pause pressed during start-up was ignored and the bot kept tapping (and could even restart the emulator). An emulator is never restarted while paused."] },
   { v: "2.4.59", date: "2026-10-20",
     new: ["More buildings are found without running the city mapper: Shrine, Victory Column, Senate, Ideal Land, Dragon Cliff, Triumphal Arch, Academy, Military Academy, Research Factory, Wisdom Dome, Art Hall, Holy Palace, Pasture, Rally Spot, Walls, Battlefield and Subordinate City join Keep and Tavern. They sit in the same place in every city, so every instance has them automatically."],
     fixed: [] },
