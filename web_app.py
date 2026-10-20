@@ -2008,6 +2008,11 @@ class Api:
         rb.lib_clear()
         return self.coords_library(p)
 
+    def coords_chats(self, p):
+        """Remember the watched chats as soon as they are typed (kept in the settings for good)."""
+        self.c.apply_config({"tg_feed_chats": str(p.get("chats") or "").strip()})
+        return {}
+
     def coords_keep(self, p):
         """How long the live list keeps a coordinate (minutes, 0 = until cleared): saved and applied at once."""
         m = max(0, int(p.get("minutes") or 0))
