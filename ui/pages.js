@@ -466,6 +466,11 @@ function instancePage(serial) {
     try { localStorage.setItem("rf_inst_tab", k); } catch (e) {}
     [...tabRow.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
     body.innerHTML = "";
+    if (k !== "duties") {
+      const nv = h("span", { class: "nowtxt" }, actNow(serial));
+      body.appendChild(h("div", { class: "nowstrip" }, h("span", { class: "actlab" }, "Now"), nv));
+      const iv = setInterval(() => { if (!nv.isConnected) clearInterval(iv); else nv.textContent = actNow(serial); }, 2000);
+    }
     const t = ITABS.find((x) => x[0] === k);
     for (const el of t[2]()) if (el) body.appendChild(el);
   };
