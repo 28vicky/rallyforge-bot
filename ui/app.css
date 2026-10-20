@@ -94,7 +94,7 @@
 html,body{height:100%}
 body{font:16px/1.45 var(--font);color:var(--fg);background:var(--bgc);overflow:hidden}
 ::selection{background:var(--accent1);color:var(--accfg)}
-.app{height:100vh;display:flex;background:var(--bg);position:relative}
+.app{position:fixed;inset:0;display:flex;background:var(--bg)}
 
 /* ---------- scrollbars: thin pill */
 *{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
@@ -491,7 +491,8 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .btn.gv .gvi{font-size:11px;line-height:1;display:inline-block}
 
 /* jump to top / bottom */
-.jumpbox{position:fixed;right:26px;bottom:52px;z-index:60;display:flex;flex-direction:column;gap:8px}
+.main{position:relative}
+.jumpbox{position:absolute;right:26px;bottom:44px;z-index:60;display:flex;flex-direction:column;gap:8px}
 .jump{width:38px;height:38px;border-radius:50%;border:var(--bd);background:var(--btn);color:var(--accent2);font-size:18px;line-height:1;cursor:pointer;box-shadow:var(--sh2);display:grid;place-content:center;padding:0}
 .jump{opacity:0;transform:translateY(6px);pointer-events:none;transition:opacity .18s,transform .18s}
 .jump.on{opacity:1;transform:none;pointer-events:auto}
@@ -499,14 +500,20 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 
 /* quick Start / Pause / Stop on an instance card (appear on hover) */
 .inst{position:relative}
-.inst .qact{position:absolute;right:8px;top:7px;display:flex;gap:4px;opacity:0;pointer-events:none;transition:opacity .12s}
+.inst .qact{position:absolute;right:8px;top:7px;display:flex;gap:2px;opacity:0;pointer-events:none;transition:opacity .12s}
 .inst:hover .qact{opacity:1;pointer-events:auto}
-.inst .qact button{width:24px;height:24px;border-radius:7px;border:var(--bd);background:var(--btn);color:var(--fg);font-size:10px;line-height:1;padding:0;display:grid;place-content:center;cursor:pointer;box-shadow:var(--sh2)}
-.inst .qact button:hover{background:var(--accent);color:var(--accfg)}
-.inst .qact button.on{color:var(--good)}
-.inst.sel .qact button{background:rgba(0,0,0,.22);color:var(--accfg);border-color:transparent}
+.inst .qact button{width:24px;height:24px;border-radius:6px;border:0;background:transparent;color:var(--fg);font-size:12px;line-height:1;padding:0;display:grid;place-content:center;cursor:pointer;box-shadow:none}
+.inst .qact button:hover{background:rgba(255,255,255,.14);color:var(--accent2)}
+.greyed{opacity:.38;pointer-events:none;filter:grayscale(.6)}
+.inst.sel .qact button{background:transparent;color:var(--accfg)}
 .inst.sel .qact button:hover{background:rgba(0,0,0,.4)}
 
+/* itinerary + log history */
+.itgrp{margin:10px 0}.ithead{font-weight:600;color:var(--accent2);padding:6px 0;border-bottom:var(--bd)}
+.itrow{display:flex;gap:16px;padding:7px 4px;border-bottom:1px solid var(--line)}.itwhen{width:150px;flex:none;color:var(--mute)}
+.itgrp.bad .ithead{color:var(--bad)}.itgrp.bad .itrow{background:rgba(220,70,70,.12)}.itgrp.bad .itwhen{color:var(--bad)}
+.histlog{max-height:460px;overflow:auto;font:13px/1.5 ui-monospace,Consolas,monospace}.hrow{padding:3px 6px;border-bottom:1px solid var(--line);white-space:pre-wrap;word-break:break-word}
+.hrow.e{color:var(--bad)}.hrow.w{color:var(--warn)}
 /* ===== Premium theme (Claude-style): warm charcoal, cream text, terracotta accent, soft flat surfaces, gentle motion ===== */
 :root,[data-pal="amber"][data-mode="dark"]{
   --fg:#f0eee6;--mute:#a8a59b;--accfg:#fff;--bd:1px solid rgba(240,238,230,.09);

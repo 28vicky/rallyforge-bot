@@ -102,7 +102,7 @@ const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", mon
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
   ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["telegram", "Telegram & Discord"], ["reliability", "Reliability"],
-  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["license", "Account"],
+  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Themes"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
 
@@ -138,7 +138,7 @@ function applyCustom() {
     const base = cs.getPropertyValue("--btn").trim();
     st.setProperty("--btn", `linear-gradient(rgba(${ar},${ag},${ab},${light ? 0.2 : 0.17}),rgba(${ar},${ag},${ab},${light ? 0.2 : 0.17})), ${base}`);
   }
-  const tz = Math.max(85, Math.min(150, parseInt(c.ui_text, 10) || 100));
+  const tz = Math.max(70, Math.min(150, parseInt(c.ui_text, 10) || 85));
   try { root.style.zoom = tz === 100 ? "" : String(tz / 100); } catch (e) {}
   const R = { sharp: [6, 4, 8], round: [28, 18, 28] }[c.ui_round];
   if (R) { st.setProperty("--r1", R[0] + "px"); st.setProperty("--r2", R[1] + "px"); st.setProperty("--rad", R[2] + "px"); }
@@ -362,10 +362,11 @@ function renderSide() {
   for (const d of S.devStatus) {
     L.appendChild(item(d.id, `${d.idx}. ${d.name || short(d.id)}`, (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [devTag(d), (d.joins && !(d.state === "pause" && d.resume_at) && !d.kicked_at) ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
     sideDrag(L.lastChild, d.id);
-    L.lastChild.appendChild(h("div", { class: "qact" },
-      h("button", { title: "Start " + (d.name || short(d.id)), class: d.state === "run" && !d.paused ? "on" : "", onclick: (e) => { e.stopPropagation(); collectAndRun("start", { serial: d.id }); } }, "\u25B6"),
-      h("button", { title: "Pause / resume", class: d.state === "pause" ? "on" : "", onclick: (e) => { e.stopPropagation(); act(api("pause", { serial: d.id })); } }, "\u275A\u275A"),
-      h("button", { title: "Stop", onclick: (e) => { e.stopPropagation(); act(api("stop", { serial: d.id })); } }, "\u25A0")));
+    const qb = (t, ico, fn) => h("button", { title: t, onclick: (e) => { e.stopPropagation(); fn(); } }, ico);
+    const nm = d.name || short(d.id);
+    L.lastChild.appendChild(h("div", { class: "qact" }, ...(d.state === "run" || d.state === "pause"
+      ? [qb(d.state === "pause" ? "Resume " + nm : "Pause " + nm, d.state === "pause" ? "\u25B6" : "\u275A\u275A", () => act(api("pause", { serial: d.id }))), qb("Stop " + nm, "\u25A0", () => act(api("stop", { serial: d.id })))]
+      : [qb("Start " + nm, "\u25B6", () => collectAndRun("start", { serial: d.id }))])));
     if ((d.state === "pause" && d.resume_at) || (d.state === "run" && d.kicked_at)) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at || d.resume_at), "data-pre": d.kicked_at ? " back in " : "" })); }
   }
   tickPauseTimers();
@@ -421,6 +422,9 @@ function paintRunState() {
   document.querySelectorAll("[data-act]").forEach((b) => {
     b.className = b.className.replace(/\bcur-\w+/g, "").replace(/\s+/g, " ").trim();
     if (st !== "run" && map[st] && map[st] === b.dataset.act) b.classList.add("cur-" + st);   // only Paused / Stopped stay lit; running = all normal
+    // buttons that do nothing right now are greyed out (one instance only): Start while running, Pause and Stop while stopped
+    const off = S.sel !== "control" && ((st === "run" && b.dataset.act === "start") || ((st === "stop" || st === "idle" || st === "error") && (b.dataset.act === "pause" || b.dataset.act === "stop")));
+    b.classList.toggle("greyed", !!off);
   });
 }
 function ribbonLabels() {
@@ -512,7 +516,7 @@ function stickyUpdate() {
     box = h("div", { id: "jumpbox", class: "jumpbox" },
       h("button", { class: "jump", id: "jumpUp", title: "Go to the top", onclick: () => { const q = $("#pages"); q.scrollTo({ top: 0, behavior: "smooth" }); } }, "\u2191"),
       h("button", { class: "jump", id: "jumpDown", title: "Go to the bottom", onclick: () => { const q = $("#pages"); q.scrollTo({ top: q.scrollHeight, behavior: "smooth" }); } }, "\u2193"));
-    document.body.appendChild(box);
+    (document.querySelector(".main") || document.body).appendChild(box);
   }
   const max = p.scrollHeight - p.clientHeight;
   $("#jumpUp").classList.toggle("on", p.scrollTop > 160);
