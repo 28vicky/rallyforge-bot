@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.56", date: "2026-10-20",
+    new: ["Keep and Tavern are now found by a picture of the whole city that ships with the app, so city tasks such as Champions work on every account without running the city mapper first. If an account's city does not match the picture, the bot falls back to the older way."],
+    fixed: ["The bot closes the building menu it opened before going to the next building, so the next tap no longer closes it again."] },
   { v: "2.4.55", date: "2026-10-20",
     new: [],
     fixed: ["Pressing Start (or the play button) on a paused instance now resumes it straight away. Before, nothing happened until the pause time ran out."] },

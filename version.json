@@ -1,9 +1,9 @@
 {
-  "version": "2.4.55",
-  "notes": "Start on a paused instance resumes it straight away.",
+  "version": "2.4.56",
+  "notes": "City tasks (Champions) find the Keep and Tavern by a whole-city picture; no city mapping needed.",
   "files": {
     "rally_bot.py": {
-      "sha256": "7160b740d9f56172797d6f7569c4143746d9d66b48cef494a1a45df77ef76bd8"
+      "sha256": "e422d1503406ac5125afa076de725ec6752862bb62c292e3ef848467e5279772"
     },
     "web_app.py": {
       "sha256": "bd5a85dd793b54699a6be287556f8b767b7b0098432c4a2f6f56d7271367fd74"
@@ -18,7 +18,7 @@
       "sha256": "c39281368962c67e3d6e5f30e8d98930a4ae1c4bae1341b4546c89480ccb228a"
     },
     "ui/changelog.js": {
-      "sha256": "87d696696dc5fc284502162555f2261aea394ebc8db4682cf3d86a4f673f51c4"
+      "sha256": "d872eaae8d6abfb0a22bc8d60672e70b4c337ff2b6a48e802ea0d2c06547fd30"
     },
     "ui/dialogs.js": {
       "sha256": "6f6438682092c6db775f9b91a5aa7f94cd55fdfb73cb53a42119ded7e6a674d6"
@@ -120,6 +120,9 @@
     }
   },
   "templates": {
+    "city_whole.png": {
+      "sha256": "84b36804a615b75d99646a369dae9f526d4c28a90f7494ba85277d4431aff5aa"
+    },
     "event_center_icon.png": {
       "sha256": "ba4652d418bcd84af9971d507314c5aec49ef1de8273d3a1029f23d181c31219"
     },
@@ -133,5 +136,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "0307f6da3dd24d9c20cda76fca0cf7790a1d077c20f3cbe17be6681e337a5c9e"
+  "sig": "86e801f2c36ad0549eaac406b4a3b5c827aabde4020939241b6a94a0546d3d8f"
 }

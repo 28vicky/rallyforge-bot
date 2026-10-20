@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.55"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.56"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -212,6 +212,7 @@ DEFAULTS = {
     "city_enabled": False,                  # run the tasks (Tasks tab) while no rally is waiting
     "city_tasks": [],                       # [{name, enabled, target, steps, every_min}], see run_step()
     "duties": {},                           # {duty_id: {on, every_min}} - ready-made duties, see DUTY_LIBRARY
+    "wheel": {"button": 1, "spins": 10, "reserve": 0},   # Tavern > Wheel of Fortune: biggest button (1/10/100), spins to do (0 = until the coins are used up), coins to keep
     "champions": {"plan": {}},                      # plan {champion: {taps, greets}}; empty = all on the champion the page opens on
     "crazy_eggs": {"eggs": {}, "lucky": "max", "min_hammers": 0},   # eggs {cost: {on, daily}}, lucky = egg cost / "max" / "" (none)
     "city_icons": {},                       # extra / changed right-side icon positions {name: [x, y]}
@@ -778,8 +779,87 @@ class Device:
     def hold_end(self):
         h = getattr(self, "_held", None)
         if h:
+            for k in (1, 2, 3):                                  # keep dragging a little before lifting, so the game never reads it as a tap
+                self._run("shell", "input", "motionevent", "MOVE", str(int(h[0] * self.sx)),
+                          str(int((h[1] - 14 * k) * self.sy)))
+            h = (h[0], h[1] - 42)
             self._run("shell", "input", "motionevent", "UP", str(int(h[0] * self.sx)), str(int(h[1] * self.sy)))
             self._held = None
+
+    def _touch_dev(self):
+        """Find the emulator's touch screen device and its raw ranges (cached). -> (path, maxx, maxy, slots) or None."""
+        t = getattr(self, "_touch", 0)
+        if t != 0:
+            return t
+        info = None
+        try:
+            out = self._run("shell", "getevent", "-p", timeout=10).stdout.decode("utf-8", "ignore")
+            for blk in re.split(r"(?m)^add device \d+:", out)[1:]:
+                path = blk.strip().split()[0]
+                mx = re.search(r"(?:0035|ABS_MT_POSITION_X)\s*:[^\n]*?max (\d+)", blk)
+                my = re.search(r"(?:0036|ABS_MT_POSITION_Y)\s*:[^\n]*?max (\d+)", blk)
+                if mx and my:
+                    sl = re.search(r"(?:002f|ABS_MT_SLOT)\s*:[^\n]*?max (\d+)", blk)
+                    info = (path, int(mx.group(1)), int(my.group(1)), bool(sl))
+                    break
+        except Exception:
+            info = None
+        self._touch = info
+        return info
+
+    def pinch_in(self, cx=270, cy=480, start=230, end=45, steps=12, delay=0.04, tilt=0.6, pressure=0, major=0, fingers=2, dev_path=None):
+        """Two fingers move TOWARD each other (the game zooms OUT). Raw multi-touch events sent in one shell
+        command. (cx, cy, start, end) are in 540x960 screen pixels. -> True when the events were sent."""
+        t = self._touch_dev()
+        if not t:
+            return False
+        path, mx, my, has_slot = t
+        if dev_path:
+            path = dev_path
+        w, h = EXPECTED_SIZE
+        fx, fy = mx / float(w), my / float(h)
+        cmds = []
+
+        def ev(a, b, c):
+            cmds.append(f"sendevent {path} {a} {b} {c}")
+
+        def pos(slot, x, y):
+            if has_slot:
+                ev(3, 47, slot)
+            ev(3, 53, int(x * fx))
+            ev(3, 54, int(y * fy))
+            if pressure:
+                ev(3, 58, pressure)
+            if major:
+                ev(3, 48, major)
+            if not has_slot:
+                ev(0, 2, 0)                                  # SYN_MT_REPORT
+        d = start
+        for i in range(steps + 1):
+            d = start + (end - start) * i / steps
+            if i == 0:
+                if has_slot:
+                    ev(3, 47, 0); ev(3, 57, 801)
+                    pos(0, cx - d, cy - d * tilt)
+                    if fingers > 1:
+                        ev(3, 47, 1); ev(3, 57, 802)
+                else:
+                    pass
+                ev(1, 330, 1)
+            pos(0, cx - d, cy - d * tilt)
+            if fingers > 1:
+                pos(1, cx + d, cy + d * tilt)
+            ev(0, 0, 0)
+            cmds.append(f"sleep {delay}")
+        if has_slot:
+            ev(3, 47, 0); ev(3, 57, -1)
+            if fingers > 1:
+                ev(3, 47, 1); ev(3, 57, -1)
+        ev(1, 330, 0)
+        ev(0, 0, 0)
+        r = self._run("shell", "sh", "-c", "'" + "; ".join(cmds) + "'", timeout=30)
+        self.last_pinch = f"touch {path} max {mx}x{my} slots={has_slot} rc={r.returncode} {(r.stderr or b'')[:120]!r}"
+        return r.returncode == 0
 
     def back(self):
         self._run("shell", "input", "keyevent", "4")
@@ -3487,6 +3567,53 @@ def crawl_portraits(dev, cfg, log, stop, progress=None):
     return found
 
 
+def merge_catalog(found, log=print):
+    """Add the generals of a crawl that the library does not have yet to USER/catalog (catalog.json + art/ + labels/).
+    Generals already in the library are left as they are. -> number added."""
+    root = USER / "catalog"
+    (root / "art").mkdir(parents=True, exist_ok=True)
+    (root / "labels").mkdir(exist_ok=True)
+    try:
+        data = json.loads((root / "catalog.json").read_text(encoding="utf-8"))
+    except Exception:
+        data = {"generals": []}
+    have = {g["name"]: g for g in data.get("generals", [])}
+    added = 0
+    for name, g in sorted(found.items(), key=lambda kv: kv[0].lower()):
+        safe = _clean_general_name(name)
+        old = have.get(safe)
+        if old:                                            # known: only add the region / troop types it was seen under
+            old["region"] = sorted(set(old.get("region", [])) | set(g["region"]))
+            old["troops"] = sorted(set(old.get("troops", [])) | set(g["troops"]))
+            continue
+        cv2.imwrite(str(root / "art" / f"{safe}.png"), g["image"])
+        if g.get("label") is not None:
+            cv2.imwrite(str(root / "labels" / f"{safe}.png"), g["label"])
+        have[safe] = {"name": safe, "region": g["region"], "troops": g["troops"], "art": f"{safe}.png"}
+        added += 1
+    (root / "catalog.json").write_text(json.dumps({"built": time.strftime("%Y-%m-%d"), "generals": sorted(have.values(), key=lambda g: g["name"].lower())}, indent=1), encoding="utf-8")
+    log(f"[+] General library: {added} new general(s) added, {len(have)} in total ({root})")
+    return added
+
+
+def run_tavern_catalog(dev, cfg, log, stop):
+    """The Tavern's ring menu is open: Recruit > Portraits, read every general (picture + name) and add the new ones to
+    the general library. Nothing is recruited and the shop is not refreshed (the Refresh button is never touched)."""
+    shot = dev.screenshot()
+    if not find_text(shot, ["Recruit General"], region=(60, 0, 420, 120)):
+        dev.tap(295, 262)                                   # 'Recruit' in the Tavern's ring menu
+        _nap(stop, 2.2, 3.0)
+        shot = dev.screenshot()
+        if not find_text(shot, ["Recruit General"], region=(60, 0, 420, 120)):
+            raise RuntimeError("the Recruit General page did not open")
+    found = crawl_portraits(dev, cfg, log, stop, progress=lambda n: None)
+    if found:
+        merge_catalog(found, log)
+    else:
+        log("[!]  General library: no generals were read")
+    return len(found)
+
+
 def save_catalog(found, log=print):
     """Write the crawl result to USER/catalog (catalog.json + art/<name>.png). Copy that folder next to the app to ship it."""
     root = USER / "catalog"
@@ -4831,7 +4958,7 @@ BUILDING_NAMES = [
     "Watchtower", "Fountain of the Gods", "Triumphal Arch", "Military Academy", "Pasture", "Hospital",
     "Workshop", "Smithy", "Siege Workshop", "Beacon Tower", "Treasury", "Marketplace",
 ]
-BUILDING_NAMES += ["Stable", "Forge", "War Hall", "Portal", "Black Market"]
+BUILDING_NAMES += ["Stable", "Forge", "War Hall", "Portal", "Black Market", "Dragon Cliff", "Archer Tower"]   # last two read from the PC client / emulator labels
 BUILDING_ALIASES = {"Stables": "Stable", "Smithy": "Forge", "Black Market": "Market"}          # the game's wording -> our name
 EXPECTED_BUILDINGS = [                                                # what a finished city map must contain
     "Keep", "Rally Spot", "Holy Palace", "Workshop", "Military Academy", "Council of State", "Research Factory",
@@ -4988,12 +5115,129 @@ def read_building_labels(img):
     return out
 
 
+def _view_scale(a, b):
+    """How much bigger things look in picture b than in picture a (ORB features) -> scale or None."""
+    try:
+        ga, gb = cv2.cvtColor(a, cv2.COLOR_BGR2GRAY), cv2.cvtColor(b, cv2.COLOR_BGR2GRAY)
+        orb = cv2.ORB_create(1500)
+        ka, da = orb.detectAndCompute(ga[90:700, 60:480], None)
+        kb, db = orb.detectAndCompute(gb[90:700, 60:480], None)
+        if da is None or db is None:
+            return None
+        m = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(da, db)
+        if len(m) < 12:
+            return None
+        pa = np.float32([ka[x.queryIdx].pt for x in m])
+        pb = np.float32([kb[x.trainIdx].pt for x in m])
+        M, inl = cv2.estimateAffinePartial2D(pa, pb, method=cv2.RANSAC, ransacReprojThreshold=4)
+        if M is None or inl is None or int(inl.sum()) < 10:
+            return None
+        return float(np.hypot(M[0, 0], M[1, 0]))
+    except Exception:
+        return None
+
+
+def zoom_out_city(dev, stop, log, max_tries=3):
+    """Zoom the city view out with a two-finger pinch (done once per emulator session). -> True when the view got wider."""
+    if getattr(dev, "zoomed_out", False):
+        return True
+    ok_any = False
+    lab = {}
+    try:                                                  # developer aid: %APPDATA%\\RallyForgeBot\\pinch_lab.json
+        lab = json.loads((USER / "pinch_lab.json").read_text(encoding="utf-8"))
+    except Exception:
+        lab = {}
+    if lab.get("shell"):
+        for c in ([lab["shell"]] if isinstance(lab["shell"], str) else lab["shell"]):
+            r = dev._run("shell", "sh", "-c", "'" + c + "'", timeout=40)
+            out = ((r.stdout or b"") + (r.stderr or b"")).decode("utf-8", "ignore")
+            for i in range(0, min(len(out), 3000), 300):
+                log(f"[i] lab> {out[i:i + 300]!r}")
+    kw = lab.get("params") or {}
+    for vi, var in enumerate(lab.get("variants") or []):
+        b = dev.screenshot()
+        ok = dev.pinch_in(**var)
+        _nap(stop, 1.5, 1.8)
+        a = dev.screenshot()
+        sc = _view_scale(b, a)
+        log(f"[i] lab variant {vi} {var}: sent={ok} scale={sc} {getattr(dev, 'last_pinch', '')}")
+    for i in range(max_tries):
+        if stop.is_set():
+            return False
+        before = dev.screenshot()
+        sent = dev.pinch_in(**kw)
+        log(f"[i] Zoom out: {getattr(dev, 'last_pinch', 'no touch device found')}")
+        if not sent:
+            log("[!] Zoom out: this emulator did not accept the two-finger pinch (no touch device or sendevent refused)")
+            return False
+        _nap(stop, 1.2, 1.5)
+        after = dev.screenshot()
+        sc = _view_scale(before, after)
+        log(f"[i] Zoom out pinch {i + 1}: view scale {sc:.2f}" if sc else f"[i] Zoom out pinch {i + 1}: scale not measurable")
+        if sc and sc < 0.93:
+            ok_any = True
+            if sc > 0.97:
+                break
+        elif sc and sc >= 0.97:
+            break                                        # nothing changed: already as far out as it goes (or pinch ignored)
+    dev.zoomed_out = ok_any
+    return ok_any
+
+
 class CityNav:
     """Moves around the city map and remembers where the camera is (relative to the top-left corner)."""
 
     def __init__(self, dev, stop, log, pause=0.9):
         self.dev, self.stop, self.log, self.pause = dev, stop, log, pause
         self.cx = self.cy = 0.0
+        self.seen_city = False                              # set once the whole-city picture recognised the screen
+        self.absolute = False                                # True: the camera place is read from the whole-city picture (no drifting)
+
+    def localize(self, shot=None):
+        """Find where the camera is by matching the screen against the whole-city picture. Sets cx, cy (city picture
+        coordinates of screen point 0,0). -> match score, or 0 when the screen is not recognised."""
+        shot = self.dev.screenshot() if shot is None else shot
+        r = locate_in_city(shot)
+        if r:
+            self.cx, self.cy = r[0], r[1]
+            return r[2]
+        return 0.0
+
+    def goto_abs(self, mapx, mapy, tol=70):
+        """Closed loop: look where we are, drag towards the point, look again - until the point is near the middle of the
+        view. -> True when it is there."""
+        x, y, w, h = CITY_VIEW
+        mid_x, mid_y = x + w / 2, y + h / 2
+        lost = 0
+        for _ in range(12):
+            if self.stop.is_set():
+                return False
+            sc = self.localize()
+            if sc:
+                self.last_score = sc
+                self.seen_city = True
+            if not sc:
+                lost += 1
+                if lost >= 7:
+                    self.log("[!]   the screen is not recognised as the city (ad or window in the way?)")
+                    return False
+                _nap(self.stop, 0.6, 0.9)
+                continue
+            lost = 0
+            px, py = mapx - self.cx, mapy - self.cy
+            if abs(px - mid_x) <= tol and abs(py - mid_y) <= tol:
+                self.log(f"[i]   camera at {round(self.cx)},{round(self.cy)} (match {sc:.2f}), target on screen at {round(px)},{round(py)}")
+                return True
+            mx = max(-210, min(210, px - mid_x))              # how far the picture has to move (finger moves the other way)
+            my = max(-320, min(320, py - mid_y))
+            if abs(mx) < 30 and abs(my) < 30:                 # a short drag may count as a TAP on a building: overshoot and come back
+                ux, uy = (1.0 if mx >= 0 else -1.0), (1.0 if my >= 0 else -1.0)
+                self.dev.swipe(270 + ux * 100, 440 + uy * 100, 270 - ux * 100, 440 - uy * 100, 450)
+                _nap(self.stop, self.pause, self.pause + 0.3)
+                continue                                      # next round sees the overshoot and drags back
+            self.dev.swipe(270 + mx / 2, 440 + my / 2, 270 - mx / 2, 440 - my / 2, 450)
+            _nap(self.stop, self.pause, self.pause + 0.3)
+        return False
 
     def _drag(self, fx, fy, tx, ty):
         before = self.dev.screenshot()
@@ -5025,8 +5269,18 @@ class CityNav:
                 break
             sx = max(-120, min(120, rx))              # bigger drags leave too little overlap to measure
             sy = max(-240, min(240, ry))
-            # dragging the finger left/up moves the camera right/down
-            dx, dy, _ = self._drag(270 + sx / 2, 440 + sy / 2, 270 - sx / 2, 440 - sy / 2)
+            # dragging the finger left/up moves the camera right/down.
+            # A short drag can be read by the game as a TAP on a building (that opened Prison, Rare Books ...), so a
+            # short move is done as one long drag past the target and a second long drag back.
+            ln = (sx * sx + sy * sy) ** 0.5
+            if ln < 80:
+                ux, uy = (sx / ln, sy / ln) if ln else (0.0, 1.0)
+                ax, ay = sx + ux * 90, sy + uy * 90
+                d1x, d1y, _ = self._drag(270 + ax / 2, 440 + ay / 2, 270 - ax / 2, 440 - ay / 2)
+                d2x, d2y, _ = self._drag(270 - ux * 45, 440 - uy * 45, 270 + ux * 45, 440 + uy * 45)
+                dx, dy = d1x + d2x, d1y + d2y
+            else:
+                dx, dy, _ = self._drag(270 + sx / 2, 440 + sy / 2, 270 - sx / 2, 440 - sy / 2)
             if abs(dx) < 3 and abs(dy) < 3:
                 break
             mx -= dx
@@ -5037,10 +5291,118 @@ class CityNav:
 
     def goto(self, mapx, mapy):
         """Bring the map point to the middle of the view. -> its screen position."""
+        if self.absolute:
+            self.goto_abs(mapx, mapy)
+            return mapx - self.cx, mapy - self.cy
         x, y, w, h = CITY_VIEW
         want_x, want_y = mapx - (x + w / 2), mapy - (y + h / 2)
         self.pan(want_x - self.cx, want_y - self.cy)
+        for _ in range(3):                                   # the city is a diamond: near a corner the map will not slide
+            rx, ry = want_x - self.cx, want_y - self.cy      # sideways until you have gone down (or up) far enough,
+            if abs(rx) < 40 and abs(ry) < 40:                # so do the other direction first, then come back
+                break
+            if abs(ry) >= 25:
+                self.pan(0, ry)
+            self.pan(want_x - self.cx, 0)
+            self.pan(want_x - self.cx, want_y - self.cy)
         return mapx - self.cx, mapy - self.cy
+
+
+_CITY_PIC = {}
+SAFE_TAP_AREA = (95, 215, 335, 470)                        # x, y, w, h of the screen where a tap can only hit the city (emulator px)
+SHRINE_LABEL_IN_PICTURE = (1372.2, 576.9)                    # the Shrine label in the whole-city picture (emulator px); the square offsets count from here
+
+
+def city_picture():
+    """The whole-city picture (grey, emulator px) used to find the camera. -> array or None."""
+    if "g" not in _CITY_PIC:
+        g = None
+        for base in (RES / "city_map", Path(__file__).parent / "city_map", USER / "city_map", USER / "templates", RES / "templates", Path(__file__).parent):
+            f = base / "city_whole.png"
+            if f.exists():
+                g = cv2.imread(str(f), cv2.IMREAD_GRAYSCALE)
+                if g is not None:
+                    break
+        _CITY_PIC["g"] = g
+    return _CITY_PIC["g"]
+
+
+def locate_in_city(shot, min_score=0.55):
+    """Where is the camera? Match the middle of the screen against the whole-city picture.
+    -> (x, y, score): the picture coordinates of screen point (0, 0), or None."""
+    g = city_picture()
+    if g is None:
+        return None
+    t = cv2.cvtColor(shot[250:730, 60:440], cv2.COLOR_BGR2GRAY)     # the lower middle: the sky, clouds and top bubbles change, the buildings do not
+    if float(t.std()) < 12:                                          # a black / blank screen (loading, window in the way): nothing to match
+        return None
+    res = cv2.matchTemplate(g, t, cv2.TM_CCOEFF_NORMED)
+    _, mv, _, ml = cv2.minMaxLoc(res)
+    if mv < min_score:
+        return None
+    r2 = res.copy()                                          # a second, different place that matches almost as well = lawns / walls look alike: do not trust
+    r2[max(0, ml[1] - 60):ml[1] + 60, max(0, ml[0] - 60):ml[0] + 60] = -1
+    second = float(r2.max())
+    if mv < 0.88 and mv - second < 0.04:
+        return None
+    return ml[0] - 60, ml[1] - 250, float(mv)
+
+
+def ring_label_free(shot, centre=(270, 450)):
+    """Read the text the game prints under the tapped building, whatever it says (no list of names is used). Takes the
+    text phrase nearest to the middle of the screen. -> (name, x, y) or None."""
+    best = None
+    for text, ws in ocr_lines(shot[120:760, 40:500]):
+        ws = sorted(ws, key=lambda w: w[1])
+        group = []
+        def flush():
+            nonlocal best
+            if not group:
+                return
+            txt = " ".join(w[0] for w in group).strip(" .,:;|-_*")
+            if len(txt) >= 4 and re.fullmatch(r"[A-Za-z' ]+", txt) and txt.lower() not in ("lv", "level", "vip", "i"):
+                gx = sum(w[1] for w in group) / len(group) + 40
+                gy = sum(w[2] for w in group) / len(group) + 120
+                d = (gx - centre[0]) ** 2 + (gy - centre[1]) ** 2
+                if d < 220 ** 2 and (best is None or d < best[0]):
+                    best = (d, txt, int(gx), int(gy))
+        last = None
+        for w in ws:
+            if last is not None and w[1] - last[1] > 90:
+                flush()
+                group = []
+            group.append(w)
+            last = w
+        flush()
+    if not best:
+        return None
+    txt, gx, gy = best[1], best[2], best[3]
+    try:                                                    # read the label line again, bigger: long names ("Council of State") lose words in the first pass
+        y0, y1 = max(0, gy - 17), min(shot.shape[0], gy + 17)
+        x0, x1 = max(0, gx - 130), min(shot.shape[1], gx + 130)
+        if True:
+            raise ValueError                                # bigger re-read added junk from the ring icons: off
+        big = cv2.resize(shot[y0:y1, x0:x1], None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+        for t2, ws2 in ocr_lines(big):
+            ws2 = sorted(ws2, key=lambda w: w[1])
+            t3 = " ".join(w[0] for w in ws2).strip(" .,:;|-_*")
+            if re.fullmatch(r"[A-Za-z' ]+", t3) and len(t3) > len(txt) and txt.lower().split()[-1] in t3.lower():
+                cx = sum(w[1] for w in ws2) / len(ws2) / 2.5 + x0
+                txt, gx = t3, int(cx)
+                break
+    except Exception:
+        pass
+    nm = match_building(txt, cutoff=0.85)                   # only to repair an OCR typo of a name the bot already spells
+    if not nm:                                              # a long name read only in part ("Vict", "of State"): finish it from the names the bot knows
+        tw = [w.lower() for w in txt.split() if len(w) >= 2]
+        hits = []
+        for known in BUILDING_NAMES:
+            kw = [w.lower() for w in known.split()]
+            if tw and all(any(k.startswith(w) or w.startswith(k) for k in kw) for w in tw) and sum(len(w) for w in tw) >= 4:
+                hits.append(known)
+        if len(hits) == 1:
+            nm = BUILDING_ALIASES.get(hits[0], hits[0])
+    return (nm or txt), gx, gy
 
 
 TPL_W, TPL_H = 110, 80                                       # size of the saved picture of a building
@@ -5217,7 +5579,7 @@ def look_with_names(dev, stop, nav, shots=3):
     nav.last_rest_labels = [(n, int(sx - dxh), int(sy - dyh)) for n, sx, sy in best_labels]
     _nap(stop, 0.35, 0.5)                                   # let the map settle, then keep the camera position right
     after = dev.screenshot()
-    dxa, dya = safe_shift(rest, after, 0, -10)
+    dxa, dya = safe_shift(rest, after, 0, -52 if held else -10)
     nav.cx -= dxa
     nav.cy -= dya
     return labels, best, rest
@@ -5250,22 +5612,17 @@ def capture_city_frames(dev, cfg, log, stop, out_dir):
         log(f"[*] City capture: frame {n}: {len(labels)} names ({', '.join(a for a, _, _ in labels)})")
         n += 1
 
-    rows, direction = 0, 1
-    while rows < 16 and not stop.is_set():
-        for i in range(24):
-            if stop.is_set():
-                break
-            snap(f"row{rows}")
-            mx, _ = nav.pan(direction * 240, 0)
-            if abs(mx) < 10:
-                break
-        snap(f"row{rows}-end")
-        _, my = nav.pan(0, 480)
-        rows += 1
-        log(f"[*] City capture: row {rows}, {n} frames")
-        if abs(my) < 20:
+    xs = [260, 500, 740, 980, 1220, 1460]
+    ys = [280, 560, 840]
+    order = []
+    for r, y in enumerate(ys):                                # serpentine over the city, going to each stop (goto copes with the diamond shape)
+        order += [(x, y) for x in (xs if r % 2 == 0 else xs[::-1])]
+    for (x, y) in order:
+        if stop.is_set():
             break
-        direction = -direction
+        nav.goto(x, y)
+        log(f"[*] City capture: stop {n + 1}/{len(order)} wanted {x},{y} camera {round(nav.cx)},{round(nav.cy)}")
+        snap(f"{x},{y}")
     dev.guard_city = False
     (out / "meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     log(f"[+] City capture: {n} frames saved to {out}")
@@ -5356,8 +5713,12 @@ def read_building_level(dev, cfg, log, stop, pos):
 
 
 def scan_city_taps(dev, cfg, log, stop, progress=None):
-    """Test run: for every building on the saved city map go to it (saved picture), tap it and read its name and level
-    from the Detail page. Writes 'level' next to each building in the city map. Buildings that are not there are left out."""
+    """Test run: the numbered squares of the default city map replace the old per-building taps."""
+    return scan_squares(dev, cfg, log, stop, progress=progress)
+
+
+def scan_city_taps_old(dev, cfg, log, stop, progress=None):
+    """(old) for every building on the saved city map go to it (saved picture), tap it and read its name and level."""
     serial = dev.serial if hasattr(dev, "serial") else "default"
     data = load_city()
     items = (data.get(serial) or {}).get("items", {})
@@ -5650,6 +6011,50 @@ def market_match(img, slot, tpl_name, threshold):
     return float(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED).max())
 
 
+def _icon_hash(img):
+    g = cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), (9, 8), interpolation=cv2.INTER_AREA).astype("int16")
+    bits = (g[:, 1:] > g[:, :-1]).flatten()
+    return int("".join("1" if b else "0" for b in bits), 2)
+
+
+def run_market_capture(dev, cfg, log, stop):
+    """The Market's ring menu is open: open the Black Market and save a picture of every item on sale into the item
+    library (USER/market_library). Pictures already in the library (same look) are not saved again. Nothing is bought
+    and nothing is refreshed."""
+    img = dev.screenshot()
+    if not market_on_screen(img):
+        p = find_text(img, ["Black Market", "Black"], region=(0, 150, 400, 500), cutoff=0.7)
+        if not p:
+            raise RuntimeError("the Black Market icon is not in the Market's menu")
+        dev.tap(p[0], p[1] - 40)
+        _nap(stop, 2.2, 3.0)
+        img = dev.screenshot()
+    if not market_on_screen(img):
+        raise RuntimeError("the Black Market did not open")
+    lib = USER / "market_library"
+    lib.mkdir(parents=True, exist_ok=True)
+    known = []
+    for f in lib.glob("*.png"):
+        t = cv2.imread(str(f))
+        if t is not None:
+            known.append(_icon_hash(t))
+    new = 0
+    slots = market_slots(img)
+    for i, sl in enumerate(slots, 1):
+        x, y, w, h = sl["icon"]
+        crop = img[y:y + h, x:x + w]
+        if crop.size == 0:
+            continue
+        hh = _icon_hash(crop)
+        if any(bin(hh ^ k).count("1") <= 5 for k in known):
+            continue
+        known.append(hh)
+        cv2.imwrite(str(lib / f"item_{int(time.time())}_{i}.png"), crop)
+        new += 1
+    log(f"[+]  Black Market: {len(slots)} item(s) on sale, {new} new picture(s) saved to the library ({len(known)} in total)")
+    cv2.imwrite(str(USER / "debug" / "black_market.png"), img)
+
+
 def run_market(dev, cfg, log, stop):
     """On the Black Market screen: buy the wanted items (gems / resources / both), refresh the shop as set."""
     wanted = market_wanted(cfg)
@@ -5778,6 +6183,25 @@ def run_step(dev, cfg, log, stop, step):
                 .replace("{boss_level}", str(b.get("level") or "")).replace("{boss_name}", b["name"]))
     cmd, _, arg = step.partition(" ")
     cmd, arg = cmd.lower(), arg.strip()
+    if cmd == "ring_name":
+        shot = dev.screenshot()
+        try:
+            cv2.imwrite(str(USER / "debug" / f"ring_{(arg or 'x').replace(' ', '_')}.png"), shot)
+        except Exception:
+            pass
+        got = None
+        try:
+            import difflib
+            hits = []
+            for t, _ in ocr_lines(shot[400:620, 110:430], 3.0):
+                m = difflib.get_close_matches(t.strip(), list(BUILDING_NAMES), n=1, cutoff=0.7)
+                if m:
+                    hits.append(m[0])
+            got = (", ".join(dict.fromkeys(hits)),) if hits else ring_label_free(shot)
+        except Exception:
+            got = ring_label_free(shot)
+        log(f"[i]   the menu that opened is called: {got[0] if got else 'no name read'}" + (f" (expected {arg})" if arg else ""))
+        return
     if cmd == "market":
         run_market(dev, cfg, log, stop)
         return
@@ -5786,6 +6210,15 @@ def run_step(dev, cfg, log, stop, step):
         return
     if cmd == "champions":
         run_champions(dev, cfg, log, stop)
+        return
+    if cmd == "tavern_catalog":
+        run_tavern_catalog(dev, cfg, log, stop)
+        return
+    if cmd == "market_capture":
+        run_market_capture(dev, cfg, log, stop)
+        return
+    if cmd == "wheel":
+        run_wheel(dev, cfg, log, stop)
         return
     if cmd == "text":
         dev.text(arg)
@@ -5867,19 +6300,61 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(p[0], p[1] - 38)                           # the icon sits just above its caption
         return True
+    if kind == "building" and not nav_state.get("picture_bad") and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
+        pitems = picture_items(dev)                          # the camera is found by the whole-city picture; positions come from the mapper or the built-in default
+        pkeys = []
+        for nm in str(name).lower().split("+"):                # "Keep+Tavern" = visit the Keep, then the Tavern
+            want = nm.strip()
+            pkeys += sorted(k for k in pitems if k.split("#")[0].lower() == want.split("#")[0] and (("#" not in want) or k.lower() == want))[:int(task.get("count", 1) or 1)]
+        nav = nav_state.get("anav")
+        if nav is None:
+            nav = CityNav(dev, stop, log)
+            nav.absolute = True
+            nav_state["anav"] = nav
+        done_any = False
+        for k in pkeys:
+            tx, ty = pitems[k]
+            log(f"[*] Going to {k} by the city picture")
+            nav.seen_city = False
+            nav.goto(tx, ty)
+            if not nav.seen_city:                           # this city does not look like the picture: use the old way for this run
+                log("[i] The whole-city picture does not match this screen - using the older way to find the building")
+                nav_state["picture_bad"] = True
+                break
+            px, py = tx - nav.cx, ty - nav.cy
+            x0, y0, w, h = SAFE_TAP_AREA
+            if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+                log(f"[!] Task '{task.get('name')}': {k} could not be brought into view (it is at {round(px)},{round(py)}) - skipped")
+                continue
+            if find_detail_icon(dev.screenshot()):          # a ring menu is still open from before: tapping the building would close it
+                close_ring(dev, stop, (px, py + 35))
+            dev.tap(int(px), int(py + float(task.get("tap_dy", 0))))
+            _nap(stop, 1.0, 1.4)
+            for st in task.get("steps", []):
+                run_step(dev, cfg, log, stop, st)
+            leave_to_city(dev, cfg, stop)
+            if find_detail_icon(dev.screenshot()):          # leave the city clean: close the ring menu the task opened
+                close_ring(dev, stop, (px, py + 35))
+            done_any = True
+        if done_any or not nav_state.get("picture_bad"):
+            return None if done_any else False
     if kind == "building":
-        items = (load_city().get(dev.serial if hasattr(dev, "serial") else "default") or {}).get("items", {})
+        items = city_map_items(dev)
         keys = sorted(k for k in items if k.split("#")[0].lower() == name.lower().split("#")[0]
                       and (("#" not in name) or k.lower() == name.lower()))
         if not keys:
             log(f"[!] Task '{task.get('name')}': '{name}' is not on the city map. {CITY_MAP_HELP}")
             return False
+        if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
+            zoom_out_city(dev, stop, log)
         nav = nav_state.get("nav") or CityNav(dev, stop, log)
         if not nav_state.get("nav"):
             nav.to_origin()
             nav_state["nav"] = nav
         for k in keys[:int(task.get("count", 1) or 1)]:
             pos = find_building(dev, stop, log, nav, k.split("#")[0], items[k], items, k)
+            if not pos and k.split("#")[0] == "Keep":
+                pos = calibrate_keep(dev, stop, log, nav)
             if not pos:
                 log(f"[!] Task '{task.get('name')}': {k} not found on screen - skipped")
                 continue
@@ -5889,6 +6364,22 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 run_step(dev, cfg, log, stop, st)
             leave_to_city(dev, cfg, stop)
         return None                                        # steps already ran for each building
+    if kind == "square":                                   # "square:1" = numbered square 1 (Keep) of the default city map
+        nav = nav_state.get("nav") or CityNav(dev, stop, log)
+        nav_state["nav"] = nav
+        if not nav_state.get("shrine"):
+            nav_state["shrine"] = locate_shrine(dev, stop, log, nav)
+        if not nav_state.get("shrine"):
+            return False
+        try:
+            nums = [int(v) for v in name.replace(";", ",").split(",") if v.strip()]
+        except ValueError:
+            log(f"[!] Task '{task.get('name')}': square target must be a number, e.g. square:1")
+            return False
+        for n in nums:
+            open_square(dev, cfg, log, stop, nav, nav_state["shrine"], n)
+            leave_to_city(dev, cfg, stop)
+        return None
     log(f"[!] Task '{task.get('name')}': target must look like icon:Mail, building:Quarry or xy:100,200")
     return False
 
@@ -6217,7 +6708,9 @@ def ch_name(img):
 
 
 def ch_on_page(img):
-    return bool(find_text(img, ["Champion"], region=(150, 20, 240, 80), cutoff=0.75))
+    if find_text(img, ["Champion"], region=(150, 20, 240, 80), cutoff=0.6):
+        return True
+    return ch_name(img) is not None                        # the champion's name banner only exists on this page
 
 
 def ch_inactive(img):
@@ -6243,6 +6736,92 @@ def ch_greet_label(img):
     if m:
         out["wait"] = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
     return out
+
+
+WHEEL_BTN = {100: (95, 924), 10: (269, 924), 1: (443, 924)}          # Spin buttons at the bottom of the Wheel of Fortune page
+WHEEL_COST = {100: 9000, 10: 900, 1: 100}
+WHEEL_COINS_BOX = (234, 128, 190, 48)
+WHEEL_ICON = (141, 328)                                              # "Wheel of Fortune" in the Tavern's ring menu
+
+
+def wheel_coins(img):
+    x, y, w, h = WHEEL_COINS_BOX
+    txt = " ".join(t for t, _ in ocr_lines(img[y:y + h, x:x + w], 3.0))
+    d = re.sub(r"[^0-9]", "", txt)
+    return int(d) if d else None
+
+
+def wheel_on_page(img):
+    return bool(find_text(img, ["Wheel of Fortune"], region=(100, 5, 340, 60), cutoff=0.7))
+
+
+def wheel_reward_panel(img):
+    return bool(find_text(img, ["Congratulations", "Continue"], region=(30, 150, 480, 650), cutoff=0.7))
+
+
+def run_wheel(dev, cfg, log, stop):
+    """Tavern's ring menu is open: open the Wheel of Fortune and spin with the button the user picked until the number
+    of spins is done, the coins run out (or fall to the reserve to keep) or something unexpected is on the screen.
+    The reward panel is closed by tapping its Continue / empty ground. Only the three Spin buttons are ever pressed."""
+    conf = {**{"button": 1, "spins": 10, "reserve": 0}, **(cfg.get("wheel") or {})}
+    big = int(conf["button"]) if int(conf["button"]) in WHEEL_BTN else 100
+    target = int(conf["spins"] or 0)                       # 0 = until the coins are used up
+    reserve = int(conf["reserve"] or 0)
+    shot = dev.screenshot()
+    if not wheel_on_page(shot):
+        p = find_text(shot, ["Wheel of Fortune", "Wheel of", "Fortune"], region=(0, 250, 300, 300), cutoff=0.7)
+        dev.tap(p[0], p[1] - 40) if p else dev.tap(*WHEEL_ICON)
+        _nap(stop, 2.2, 2.8)
+        shot = dev.screenshot()
+        if not wheel_on_page(shot):
+            raise RuntimeError("the Wheel of Fortune page did not open")
+    done = 0
+    fails = 0
+    while not stop.is_set():
+        shot = dev.screenshot()
+        if wheel_reward_panel(shot):                       # a reward panel is still up
+            dev.tap(270, 754)
+            _nap(stop, 0.8, 1.1)
+            continue
+        if not wheel_on_page(shot):
+            log("[!]  Wheel: not on the Wheel of Fortune page any more - stopped")
+            break
+        coins = wheel_coins(shot)
+        if coins is None:
+            log("[!]  Wheel: could not read the coins - stopped")
+            break
+        left = (target - done) if target else None
+        if left is not None and left <= 0:
+            log(f"[+]  Wheel: {done} spin(s) done")
+            break
+        pick = next((b for b in (100, 10, 1) if b <= big and (left is None or b <= left) and coins - WHEEL_COST[b] >= reserve), None)
+        if pick is None:
+            log(f"[+]  Wheel: stopped after {done} spin(s) - {coins:,} coins left (cost/keep-at-least {reserve:,})")
+            break
+        dev.tap(*WHEEL_BTN[pick])
+        shown = False
+        for _ in range(14):
+            _nap(stop, 0.5, 0.7)
+            if wheel_reward_panel(dev.screenshot()):
+                shown = True
+                break
+        if not shown:
+            fails += 1
+            log(f"[i]   Wheel: no reward panel after the {pick}-spin button ({fails}/3)")
+            if fails >= 3:
+                break
+            continue
+        fails = 0
+        done += pick
+        log(f"[i]   Wheel: {done} spin(s) done ({coins - WHEEL_COST[pick]:,} coins left)")
+        for _ in range(4):                                 # close the panel: Continue, else empty ground
+            dev.tap(270, 754)
+            _nap(stop, 0.8, 1.1)
+            if not wheel_reward_panel(dev.screenshot()):
+                break
+            dev.tap(270, 110)
+            _nap(stop, 0.6, 0.9)
+    return done
 
 
 def ch_snap(img, tag):
@@ -6555,8 +7134,437 @@ def city_tasks_due(cfg, last_run, serial=""):
 CITY_MAP_HELP = "The city map for this emulator is missing. Open the City page and run the City Mapper first - every task that uses a building (Black Market, Tavern, troops, resources...) needs it."
 
 
+# Buildings that sit at the same place in every city. The pixel position on the map drifts a little between runs
+# (and between accounts), so it is only a first guess: calibrate_keep() finds the Tavern (a fixed building) and goes
+# from there to the Keep, then saves the real Keep position into this emulator's city map once, for good.
+FIXED_BUILDINGS = {"Keep#1": [1141, 609]}
+ANCHOR_TO_KEEP = {"Tavern": (90, -135), "Shrine": (313, -139)}   # Keep label minus anchor label (emulator pixels; measured on Kiravik's city picture and cross-checked on the PC client view)
+# Fixed buildings: label position minus the Shrine label (emulator pixels). The Shrine, Tavern and Keep never move, so any one of them gives the rest.
+FIXED_OFFSETS_FROM_SHRINE = {"Victory Column": [-681, -363], "Council of State": [74, -439], "Ideal Land": [324, -449], "Dragon Cliff": [651, -447], "Arsenal": [-91, -352], "Triumphal Arch": [219, -357], "Academy": [65, -272], "Military Academy": [492, -267], "Research Factory": [-451, -182], "Barracks": [-205, -178], "Wisdom Dome": [681, -159], "Warehouse": [-19, -133], "Keep": [314, -139], "Art Hall": [-628, -101], "Prison": [-381, -88], "Holy Palace": [528, -73], "Tavern": [223, -3], "Trap Factory": [-203, -6], "Shrine": [0, 0], "Archer Camp": [657, 27], "Pasture": [-808, -10], "Stables": [-577, 51], "Market": [-425, 132], "Workshop": [89, 141], "War Hall": [405, 126], "Embassy": [231, 211], "Hospital": [-72, 311], "Rally Spot": [644, 234], "Walls": [-406, 291], "Battlefield": [-701, 357], "Bounty Cave": [-471, 455]}
+# Squares the bot does not need for now (owner, 20 Oct): Bounty Cave, Wonder, Watchtower, Archer Tower 1 and 2. Parked for a future build; ask for them with numbers (square:N).
+PARKED_SQUARES = {31, 32, 34, 35, 36}
+UNIQUE_BUILDINGS = {k.lower() for k in FIXED_OFFSETS_FROM_SHRINE}                # one of each in the city: a second read of the same name means the camera was somewhere else
+
+# Numbered squares of the default city map (city_map/city_map_default.png): number -> [name, centre of the square minus the Shrine label, emulator pixels]. 1 = Keep.
+CITY_SQUARES = {int(k): v for k, v in {"1": ["Keep", 319, -218], "2": ["Tavern", 232, -27], "3": ["Shrine", 30, -29], "4": ["Victory Column", -684, -334], "5": ["Council of State", 73, -452], "6": ["Ideal Land", 291, -487], "7": ["Dragon Cliff", 704, -430], "8": ["Arsenal", -85, -379], "9": ["Triumphal Arch", 222, -388], "10": ["Academy", 65, -302], "11": ["Military Academy", 502, -280], "12": ["Research Factory", -443, -204], "13": ["Barracks", -206, -199], "14": ["Wisdom Dome", 682, -177], "15": ["Warehouse", -21, -172], "16": ["Art Hall", -655, -123], "17": ["Prison", -378, -118], "18": ["Holy Palace", 515, -103], "19": ["Trap Factory", -210, -27], "20": ["Archer Camp", 658, 13], "21": ["Pasture", -810, -29], "22": ["Stables", -581, 52], "23": ["Market", -432, 116], "24": ["Workshop", 80, 111], "25": ["War Hall", 424, 103], "26": ["Embassy", 240, 190], "27": ["Hospital", -68, 280], "28": ["Rally Spot", 653, 221], "29": ["Walls", -473, 290], "30": ["Battlefield", -704, 359], "31": ["Bounty Cave", -473, 475], "32": ["Wonder", -999, -208], "33": ["Subordinate City", -1058, -523], "34": ["Watchtower", -1160, -88], "35": ["Archer Tower 1", -1085, 673], "36": ["Archer Tower 2", -990, 731], "37": ["Army Camp", 535, 421]}.items()}
+
+CALIB_STOPS = [(1141, 609), (1312, 588), (1000, 800), (1400, 800), (700, 650), (1000, 450), (1400, 450), (600, 900), (1450, 700)]
+
+
+DEFAULT_PICTURE_BUILDINGS = {"keep", "tavern"}              # buildings every city has at the same place: used without any mapping
+
+
+def picture_items(dev):
+    """Building positions in the whole-city picture frame: what the square mapper saved for this emulator, and for every
+    building it did not save the built-in default (the numbered squares). -> {"Keep#1": [x, y], ...} or None when the
+    city picture is not available."""
+    if city_picture() is None:
+        return None
+    ent = load_city().get(getattr(dev, "serial", "default")) or {}
+    items = {}
+    if ent.get("frame") == "picture":
+        items.update({k: list(v) for k, v in ent.get("items", {}).items()})
+    have = {k.split("#")[0].lower() for k in items}
+    for n, (nm, ox, oy) in CITY_SQUARES.items():
+        if n in PARKED_SQUARES:
+            continue
+        base = re.sub(r"\s*\d+$", "", nm)
+        if base.lower() in have or base.lower() not in DEFAULT_PICTURE_BUILDINGS:
+            continue
+        items[f"{base}#1"] = [round(SHRINE_LABEL_IN_PICTURE[0] + ox), round(SHRINE_LABEL_IN_PICTURE[1] + oy)]
+    return items
+
+
 def city_map_items(dev):
-    return (load_city().get(getattr(dev, "serial", "default")) or {}).get("items", {})
+    items = dict((load_city().get(getattr(dev, "serial", "default")) or {}).get("items", {}))
+    for k, v in FIXED_BUILDINGS.items():
+        items.setdefault(k, list(v))
+    return items
+
+
+def calibrate_keep(dev, stop, log, nav):
+    """The Keep is not where the map says: sweep the city for the Keep or a fixed neighbour (Tavern), walk from it to
+    the Keep, confirm the Keep's name label there and save its position. -> (screen x, screen y) or None."""
+    serial = dev.serial if hasattr(dev, "serial") else "default"
+    log("[*] Keep: calibrating the city map from the Tavern (one time)")
+    nav.to_origin()
+    for sx, sy in CALIB_STOPS:
+        if stop.is_set():
+            return None
+        nav.goto(sx, sy)
+        labels, _, _ = look_with_names(dev, stop, nav)
+        seen = ", ".join(f"{n}({mx},{my})" for n, mx, my in labels)
+        log(f"[i] Keep calibration: stop {sx},{sy} camera {round(nav.cx)},{round(nav.cy)} - names read: {seen or 'none'}")
+        est = None
+        for n, mx, my in labels:
+            if n == "Keep":
+                est = (mx, my)
+                break
+        if est is None:
+            for n, mx, my in labels:
+                if n in ANCHOR_TO_KEEP:
+                    est = (mx + ANCHOR_TO_KEEP[n][0], my + ANCHOR_TO_KEEP[n][1])
+                    break
+        if est is None:
+            continue
+        nav.goto(*est)
+        labels, _, _ = look_with_names(dev, stop, nav)
+        keeps = [(mx, my) for n, mx, my in labels if n == "Keep" and abs(mx - est[0]) < 150 and abs(my - est[1]) < 150]
+        if not keeps:
+            log("[i] Keep calibration: no Keep label at the expected place yet - looking on")
+            continue
+        mx, my = min(keeps, key=lambda c: (c[0] - est[0]) ** 2 + (c[1] - est[1]) ** 2)
+        data = load_city()
+        data.setdefault(serial, {}).setdefault("items", {})["Keep#1"] = [round(mx), round(my)]
+        save_city(data)
+        log(f"[+] Keep found and saved on the city map at {round(mx)},{round(my)}")
+        return mx - nav.cx, my - nav.cy
+    log("[!] Keep calibration: could not find the Keep or the Tavern")
+    return None
+
+
+def locate_shrine(dev, stop, log, nav):
+    """Find the Shrine's place on the city map by reading the name label of ANY fixed building (they all sit at a fixed
+    distance from the Shrine). -> (map x, map y) of the Shrine label, or None."""
+    nav.to_origin()
+    for sx, sy in CALIB_STOPS:
+        if stop.is_set():
+            return None
+        nav.goto(sx, sy)
+        labels, _, _ = look_with_names(dev, stop, nav)
+        for n, mx, my in labels:
+            off = FIXED_OFFSETS_FROM_SHRINE.get(BUILDING_ALIASES.get(n, n))
+            if off:
+                log(f"[i] Squares: anchor '{n}' read at {mx},{my}")
+                return mx - off[0], my - off[1]
+    log("[!] Squares: no fixed building name could be read - cannot place the squares")
+    return None
+
+
+_DETAIL_TPL = {}
+# The yellow "i" (Detail) icon of the building ring menu, cut from Kiravik (48x48 px, emulator size). It looks the same on every building.
+DETAIL_ICON_B64 = "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"
+
+
+def detail_template():
+    """The i icon picture: the one learned on this PC (templates/detail_icon.png) wins over the built-in one."""
+    if "t" not in _DETAIL_TPL:
+        import base64
+        t = None
+        p = template_path("detail_icon")
+        if p:
+            t = cv2.imread(str(p))
+        if t is None:
+            t = cv2.imdecode(np.frombuffer(base64.b64decode(DETAIL_ICON_B64), np.uint8), cv2.IMREAD_COLOR)
+        _DETAIL_TPL["t"] = t
+    return _DETAIL_TPL["t"]
+
+
+def find_detail_icon(shot, thr=0.8):
+    """Look for the i (Detail) icon of an open ring menu by its PICTURE. -> (x, y, score) or None."""
+    t = detail_template()
+    th, tw = t.shape[:2]
+    area = shot[100:800, 0:540]
+    if area.shape[0] < th or area.shape[1] < tw:
+        return None
+    res = cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED)
+    _, mv, _, ml = cv2.minMaxLoc(res)
+    if mv < thr:
+        return None
+    return ml[0] + tw // 2, ml[1] + 100 + th // 2, float(mv)
+
+
+def ring_label(shot, expected, pos):
+    """The building name the game prints under a tapped building (ring menu open). -> (name, x, y) of the best match or None.
+    Prefers the expected building; otherwise the name nearest to where we tapped."""
+    cands = []
+    for text, ws in ocr_lines(shot[120:760, 40:500]):
+        for n in (1, 2, 3):
+            for i in range(len(ws) - n + 1):
+                seg = ws[i:i + n]
+                nm = match_building(" ".join(w[0] for w in seg))
+                if nm:
+                    cands.append((nm, int(sum(w[1] for w in seg) / n) + 40, int(sum(w[2] for w in seg) / n) + 120))
+    for text, ws in ocr_lines(shot[120:760, 40:500]):          # a long name read only in part ("Arch" of "Triumphal Arch") counts for the expected building
+        for w in ws:
+            if len(w[0]) >= 4 and str(expected).count(" ") and w[0].lower().strip(".,:;*") in str(expected).lower().split():
+                cands.append((str(expected), int(w[1]) + 40, int(w[2]) + 120))
+    if not cands:
+        return None
+    norm = lambda t: BUILDING_ALIASES.get(t, t).lower().replace(" ", "")
+    exp = [c for c in cands if norm(c[0]) == norm(expected) or str(expected).lower().startswith(c[0].lower())]
+    pool = exp or cands
+    return min(pool, key=lambda c: (c[1] - pos[0]) ** 2 + (c[2] - pos[1]) ** 2)
+
+
+def close_ring(dev, stop, label_pos):
+    """Close the open ring menu by tapping the same building again (the game closes it). Never Back: on the city screen
+    Back asks to quit the game. -> True when the ring is gone."""
+    lx = min(max(label_pos[0], 110), 400)                    # never aim at the icon columns on the screen edges (Login Gifts, Quests ...)
+    spots = [(lx, label_pos[1] - 35), (270, 430), (lx, label_pos[1] - 60)]
+    for sp in spots:
+        if not find_detail_icon(dev.screenshot()):
+            return True
+        dev.tap(int(sp[0]), int(sp[1]))
+        for _ in range(3):                                   # the game zooms back out after the ring closes: give it time before tapping again
+            _nap(stop, 0.5, 0.7)
+            if not find_detail_icon(dev.screenshot()):
+                return True
+    return not find_detail_icon(dev.screenshot())
+
+
+def read_square(dev, cfg, log, stop, pos, expected="", levels=False):
+    """Tap the building at pos and read its name from the label the game prints under it (the ring menu is open; its i
+    icon, found by picture, is the proof that the menu opened). With levels=True also press the i icon, More Information
+    and read "Name Level N". Every step first checks that the screen it expects is really there.
+    -> (name, level, (label x, label y)) or None. In the quick mode the ring menu is left open (see close_ring)."""
+    nap = lambda lo, hi=None: _nap(stop, lo, hi)
+    ic = ring = lab = None
+    for attempt in (1, 2):                                  # a bubble over the building can eat the first tap
+        dev.tap(int(pos[0]), int(pos[1]))
+        for _ in range(6):                                  # the camera glides to the building first: wait for the ring menu (up to ~4 s)
+            nap(0.6, 0.8)
+            ring = dev.screenshot()
+            ic = find_detail_icon(ring)
+            if ic or stop.is_set():
+                break
+        if ic:
+            time.sleep(0.4)                                 # let the name label finish drawing
+            ring = dev.screenshot()
+            ic = find_detail_icon(ring) or ic
+            break
+    if not ic:
+        log("[!]   no ring menu after tapping - nothing opened")
+        return None
+    known_names = {n.lower() for n in BUILDING_NAMES} | {BUILDING_ALIASES.get(n, n).lower() for n in BUILDING_NAMES}
+
+    def _read(img):                                         # a building name the game prints, spelled the way the bot knows it
+        r = ring_label(img, "", pos)
+        if r:
+            return r
+        r = ring_label_free(img)
+        if r and r[0].lower() in known_names:
+            return r
+        if r:
+            log(f"[i]   text on the ring that is not a building name: '{r[0]}' - left blank (map this square by hand)")
+        return None
+    lab = _read(ring)
+    for _ in range(3):                                      # the label may still be drawing: look again
+        if lab or stop.is_set():
+            break
+        nap(0.5, 0.7)
+        ring = dev.screenshot()
+        lab = _read(ring)
+    if not levels and lab:
+        return lab[0], 0, (lab[1], lab[2])
+    if not lab:
+        log("[i]   name on the ring not clear - pressing the i icon to read it on the Detail page")
+    dev.tap(ic[0], ic[1])
+    nap(1.1, 1.5)
+    shot = dev.screenshot()
+    result = None
+    more = find_text(shot, ["More Information"], region=(60, 780, 420, 150))
+    if more:
+        dev.tap(*more)
+        nap(0.9, 1.3)
+        shot = dev.screenshot()
+        for text, _ in ocr_lines(shot[130:210, 60:480]):
+            m = re.search(r"([A-Za-z' ]+?)\s+Level\s*(\d+)", text)
+            if m:
+                result = (m.group(1).strip(), int(m.group(2)))
+                break
+            nm = match_building(text)                       # no level in the header (Triumphal Arch...)
+            if nm:
+                result = (nm, 0)
+                break
+    else:                                                    # Detail page without More Information: read the name on the picture
+        for text, _ in ocr_lines(shot[430:520, 100:440]):
+            nm = match_building(text)
+            if nm:
+                result = (nm, 0)
+                break
+    try:                                                     # learn this PC's real i icon once
+        if result and not template_path("detail_icon"):
+            save_template("detail_icon", ring[ic[1] - 24:ic[1] + 24, ic[0] - 24:ic[0] + 24])
+    except Exception:
+        pass
+    for _ in range(4):                                       # close the panel / Detail page, back to the city
+        if screen_state(dev.screenshot(), cfg) == "city":
+            break
+        dev.back()
+        nap(0.7, 1.0)
+    return (result[0], result[1], None) if result else None
+
+
+def open_square(dev, cfg, log, stop, nav, shrine, number):
+    """Go to numbered square N of the default city map (by coordinates), tap it and read the building.
+    -> (expected name, read name, level, map x, map y) or None."""
+    sq = CITY_SQUARES.get(int(number))
+    if not sq:
+        log(f"[!] Square {number} does not exist (1-{len(CITY_SQUARES)})")
+        return None
+    name, ox, oy = sq
+    tx, ty = shrine[0] + ox, shrine[1] + oy
+    nav.goto(tx, ty)
+    px, py = tx - nav.cx, ty - nav.cy
+    x0, y0, w, h = CITY_VIEW
+    if nav.absolute:                                         # only tap where nothing but the city is: not the top bar, bubbles or the side icon columns
+        x0, y0, w, h = SAFE_TAP_AREA
+    if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+        log(f"[!] Square {number} ({name}): cannot be brought into the safe tap area (it is at {round(px)},{round(py)} on screen, city edge?) - left blank, map it by hand")
+        return None
+    log(f"[*] Square {number} ({name}): tapping {round(px)},{round(py)}")
+    levels = bool(cfg.get("squares_levels", False))
+    res = read_square(dev, cfg, log, stop, (px, py), name, levels)
+    if res and res[2] and nav.absolute:                      # the camera place is read from the picture each time: only close the ring
+        if not close_ring(dev, stop, res[2]):
+            log("[!]   the ring menu would not close - stopping so nothing is pressed by mistake")
+            stop.set()
+    elif res and res[2]:                                     # the label shows where the building really is on the screen: re-anchor the camera
+        lx, ly = res[2]
+        fo = FIXED_OFFSETS_FROM_SHRINE.get(name)
+        if fo:                                               # the label's own place is known exactly (offset from the Shrine label)
+            nav.cx, nav.cy = shrine[0] + fo[0] - lx, shrine[1] + fo[1] - ly
+        else:
+            nav.cx, nav.cy = tx - lx, ty - (ly - 35)
+        if not close_ring(dev, stop, res[2]):
+            log("[!]   the ring menu would not close - stopping so nothing is pressed by mistake")
+            stop.set()
+    elif levels or res is not None:                          # read on the Detail page (i icon): back out to the city and make sure the ring is gone
+        leave_to_city(dev, cfg, stop)
+        _nap(stop, 0.6, 0.9)
+        if find_detail_icon(dev.screenshot()):
+            close_ring(dev, stop, (270, 465))
+    elif res is None and not levels:
+        leave_to_city(dev, cfg, stop)
+    if not res:
+        log(f"[!] Square {number} ({name}): nothing could be read")
+        return None
+    got = BUILDING_ALIASES.get(res[0], res[0])
+    like = got.lower().replace(" ", "") == BUILDING_ALIASES.get(name, name).lower().replace(" ", "") or name.lower().startswith(got.lower())
+    log(f"[+] Square {number} -> '{res[0]}'" + (f" level {res[1]}" if res[1] else "") + ("" if like else f"  (the default map says {name})"))
+    return name, res[0], res[1], tx, ty, True                # the map is filled with what the game says, not with what we expect
+
+
+def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
+    """Map the city by the numbered squares: go to each square, tap it, read its name and level. Squares that read
+    correctly are saved on this emulator's city map. -> {number: result}"""
+    serial = dev.serial if hasattr(dev, "serial") else "default"
+    dev.arm_guard(cfg, log, stop)
+    dev.guard_city = True
+    t0 = time.time()
+    nav = CityNav(dev, stop, log)
+    order = list(numbers or [n for n in sorted(CITY_SQUARES) if n not in PARKED_SQUARES])
+    got, bad, items, levels = {}, [], {}, {}
+    prog_f = USER / "squares_progress.json"
+    try:                                                     # an unfinished run (stopped, crashed, lost): carry on from where it stopped
+        pst = json.loads(prog_f.read_text(encoding="utf-8")) if prog_f.exists() else {}
+    except Exception:
+        pst = {}
+    mine = pst.get(serial) or {}
+    if not numbers and mine and time.time() - mine.get("t", 0) < 6 * 3600 and mine.get("done"):
+        done_before = set(mine["done"])
+        order = [n for n in order if n not in done_before]
+        try:                                                 # drop saved reads that are not in the done list (a read that was found wrong and cleared)
+            _d = load_city()
+            _e = _d.get(serial) or {}
+            _lv = _e.get("levels", {})
+            _drop = [k for k in list(_e.get("items", {})) if _lv.get(k, {}).get("square") not in done_before]
+            if _drop:
+                for k in _drop:
+                    _e["items"].pop(k, None)
+                    _lv.pop(k, None)
+                save_city(_d)
+        except Exception:
+            pass
+        if order:
+            log(f"[*] Squares: carrying on from the last run - {len(done_before)} squares already read, {len(order)} to go")
+        else:
+            order = [n for n in sorted(CITY_SQUARES) if n not in PARKED_SQUARES]
+            mine = {}
+    done_list = list(mine.get("done", [])) if mine else []
+    wipe = not done_list                                    # a fresh run starts from a blank map; a resumed run keeps what it already read
+    if city_picture() is not None:                           # the camera place comes from the whole-city picture: no slow start, no drifting
+        nav.absolute = True
+        shrine = SHRINE_LABEL_IN_PICTURE
+        log("[i] Squares: finding the camera place by the whole-city picture")
+    else:
+        shrine = locate_shrine(dev, stop, log, nav)
+    if shrine:
+        for i, n in enumerate(order):
+            if stop.is_set():
+                break
+            r = open_square(dev, cfg, log, stop, nav, shrine, n)
+            if not r and not stop.is_set():                  # an ad / pop-up may have covered the city: close it, find our place again, retry once
+                try:
+                    shut = clear_popups(dev, cfg, log, stop, rounds=4)
+                except Exception:
+                    shut = 0
+                if shut:
+                    log(f"[*] Square {n}: closed {shut} pop-up(s) - finding the way again and retrying")
+                    if not nav.absolute:
+                        nav = CityNav(dev, stop, log)
+                        shrine = locate_shrine(dev, stop, log, nav) or shrine
+                    r = open_square(dev, cfg, log, stop, nav, shrine, n)
+            got[n] = r
+            nm = CITY_SQUARES[n][0]
+            if r and r[5] and r[1].lower() in UNIQUE_BUILDINGS and any(k.split("#")[0].lower() == r[1].lower() for k in items):
+                log(f"[!] Square {n}: read '{r[1]}' but that building is already mapped on another square - the camera was probably not where it thought. Left blank.")
+                r = None
+            if r and r[5]:
+                base = re.sub(r"\s*\d+$", "", r[1]).strip() or r[1]
+                k_n = 1
+                while f"{base}#{k_n}" in items:
+                    k_n += 1
+                key = f"{base}#{k_n}"
+                items[key] = [round(r[3]), round(r[4])]
+                levels[key] = {"name": r[1], "level": r[2], "square": n}
+                done_list.append(n)
+                try:
+                    data = load_city()
+                    ent = data.setdefault(serial, {"items": {}})
+                    if nav.absolute and (wipe or ent.get("frame") != "picture"):
+                        ent["items"], ent["levels"], ent["frame"] = {}, {}, "picture"
+                        wipe = False
+                    ent.setdefault("items", {})[key] = items[key]
+                    ent.setdefault("levels", {})[key] = levels[key]
+                    save_city(data)
+                    pst[serial] = {"done": done_list, "t": time.time()}
+                    prog_f.write_text(json.dumps(pst), encoding="utf-8")
+                except Exception:
+                    pass
+            else:
+                bad.append(nm)
+            if progress:
+                try:
+                    progress({"phase": "sweeping", "pct": int(100 * (i + 1) / len(order)), "left": int((time.time() - t0) / (i + 1) * (len(order) - i - 1)),
+                              "text": f"Square {n} ({nm}) done", "mapped": [k.split("#")[0] for k in items], "expected": [CITY_SQUARES[x][0] for x in order],
+                              "missing": bad, "seconds": int(time.time() - t0), "stops": i + 1, "total": len(order), "row": 0})
+                except Exception:
+                    pass
+    dev.guard_city = False
+    if not bad and not stop.is_set():                        # finished: next run starts from square 1
+        try:
+            pst.pop(serial, None)
+            prog_f.write_text(json.dumps(pst), encoding="utf-8")
+        except Exception:
+            pass
+    if items:
+        data = load_city()
+        ent = data.setdefault(serial, {"items": {}})
+        if nav.absolute and ent.get("frame") != "picture":
+            ent["items"], ent["levels"], ent["frame"] = {}, {}, "picture"
+        ent.setdefault("items", {}).update(items)
+        ent.setdefault("levels", {}).update(levels)
+        save_city(data)
+    log(f"[+] Squares: read {len(items)} of {len(order)} in {int(time.time() - t0)}s. Not read: {', '.join(bad) if bad else 'none'}")
+    if progress:
+        try:
+            progress({"phase": "done", "pct": 100, "left": 0, "text": "Done", "mapped": [k.split("#")[0] for k in items], "expected": [CITY_SQUARES[x][0] for x in order],
+                      "missing": bad, "seconds": int(time.time() - t0), "stops": len(order), "total": len(order), "row": 0})
+        except Exception:
+            pass
+    return got
 
 
 def task_needs_city_map(t):
@@ -7206,6 +8214,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     aj_next = [0.0]
     aj_scan = [0.0]                       # last time the rally list was read for monster pictures while the game's Auto-Join joins
     city_last, city_block = {}, [0.0]
+    city_why = [0.0]
     city_day = [_game_day()]
     last_watch = time.time()
     off_list = [None]                                         # since when we have not been on the rally list
@@ -7428,6 +8437,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         recover()
                     else:
                         act("step", text="Auto-Join is on - next check in %d min" % max(1, int((aj_next[0] - now) // 60)))
+                        if now - city_why[0] > 300:                       # say why no city trip is made (tasks off / nothing due / blocked)
+                            city_why[0] = now
+                            nd = len(city_tasks_due(cfg, city_last, serial)) if cfg.get("city_enabled") else 0
+                            log(f"[i] No city trip now: tasks {'on' if cfg.get('city_enabled') else 'OFF'}, {nd} due, blocked for {max(0, int(city_block[0] - now))} s")
                         nap(5, 8)
                     continue
             if not rallies_on:                                    # tasks only: stay in the city and work through them
