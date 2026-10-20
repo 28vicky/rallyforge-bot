@@ -700,3 +700,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 :root .hint,:root .note{color:var(--mute)}
 :root .drow .dst,:root .row .chip{font-size:12.5px}
 :root .main{padding-bottom:36px}
+.note.clamp{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:0}
+.morelnk{background:none;border:0;padding:0 0 8px;color:var(--accent1);font:inherit;font-size:13px;cursor:pointer;display:block}
+.morelnk:hover{text-decoration:underline}

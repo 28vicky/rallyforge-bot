@@ -785,3 +785,23 @@ setInterval(async () => {
     if (m && m !== AUTO.err) { AUTO.err = m; toast("Not saved yet: " + m, "error"); }
   } finally { AUTO.busy = false; }
 }, 1000);
+
+// long help paragraphs fold to one line with a small "More" link (quiet screens, nothing lost)
+(function () {
+  const fold = (n) => {
+    if (n.dataset.fold || !n.isConnected) return;
+    const t = (n.textContent || "").trim();
+    if (t.length < 110 || n.closest(".warnbar,.modal,.toasts")) return;
+    n.dataset.fold = "1"; n.classList.add("clamp");
+    const b = document.createElement("button"); b.type = "button"; b.className = "morelnk"; b.textContent = "More";
+    b.onclick = () => { const o = n.classList.toggle("clamp"); b.textContent = o ? "More" : "Less"; };
+    n.insertAdjacentElement("afterend", b);
+  };
+  const scan = (root) => (root || document).querySelectorAll(".pages .note").forEach(fold);
+  const start = () => {
+    const p = document.getElementById("pages"); if (!p) return setTimeout(start, 300);
+    new MutationObserver(() => scan(p)).observe(p, { childList: true, subtree: true });
+    scan(p);
+  };
+  start();
+})();
