@@ -5413,6 +5413,30 @@ def corner_pic():
         return None
 
 
+def _flag_on():
+    try:
+        return (USER / "city_nav_squares.txt").read_text(encoding="utf-8").strip().lower().startswith("test")
+    except Exception:
+        return False
+
+
+def gain_probe(dev, stop, log):
+    """Test aid (only with city_nav_squares.txt, on a city that fits the picture): swipe by known amounts and log how far the
+    map really moved, to learn how to count squares in other city styles."""
+    try:
+        for fx, fy, tx, ty in [(300, 400, 140, 400), (300, 400, 300, 160), (230, 300, 380, 560), (300, 600, 300, 520), (300, 460, 300, 480)]:
+            a = locate_in_city(dev.screenshot())
+            dev.swipe(fx, fy, tx, ty, 450)
+            _nap(stop, 1.0, 1.3)
+            b = locate_in_city(dev.screenshot())
+            if a and b:
+                log(f"[i]   swipe probe: finger {tx - fx},{ty - fy} -> camera moved {round(b[0] - a[0])},{round(b[1] - a[1])}")
+            else:
+                log(f"[i]   swipe probe: finger {tx - fx},{ty - fy} -> picture not matched ({bool(a)},{bool(b)})")
+    except Exception as e:
+        log(f"[i]   swipe probe failed: {e}")
+
+
 def learn_corner(nav, log):
     """Once, on a city that matches the stored picture: drag to the top-left corner and note where the picture says the
     camera is. Every other city style then counts its squares from the same place."""
@@ -6428,7 +6452,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(p[0], p[1] - 38)                           # the icon sits just above its caption
         return True
-    if kind == "building" and not nav_state.get("picture_bad") and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
+    if kind == "building" and not nav_state.get("picture_bad") and not (PICTURE_BAD.get(getattr(dev, "serial", "")) and city_map_items(dev)) and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
         pitems = picture_items(dev)                          # the camera is found by the whole-city picture; positions come from the mapper or the built-in default
         pkeys = []
         for nm in str(name).lower().split("+"):                # "Keep+Tavern" = visit the Keep, then the Tavern
@@ -6438,7 +6462,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         nav = nav_state.get("anav")
         if nav is None:
             nav = CityNav(dev, stop, log)
-            _force = str(cfg.get("city_nav", "auto")).lower() == "squares" or (USER / "city_nav_squares.txt").exists()     # the file is a test switch: every instance walks by squares
+            _force = str(cfg.get("city_nav", "auto")).lower() == "squares" or _flag_on()     # a test switch file (city_nav_squares.txt starting with "test") makes every instance walk by squares
             nav.absolute = not _force and not PICTURE_BAD.get(serial_)    # squares = never use the picture (another city style); remembered per instance once the picture did not fit
             nav.quiet = True
             nav_state["anav"] = nav
@@ -6449,6 +6473,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 cp = corner_pic()
                 if cp:
                     nav.cx, nav.cy = cp
+                if _flag_on():
+                    gain_probe(dev, stop, log)
         done_any = False
         for k in pkeys:
             tx, ty = pitems[k]
@@ -6456,6 +6482,10 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             nav.seen_city = False
             dev.expect_city = True
             nav.goto(tx, ty)
+            if nav.absolute and not nav.seen_city and city_map_items(dev):     # the picture does not fit this city style but this account has its own city map: use that (the closed-loop older way)
+                PICTURE_BAD[serial_] = True
+                nav_state["picture_bad"] = True
+                break
             if nav.absolute and not nav.seen_city:          # the picture does not fit this city style: count the squares from the corner instead (remembered for this instance)
                 PICTURE_BAD[serial_] = True
                 nav.absolute = False
