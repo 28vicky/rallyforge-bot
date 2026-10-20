@@ -422,8 +422,8 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .two .lst .li img{background:rgba(127,127,127,.12)}
 
 /* emulator page: name, status and Start/Pause/Stop stay at the top while the page scrolls */
-.stickyhead{position:sticky;top:-4px;z-index:20;background:var(--bgc);padding:8px 0 4px;margin-bottom:10px;box-shadow:0 8px 10px -8px rgba(0,0,0,.55)}
-.stickyhead>.row{margin-bottom:10px!important}
+.stickyhead{position:sticky;top:-4px;z-index:20;background:var(--bgc);padding:16px 16px 6px;margin:0 0 12px;border-radius:var(--r1);border:var(--bd);box-shadow:0 4px 8px -4px rgba(0,0,0,.5)}
+.stickyhead>.row{margin-bottom:10px!important;margin-top:0!important}
 .stickyhead>.warnbar{margin-bottom:10px}
 
 /* general pickers: search and list are one box; both sides the same height */
