@@ -861,6 +861,9 @@ PAGES.telegram = function () {
   const feedBox = h("div", {});
   const feedChats = h("input", { type: "text", value: c.tg_feed_chats || "", placeholder: "@channel, group name as in your Telegram list" });
   let liveMax = null;
+  const keepOpts = [[10, "10 minutes"], [20, "20 minutes"], [30, "30 minutes"], [60, "1 hour"], [180, "3 hours"], [0, "Until I clear the list"]];
+  const keepSel = h("select", { onchange: async (e) => { c.tg_keep_min = Number(e.target.value); const j = await act(api("coords_keep", { minutes: c.tg_keep_min })); if (j) { drawFeed(j); toast("Saved.", "ok"); } } },
+    ...keepOpts.map(([v, t]) => h("option", { value: v, selected: Number(c.tg_keep_min ?? 60) === v }, t)));
   const drawFeed = (j) => {
     if (!j) return;
     if (!liveMax) liveMax = maxToggle(live);
@@ -878,7 +881,7 @@ PAGES.telegram = function () {
   setTimeout(() => { feedBox.dataset.shown = "1"; loadFeed(); }, 300);
   const live = panel("Live coordinates (everything that appears in the chats you watch)",
     grid2(fld("Chats / channels to watch (comma separated)", feedChats),
-      fld("Forget a coordinate after (min, 0 = never)", inp(c, "tg_keep_min", { type: "int", cls: "short" }))),
+      fld("Keep coordinates for (older ones are removed by themselves)", keepSel)),
     h("div", { class: "row", style: { margin: "10px 0" } },
       btn("Start watching", async () => { c.tg_feed_chats = feedChats.value; const j = await act(api("coords_watch", { cfg: c })); if (j) { drawFeed(j); toast("Watching.", "ok"); } }, "pri")),
     note("Log in above first. Use the chat's name exactly as in your Telegram list, or its @username. Every new or edited message there is read for lines like 'Lv7 Witch (xy: 719 539) 94km' (also when another bot wrote it); each coordinate is listed here with the time it was seen. Messages without that form are counted but not listed."),

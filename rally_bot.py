@@ -4883,9 +4883,20 @@ _feed, _feed_stats = [], {"messages": 0, "with_coords": 0, "chats": [], "last": 
 _feed_lock = threading.Lock()
 
 
+_feed_keep = [None]                  # how long (min) the live list keeps a coordinate; set from the settings, 0 = until cleared
+
+
+def feed_set_keep(keep_min):
+    """Change how long coordinates are kept (applies at once, also to the saved list)."""
+    _feed_keep[0] = int(keep_min or 0)
+    feed_get(_feed_keep[0])
+
+
 def feed_add(items, chat="", keep_min=60):
     """A chat message with positions: add them to the live list (the same X,Y in the same chat only refreshes its time)."""
     now = time.time()
+    if _feed_keep[0] is not None:
+        keep_min = _feed_keep[0]
     with _feed_lock:
         if keep_min:
             _feed[:] = [f for f in _feed if now - f["t"] <= keep_min * 60]
@@ -4919,7 +4930,13 @@ def feed_get(keep_min=60):
             except Exception:
                 pass
         if keep_min:
+            n = len(_feed)
             _feed[:] = [f for f in _feed if now - f["t"] <= keep_min * 60]
+            if len(_feed) != n:
+                try:
+                    FEED_FILE.write_text(json.dumps({"items": _feed}, indent=1), encoding="utf-8")
+                except Exception:
+                    pass
         return list(_feed), dict(_feed_stats)
 
 

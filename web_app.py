@@ -1125,6 +1125,7 @@ class Controller:
 
     def _tg_listen_feed(self, tg):
         chats = str(self.cfg.get("tg_feed_chats") or "").strip()
+        rb._feed_keep[0] = int(self.cfg.get("tg_keep_min", 60) or 0)
         if chats:
             try:
                 labels = tg.listen_feed(chats, on_update=lambda items: self.event("coords"), keep_min=int(self.cfg.get("tg_keep_min", 60) or 0))
@@ -1998,6 +1999,13 @@ class Api:
         if not self.c.tg_ready or self.c.tg is None:
             raise ApiError("Log in to Telegram first (above).")
         self.c._tg_listen_feed(self.c.tg)
+        return self.coords(p)
+
+    def coords_keep(self, p):
+        """How long the live list keeps a coordinate (minutes, 0 = until cleared): saved and applied at once."""
+        m = max(0, int(p.get("minutes") or 0))
+        self.c.apply_config({"tg_keep_min": m})
+        rb.feed_set_keep(m)
         return self.coords(p)
 
     def coords_clear(self, p):
