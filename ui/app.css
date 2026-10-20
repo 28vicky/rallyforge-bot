@@ -680,3 +680,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 .pcard{background:var(--card);box-shadow:none;border-radius:12px}
 .pcard .phead b{font-weight:600;letter-spacing:.02em}
 .pfill{background:var(--accent1)}
+/* pinned header covers the full width and the top edge, nothing peeks around it */
+.pages{padding-top:0}
+.stickyhead{margin:0 -6px 14px -2px;padding:6px 6px 0 2px;top:0}
