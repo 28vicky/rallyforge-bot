@@ -296,7 +296,6 @@ function instancePage(serial) {
   };
   const stBtn = (t, fn, cls) => h("button", { class: "btn" + (cls ? " " + cls : ""), "data-act": t.toLowerCase(), onclick: fn }, t);
   const moreBtn = btn("More \u25BE", (e) => menu(e.currentTarget, [
-    { label: "Scan city", run: () => scanCityFlow(serial) }, { label: "Map by hand", run: () => manualMapFlow(serial) }, { label: "Map by squares", run: () => scanCityTapsFlow(serial) },
     { label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "");
   const bar = h("div", { class: "row instbar" },
     btn("Take game back now", () => act(api("takeback", { serial }))),
@@ -441,22 +440,46 @@ function instancePage(serial) {
     h("div", { class: "row", style: { gap: "22px", alignItems: "center" } },
       h("label", { class: "tgl" }, asOn, h("span", { class: "sw" }), "Start this instance automatically when the app opens")));
   // ---- tabs (same look as the Control settings tabs). The chosen tab is remembered, also when another instance is opened.
+  // section switcher inside one screen: pills on top, one section at a time (less scrolling)
+  const sections = (key, list) => {
+    S.sec = S.sec || {};
+    if (!list.some((x) => x[0] === S.sec[key])) S.sec[key] = list[0][0];
+    const wrapS = h("div", {}), pills = h("div", { class: "subnav" }), area = h("div", {});
+    const show = (k) => {
+      S.sec[key] = k;
+      [...pills.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
+      area.innerHTML = "";
+      const el = list.find((x) => x[0] === k)[2]();
+      for (const e of (Array.isArray(el) ? el : [el])) if (e) area.appendChild(e);
+    };
+    list.forEach(([k, l]) => pills.appendChild(h("button", { class: "sub", "data-k": k, onclick: () => show(k) }, l)));
+    wrapS.append(pills, area); show(S.sec[key]);
+    return [wrapS];
+  };
+  const mapPanel = () => panel("Map the city",
+    note("The bot needs to know where the buildings are. Scan city reads the names while it holds a finger on the screen. Map by hand and Map by squares are the manual ways when scanning does not fit your city style."),
+    h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } }, btn("Scan city", () => scanCityFlow(serial)), btn("Map by hand", () => manualMapFlow(serial)), btn("Map by squares", () => scanCityTapsFlow(serial))));
   const ITABS = [
     ["dash", "Dashboard", () => {
       const a = activityBox(serial, "Activity");
       const L = a.querySelector(".actleft"), R = a.querySelector(".actright");
       return [h("div", { class: "dutygrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
     }],
-    ["run", "Run & phone", () => [phone, autoStart, autoJoin, staminaPanel(ov, S.cfg)]],
-    ["settings", "Settings", () => [panelEl]],
-    ["presets", "Presets & generals", () => ownP],
-    ["monsters", "Monsters", () => [PAGES.monsters(serial)]],
-    ["tasks", "Tasks", () => [PAGES.tasks(serial)]],
-    ["duties", "Duties", () => [PAGES.duties(serial)]],
-    ["crazy_eggs", "Crazy Eggs", () => [PAGES.duties(serial, "crazy_eggs")]],
-    ["champions", "Champions", () => [PAGES.duties(serial, "champions")]],
-    ["itinerary", "Itinerary", () => [instItinerary(serial)]],
-    ["history", "Log history", () => [instHistory(serial)]],
+    ["rallies", "Rallies", () => sections("rallies", [
+      ["mon", "Monsters", () => [PAGES.monsters(serial)]],
+      ["gen", "Generals & presets", () => ownP],
+      ["sta", "Stamina", () => [staminaPanel(ov, S.cfg)]],
+      ["aj", "Auto-Join", () => [autoJoin]]])],
+    ["activities", "Activities", () => [PAGES.duties(serial)]],
+    ["city", "City", () => sections("city", [
+      ["tasks", "Tasks", () => [PAGES.tasks(serial)]],
+      ["market", "Market", () => [PAGES.market()]],
+      ["map", "Map the city", () => [mapPanel()]]])],
+    ["itinerary", "Plan", () => [instItinerary(serial)]],
+    ["history", "Log", () => [instHistory(serial)]],
+    ["settings", "Settings", () => sections("settings", [
+      ["phone", "Phone and start", () => [phone, autoStart]],
+      ["all", "All other settings", () => [panelEl]]])],
   ];
   if (!S.instTab) { try { S.instTab = localStorage.getItem("rf_inst_tab") || ""; } catch (e) { S.instTab = ""; } }
   if (!ITABS.some((t) => t[0] === S.instTab)) S.instTab = "dash";
@@ -467,7 +490,7 @@ function instancePage(serial) {
     try { localStorage.setItem("rf_inst_tab", k); } catch (e) {}
     [...tabRow.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
     body.innerHTML = "";
-    if (k !== "dash") {
+    if (k !== "dash" && k !== "activities") {
       const nv = h("span", { class: "nowtxt" }, actNow(serial));
       body.appendChild(h("div", { class: "nowstrip" }, h("span", { class: "actlab" }, "Now"), nv));
       const iv = setInterval(() => { if (!nv.isConnected) clearInterval(iv); else nv.textContent = actNow(serial); }, 2000);
@@ -1104,7 +1127,7 @@ PAGES.duties = function (fixed, only, compact) {
         h("span", { class: "dst " + (r.status === "done" ? "ok" : r.status === "gaveup" ? "bad" : "") }, r.on ? r.status_text : "Off"))).concat(onRows.length ? [] : [note("No duty is switched on yet.")])),
         h("div", { class: "row", style: { marginTop: "10px", justifyContent: "space-between" } },
           h("span", { class: "hint" }, onRows.length > 7 ? "+" + (onRows.length - 7) + " more switched on" : onRows.length + " switched on"),
-          h("button", { class: "btn sm", onclick: () => S.gotoInstTab && S.gotoInstTab("duties") }, "Manage all duties \u2192"))));
+          h("button", { class: "btn sm", onclick: () => S.gotoInstTab && S.gotoInstTab("activities") }, "Manage all duties \u2192"))));
       return;
     }
     if (!only) root.appendChild(panel("Duties",
