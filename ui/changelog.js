@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.59", date: "2026-10-20",
+    new: ["More buildings are found without running the city mapper: Shrine, Victory Column, Senate, Ideal Land, Dragon Cliff, Triumphal Arch, Academy, Military Academy, Research Factory, Wisdom Dome, Art Hall, Holy Palace, Pasture, Rally Spot, Walls, Battlefield and Subordinate City join Keep and Tavern. They sit in the same place in every city, so every instance has them automatically."],
+    fixed: [] },
   { v: "2.4.58", date: "2026-10-20",
     new: ["Wheel of Fortune is now a daily task (Duties page): the bot walks to the Tavern, opens the Wheel and spins with the button you choose (once / \u00d710 / \u00d7100), for the number of spins you set or until the coins are used up, keeping the coins you want to keep. Settings can be different for every instance.",
           "Run a task now: pick any task on the Duties page and press Run first - the bot does it next, before everything else, even if the task is off or already done today."],

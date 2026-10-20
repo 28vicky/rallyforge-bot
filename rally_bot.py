@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.58"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.59"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -7226,7 +7226,7 @@ CITY_SQUARES = {int(k): v for k, v in {"1": ["Keep", 319, -218], "2": ["Tavern",
 CALIB_STOPS = [(1141, 609), (1312, 588), (1000, 800), (1400, 800), (700, 650), (1000, 450), (1400, 450), (600, 900), (1450, 700)]
 
 
-DEFAULT_PICTURE_BUILDINGS = {"keep", "tavern"}              # buildings every city has at the same place: used without any mapping
+DEFAULT_PICTURE_BUILDINGS = {"keep", "tavern", "shrine", "victory column", "council of state", "ideal land", "dragon cliff", "triumphal arch", "academy", "military academy", "research factory", "wisdom dome", "art hall", "holy palace", "pasture", "rally spot", "walls", "battlefield", "subordinate city"}   # the owner's list of fixed buildings (20 Oct): same place in every city, used without any mapping. Not fixed: Arsenal, Barracks, Warehouse, Prison, Trap Factory, Archer Camp, Stables, Market, Workshop, War Hall, Embassy, Hospital, Bounty Cave.
 
 
 def picture_items(dev):
