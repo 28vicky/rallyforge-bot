@@ -495,7 +495,26 @@ function renderPage() {
   lastPageSel = S.sel;
   if (keep) { p.scrollTop = keep; requestAnimationFrame(() => { p.scrollTop = keep; }); setTimeout(() => { p.scrollTop = keep; }, 250); }
   paintRunState();
+  stickyUpdate();
 }
+// the pinned instance header turns into a bar only after the page is scrolled; the jump buttons show when there is something to jump to
+function stickyUpdate() {
+  const p = $("#pages"); if (!p) return;
+  const sh = p.querySelector(".stickyhead");
+  if (sh) sh.classList.toggle("stuck", p.scrollTop > 6);
+  let box = $("#jumpbox");
+  if (!box) {
+    box = h("div", { id: "jumpbox", class: "jumpbox" },
+      h("button", { class: "jump", id: "jumpUp", title: "Go to the top", onclick: () => { const q = $("#pages"); q.scrollTo({ top: 0, behavior: "smooth" }); } }, "\u2191"),
+      h("button", { class: "jump", id: "jumpDown", title: "Go to the bottom", onclick: () => { const q = $("#pages"); q.scrollTo({ top: q.scrollHeight, behavior: "smooth" }); } }, "\u2193"));
+    document.body.appendChild(box);
+  }
+  const max = p.scrollHeight - p.clientHeight;
+  $("#jumpUp").style.display = p.scrollTop > 160 ? "" : "none";
+  $("#jumpDown").style.display = max > 300 && p.scrollTop < max - 160 ? "" : "none";
+}
+document.addEventListener("scroll", (e) => { if (e.target && e.target.id === "pages") stickyUpdate(); }, true);
+setInterval(stickyUpdate, 700);
 function rerender() { const p = $("#pages"); const y = p.scrollTop; renderPage(); p.scrollTop = y; }
 
 // ------------------------------------------------------------------ logs

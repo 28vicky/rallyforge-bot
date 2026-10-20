@@ -422,10 +422,12 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .two .lst .li img{background:rgba(127,127,127,.12)}
 
 /* emulator page: name, status and Start/Pause/Stop stay at the top while the page scrolls */
-.stickyhead{position:sticky;top:-4px;z-index:20;background:var(--bg) fixed,var(--bgc);padding:14px 6px 12px 2px;margin:0 -6px 6px -2px}
-.stickybox{background:var(--bgc);padding:12px 16px 4px;border-radius:var(--r1);border:var(--bd);box-shadow:0 4px 8px -4px rgba(0,0,0,.5)}
-.stickybox>.row{margin-bottom:10px!important;margin-top:0!important}
-.stickybox>.warnbar{margin-bottom:10px}
+.stickyhead{position:sticky;top:12px;z-index:20}
+.stickyhead::before{content:"";position:absolute;z-index:-2;top:-14px;bottom:-12px;left:-2px;right:-6px;background:var(--bg) fixed,var(--bgc);opacity:0;transition:opacity .15s;pointer-events:none}
+.stickybox{position:relative;transition:padding .15s}
+.stickybox::before{content:"";position:absolute;z-index:-1;top:-10px;bottom:-4px;left:0;right:0;background:var(--bgc);border:var(--bd);border-radius:var(--r1);box-shadow:0 4px 8px -4px rgba(0,0,0,.5);opacity:0;transition:opacity .15s;pointer-events:none}
+.stickyhead.stuck::before,.stickyhead.stuck .stickybox::before{opacity:1}
+.stickyhead.stuck .stickybox{padding:0 16px}
 
 /* general pickers: search and list are one box; both sides the same height */
 .ghead{display:flex;justify-content:space-between;align-items:center;min-height:38px;margin-bottom:4px}
@@ -439,3 +441,8 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .ghead .row{align-items:center}
 .btn.gv{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13px;line-height:1;padding:7px 11px}
 .btn.gv .gvi{font-size:11px;line-height:1;display:inline-block}
+
+/* jump to top / bottom */
+.jumpbox{position:fixed;right:26px;bottom:52px;z-index:60;display:flex;flex-direction:column;gap:8px}
+.jump{width:38px;height:38px;border-radius:50%;border:var(--bd);background:var(--btn);color:var(--accent2);font-size:18px;line-height:1;cursor:pointer;box-shadow:var(--sh2);display:grid;place-content:center;padding:0}
+.jump:hover{background:var(--accent);color:var(--accfg)}
