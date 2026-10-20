@@ -450,7 +450,8 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 @keyframes subin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 
 /* left list: drag to reorder */
-.inst[draggable="true"] { cursor: grab; }
+.inst[draggable="true"] { cursor: pointer; }
+.inst.dragging { cursor: grabbing; }
 .inst.dragging { opacity: .45; outline: 1px dashed var(--accent2); }
 
 /* status bar: update available */
