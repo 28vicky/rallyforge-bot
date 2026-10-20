@@ -91,6 +91,31 @@ function listTable(cols, rows, onSel, selected) {
   return { el: wrap, get: () => sel, set: (i) => { sel = i; draw(); } };
 }
 
+
+// A "Maximize" switch for a panel: it covers the whole right section (everything right of the instance list); press again to shrink it back.
+function maxToggle(panelEl) {
+  if (!document.getElementById("maxStyle")) {
+    const st = document.createElement("style"); st.id = "maxStyle";
+    st.textContent = ".panel.pmax{position:fixed;z-index:60;margin:0;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;background:var(--bg,#12141f)}" +
+      ".panel.pmax .tlist{max-height:none;flex:1;min-height:0}.panel.pmax .pmax-fill{flex:1;min-height:0;display:flex;flex-direction:column}.panel.pmax .pmax-fill>div{flex:1;min-height:0;display:flex;flex-direction:column}";
+    document.head.appendChild(st);
+  }
+  const place = () => {
+    const m = document.querySelector(".main");
+    if (!panelEl.classList.contains("pmax") || !m) return;
+    const r = m.getBoundingClientRect();
+    Object.assign(panelEl.style, { top: r.top + "px", left: r.left + "px", width: r.width + "px", height: Math.max(200, r.height - 30) + "px" });
+  };
+  window.addEventListener("resize", place);
+  const b = h("button", { class: "btn" }, "\u2922 Maximize");
+  b.onclick = () => {
+    const on = panelEl.classList.toggle("pmax");
+    if (on) place(); else ["top", "left", "width", "height"].forEach((k) => (panelEl.style[k] = ""));
+    b.textContent = on ? "\u2921 Minimize" : "\u2922 Maximize";
+  };
+  return b;
+}
+
 const PAGES = {};
 
 // ====================================================================== dashboard
@@ -835,15 +860,17 @@ PAGES.telegram = function () {
   // live list of every coordinate that shows up in the chats you watch
   const feedBox = h("div", {});
   const feedChats = h("input", { type: "text", value: c.tg_feed_chats || "", placeholder: "@channel, group name as in your Telegram list" });
+  let liveMax = null;
   const drawFeed = (j) => {
     if (!j) return;
+    if (!liveMax) liveMax = maxToggle(live);
     const ago = (t) => { const s = Math.max(0, Math.round(j.now - t)); return s < 60 ? s + " s" : s < 3600 ? Math.round(s / 60) + " min" : Math.round(s / 3600) + " h"; };
     const t = listTable(["Seen", "Chat", "Level", "Name", "X", "Y", "km"], j.items.map((b) => ({ cells: [ago(b.t) + " ago", b.chat || "", b.level || "", b.name, b.x, b.y, b.km ?? ""] })), null, null);
     feedBox.innerHTML = "";
     feedBox.appendChild(h("div", { class: "row", style: { gap: "10px", flexWrap: "wrap", margin: "8px 0" } },
       h("span", { class: "chip" }, "messages read: " + j.stats.messages), h("span", { class: "chip" }, "with coordinates: " + j.stats.with_coords),
       h("span", { class: "chip" }, "watching: " + ((j.stats.chats || []).join(", ") || "nothing yet")),
-      btn("Clear list", async () => { drawFeed(await act(api("coords_clear"))); })));
+      btn("Clear list", async () => { drawFeed(await act(api("coords_clear"))); }), liveMax));
     feedBox.appendChild(t.el);
   };
   const loadFeed = async () => { if (!feedBox.isConnected) return; const j = await api("coords", {}, { quiet: true }).catch(() => null); drawFeed(j); };
@@ -855,7 +882,7 @@ PAGES.telegram = function () {
     h("div", { class: "row", style: { margin: "10px 0" } },
       btn("Start watching", async () => { c.tg_feed_chats = feedChats.value; const j = await act(api("coords_watch", { cfg: c })); if (j) { drawFeed(j); toast("Watching.", "ok"); } }, "pri")),
     note("Log in above first. Use the chat's name exactly as in your Telegram list, or its @username. Every new or edited message there is read for lines like 'Lv7 Witch (xy: 719 539) 94km' (also when another bot wrote it); each coordinate is listed here with the time it was seen. Messages without that form are counted but not listed."),
-    feedBox);
+    h("div", { class: "pmax-fill" }, feedBox));
   return h("div", {}, login, live, boss);
 };
 
