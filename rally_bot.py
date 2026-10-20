@@ -5484,7 +5484,8 @@ class CityNav:
             if not sc:
                 lost += 1
                 if lost >= 7:
-                    self.log("[!]   the screen is not recognised as the city (ad or window in the way?)")
+                    if not getattr(self, "quiet", False):
+                        self.log("[!]   the screen is not recognised as the city (ad or window in the way?)")
                     return False
                 _nap(self.stop, 0.6, 0.9)
                 continue
@@ -5571,6 +5572,39 @@ class CityNav:
             self.pan(want_x - self.cx, 0)
             self.pan(want_x - self.cx, want_y - self.cy)
         return mapx - self.cx, mapy - self.cy
+
+
+CORNER_PIC = None                                          # camera place (picture coordinates of screen point 0,0) when the map is dragged to the city's top-left corner; learned once, see learn_corner
+CORNER_FILE = USER / "corner_pic.json"
+PICTURE_BAD = {}                                          # serial -> True: this instance's city does not look like the stored picture, go straight to the squares
+
+
+def corner_pic():
+    if CORNER_PIC:
+        return CORNER_PIC
+    try:
+        d = json.loads(CORNER_FILE.read_text(encoding="utf-8"))
+        return (float(d["x"]), float(d["y"]))
+    except Exception:
+        return None
+
+
+def learn_corner(nav, log):
+    """Once, on a city that matches the stored picture: drag to the top-left corner and note where the picture says the
+    camera is. Every other city style then counts its squares from the same place."""
+    if corner_pic() is not None:
+        return
+    nav.to_origin()
+    for _ in range(3):
+        sc = nav.localize()
+        if sc:
+            try:
+                CORNER_FILE.write_text(json.dumps({"x": round(nav.cx, 1), "y": round(nav.cy, 1), "score": round(sc, 2)}), encoding="utf-8")
+            except Exception:
+                pass
+            log(f"[i] City corner learned at {round(nav.cx)},{round(nav.cy)} (match {sc:.2f})")
+            return
+        _nap(nav.stop, 0.6, 0.9)
 
 
 _CITY_PIC = {}
@@ -6576,25 +6610,34 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         for nm in str(name).lower().split("+"):                # "Keep+Tavern" = visit the Keep, then the Tavern
             want = nm.strip()
             pkeys += sorted(k for k in pitems if k.split("#")[0].lower() == want.split("#")[0] and (("#" not in want) or k.lower() == want))[:int(task.get("count", 1) or 1)]
+        serial_ = getattr(dev, "serial", "")
         nav = nav_state.get("anav")
         if nav is None:
             nav = CityNav(dev, stop, log)
-            nav.absolute = str(cfg.get("city_nav", "auto")).lower() != "squares"      # 'squares' = never use the picture (another city style: Europe / Russia / Japan ...)
+            nav.absolute = str(cfg.get("city_nav", "auto")).lower() != "squares" and not PICTURE_BAD.get(serial_)    # squares = never use the picture (another city style); remembered per instance once the picture did not fit
+            nav.quiet = True
             nav_state["anav"] = nav
-            if not nav.absolute:
-                log("[i] Walking by the squares (no city picture): going to the city's corner first")
+            if nav.absolute:
+                learn_corner(nav, log)
+            else:
                 nav.to_origin()
+                cp = corner_pic()
+                if cp:
+                    nav.cx, nav.cy = cp
         done_any = False
         for k in pkeys:
             tx, ty = pitems[k]
-            log(f"[*] Going to {k} " + ("by the city picture" if nav.absolute else "by its square"))
+            log(f"[*] Going to {k}")
             nav.seen_city = False
             dev.expect_city = True
             nav.goto(tx, ty)
-            if nav.absolute and not nav.seen_city:          # this city does not look like the picture (another style): walk by the squares instead, from the corner
-                log("[i] The whole-city picture does not match this city - walking by the squares instead")
+            if nav.absolute and not nav.seen_city:          # the picture does not fit this city style: count the squares from the corner instead (remembered for this instance)
+                PICTURE_BAD[serial_] = True
                 nav.absolute = False
                 nav.to_origin()
+                cp = corner_pic()
+                if cp:
+                    nav.cx, nav.cy = cp
                 nav.goto(tx, ty)
             px, py = tx - nav.cx, ty - nav.cy
             x0, y0, w, h = SAFE_TAP_AREA
