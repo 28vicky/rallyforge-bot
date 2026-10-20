@@ -5163,7 +5163,10 @@ class CityNav:
         for _ in range(12):
             if self.stop.is_set():
                 return False
-            if not self.localize():
+            sc = self.localize()
+            if sc:
+                self.last_score = sc
+            if not sc:
                 lost += 1
                 if lost >= 7:
                     self.log("[!]   the screen is not recognised as the city (ad or window in the way?)")
@@ -5173,6 +5176,7 @@ class CityNav:
             lost = 0
             px, py = mapx - self.cx, mapy - self.cy
             if abs(px - mid_x) <= tol and abs(py - mid_y) <= tol:
+                self.log(f"[i]   camera at {round(self.cx)},{round(self.cy)} (match {sc:.2f}), target on screen at {round(px)},{round(py)}")
                 return True
             mx = max(-210, min(210, px - mid_x))              # how far the picture has to move (finger moves the other way)
             my = max(-320, min(320, py - mid_y))
@@ -5279,12 +5283,17 @@ def locate_in_city(shot, min_score=0.55):
     g = city_picture()
     if g is None:
         return None
-    t = cv2.cvtColor(shot[300:700, 60:440], cv2.COLOR_BGR2GRAY)     # the lower middle: the sky, clouds and top bubbles change, the buildings do not
+    t = cv2.cvtColor(shot[250:730, 60:440], cv2.COLOR_BGR2GRAY)     # the lower middle: the sky, clouds and top bubbles change, the buildings do not
     res = cv2.matchTemplate(g, t, cv2.TM_CCOEFF_NORMED)
     _, mv, _, ml = cv2.minMaxLoc(res)
     if mv < min_score:
         return None
-    return ml[0] - 60, ml[1] - 300, float(mv)
+    r2 = res.copy()                                          # a second, different place that matches almost as well = lawns / walls look alike: do not trust
+    r2[max(0, ml[1] - 60):ml[1] + 60, max(0, ml[0] - 60):ml[0] + 60] = -1
+    second = float(r2.max())
+    if mv < 0.88 and mv - second < 0.04:
+        return None
+    return ml[0] - 60, ml[1] - 250, float(mv)
 
 
 def ring_label_free(shot, centre=(270, 450)):
@@ -6882,6 +6891,7 @@ FIXED_BUILDINGS = {"Keep#1": [1141, 609]}
 ANCHOR_TO_KEEP = {"Tavern": (90, -135), "Shrine": (313, -139)}   # Keep label minus anchor label (emulator pixels; measured on Kiravik's city picture and cross-checked on the PC client view)
 # Fixed buildings: label position minus the Shrine label (emulator pixels). The Shrine, Tavern and Keep never move, so any one of them gives the rest.
 FIXED_OFFSETS_FROM_SHRINE = {"Victory Column": [-681, -363], "Council of State": [74, -439], "Ideal Land": [324, -449], "Dragon Cliff": [651, -447], "Arsenal": [-91, -352], "Triumphal Arch": [219, -357], "Academy": [65, -272], "Military Academy": [492, -267], "Research Factory": [-451, -182], "Barracks": [-205, -178], "Wisdom Dome": [681, -159], "Warehouse": [-19, -133], "Keep": [314, -139], "Art Hall": [-628, -101], "Prison": [-381, -88], "Holy Palace": [528, -73], "Tavern": [223, -3], "Trap Factory": [-203, -6], "Shrine": [0, 0], "Archer Camp": [657, 27], "Pasture": [-808, -10], "Stables": [-577, 51], "Market": [-425, 132], "Workshop": [89, 141], "War Hall": [405, 126], "Embassy": [231, 211], "Hospital": [-72, 311], "Rally Spot": [644, 234], "Walls": [-406, 291], "Battlefield": [-701, 357], "Bounty Cave": [-471, 455]}
+UNIQUE_BUILDINGS = {k.lower() for k in FIXED_OFFSETS_FROM_SHRINE}                # one of each in the city: a second read of the same name means the camera was somewhere else
 
 # Numbered squares of the default city map (city_map/city_map_default.png): number -> [name, centre of the square minus the Shrine label, emulator pixels]. 1 = Keep.
 CITY_SQUARES = {int(k): v for k, v in {"1": ["Keep", 319, -218], "2": ["Tavern", 232, -27], "3": ["Shrine", 30, -29], "4": ["Victory Column", -684, -334], "5": ["Council of State", 73, -452], "6": ["Ideal Land", 291, -487], "7": ["Dragon Cliff", 704, -430], "8": ["Arsenal", -85, -379], "9": ["Triumphal Arch", 222, -388], "10": ["Academy", 65, -302], "11": ["Military Academy", 502, -280], "12": ["Research Factory", -443, -204], "13": ["Barracks", -206, -199], "14": ["Wisdom Dome", 682, -177], "15": ["Warehouse", -21, -172], "16": ["Art Hall", -655, -123], "17": ["Prison", -378, -118], "18": ["Holy Palace", 515, -103], "19": ["Trap Factory", -210, -27], "20": ["Archer Camp", 658, 13], "21": ["Pasture", -810, -29], "22": ["Stables", -581, 52], "23": ["Market", -432, 116], "24": ["Workshop", 80, 111], "25": ["War Hall", 424, 103], "26": ["Embassy", 240, 190], "27": ["Hospital", -68, 280], "28": ["Rally Spot", 653, 221], "29": ["Walls", -473, 290], "30": ["Battlefield", -704, 359], "31": ["Bounty Cave", -473, 475], "32": ["Wonder", -999, -208], "33": ["Subordinate City", -1058, -523], "34": ["Watchtower", -1160, -88], "35": ["Archer Tower 1", -1085, 673], "36": ["Archer Tower 2", -990, 731], "37": ["Army Camp", 535, 421]}.items()}
@@ -7210,6 +7220,9 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
                     r = open_square(dev, cfg, log, stop, nav, shrine, n)
             got[n] = r
             nm = CITY_SQUARES[n][0]
+            if r and r[5] and r[1].lower() in UNIQUE_BUILDINGS and any(k.split("#")[0].lower() == r[1].lower() for k in items):
+                log(f"[!] Square {n}: read '{r[1]}' but that building is already mapped on another square - the camera was probably not where it thought. Left blank.")
+                r = None
             if r and r[5]:
                 base = re.sub(r"\s*\d+$", "", r[1]).strip() or r[1]
                 k_n = 1
