@@ -6220,11 +6220,15 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
                 log(f"[!] Task '{task.get('name')}': {k} could not be brought into view (it is at {round(px)},{round(py)}) - skipped")
                 continue
+            if find_detail_icon(dev.screenshot()):          # a ring menu is still open from before: tapping the building would close it
+                close_ring(dev, stop, (px, py + 35))
             dev.tap(int(px), int(py + float(task.get("tap_dy", 0))))
             _nap(stop, 1.0, 1.4)
             for st in task.get("steps", []):
                 run_step(dev, cfg, log, stop, st)
             leave_to_city(dev, cfg, stop)
+            if find_detail_icon(dev.screenshot()):          # leave the city clean: close the ring menu the task opened
+                close_ring(dev, stop, (px, py + 35))
             done_any = True
         return None if done_any else False
     if kind == "building":
