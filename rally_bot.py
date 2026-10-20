@@ -5142,6 +5142,48 @@ class CityNav:
     def __init__(self, dev, stop, log, pause=0.9):
         self.dev, self.stop, self.log, self.pause = dev, stop, log, pause
         self.cx = self.cy = 0.0
+        self.absolute = False                                # True: the camera place is read from the whole-city picture (no drifting)
+
+    def localize(self, shot=None):
+        """Find where the camera is by matching the screen against the whole-city picture. Sets cx, cy (city picture
+        coordinates of screen point 0,0). -> match score, or 0 when the screen is not recognised."""
+        shot = self.dev.screenshot() if shot is None else shot
+        r = locate_in_city(shot)
+        if r:
+            self.cx, self.cy = r[0], r[1]
+            return r[2]
+        return 0.0
+
+    def goto_abs(self, mapx, mapy, tol=70):
+        """Closed loop: look where we are, drag towards the point, look again - until the point is near the middle of the
+        view. -> True when it is there."""
+        x, y, w, h = CITY_VIEW
+        mid_x, mid_y = x + w / 2, y + h / 2
+        lost = 0
+        for _ in range(12):
+            if self.stop.is_set():
+                return False
+            if not self.localize():
+                lost += 1
+                if lost >= 3:
+                    self.log("[!]   the screen is not recognised as the city (ad or window in the way?)")
+                    return False
+                _nap(self.stop, 0.6, 0.9)
+                continue
+            lost = 0
+            px, py = mapx - self.cx, mapy - self.cy
+            if abs(px - mid_x) <= tol and abs(py - mid_y) <= tol:
+                return True
+            mx = max(-210, min(210, px - mid_x))              # how far the picture has to move (finger moves the other way)
+            my = max(-320, min(320, py - mid_y))
+            if abs(mx) < 30 and abs(my) < 30:                 # a short drag may count as a TAP on a building: overshoot and come back
+                ux, uy = (1.0 if mx >= 0 else -1.0), (1.0 if my >= 0 else -1.0)
+                self.dev.swipe(270 + ux * 100, 440 + uy * 100, 270 - ux * 100, 440 - uy * 100, 450)
+                _nap(self.stop, self.pause, self.pause + 0.3)
+                continue                                      # next round sees the overshoot and drags back
+            self.dev.swipe(270 + mx / 2, 440 + my / 2, 270 - mx / 2, 440 - my / 2, 450)
+            _nap(self.stop, self.pause, self.pause + 0.3)
+        return False
 
     def _drag(self, fx, fy, tx, ty):
         before = self.dev.screenshot()
@@ -5195,6 +5237,9 @@ class CityNav:
 
     def goto(self, mapx, mapy):
         """Bring the map point to the middle of the view. -> its screen position."""
+        if self.absolute:
+            self.goto_abs(mapx, mapy)
+            return mapx - self.cx, mapy - self.cy
         x, y, w, h = CITY_VIEW
         want_x, want_y = mapx - (x + w / 2), mapy - (y + h / 2)
         self.pan(want_x - self.cx, want_y - self.cy)
@@ -5207,6 +5252,70 @@ class CityNav:
             self.pan(want_x - self.cx, 0)
             self.pan(want_x - self.cx, want_y - self.cy)
         return mapx - self.cx, mapy - self.cy
+
+
+_CITY_PIC = {}
+SHRINE_LABEL_IN_PICTURE = (1372.2, 576.9)                    # the Shrine label in the whole-city picture (emulator px); the square offsets count from here
+
+
+def city_picture():
+    """The whole-city picture (grey, emulator px) used to find the camera. -> array or None."""
+    if "g" not in _CITY_PIC:
+        g = None
+        for base in (RES / "city_map", Path(__file__).parent / "city_map", USER / "city_map"):
+            f = base / "city_whole.png"
+            if f.exists():
+                g = cv2.imread(str(f), cv2.IMREAD_GRAYSCALE)
+                if g is not None:
+                    break
+        _CITY_PIC["g"] = g
+    return _CITY_PIC["g"]
+
+
+def locate_in_city(shot, min_score=0.55):
+    """Where is the camera? Match the middle of the screen against the whole-city picture.
+    -> (x, y, score): the picture coordinates of screen point (0, 0), or None."""
+    g = city_picture()
+    if g is None:
+        return None
+    t = cv2.cvtColor(shot[150:700, 60:440], cv2.COLOR_BGR2GRAY)
+    res = cv2.matchTemplate(g, t, cv2.TM_CCOEFF_NORMED)
+    _, mv, _, ml = cv2.minMaxLoc(res)
+    if mv < min_score:
+        return None
+    return ml[0] - 60, ml[1] - 150, float(mv)
+
+
+def ring_label_free(shot, centre=(270, 450)):
+    """Read the text the game prints under the tapped building, whatever it says (no list of names is used). Takes the
+    text phrase nearest to the middle of the screen. -> (name, x, y) or None."""
+    best = None
+    for text, ws in ocr_lines(shot[120:760, 40:500]):
+        ws = sorted(ws, key=lambda w: w[1])
+        group = []
+        def flush():
+            nonlocal best
+            if not group:
+                return
+            txt = " ".join(w[0] for w in group).strip(" .,:;|-_*")
+            if len(txt) >= 3 and re.fullmatch(r"[A-Za-z' ]+", txt) and txt.lower() not in ("lv", "level", "vip", "i"):
+                gx = sum(w[1] for w in group) / len(group) + 40
+                gy = sum(w[2] for w in group) / len(group) + 120
+                d = (gx - centre[0]) ** 2 + (gy - centre[1]) ** 2
+                if d < 220 ** 2 and (best is None or d < best[0]):
+                    best = (d, txt, int(gx), int(gy))
+        last = None
+        for w in ws:
+            if last is not None and w[1] - last[1] > 90:
+                flush()
+                group = []
+            group.append(w)
+            last = w
+        flush()
+    if not best:
+        return None
+    nm = match_building(best[1], cutoff=0.85)               # only to repair an OCR typo of a name the bot already spells
+    return (nm or best[1]), best[2], best[3]
 
 
 TPL_W, TPL_H = 110, 80                                       # size of the saved picture of a building
@@ -6910,7 +7019,7 @@ def read_square(dev, cfg, log, stop, pos, expected="", levels=False):
     if not ic:
         log("[!]   no ring menu after tapping - nothing opened")
         return None
-    lab = ring_label(ring, expected, pos)
+    lab = ring_label_free(ring) or ring_label(ring, expected, pos)
     if not levels:
         if not lab:
             log("[!]   ring menu is open but the building name could not be read")
@@ -6971,7 +7080,11 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     log(f"[*] Square {number} ({name}): tapping {round(px)},{round(py)}")
     levels = bool(cfg.get("squares_levels", False))
     res = read_square(dev, cfg, log, stop, (px, py), name, levels)
-    if res and res[2]:                                       # the label shows where the building really is on the screen: re-anchor the camera
+    if res and res[2] and nav.absolute:                      # the camera place is read from the picture each time: only close the ring
+        if not close_ring(dev, stop, res[2]):
+            log("[!]   the ring menu would not close - stopping so nothing is pressed by mistake")
+            stop.set()
+    elif res and res[2]:                                     # the label shows where the building really is on the screen: re-anchor the camera
         lx, ly = res[2]
         fo = FIXED_OFFSETS_FROM_SHRINE.get(name)
         if fo:                                               # the label's own place is known exactly (offset from the Shrine label)
@@ -6987,9 +7100,9 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
         log(f"[!] Square {number} ({name}): nothing could be read")
         return None
     got = BUILDING_ALIASES.get(res[0], res[0])
-    same = got.lower().replace(" ", "") == BUILDING_ALIASES.get(name, name).lower().replace(" ", "") or name.lower().startswith(got.lower())
-    log(f"[+] Square {number} ({name}) -> '{res[0]}'" + (f" level {res[1]}" if res[1] else "") + ("" if same else "  (DIFFERENT NAME - check this square)"))
-    return name, res[0], res[1], tx, ty, same
+    like = got.lower().replace(" ", "") == BUILDING_ALIASES.get(name, name).lower().replace(" ", "") or name.lower().startswith(got.lower())
+    log(f"[+] Square {number} -> '{res[0]}'" + (f" level {res[1]}" if res[1] else "") + ("" if like else f"  (the default map says {name})"))
+    return name, res[0], res[1], tx, ty, True                # the map is filled with what the game says, not with what we expect
 
 
 def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
@@ -7017,7 +7130,12 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
             order = list(sorted(CITY_SQUARES))
             mine = {}
     done_list = list(mine.get("done", [])) if mine else []
-    shrine = locate_shrine(dev, stop, log, nav)
+    if city_picture() is not None:                           # the camera place comes from the whole-city picture: no slow start, no drifting
+        nav.absolute = True
+        shrine = SHRINE_LABEL_IN_PICTURE
+        log("[i] Squares: finding the camera place by the whole-city picture")
+    else:
+        shrine = locate_shrine(dev, stop, log, nav)
     if shrine:
         for i, n in enumerate(order):
             if stop.is_set():
@@ -7030,19 +7148,26 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
                     shut = 0
                 if shut:
                     log(f"[*] Square {n}: closed {shut} pop-up(s) - finding the way again and retrying")
-                    nav = CityNav(dev, stop, log)
-                    shrine = locate_shrine(dev, stop, log, nav) or shrine
+                    if not nav.absolute:
+                        nav = CityNav(dev, stop, log)
+                        shrine = locate_shrine(dev, stop, log, nav) or shrine
                     r = open_square(dev, cfg, log, stop, nav, shrine, n)
             got[n] = r
             nm = CITY_SQUARES[n][0]
             if r and r[5]:
-                key = re.sub(r" (\d)$", r"#\1", nm) if re.search(r" \d$", nm) else nm + "#1"
+                base = re.sub(r"\s*\d+$", "", r[1]).strip() or r[1]
+                k_n = 1
+                while f"{base}#{k_n}" in items:
+                    k_n += 1
+                key = f"{base}#{k_n}"
                 items[key] = [round(r[3]), round(r[4])]
-                levels[key] = {"name": r[1], "level": r[2]}
+                levels[key] = {"name": r[1], "level": r[2], "square": n}
                 done_list.append(n)
                 try:
                     data = load_city()
                     ent = data.setdefault(serial, {"items": {}})
+                    if nav.absolute and ent.get("frame") != "picture":
+                        ent["items"], ent["levels"], ent["frame"] = {}, {}, "picture"
                     ent.setdefault("items", {})[key] = items[key]
                     ent.setdefault("levels", {})[key] = levels[key]
                     save_city(data)
@@ -7069,6 +7194,8 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
     if items:
         data = load_city()
         ent = data.setdefault(serial, {"items": {}})
+        if nav.absolute and ent.get("frame") != "picture":
+            ent["items"], ent["levels"], ent["frame"] = {}, {}, "picture"
         ent.setdefault("items", {}).update(items)
         ent.setdefault("levels", {}).update(levels)
         save_city(data)
