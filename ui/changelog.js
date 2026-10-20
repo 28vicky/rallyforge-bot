@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.64", date: "2026-10-21",
+    new: ["The Silver Lionheart Knight (Cinnabar) and other points bosses are never joined: they are hit once for alliance points, so no account needs to join them."],
+    fixed: [] },
   { v: "2.4.63", date: "2026-10-21",
     new: ["A new, cleaner look for the whole app: sidebar with your name, one header per instance (name, status, Start/Pause/Stop, More), and tabs Dashboard, Rallies, Activities, City, Plan, Log, Settings. Light and dark themes, Inter font, sentence-case text.",
           "Page size is now a slider (80% to 200%) with quick 100 / 125 / 150 / 200% buttons.",
