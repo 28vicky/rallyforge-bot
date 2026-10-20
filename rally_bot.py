@@ -6340,6 +6340,93 @@ def find_building_test(dev, cfg, log, stop, name, progress=None):
     return {}
 
 
+def capture_city_pictures(dev, cfg, log, stop, progress=None):
+    """Picture capture for building a whole-city picture offline: go to the top-left corner, then sweep the city in a
+    serpentine of plain finger pans (no name reading), saving a clean screenshot at every stop plus how far the map really
+    moved (image matching). Frames: citycap/<serial>/pic_NNN.png, meta: pics.json. Stitching is done offline."""
+    dev.arm_guard(cfg, log, stop)
+    dev.guard_city = True
+    serial = dev.serial if hasattr(dev, "serial") else "default"
+    t0 = time.time()
+    cap_dir = USER / "citycap" / re.sub(r"[^0-9A-Za-z]+", "_", serial) / "pics"
+    try:
+        import shutil
+        shutil.rmtree(cap_dir, ignore_errors=True)
+        cap_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    meta = []
+
+    def rep(text, pct):
+        if progress:
+            try:
+                progress({"phase": "sweeping", "pct": pct, "left": None, "text": text, "stops": len(meta), "total": 40, "row": 0,
+                          "mapped": [], "missing": [], "expected": [], "seconds": int(time.time() - t0)})
+            except Exception:
+                pass
+
+    def pan_measure(dx, dy):
+        before = dev.screenshot()
+        pan_content(dev, stop, dx, dy)
+        x, y, w, h = CITY_VIEW
+        for attempt in range(3):
+            _nap(stop, 0.8, 1.0)
+            after = dev.screenshot()
+            diff = float(cv2.absdiff(before[y:y + h, x:x + w], after[y:y + h, x:x + w]).mean())
+            if diff >= 2.0:
+                break
+            log(f"[i] City pictures: pan {dx:.0f},{dy:.0f} - picture changed {diff:.2f} (try {attempt + 1})")
+        mx, my, resp = city_shift(before, after)
+        if diff < 2.0:
+            return None
+        if not (resp >= 0.05 and abs(mx) < 2.0 * abs(dx) / GAIN * GAIN + 30 and abs(my) < 2.0 * abs(dy) + 30):
+            mx, my = dx * 1.0, dy * 1.0
+        return mx, my, resp, after
+
+    def snap(tag, mx, my, resp):
+        shot = dev.screenshot()
+        i = len(meta)
+        cv2.imwrite(str(cap_dir / f"pic_{i:03d}.png"), shot)
+        meta.append({"i": i, "tag": tag, "shift": [round(float(mx), 1), round(float(my), 1)], "resp": round(float(resp), 3)})
+        (cap_dir / "pics.json").write_text(json.dumps(meta), encoding="utf-8")
+        log(f"[i] City picture {i}: {tag}, map moved {mx:.0f},{my:.0f}")
+
+    rep("Opening the city view", 2)
+    if not ensure_view(dev, cfg, stop, log, "city", tries=14):
+        dev.guard_city = False
+        raise ValueError("Could not get the game to the city view - open the city by hand and try again.")
+    rep("Going to the top-left corner", 5)
+    for axis in (0, 1):
+        for _ in range(12):
+            if stop.is_set():
+                break
+            r = pan_measure(290 if axis == 0 else 0, 0 if axis == 0 else 430)
+            if r is None:
+                break
+    snap("corner", 0, 0, 1)
+    direction = 1
+    for col in range(8):
+        if stop.is_set():
+            break
+        for _ in range(6):
+            if stop.is_set():
+                break
+            r = pan_measure(0, -direction * 360)
+            if r is None:
+                break
+            snap(f"col{col} {'down' if direction == 1 else 'up'}", r[0], r[1], r[2])
+            rep(f"Taking pictures (column {col + 1})", min(95, 8 + col * 11))
+        r = pan_measure(-240, 0)
+        if r is None:
+            break
+        snap(f"col{col} right", r[0], r[1], r[2])
+        direction = -direction
+    dev.guard_city = False
+    rep("Done", 100)
+    log(f"[+] City pictures: {len(meta)} frames in {int(time.time() - t0)} s - saved in citycap")
+    return {}
+
+
 def scan_city(dev, cfg, log, stop, progress=None):
     """The city mapper: reads the building names (works in every city style). Test mode: a file city_test.txt with a building
     name next to the settings runs only the search for that one building."""
@@ -6347,6 +6434,8 @@ def scan_city(dev, cfg, log, stop, progress=None):
         want = (USER / "city_test.txt").read_text(encoding="utf-8").strip()
     except OSError:
         want = ""
+    if want.lower() == "capture":
+        return capture_city_pictures(dev, cfg, log, stop, progress)
     if want:
         return find_building_test(dev, cfg, log, stop, want, progress)
     return scan_city_names(dev, cfg, log, stop, progress)
