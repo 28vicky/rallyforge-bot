@@ -1,33 +1,36 @@
 {
-  "version": "2.4.62",
-  "notes": "Building tasks work in every city style; Champions fixes",
+  "version": "2.4.63",
+  "notes": "New cleaner look: new sidebar, instance header and tabs, Light/Dark, page-size slider, Global/Own monster switch, Telegram live coordinates",
   "files": {
     "rally_bot.py": {
-      "sha256": "729590010f649b8593f53664c06d32c98de0bd6c447b87a82338e19df90738a0"
+      "sha256": "3e54cad31c10dc9447e793cc9b338ca168df8bee2b854497ec61602de302532f"
     },
     "web_app.py": {
-      "sha256": "7975800cdf579b8726c334d84cde23e684e896fb127e4d6699b11d695f23cdc3"
+      "sha256": "891199c5803a1de779e1d668b2e15e6eeb21bcd93f58f76769c716158cbd26e2"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "58c4cb1b1edb2b45c469e0d318d136083ad7e9108abba6d3f3fdb437ccf77be0"
+      "sha256": "5e51a018e5ab48f867a9520f4d804e4d34567a02c2eb5b0a31c68e608ced1f6c"
     },
     "ui/app.js": {
-      "sha256": "c39281368962c67e3d6e5f30e8d98930a4ae1c4bae1341b4546c89480ccb228a"
+      "sha256": "fecdb35f6bd865136680c04b23e41dd0d96c2a1d5137d13a6b6e1bf0cb089f77"
     },
     "ui/changelog.js": {
-      "sha256": "cf30a3e21a6fd81290e71fa3e9c23ed83554afab993d76176b162e50322e9adf"
+      "sha256": "183e2be9060f24735b55c19703eec7ca92c54db0e64582499e8852727dd5f0f1"
     },
     "ui/dialogs.js": {
-      "sha256": "6f6438682092c6db775f9b91a5aa7f94cd55fdfb73cb53a42119ded7e6a674d6"
+      "sha256": "40549bd7764a94cf5129436895741a90d80d7fa051fd8948742d18f28e841df7"
+    },
+    "ui/fonts.css": {
+      "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
     },
     "ui/index.html": {
-      "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
+      "sha256": "6325f039aee1381b49874784046d3d4ece41e64b5eaf8352b58a06e358fb811c"
     },
     "ui/pages.js": {
-      "sha256": "9905e0484bebc0e1b1b56ce8609b63eda2684dca8fed7e4b1ba2353f761b224d"
+      "sha256": "a782a74f37bd3aab5caf82bd4ca6807740978a7416a24c3187cd72fa571d3b3c"
     }
   },
   "mode": "ask",
@@ -136,5 +139,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "137a511a39cb62b35a04c9a9bf9ab34d67e2c3a5f8722aa0f7fdd723c9f15182"
+  "sig": "48a8f26692b3671b34c460247720d7c70c00bf45cd8fb941d6417d10f9b0de01"
 }
