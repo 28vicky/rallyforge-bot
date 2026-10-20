@@ -5314,8 +5314,22 @@ def ring_label_free(shot, centre=(270, 450)):
         flush()
     if not best:
         return None
-    nm = match_building(best[1], cutoff=0.85)               # only to repair an OCR typo of a name the bot already spells
-    return (nm or best[1]), best[2], best[3]
+    txt, gx, gy = best[1], best[2], best[3]
+    try:                                                    # read the label line again, bigger: long names ("Council of State") lose words in the first pass
+        y0, y1 = max(0, gy - 17), min(shot.shape[0], gy + 17)
+        x0, x1 = max(0, gx - 130), min(shot.shape[1], gx + 130)
+        big = cv2.resize(shot[y0:y1, x0:x1], None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+        for t2, ws2 in ocr_lines(big):
+            ws2 = sorted(ws2, key=lambda w: w[1])
+            t3 = " ".join(w[0] for w in ws2).strip(" .,:;|-_*")
+            if re.fullmatch(r"[A-Za-z' ]+", t3) and len(t3) > len(txt) and txt.lower().split()[-1] in t3.lower():
+                cx = sum(w[1] for w in ws2) / len(ws2) / 2.5 + x0
+                txt, gx = t3, int(cx)
+                break
+    except Exception:
+        pass
+    nm = match_building(txt, cutoff=0.85)                   # only to repair an OCR typo of a name the bot already spells
+    return (nm or txt), gx, gy
 
 
 TPL_W, TPL_H = 110, 80                                       # size of the saved picture of a building
@@ -6988,11 +7002,15 @@ def ring_label(shot, expected, pos):
 def close_ring(dev, stop, label_pos):
     """Close the open ring menu by tapping the same building again (the game closes it). Never Back: on the city screen
     Back asks to quit the game. -> True when the ring is gone."""
-    for _ in range(3):
+    spots = [(label_pos[0], label_pos[1] - 35), (270, 430), (label_pos[0], label_pos[1] - 60)]
+    for sp in spots:
         if not find_detail_icon(dev.screenshot()):
             return True
-        dev.tap(int(label_pos[0]), int(label_pos[1] - 35))
-        _nap(stop, 0.8, 1.1)                                 # the game zooms back out after the ring closes
+        dev.tap(int(sp[0]), int(sp[1]))
+        for _ in range(3):                                   # the game zooms back out after the ring closes: give it time before tapping again
+            _nap(stop, 0.5, 0.7)
+            if not find_detail_icon(dev.screenshot()):
+                return True
     return not find_detail_icon(dev.screenshot())
 
 
@@ -7137,6 +7155,7 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
             order = list(sorted(CITY_SQUARES))
             mine = {}
     done_list = list(mine.get("done", [])) if mine else []
+    wipe = not done_list                                    # a fresh run starts from a blank map; a resumed run keeps what it already read
     if city_picture() is not None:                           # the camera place comes from the whole-city picture: no slow start, no drifting
         nav.absolute = True
         shrine = SHRINE_LABEL_IN_PICTURE
@@ -7173,8 +7192,9 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
                 try:
                     data = load_city()
                     ent = data.setdefault(serial, {"items": {}})
-                    if nav.absolute and ent.get("frame") != "picture":
+                    if nav.absolute and (wipe or ent.get("frame") != "picture"):
                         ent["items"], ent["levels"], ent["frame"] = {}, {}, "picture"
+                        wipe = False
                     ent.setdefault("items", {})[key] = items[key]
                     ent.setdefault("levels", {})[key] = levels[key]
                     save_city(data)
