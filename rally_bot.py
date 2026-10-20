@@ -6821,6 +6821,97 @@ def pan_content(dev, stop, dx, dy):
     _nap(stop, 0.9, 1.2)
 
 
+# ---- Learned city layout per account: how far apart the building names really are on THIS account's screen.
+# City styles differ by tens of pixels, so every time two or more names are read together their distance is remembered
+# (running average) and later used to aim at a building from whatever names are in view - fewer looks, no calibration run.
+CITY_OFFSETS_FILE = USER / "city_offsets.json"
+_OFF_LOCK = threading.Lock()
+_OFF_CACHE = {}
+
+
+def _off_load():
+    if not _OFF_CACHE:
+        try:
+            _OFF_CACHE.update(json.loads(CITY_OFFSETS_FILE.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    return _OFF_CACHE
+
+
+def learn_offsets(serial, labs):
+    """Remember the distances between the names read together in one look (labs = [(name, x, y), ...])."""
+    names = {}
+    for n, x, y in labs:
+        names.setdefault(n, (x, y))
+    if len(names) < 2:
+        return
+    with _OFF_LOCK:
+        pairs = _off_load().setdefault(serial or "default", {})
+        keys = sorted(names)
+        for i, a in enumerate(keys):
+            for b in keys[i + 1:]:
+                dx, dy = names[b][0] - names[a][0], names[b][1] - names[a][1]
+                if abs(dx) > 520 or abs(dy) > 800:
+                    continue
+                k = a + "|" + b
+                ox, oy, n = pairs.get(k, [dx, dy, 0])
+                if n >= 2 and (abs(dx - ox) > 60 or abs(dy - oy) > 60):
+                    continue                                    # a misread name: do not let it spoil the average
+                n = min(n, 12)
+                pairs[k] = [round((ox * n + dx) / (n + 1), 1), round((oy * n + dy) / (n + 1), 1), n + 1]
+        try:
+            CITY_OFFSETS_FILE.write_text(json.dumps(_OFF_CACHE), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def _measured(pairs, a, b):
+    """Measured offset from name a to name b: direct, or through one other building. -> (dx, dy) or None."""
+    if a == b:
+        return (0.0, 0.0)
+    v = pairs.get(a + "|" + b)
+    if v:
+        return (v[0], v[1])
+    v = pairs.get(b + "|" + a)
+    if v:
+        return (-v[0], -v[1])
+    return None
+
+
+def estimate_from_names(serial, want, labs, pri):
+    """Where building `want` should be, from the names in view. Uses this account's own measured distances first,
+    then the built-in layout scaled by what was measured on this account. -> (x, y, how) or None."""
+    with _OFF_LOCK:
+        pairs = dict(_off_load().get(serial or "default") or {})
+    direct, hops = [], []
+    for ln, lx, ly in labs:
+        m = _measured(pairs, ln, want)
+        if m:
+            direct.append((lx + m[0], ly + m[1]))
+            continue
+        for mid in {k.split("|")[i] for k in pairs for i in (0, 1)}:        # one hop through a third building
+            a, b = _measured(pairs, ln, mid), _measured(pairs, mid, want)
+            if a and b and mid != ln and mid != want:
+                hops.append((lx + a[0] + b[0], ly + a[1] + b[1]))
+                break
+    if direct or hops:
+        use = direct or hops
+        return sum(e[0] for e in use) / len(use), sum(e[1] for e in use) / len(use), "measured"
+    # no measured distance yet: the built-in layout, scaled by this account's measured/built-in ratio (if any pair is known)
+    sxn = sxd = syn = syd = 0.0
+    for k, (mx, my, _n) in pairs.items():
+        a, b = k.split("|")
+        if a in pri and b in pri:
+            px, py = pri[b][0] - pri[a][0], pri[b][1] - pri[a][1]
+            sxn += mx * px; sxd += px * px; syn += my * py; syd += py * py
+    sx = max(0.5, min(1.6, sxn / sxd)) if sxd > 2500 else 1.0
+    sy = max(0.5, min(1.6, syn / syd)) if syd > 2500 else 1.0
+    ests = [(lx + (pri[want][0] - pri[ln][0]) * sx, ly + (pri[want][1] - pri[ln][1]) * sy) for ln, lx, ly in labs if ln in pri]
+    if not ests:
+        return None
+    return sum(e[0] for e in ests) / len(ests), sum(e[1] for e in ests) / len(ests), "layout x%.2f/%.2f" % (sx, sy)
+
+
 def aim_by_labels(dev, cfg, log, stop, name, tries=14):
     """Bring a building into the safe tap area by reading the names written under the buildings - works in every city
     style, no picture and no counting needed. Whatever names are in view tell where the wanted building should be
@@ -6836,6 +6927,7 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=14):
         if stop.is_set():
             return None
         labs = labels_on_screen(dev, stop)
+        learn_offsets(getattr(dev, "serial", ""), labs)
         hit = [l for l in labs if l[0] == want]
         if hit:
             n_, x, y = hit[0]
@@ -6844,8 +6936,8 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=14):
                 return x, y
             pan_content(dev, stop, 270 - x, 440 - y)
             continue
-        ests = [(lx + pri[want][0] - pri[ln][0], ly + pri[want][1] - pri[ln][1]) for ln, lx, ly in labs if ln in pri]
-        if not ests:
+        est = estimate_from_names(getattr(dev, "serial", ""), want, labs, pri)
+        if not est:
             lost += 1
             if lost > 2:
                 if not ensure_view(dev, cfg, stop, log, "city", tries=4):
@@ -6853,9 +6945,8 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=14):
             pan_content(dev, stop, 0, 150 if lost % 2 else -150)   # nothing readable here: look somewhere else
             continue
         lost = 0
-        ex = sum(e[0] for e in ests) / len(ests)
-        ey = sum(e[1] for e in ests) / len(ests)
-        log(f"[i]   names in view: {', '.join(l[0] for l in labs)} -> {want} should be at about {round(ex)},{round(ey)}")
+        ex, ey, how = est
+        log(f"[i]   names in view: {', '.join(l[0] for l in labs)} -> {want} should be at about {round(ex)},{round(ey)} ({how})")
         pan_content(dev, stop, 270 - ex, 440 - ey)
     return None
 
