@@ -16,7 +16,19 @@ const TOUR = { i: 0, on: false };
 
 function tourDone() { try { localStorage.setItem("rf_tour_done", "1"); } catch (e) {} if (S.cfg) { S.cfg.tour_done = true; api("save", { cfg: { tour_done: true } }, { quiet: true }).catch(() => {}); } }
 function tourSeen() { try { if (localStorage.getItem("rf_tour_done")) return true; } catch (e) {} return !!(S.cfg && S.cfg.tour_done); }
-function maybeStartTour() { if (!tourSeen() && (S.firstRun || !(S.devices || []).some((d) => d.id))) startTour(); }
+// Everybody (new installs and existing ones) gets one small question the first time: "would you like a quick walkthrough?".
+// Yes starts it, No (or the cross) just closes it. Either way it is never asked again.
+function maybeStartTour() { if (!tourSeen()) tourAsk(); }
+function tourAsk() {
+  if (document.getElementById("tourAsk")) return;
+  const close = () => { const e = document.getElementById("tourAsk"); if (e) e.remove(); };
+  document.body.append(h("div", { id: "tourAsk", class: "tour-ask", role: "dialog" },
+    h("div", { class: "tour-t" }, "Would you like a quick walkthrough?"),
+    h("div", { class: "tour-p" }, "Two minutes: where to click, how to set up your presets and start the bot."),
+    h("div", { class: "tour-b", style: { marginTop: "12px" } },
+      h("button", { class: "btn sm pri", type: "button", onclick: () => { close(); startTour(); } }, "Yes, show me"),
+      h("button", { class: "btn sm", type: "button", onclick: () => { close(); tourDone(); } }, "No thanks"))));
+}
 
 function startTour() {
   if (TOUR.on) return;
