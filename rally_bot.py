@@ -6437,7 +6437,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         nav = nav_state.get("anav")
         if nav is None:
             nav = CityNav(dev, stop, log)
-            nav.absolute = str(cfg.get("city_nav", "auto")).lower() != "squares" and not PICTURE_BAD.get(serial_)    # squares = never use the picture (another city style); remembered per instance once the picture did not fit
+            _force = str(cfg.get("city_nav", "auto")).lower() == "squares" or (USER / "city_nav_squares.txt").exists()     # the file is a test switch: every instance walks by squares
+            nav.absolute = not _force and not PICTURE_BAD.get(serial_)    # squares = never use the picture (another city style); remembered per instance once the picture did not fit
             nav.quiet = True
             nav_state["anav"] = nav
             if nav.absolute:
@@ -6462,6 +6463,13 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 if cp:
                     nav.cx, nav.cy = cp
                 nav.goto(tx, ty)
+            if not nav.absolute:                              # test aid: when the picture happens to fit, say how far the counted position is from the real one
+                try:
+                    r_ = locate_in_city(dev.screenshot())
+                    if r_:
+                        log(f"[i]   squares check: counted camera {round(nav.cx)},{round(nav.cy)} - picture says {round(r_[0])},{round(r_[1])} (off by {round(nav.cx - r_[0])},{round(nav.cy - r_[1])})")
+                except Exception:
+                    pass
             px, py = tx - nav.cx, ty - nav.cy
             x0, y0, w, h = SAFE_TAP_AREA
             if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
