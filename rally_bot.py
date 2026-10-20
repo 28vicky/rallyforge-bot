@@ -5318,6 +5318,8 @@ def ring_label_free(shot, centre=(270, 450)):
     try:                                                    # read the label line again, bigger: long names ("Council of State") lose words in the first pass
         y0, y1 = max(0, gy - 17), min(shot.shape[0], gy + 17)
         x0, x1 = max(0, gx - 130), min(shot.shape[1], gx + 130)
+        if True:
+            raise ValueError                                # bigger re-read added junk from the ring icons: off
         big = cv2.resize(shot[y0:y1, x0:x1], None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
         for t2, ws2 in ocr_lines(big):
             ws2 = sorted(ws2, key=lambda w: w[1])
@@ -7002,7 +7004,8 @@ def ring_label(shot, expected, pos):
 def close_ring(dev, stop, label_pos):
     """Close the open ring menu by tapping the same building again (the game closes it). Never Back: on the city screen
     Back asks to quit the game. -> True when the ring is gone."""
-    spots = [(label_pos[0], label_pos[1] - 35), (270, 430), (label_pos[0], label_pos[1] - 60)]
+    lx = min(max(label_pos[0], 110), 400)                    # never aim at the icon columns on the screen edges (Login Gifts, Quests ...)
+    spots = [(lx, label_pos[1] - 35), (270, 430), (lx, label_pos[1] - 60)]
     for sp in spots:
         if not find_detail_icon(dev.screenshot()):
             return True
@@ -7037,14 +7040,15 @@ def read_square(dev, cfg, log, stop, pos, expected="", levels=False):
     if not ic:
         log("[!]   no ring menu after tapping - nothing opened")
         return None
-    lab = ring_label_free(ring)
+    def _read(img):                                         # any building name the game prints (spelled the way the bot knows it), else the raw text
+        return ring_label(img, "", pos) or ring_label_free(img)
+    lab = _read(ring)
     for _ in range(3):                                      # the label may still be drawing: look again
         if lab or stop.is_set():
             break
         nap(0.5, 0.7)
         ring = dev.screenshot()
-        lab = ring_label_free(ring)
-    lab = lab or ring_label(ring, expected, pos)
+        lab = _read(ring)
     if not levels:
         if not lab:
             log("[!]   ring menu is open but the building name could not be read")
