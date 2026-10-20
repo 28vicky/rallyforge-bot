@@ -1050,7 +1050,7 @@ PAGES.themes = function () {
   const segs = h("div", { class: "seg" });
   const drawSeg = () => { segs.innerHTML = ""; [["dark", "Dark"], ["light", "Light"], ["auto", "Follow Windows"]].forEach(([m, l]) => segs.appendChild(h("button", { class: mode() === m ? "on" : "", onclick: () => { setTheme(null, m); renderModeIcon(); drawSeg(); drawThumbs(); } }, l))); };
   const thumbs = h("div", { class: "thumbs" });
-  const PALS = [["ivory", "Ivory", "Warm and calm, clay accent"], ["midnight", "Midnight", "Cool, sharp, indigo accent"], ["amber", "Amber", "Warm copper (classic)"], ["sage", "Sage", "Calm teal-green (classic)"]];
+  const PALS = [["ivory", "Ivory", "Warm and calm, clay accent"]];                 // Midnight, Amber and Sage are hidden for now
   const drawThumbs = () => {
     thumbs.innerHTML = "";
     const m = resolvedMode();
@@ -1076,7 +1076,15 @@ PAGES.themes = function () {
     look.append(
       row("Buttons", segOf("ui_btn", [["raised", "Plain"], ["tinted", "Accent tint"]], "raised"), "Tint the buttons with the accent colour."),
       row("Borders", segOf("ui_border", [["subtle", "Subtle"], ["accent", "Accent"]], "subtle"), "Outline of cards, buttons and boxes."),
-      row("Text size", segOf("ui_text", [[75, "Small"], [85, "Normal"], [100, "Large"], [115, "Largest"]], 85), "Makes everything in the window bigger or smaller."),
+      row("Page size", (() => {
+        const cur = Math.max(80, Math.min(200, parseInt(c.ui_text, 10) || 100));
+        const lab = h("b", { class: "pzval" }, cur + "%");
+        const sl = h("input", { type: "range", min: 80, max: 200, step: 5, value: cur, class: "pzrange" });
+        sl.addEventListener("input", () => { lab.textContent = sl.value + "%"; });
+        sl.addEventListener("change", () => { setLook({ ui_text: parseInt(sl.value, 10) }); });
+        const pre = h("div", { class: "row", style: { gap: "6px" } }, [100, 125, 150, 200].map((v) => h("button", { class: "btn sm", onclick: () => { setLook({ ui_text: v }); drawLook(); } }, v + "%")));
+        return h("div", { class: "row", style: { gap: "14px", alignItems: "center", flexWrap: "wrap" } }, sl, lab, pre);
+      })(), "Makes everything in the window bigger or smaller."),
       row("Instance name", segOf("ui_name", [[20, "Small"], [24, "Medium"], [30, "Large"], [38, "Huge"]], 24), "Size of the name at the top of each instance page."),
       row("Corners", segOf("ui_round", [["sharp", "Sharp"], ["normal", "Soft"], ["round", "Round"]], "normal"), "How round the cards and buttons are."));
   };
@@ -1084,12 +1092,12 @@ PAGES.themes = function () {
   hexIn.onchange = () => { let v = hexIn.value.trim(); if (v && v[0] !== "#") v = "#" + v; if (/^#[0-9a-f]{6}$/i.test(v)) { setLook({ ui_accent: v.toLowerCase() }); drawLook(); } else toast("Type a colour like #d9a566.", "bad"); };
   drawLook();
   return h("div", {},
-    panel("Appearance", h("div", { class: "row", style: { gap: "16px" } }, h("span", { class: "lab" }, "Appearance"), segs, h("span", { class: "hint" }, "One switch: every theme follows it.")), thumbs,
-      note("Click a theme to switch to it at once. The sun / moon button at the top right flips between dark and light from any tab.")),
+    panel("Appearance", h("div", { class: "row", style: { gap: "16px" } }, h("span", { class: "lab" }, "Appearance"), segs, h("span", { class: "hint" }, "Light, dark, or follow Windows.")),
+      note("The sun / moon button at the top right flips between dark and light from any tab.")),
     panel("Accent colour", note("Pick a colour for the highlights: the active tab, switches, the selected instance and the focus outlines. The text colour on top of it is chosen automatically so it stays readable."),
       h("div", { class: "row", style: { gap: "12px" } }, sw, picker, hexIn)),
     panel("Look", look,
-      h("div", { class: "row", style: { marginTop: "6px" } }, btn("Reset look", () => { setLook({ ui_accent: "", ui_btn: "raised", ui_border: "subtle", ui_round: "normal", ui_text: 85, ui_name: 24 }); drawLook(); }, "", "refresh"))));
+      h("div", { class: "row", style: { marginTop: "6px" } }, btn("Reset look", () => { setLook({ ui_accent: "", ui_btn: "raised", ui_border: "subtle", ui_round: "normal", ui_text: 100, ui_name: 24 }); drawLook(); }, "", "refresh"))));
 };
 
 // ====================================================================== license (sold edition only)

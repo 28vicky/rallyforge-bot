@@ -138,15 +138,17 @@ function applyCustom() {
     const base = cs.getPropertyValue("--btn").trim();
     st.setProperty("--btn", `linear-gradient(rgba(${ar},${ag},${ab},${light ? 0.2 : 0.17}),rgba(${ar},${ag},${ab},${light ? 0.2 : 0.17})), ${base}`);
   }
-  const tz = Math.max(70, Math.min(150, parseInt(c.ui_text, 10) || 85));
+  const tz = Math.max(80, Math.min(200, parseInt(c.ui_text, 10) || 100));
   try { root.style.zoom = tz === 100 ? "" : String(tz / 100); } catch (e) {}
   const R = { sharp: [6, 4, 8], round: [28, 18, 28] }[c.ui_round];
   if (R) { st.setProperty("--r1", R[0] + "px"); st.setProperty("--r2", R[1] + "px"); st.setProperty("--rad", R[2] + "px"); }
 }
+const PALS_ON = ["ivory"];                       // Midnight, Amber and Sage are kept in the code but hidden for now
+const curPal = () => (PALS_ON.includes(S.cfg.ui_pal) ? S.cfg.ui_pal : "ivory");
 function applyTheme() {
-  document.documentElement.dataset.pal = S.cfg.ui_pal || "ivory";
+  document.documentElement.dataset.pal = curPal();
   document.documentElement.dataset.mode = resolvedMode();
-  try { localStorage.setItem("rf_theme", JSON.stringify({ pal: S.cfg.ui_pal || "ivory", mode: S.cfg.ui_mode || "light" })); } catch (e) {}
+  try { localStorage.setItem("rf_theme", JSON.stringify({ pal: curPal(), mode: S.cfg.ui_mode || "light" })); } catch (e) {}
   applyCustom();
 }
 function setLook(o) {

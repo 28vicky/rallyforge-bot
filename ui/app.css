@@ -726,3 +726,5 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .ownseg button.on{background:var(--accent1);color:var(--accfg)}
 /* one rule for "selected": filled with the accent colour */
 :root .sub.on{background:var(--accent1);color:var(--accfg);border-color:transparent}
+.pzrange{width:220px;accent-color:var(--accent1)}
+.pzval{min-width:46px}
