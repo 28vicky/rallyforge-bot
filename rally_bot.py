@@ -6804,6 +6804,15 @@ DUTY_LIBRARY = [
     {"id": "collect_resources", "group": "Common tasks", "title": "Collect resources", "every_min": 180, "verified": False,
      "note": "Taps every mapped farm / sawmill / quarry / mine. Needs the city mapper.",
      "target": "building:Farm", "count": 6, "steps": ["wait 1", "tap_text Collect|Claim"]},
+    {"id": "reach_tavern", "group": "Common tasks", "title": "Test: go to Tavern", "every_min": 60, "verified": False,
+     "note": "Only checks that the bot walks to the Tavern and opens its menu (nothing is pressed).",
+     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 3"]},
+    {"id": "reach_market", "group": "Common tasks", "title": "Test: go to Market", "every_min": 60, "verified": False,
+     "note": "Only checks that the bot walks to the Market and opens its menu (nothing is pressed).",
+     "target": "building:Market", "tap_dy": 0, "steps": ["wait 3"]},
+    {"id": "reach_embassy", "group": "Common tasks", "title": "Test: go to Embassy", "every_min": 60, "verified": False,
+     "note": "Only checks that the bot walks to the Embassy and opens its menu (nothing is pressed).",
+     "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 3"]},
 ]
 DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
 
