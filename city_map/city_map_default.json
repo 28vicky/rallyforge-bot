@@ -1,0 +1,772 @@
+{
+ "note": "Kiravik whole-city picture (2344x1624 mosaic px; emulator px = mosaic/1.017). id 1 = Keep. tap = measured tap point; box = square around the building.",
+ "image": "city_map_default.png",
+ "buildings": [
+  {
+   "id": 1,
+   "name": "Keep",
+   "box": [
+    1600,
+    250,
+    1840,
+    480
+   ],
+   "center": [
+    1720,
+    365
+   ],
+   "tap": [
+    1715,
+    446
+   ],
+   "offset_from_shrine_emu": [
+    314,
+    -139
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Tavern",
+   "box": [
+    1565,
+    485,
+    1700,
+    635
+   ],
+   "center": [
+    1632,
+    560
+   ],
+   "tap": [
+    1623,
+    584
+   ],
+   "offset_from_shrine_emu": [
+    223,
+    -3
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Shrine",
+   "box": [
+    1355,
+    500,
+    1500,
+    615
+   ],
+   "center": [
+    1427,
+    557
+   ],
+   "tap": [
+    1396,
+    587
+   ],
+   "offset_from_shrine_emu": [
+    0,
+    0
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Victory Column",
+   "box": [
+    610,
+    190,
+    790,
+    305
+   ],
+   "center": [
+    700,
+    247
+   ],
+   "tap": [
+    703,
+    218
+   ],
+   "offset_from_shrine_emu": [
+    -681,
+    -363
+   ]
+  },
+  {
+   "id": 5,
+   "name": "Council of State",
+   "box": [
+    1395,
+    60,
+    1545,
+    195
+   ],
+   "center": [
+    1470,
+    127
+   ],
+   "tap": [
+    1471,
+    141
+   ],
+   "offset_from_shrine_emu": [
+    74,
+    -439
+   ]
+  },
+  {
+   "id": 6,
+   "name": "Ideal Land",
+   "box": [
+    1640,
+    30,
+    1745,
+    155
+   ],
+   "center": [
+    1692,
+    92
+   ],
+   "tap": [
+    1725,
+    130
+   ],
+   "offset_from_shrine_emu": [
+    324,
+    -449
+   ]
+  },
+  {
+   "id": 7,
+   "name": "Dragon Cliff",
+   "box": [
+    1990,
+    10,
+    2235,
+    290
+   ],
+   "center": [
+    2112,
+    150
+   ],
+   "tap": [
+    2058,
+    132
+   ],
+   "offset_from_shrine_emu": [
+    651,
+    -447
+   ]
+  },
+  {
+   "id": 8,
+   "name": "Arsenal",
+   "box": [
+    1235,
+    140,
+    1385,
+    265
+   ],
+   "center": [
+    1310,
+    202
+   ],
+   "tap": [
+    1303,
+    229
+   ],
+   "offset_from_shrine_emu": [
+    -91,
+    -352
+   ]
+  },
+  {
+   "id": 9,
+   "name": "Triumphal Arch",
+   "box": [
+    1570,
+    130,
+    1675,
+    255
+   ],
+   "center": [
+    1622,
+    192
+   ],
+   "tap": [
+    1619,
+    224
+   ],
+   "offset_from_shrine_emu": [
+    219,
+    -357
+   ]
+  },
+  {
+   "id": 10,
+   "name": "Academy",
+   "box": [
+    1395,
+    215,
+    1530,
+    345
+   ],
+   "center": [
+    1462,
+    280
+   ],
+   "tap": [
+    1462,
+    310
+   ],
+   "offset_from_shrine_emu": [
+    65,
+    -272
+   ]
+  },
+  {
+   "id": 11,
+   "name": "Military Academy",
+   "box": [
+    1850,
+    245,
+    1965,
+    360
+   ],
+   "center": [
+    1907,
+    302
+   ],
+   "tap": [
+    1896,
+    315
+   ],
+   "offset_from_shrine_emu": [
+    492,
+    -267
+   ]
+  },
+  {
+   "id": 12,
+   "name": "Research Factory",
+   "box": [
+    890,
+    335,
+    1000,
+    425
+   ],
+   "center": [
+    945,
+    380
+   ],
+   "tap": [
+    937,
+    402
+   ],
+   "offset_from_shrine_emu": [
+    -451,
+    -182
+   ]
+  },
+  {
+   "id": 13,
+   "name": "Barracks",
+   "box": [
+    1110,
+    320,
+    1265,
+    450
+   ],
+   "center": [
+    1187,
+    385
+   ],
+   "tap": [
+    1188,
+    406
+   ],
+   "offset_from_shrine_emu": [
+    -205,
+    -178
+   ]
+  },
+  {
+   "id": 14,
+   "name": "Wisdom Dome",
+   "box": [
+    2035,
+    360,
+    2145,
+    455
+   ],
+   "center": [
+    2090,
+    407
+   ],
+   "tap": [
+    2089,
+    425
+   ],
+   "offset_from_shrine_emu": [
+    681,
+    -159
+   ]
+  },
+  {
+   "id": 15,
+   "name": "Warehouse",
+   "box": [
+    1300,
+    335,
+    1450,
+    490
+   ],
+   "center": [
+    1375,
+    412
+   ],
+   "tap": [
+    1377,
+    452
+   ],
+   "offset_from_shrine_emu": [
+    -19,
+    -133
+   ]
+  },
+  {
+   "id": 16,
+   "name": "Art Hall",
+   "box": [
+    645,
+    395,
+    815,
+    530
+   ],
+   "center": [
+    730,
+    462
+   ],
+   "tap": [
+    757,
+    484
+   ],
+   "offset_from_shrine_emu": [
+    -628,
+    -101
+   ]
+  },
+  {
+   "id": 17,
+   "name": "Prison",
+   "box": [
+    935,
+    395,
+    1090,
+    540
+   ],
+   "center": [
+    1012,
+    467
+   ],
+   "tap": [
+    1009,
+    497
+   ],
+   "offset_from_shrine_emu": [
+    -381,
+    -88
+   ]
+  },
+  {
+   "id": 18,
+   "name": "Holy Palace",
+   "box": [
+    1855,
+    400,
+    1985,
+    565
+   ],
+   "center": [
+    1920,
+    482
+   ],
+   "tap": [
+    1933,
+    513
+   ],
+   "offset_from_shrine_emu": [
+    528,
+    -73
+   ]
+  },
+  {
+   "id": 19,
+   "name": "Trap Factory",
+   "box": [
+    1095,
+    495,
+    1270,
+    625
+   ],
+   "center": [
+    1182,
+    560
+   ],
+   "tap": [
+    1190,
+    581
+   ],
+   "offset_from_shrine_emu": [
+    -203,
+    -6
+   ]
+  },
+  {
+   "id": 20,
+   "name": "Archer Camp",
+   "box": [
+    1985,
+    535,
+    2145,
+    665
+   ],
+   "center": [
+    2065,
+    600
+   ],
+   "tap": [
+    2064,
+    614
+   ],
+   "offset_from_shrine_emu": [
+    657,
+    27
+   ]
+  },
+  {
+   "id": 21,
+   "name": "Pasture",
+   "box": [
+    505,
+    490,
+    640,
+    625
+   ],
+   "center": [
+    572,
+    557
+   ],
+   "tap": [
+    574,
+    577
+   ],
+   "offset_from_shrine_emu": [
+    -808,
+    -10
+   ]
+  },
+  {
+   "id": 22,
+   "name": "Stables",
+   "box": [
+    730,
+    585,
+    880,
+    695
+   ],
+   "center": [
+    805,
+    640
+   ],
+   "tap": [
+    809,
+    639
+   ],
+   "offset_from_shrine_emu": [
+    -577,
+    51
+   ]
+  },
+  {
+   "id": 23,
+   "name": "Market",
+   "box": [
+    895,
+    650,
+    1020,
+    760
+   ],
+   "center": [
+    957,
+    705
+   ],
+   "tap": [
+    964,
+    721
+   ],
+   "offset_from_shrine_emu": [
+    -425,
+    132
+   ]
+  },
+  {
+   "id": 24,
+   "name": "Workshop",
+   "box": [
+    1400,
+    650,
+    1555,
+    750
+   ],
+   "center": [
+    1477,
+    700
+   ],
+   "tap": [
+    1487,
+    730
+   ],
+   "offset_from_shrine_emu": [
+    89,
+    141
+   ]
+  },
+  {
+   "id": 25,
+   "name": "War Hall",
+   "box": [
+    1750,
+    630,
+    1905,
+    755
+   ],
+   "center": [
+    1827,
+    692
+   ],
+   "tap": [
+    1808,
+    715
+   ],
+   "offset_from_shrine_emu": [
+    405,
+    126
+   ]
+  },
+  {
+   "id": 26,
+   "name": "Embassy",
+   "box": [
+    1570,
+    715,
+    1710,
+    845
+   ],
+   "center": [
+    1640,
+    780
+   ],
+   "tap": [
+    1631,
+    802
+   ],
+   "offset_from_shrine_emu": [
+    231,
+    211
+   ]
+  },
+  {
+   "id": 27,
+   "name": "Hospital",
+   "box": [
+    1265,
+    800,
+    1390,
+    945
+   ],
+   "center": [
+    1327,
+    872
+   ],
+   "tap": [
+    1323,
+    903
+   ],
+   "offset_from_shrine_emu": [
+    -72,
+    311
+   ]
+  },
+  {
+   "id": 28,
+   "name": "Rally Spot",
+   "box": [
+    2000,
+    725,
+    2120,
+    900
+   ],
+   "center": [
+    2060,
+    812
+   ],
+   "tap": [
+    2051,
+    825
+   ],
+   "offset_from_shrine_emu": [
+    644,
+    234
+   ]
+  },
+  {
+   "id": 29,
+   "name": "Walls",
+   "box": [
+    800,
+    790,
+    1030,
+    975
+   ],
+   "center": [
+    915,
+    882
+   ],
+   "tap": [
+    983,
+    883
+   ],
+   "offset_from_shrine_emu": [
+    -406,
+    291
+   ]
+  },
+  {
+   "id": 30,
+   "name": "Battlefield",
+   "box": [
+    625,
+    905,
+    735,
+    1000
+   ],
+   "center": [
+    680,
+    952
+   ],
+   "tap": [
+    683,
+    950
+   ],
+   "offset_from_shrine_emu": [
+    -701,
+    357
+   ]
+  },
+  {
+   "id": 31,
+   "name": "Bounty Cave",
+   "box": [
+    855,
+    1035,
+    975,
+    1105
+   ],
+   "center": [
+    915,
+    1070
+   ],
+   "tap": [
+    917,
+    1050
+   ],
+   "offset_from_shrine_emu": [
+    -471,
+    455
+   ]
+  },
+  {
+   "id": 32,
+   "name": "Wonder",
+   "box": [
+    200,
+    230,
+    560,
+    520
+   ],
+   "center": [
+    380,
+    375
+   ]
+  },
+  {
+   "id": 33,
+   "name": "Subordinate City",
+   "box": [
+    240,
+    0,
+    400,
+    110
+   ],
+   "center": [
+    320,
+    55
+   ]
+  },
+  {
+   "id": 34,
+   "name": "Watchtower",
+   "box": [
+    180,
+    405,
+    252,
+    592
+   ],
+   "center": [
+    216,
+    498
+   ]
+  },
+  {
+   "id": 35,
+   "name": "Archer Tower 1",
+   "box": [
+    264,
+    1195,
+    322,
+    1348
+   ],
+   "center": [
+    293,
+    1271
+   ]
+  },
+  {
+   "id": 36,
+   "name": "Archer Tower 2",
+   "box": [
+    363,
+    1254,
+    416,
+    1407
+   ],
+   "center": [
+    389,
+    1330
+   ]
+  },
+  {
+   "id": 37,
+   "name": "Army Camp",
+   "box": [
+    1640,
+    910,
+    2240,
+    1120
+   ],
+   "center": [
+    1940,
+    1015
+   ]
+  }
+ ]
+}
