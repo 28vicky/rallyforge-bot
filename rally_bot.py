@@ -5331,6 +5331,15 @@ def ring_label_free(shot, centre=(270, 450)):
     except Exception:
         pass
     nm = match_building(txt, cutoff=0.85)                   # only to repair an OCR typo of a name the bot already spells
+    if not nm:                                              # a long name read only in part ("Vict", "of State"): finish it from the names the bot knows
+        tw = [w.lower() for w in txt.split() if len(w) >= 2]
+        hits = []
+        for known in BUILDING_NAMES:
+            kw = [w.lower() for w in known.split()]
+            if tw and all(any(k.startswith(w) or w.startswith(k) for k in kw) for w in tw) and sum(len(w) for w in tw) >= 4:
+                hits.append(known)
+        if len(hits) == 1:
+            nm = BUILDING_ALIASES.get(hits[0], hits[0])
     return (nm or txt), gx, gy
 
 
