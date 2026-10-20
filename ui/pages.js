@@ -269,7 +269,7 @@ function instancePage(serial) {
   const stBtn = (t, fn) => h("button", { class: "btn", "data-act": t.toLowerCase(), onclick: fn }, t);
   const bar = h("div", { class: "row", style: { marginBottom: "14px" } },
     stBtn("Start", () => collectAndRun("start", { serial })), stBtn("Pause", () => act(api("pause", { serial }))), stBtn("Stop", () => act(api("stop", { serial }))), btn("Take game back now", () => act(api("takeback", { serial }))),
-    btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"),
+    btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"), btn("Map by squares", () => scanCityTapsFlow(), "sm"),
     btn("Profile \u25BE", (e) => menu(e.currentTarget, [{ label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "sm"));
   const head = h("div", { class: "row", style: { margin: "0 0 14px", gap: "16px", alignItems: "center" } },
     h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", color: "var(--accent2)", margin: "0" } }, dev.name || "Instance " + d.idx),
