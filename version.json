@@ -1,12 +1,12 @@
 {
-  "version": "2.4.53",
-  "notes": "Stamina fills all the way up (slider to the end) by default; Exact number box only shows when chosen.",
+  "version": "2.4.55",
+  "notes": "Start on a paused instance resumes it straight away.",
   "files": {
     "rally_bot.py": {
-      "sha256": "3f46914e455bd42dbd59a940e9763103f926087ec1d5b0884506c1ade7c97248"
+      "sha256": "7160b740d9f56172797d6f7569c4143746d9d66b48cef494a1a45df77ef76bd8"
     },
     "web_app.py": {
-      "sha256": "35c7fee927ede0f0891c5ced224c0a8cb8cc7acdd307ebf8e7614287952ce6a2"
+      "sha256": "bd5a85dd793b54699a6be287556f8b767b7b0098432c4a2f6f56d7271367fd74"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "c39281368962c67e3d6e5f30e8d98930a4ae1c4bae1341b4546c89480ccb228a"
     },
     "ui/changelog.js": {
-      "sha256": "c1164cd7497cd2084504130cae0e450677d89ae257f5c85169dde89ed569ed1c"
+      "sha256": "87d696696dc5fc284502162555f2261aea394ebc8db4682cf3d86a4f673f51c4"
     },
     "ui/dialogs.js": {
       "sha256": "6f6438682092c6db775f9b91a5aa7f94cd55fdfb73cb53a42119ded7e6a674d6"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "715c5fabb14c8d908c4ad194d727d5707d8da428cd946f3306e699015a1b0415"
+  "sig": "0307f6da3dd24d9c20cda76fca0cf7790a1d077c20f3cbe17be6681e337a5c9e"
 }
