@@ -6749,7 +6749,7 @@ ANCHOR_TO_KEEP = {"Tavern": (90, -135), "Shrine": (313, -139)}   # Keep label mi
 FIXED_OFFSETS_FROM_SHRINE = {"Victory Column": [-681, -363], "Council of State": [74, -439], "Ideal Land": [324, -449], "Dragon Cliff": [651, -447], "Arsenal": [-91, -352], "Triumphal Arch": [219, -357], "Academy": [65, -272], "Military Academy": [492, -267], "Research Factory": [-451, -182], "Barracks": [-205, -178], "Wisdom Dome": [681, -159], "Warehouse": [-19, -133], "Keep": [314, -139], "Art Hall": [-628, -101], "Prison": [-381, -88], "Holy Palace": [528, -73], "Tavern": [223, -3], "Trap Factory": [-203, -6], "Shrine": [0, 0], "Archer Camp": [657, 27], "Pasture": [-808, -10], "Stables": [-577, 51], "Market": [-425, 132], "Workshop": [89, 141], "War Hall": [405, 126], "Embassy": [231, 211], "Hospital": [-72, 311], "Rally Spot": [644, 234], "Walls": [-406, 291], "Battlefield": [-701, 357], "Bounty Cave": [-471, 455]}
 
 # Numbered squares of the default city map (city_map/city_map_default.png): number -> [name, centre of the square minus the Shrine label, emulator pixels]. 1 = Keep.
-CITY_SQUARES = {"1": ["Keep", 319, -218], "2": ["Tavern", 232, -27], "3": ["Shrine", 30, -29], "4": ["Victory Column", -684, -334], "5": ["Council of State", 73, -452], "6": ["Ideal Land", 291, -487], "7": ["Dragon Cliff", 704, -430], "8": ["Arsenal", -85, -379], "9": ["Triumphal Arch", 222, -388], "10": ["Academy", 65, -302], "11": ["Military Academy", 502, -280], "12": ["Research Factory", -443, -204], "13": ["Barracks", -206, -199], "14": ["Wisdom Dome", 682, -177], "15": ["Warehouse", -21, -172], "16": ["Art Hall", -655, -123], "17": ["Prison", -378, -118], "18": ["Holy Palace", 515, -103], "19": ["Trap Factory", -210, -27], "20": ["Archer Camp", 658, 13], "21": ["Pasture", -810, -29], "22": ["Stables", -581, 52], "23": ["Market", -432, 116], "24": ["Workshop", 80, 111], "25": ["War Hall", 424, 103], "26": ["Embassy", 240, 190], "27": ["Hospital", -68, 280], "28": ["Rally Spot", 653, 221], "29": ["Walls", -473, 290], "30": ["Battlefield", -704, 359], "31": ["Bounty Cave", -473, 475], "32": ["Wonder", -999, -208], "33": ["Subordinate City", -1058, -523], "34": ["Watchtower", -1160, -88], "35": ["Archer Tower 1", -1085, 673], "36": ["Archer Tower 2", -990, 731], "37": ["Army Camp", 535, 421]}
+CITY_SQUARES = {int(k): v for k, v in {"1": ["Keep", 319, -218], "2": ["Tavern", 232, -27], "3": ["Shrine", 30, -29], "4": ["Victory Column", -684, -334], "5": ["Council of State", 73, -452], "6": ["Ideal Land", 291, -487], "7": ["Dragon Cliff", 704, -430], "8": ["Arsenal", -85, -379], "9": ["Triumphal Arch", 222, -388], "10": ["Academy", 65, -302], "11": ["Military Academy", 502, -280], "12": ["Research Factory", -443, -204], "13": ["Barracks", -206, -199], "14": ["Wisdom Dome", 682, -177], "15": ["Warehouse", -21, -172], "16": ["Art Hall", -655, -123], "17": ["Prison", -378, -118], "18": ["Holy Palace", 515, -103], "19": ["Trap Factory", -210, -27], "20": ["Archer Camp", 658, 13], "21": ["Pasture", -810, -29], "22": ["Stables", -581, 52], "23": ["Market", -432, 116], "24": ["Workshop", 80, 111], "25": ["War Hall", 424, 103], "26": ["Embassy", 240, 190], "27": ["Hospital", -68, 280], "28": ["Rally Spot", 653, 221], "29": ["Walls", -473, 290], "30": ["Battlefield", -704, 359], "31": ["Bounty Cave", -473, 475], "32": ["Wonder", -999, -208], "33": ["Subordinate City", -1058, -523], "34": ["Watchtower", -1160, -88], "35": ["Archer Tower 1", -1085, 673], "36": ["Archer Tower 2", -990, 731], "37": ["Army Camp", 535, 421]}.items()}
 
 CALIB_STOPS = [(1141, 609), (1312, 588), (1000, 800), (1400, 800), (700, 650), (1000, 450), (1400, 450), (600, 900), (1450, 700)]
 
@@ -6853,23 +6853,63 @@ def find_detail_icon(shot, thr=0.8):
     return ml[0] + tw // 2, ml[1] + 100 + th // 2, float(mv)
 
 
-def read_square(dev, cfg, log, stop, pos, expected=""):
-    """Tap the building at pos, tap its i (Detail) icon (found by its picture), then More Information and read the
-    header ("Keep Level 48"). Every step first checks that the screen it expects is really there. Buildings without a
-    More Information button (Arsenal) are read from the name on the Detail picture. Everything is closed again.
-    -> (name, level) or None."""
+def ring_label(shot, expected, pos):
+    """The building name the game prints under a tapped building (ring menu open). -> (name, x, y) of the best match or None.
+    Prefers the expected building; otherwise the name nearest to where we tapped."""
+    cands = []
+    for text, ws in ocr_lines(shot[120:760, 40:500]):
+        for n in (1, 2, 3):
+            for i in range(len(ws) - n + 1):
+                seg = ws[i:i + n]
+                nm = match_building(" ".join(w[0] for w in seg))
+                if nm:
+                    cands.append((nm, int(sum(w[1] for w in seg) / n) + 40, int(sum(w[2] for w in seg) / n) + 120))
+    for text, ws in ocr_lines(shot[120:760, 40:500]):          # a long name read only in part ("Arch" of "Triumphal Arch") counts for the expected building
+        for w in ws:
+            if len(w[0]) >= 4 and str(expected).count(" ") and w[0].lower().strip(".,:;*") in str(expected).lower().split():
+                cands.append((str(expected), int(w[1]) + 40, int(w[2]) + 120))
+    if not cands:
+        return None
+    norm = lambda t: BUILDING_ALIASES.get(t, t).lower().replace(" ", "")
+    exp = [c for c in cands if norm(c[0]) == norm(expected) or str(expected).lower().startswith(c[0].lower())]
+    pool = exp or cands
+    return min(pool, key=lambda c: (c[1] - pos[0]) ** 2 + (c[2] - pos[1]) ** 2)
+
+
+def close_ring(dev, stop, label_pos):
+    """Close the open ring menu by tapping the same building again (the game closes it). Never Back: on the city screen
+    Back asks to quit the game. -> True when the ring is gone."""
+    for _ in range(2):
+        if not find_detail_icon(dev.screenshot()):
+            return True
+        dev.tap(int(label_pos[0]), int(label_pos[1] - 35))
+        _nap(stop, 0.6, 0.9)
+    return not find_detail_icon(dev.screenshot())
+
+
+def read_square(dev, cfg, log, stop, pos, expected="", levels=False):
+    """Tap the building at pos and read its name from the label the game prints under it (the ring menu is open; its i
+    icon, found by picture, is the proof that the menu opened). With levels=True also press the i icon, More Information
+    and read "Name Level N". Every step first checks that the screen it expects is really there.
+    -> (name, level, (label x, label y)) or None. In the quick mode the ring menu is left open (see close_ring)."""
     nap = lambda lo, hi=None: _nap(stop, lo, hi)
-    ic = None
+    ic = ring = lab = None
     for attempt in (1, 2):                                  # a bubble over the building can eat the first tap
         dev.tap(int(pos[0]), int(pos[1]))
-        nap(0.9, 1.2)
+        nap(0.8, 1.1)
         ring = dev.screenshot()
         ic = find_detail_icon(ring)
         if ic:
             break
     if not ic:
-        log("[!]   no Detail (i) icon after tapping - nothing opened")
+        log("[!]   no ring menu after tapping - nothing opened")
         return None
+    lab = ring_label(ring, expected, pos)
+    if not levels:
+        if not lab:
+            log("[!]   ring menu is open but the building name could not be read")
+            return None
+        return lab[0], 0, (lab[1], lab[2])
     dev.tap(ic[0], ic[1])
     nap(1.1, 1.5)
     shot = dev.screenshot()
@@ -6894,18 +6934,17 @@ def read_square(dev, cfg, log, stop, pos, expected=""):
             if nm:
                 result = (nm, 0)
                 break
-    if result:
-        try:                                                 # learn this PC's real i icon once
-            if not template_path("detail_icon"):
-                save_template("detail_icon", ring[ic[1] - 24:ic[1] + 24, ic[0] - 24:ic[0] + 24])
-        except Exception:
-            pass
+    try:                                                     # learn this PC's real i icon once
+        if result and not template_path("detail_icon"):
+            save_template("detail_icon", ring[ic[1] - 24:ic[1] + 24, ic[0] - 24:ic[0] + 24])
+    except Exception:
+        pass
     for _ in range(4):                                       # close the panel / Detail page, back to the city
         if screen_state(dev.screenshot(), cfg) == "city":
             break
         dev.back()
         nap(0.7, 1.0)
-    return result
+    return (result[0], result[1], None) if result else None
 
 
 def open_square(dev, cfg, log, stop, nav, shrine, number):
@@ -6924,18 +6963,20 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
         log(f"[!] Square {number} ({name}): the camera did not reach it (it is at {round(px)},{round(py)} on screen)")
         return None
     log(f"[*] Square {number} ({name}): tapping {round(px)},{round(py)}")
-    before = dev.screenshot()
-    res = read_square(dev, cfg, log, stop, (px, py), name)
-    leave_to_city(dev, cfg, stop)
-    nap_after = dev.screenshot()
-    try:                                                     # the camera can jump when the pages close: measure and correct
-        dx, dy, resp = city_shift(before, nap_after)
-        if resp >= 0.05 and (abs(dx) > 3 or abs(dy) > 3):
-            nav.cx -= dx
-            nav.cy -= dy
-            log(f"[i]   the camera moved by {round(dx)},{round(dy)} while the pages were open - corrected")
-    except Exception:
-        pass
+    levels = bool(cfg.get("squares_levels", False))
+    res = read_square(dev, cfg, log, stop, (px, py), name, levels)
+    if res and res[2]:                                       # the label shows where the building really is on the screen: re-anchor the camera
+        lx, ly = res[2]
+        fo = FIXED_OFFSETS_FROM_SHRINE.get(name)
+        if fo:                                               # the label's own place is known exactly (offset from the Shrine label)
+            nav.cx, nav.cy = shrine[0] + fo[0] - lx, shrine[1] + fo[1] - ly
+        else:
+            nav.cx, nav.cy = tx - lx, ty - (ly - 35)
+        if not close_ring(dev, stop, res[2]):
+            log("[!]   the ring menu would not close - stopping so nothing is pressed by mistake")
+            stop.set()
+    elif levels:
+        leave_to_city(dev, cfg, stop)
     if not res:
         log(f"[!] Square {number} ({name}): nothing could be read")
         return None

@@ -403,12 +403,12 @@ async function manualMapFlow(arg) {
 async function scanCityTapsFlow() {
   const serial = await chooseDevice("Tap-test the city with which instance?");
   if (!serial) return;
-  if (!(await confirmBox("City mapper - tap test", "TEST RUN. The bot goes to each numbered square of the default city map, taps the building, presses its i (Detail) icon, opens More Information and reads its name and level. Squares that read correctly are saved on this instance's city map. Open the CITY screen and leave the instance alone.", "OK, ready"))) return;
+  if (!(await confirmBox("City mapper - tap test", "TEST RUN. The bot goes to each numbered square of the default city map, taps the building and reads its name (the i icon proves the building menu opened). Squares that read correctly are saved on this instance's city map. Open the CITY screen and leave the instance alone.", "OK, ready"))) return;
   await act(api("save", { cfg: S.cfg, devices: S.devices }, { quiet: true }));
   if (!(await act(api("scan_city_taps_start", { serial })))) return;
   S.cityScanSerial = serial;
   S.cityProg = null;
-  scanBox = modal({ title: "Tap test - reading building levels", focus: false, buttons: [{ label: "Stop", cls: "pri", onclick: () => { act(api("scan_city_stop")); return false; } }],
+  scanBox = modal({ title: "Map by squares - reading buildings and levels", focus: false, buttons: [{ label: "Stop", cls: "pri", onclick: () => { act(api("scan_city_stop")); return false; } }],
     body: h("div", { id: "cityScanInfo", style: { minWidth: "380px" } },
       h("div", { id: "cityScanTxt", class: "note" }, "Starting..."),
       h("div", { class: "pbar" }, h("div", { id: "cityScanBar", class: "pfill" })),
