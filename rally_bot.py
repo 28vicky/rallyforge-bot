@@ -4116,8 +4116,10 @@ def mumu_manager(adb=None):
     return next((c for c in cands if c.exists()), None)
 
 
-def mumu_index(serial, adb):
-    """MuMu 12 instance number for an ADB address like 127.0.0.1:16448, or None."""
+def mumu_index(serial, adb, name=None):
+    """MuMu 12 instance number for an ADB address like 127.0.0.1:16448, or None.
+    A stopped instance has no ADB port in MuMu's list, so the instance NAME (the one you gave it in MuMu, the same as
+    its name in the bot) is used as a second way to find it."""
     m = re.fullmatch(r"127\.0\.0\.1:(\d+)", serial)
     mgr = mumu_manager(adb) if m else None
     if not mgr:
@@ -4141,9 +4143,27 @@ def mumu_index(serial, adb):
     try:
         out = subprocess.run([str(mgr), "info", "-v", "all"], capture_output=True, text=True,
                              timeout=20, creationflags=NOWIN).stdout
-        found = walk(json.loads(out))
+        data = json.loads(out)
+        found = walk(data)
         if found not in (None, "None"):
             return found
+        if name:
+            want = str(name).strip().lower()
+            hits = []
+
+            def by_name(o, key=None):
+                if isinstance(o, dict):
+                    if str(o.get("name", "")).strip().lower() == want and ("index" in o or key is not None):
+                        hits.append(str(o.get("index", key)))
+                    for k, v in o.items():
+                        by_name(v, k)
+                elif isinstance(o, list):
+                    for v in o:
+                        by_name(v)
+            by_name(data)
+            hits = [x for x in hits if x not in ("None", "")]
+            if len(set(hits)) == 1:
+                return hits[0]
     except Exception:
         pass
     if 16384 <= port <= 16384 + 32 * 99 and (port - 16384) % 32 == 0:      # MuMu 12 default ports
@@ -4155,7 +4175,7 @@ def emulator_stop_command(serial, adb, cfg):
     """Command that closes this emulator instance nicely, or None. Your own stop_cmd always wins."""
     if cfg.get("stop_cmd"):
         return cfg["stop_cmd"]
-    idx = mumu_index(serial, adb)
+    idx = mumu_index(serial, adb, (cfg.get("device_names") or {}).get(serial))
     if idx is not None:
         return [str(mumu_manager(adb)), "control", "-v", idx, "shutdown"]
     m = re.fullmatch(r"emulator-(\d+)", serial)
@@ -4200,7 +4220,7 @@ def emulator_launch_command(serial, adb, cfg):
     """Command that starts this emulator instance, or None. Your own launch_cmd always wins."""
     if cfg.get("launch_cmd"):
         return cfg["launch_cmd"]
-    idx = mumu_index(serial, adb)
+    idx = mumu_index(serial, adb, (cfg.get("device_names") or {}).get(serial))
     if idx is not None:
         return [str(mumu_manager(adb)), "control", "-v", idx, "launch"]
     m = re.fullmatch(r"emulator-(\d+)", serial)
