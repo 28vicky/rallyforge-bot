@@ -199,6 +199,8 @@ DEFAULTS = {
     "tg_auto_min": 0,                       # ask again every N minutes (0 = only when you press the button)
     "tg_min_level": 0,                      # ignore bosses below this level when a task uses {boss_x} {boss_y}
     "tg_pick": "nearest",                   # nearest | highest
+    "city_nav": "auto",                     # auto = find the camera by the whole-city picture (own city style), falling back to the squares; squares = always walk by the squares
+    "city_tap_dy": 22,                      # px below the building's square that a city tap aims at (the lower part of the building; its height then does not matter)
     "tg_feed_chats": "",                    # chats / channels / bots to watch for coordinates (comma separated: @username, link or the name in your chat list)
     "tg_keep_min": 60,                      # forget a coordinate in the live list after this many minutes (0 = keep until cleared)
     "sidebar_open": True,                   # emulator list on the left (toggle with the header button, Ctrl+B or F9)
@@ -6577,19 +6579,23 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         nav = nav_state.get("anav")
         if nav is None:
             nav = CityNav(dev, stop, log)
-            nav.absolute = True
+            nav.absolute = str(cfg.get("city_nav", "auto")).lower() != "squares"      # 'squares' = never use the picture (another city style: Europe / Russia / Japan ...)
             nav_state["anav"] = nav
+            if not nav.absolute:
+                log("[i] Walking by the squares (no city picture): going to the city's corner first")
+                nav.to_origin()
         done_any = False
         for k in pkeys:
             tx, ty = pitems[k]
-            log(f"[*] Going to {k} by the city picture")
+            log(f"[*] Going to {k} " + ("by the city picture" if nav.absolute else "by its square"))
             nav.seen_city = False
             dev.expect_city = True
             nav.goto(tx, ty)
-            if not nav.seen_city:                           # this city does not look like the picture: use the old way for this run
-                log("[i] The whole-city picture does not match this screen - using the older way to find the building")
-                nav_state["picture_bad"] = True
-                break
+            if nav.absolute and not nav.seen_city:          # this city does not look like the picture (another style): walk by the squares instead, from the corner
+                log("[i] The whole-city picture does not match this city - walking by the squares instead")
+                nav.absolute = False
+                nav.to_origin()
+                nav.goto(tx, ty)
             px, py = tx - nav.cx, ty - nav.cy
             x0, y0, w, h = SAFE_TAP_AREA
             if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
@@ -6607,7 +6613,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 except Exception:
                     pass
                 dev.expect_city = False                     # from the tap on, a window opening is expected
-                dev.tap(int(px), int(py + float(task.get("tap_dy", 0))))
+                lower = (int(cfg.get("city_tap_dy", 22) or 0), 44, 0)[attempt]      # aim at the LOWER part of the building: a tall Keep / Wonder in another city style must not move the tap off it
+                dev.tap(int(px), int(py + float(task.get("tap_dy", 0)) + lower))
                 _nap(stop, 1.0, 1.4)
                 shot = dev.screenshot()
                 ring_task = any(str(t).split()[0] in ("ring_name", "champions", "tavern_catalog", "market_capture", "wheel") for t in task.get("steps", []) if str(t).strip())
