@@ -422,7 +422,7 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .two .lst .li img{background:rgba(127,127,127,.12)}
 
 /* emulator page: name, status and Start/Pause/Stop stay at the top while the page scrolls */
-.stickyhead{position:sticky;top:-4px;z-index:20;background:var(--bgc);padding:14px 6px 12px 2px;margin:0 -6px 6px -2px}
+.stickyhead{position:sticky;top:-4px;z-index:20;background:var(--bg) fixed,var(--bgc);padding:14px 6px 12px 2px;margin:0 -6px 6px -2px}
 .stickybox{background:var(--bgc);padding:12px 16px 4px;border-radius:var(--r1);border:var(--bd);box-shadow:0 4px 8px -4px rgba(0,0,0,.5)}
 .stickybox>.row{margin-bottom:10px!important;margin-top:0!important}
 .stickybox>.warnbar{margin-bottom:10px}
