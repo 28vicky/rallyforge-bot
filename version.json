@@ -1,9 +1,9 @@
 {
-  "version": "2.4.49",
-  "notes": "Emulator list shows NO STAMINA and KICKED (with countdown); Profile menu on each emulator; bigger emulator name; text size and name size options in Themes",
+  "version": "2.4.50",
+  "notes": "",
   "files": {
     "rally_bot.py": {
-      "sha256": "84652dcd81a9c182ee5a2af8a8f6e89f95d74526b201bca1ad56800f51a2f2f4"
+      "sha256": "dc190a7bc5a0470f8cae2d3264d4b431ba324e1ce2c0d2d43aaa225aa888346e"
     },
     "web_app.py": {
       "sha256": "35c7fee927ede0f0891c5ced224c0a8cb8cc7acdd307ebf8e7614287952ce6a2"
@@ -12,22 +12,22 @@
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "b647ac8b4a6fde5680c050734ca147b10f8c930bdbddbc2ef768279119c0102d"
+      "sha256": "58c4cb1b1edb2b45c469e0d318d136083ad7e9108abba6d3f3fdb437ccf77be0"
     },
     "ui/app.js": {
-      "sha256": "0822ac7c852ed122a7f6102ae84ec1bd04d45378f9d0859c9d109f12cbbc2d3f"
+      "sha256": "c39281368962c67e3d6e5f30e8d98930a4ae1c4bae1341b4546c89480ccb228a"
     },
     "ui/changelog.js": {
-      "sha256": "db76bdef91aa3b7deb282617c3e8f79ac1bed02e6f16cdc397ec55690de3edb7"
+      "sha256": "82cc6fed939c00cf5449116d08f941d6a948bc7ef5cdf724f3246c571bedf42f"
     },
     "ui/dialogs.js": {
-      "sha256": "93b85f9748c2d4841661e449f9475108f64da23dc46165c5470327f2a38aebf0"
+      "sha256": "6f6438682092c6db775f9b91a5aa7f94cd55fdfb73cb53a42119ded7e6a674d6"
     },
     "ui/index.html": {
       "sha256": "f96cd3935a617efa047b0c2daf5ec65ad5cb4afaf13b1761bdea1cd2bd99d358"
     },
     "ui/pages.js": {
-      "sha256": "52da2e3f60b03b180a402198e0d3229b99a71123b3208b37a0f972254ea78ddb"
+      "sha256": "3d3a0d1274f2e61713d26faf76cc22cc9ac7f855eed98716e612d60db59cf521"
     }
   },
   "mode": "ask",
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "88c6900bbf0473f2a909a175dba972174703a164dcc78c80f51a2da9aa4f2672"
+  "sig": "c97c570f6d2aff54e364b9d00ea88c61dcdc6a3d5bedddce8bd00097bb389b78"
 }
