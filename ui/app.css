@@ -683,3 +683,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 /* pinned header covers the full width and the top edge, nothing peeks around it */
 .pages{padding-top:0}
 .stickyhead{margin:0 -6px 14px -2px;padding:6px 6px 0 2px;top:0}
+
+/* sentence case everywhere, no capital-letter headings */
+:root *,:root *::before,:root *::after{text-transform:none!important}
+:root .side h4,:root .actlab,:root .grp .cap,:root .pcard .phead b{letter-spacing:0}
+:root .side h4{font-size:13px}

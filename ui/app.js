@@ -186,7 +186,7 @@ function layout() {
   root.appendChild(h("div", { class: "app" + (S.cfg.sidebar_open === false ? " nosb" : ""), id: "app" },
     h("div", { class: "side" },
       h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }), h("span", {}, "RallyForge")),
-      h("h4", {}, "INSTANCES", burger()),
+      h("h4", {}, "Instances", burger()),
       h("div", { class: "inst-list", id: "instList" }),
       h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }), h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
     h("div", { class: "main" },
@@ -346,11 +346,11 @@ async function loadProfileFlow() {
 
 // ------------------------------------------------------------------ sidebar / tabs / pages
 function devTag(d) {
-  if (S.cityJobs && S.cityJobs[d.id] && S.cityJobs[d.id].running) return "MAPPING CITY";
-  const t = { run: "RUNNING", pause: "PAUSED", stop: "STOPPED", error: "PROBLEM" }[d.state] || "";
-  if (d.state === "run" && d.kicked_at) return "KICKED";
-  if (d.state === "run" && d.no_stamina) return "NO STAMINA";
-  return d.queued ? "QUEUED" : t;
+  if (S.cityJobs && S.cityJobs[d.id] && S.cityJobs[d.id].running) return "Mapping city";
+  const t = { run: "Running", pause: "Paused", stop: "Stopped", error: "Problem" }[d.state] || "";
+  if (d.state === "run" && d.kicked_at) return "Kicked";
+  if (d.state === "run" && d.no_stamina) return "No stamina";
+  return d.queued ? "Queued" : t;
 }
 function renderSide() {
   const L = $("#instList");
@@ -361,7 +361,7 @@ function renderSide() {
     h("span", { class: "nm" }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   for (const d of S.devStatus) {
-    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["RUNNING", "STOPPED", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
+    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
     sideDrag(L.lastChild, d.id);
     const qb = (t, ico, fn, dim) => h("button", { title: t, class: dim ? "dim" : "", onclick: (e) => { e.stopPropagation(); if (!dim) fn(); } }, ico);
     const nm = d.name || short(d.id);
