@@ -423,11 +423,11 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 
 /* emulator page: name, status and Start/Pause/Stop stay at the top while the page scrolls */
 .stickyhead{position:sticky;top:0;z-index:20}
-.stickyhead::before{content:"";position:absolute;z-index:-2;top:-14px;bottom:-22px;left:-2px;right:-6px;background:var(--bg) fixed,var(--bgc);opacity:0;transition:opacity .15s;pointer-events:none}
+.stickyhead::before{content:"";position:absolute;z-index:-2;top:-14px;bottom:-36px;left:-2px;right:-6px;background:var(--bg) fixed,var(--bgc);-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 24px),transparent 100%);mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 24px),transparent 100%);opacity:0;transition:opacity .15s;pointer-events:none}
 .stickybox{position:relative;transition:padding .15s,transform .15s}
-.stickybox::before{content:"";position:absolute;z-index:-1;top:-3px;bottom:-4px;left:0;right:0;background:var(--bgc);border:var(--bd);border-radius:var(--r1);box-shadow:0 4px 8px -4px rgba(0,0,0,.5);opacity:0;transition:opacity .15s;pointer-events:none}
+.stickybox::before{content:"";position:absolute;z-index:-1;top:-4px;bottom:-9px;left:0;right:0;background:var(--bgc);border:var(--bd);border-radius:var(--r1);box-shadow:0 4px 8px -4px rgba(0,0,0,.5);opacity:0;transition:opacity .15s;pointer-events:none}
 .stickyhead.stuck::before,.stickyhead.stuck .stickybox::before{opacity:1}
-.stickyhead.stuck .stickybox{padding:0 16px;transform:translateY(9px)}
+.stickyhead.stuck .stickybox{padding:0 16px;transform:translateY(10px)}
 
 /* general pickers: search and list are one box; both sides the same height */
 .ghead{display:flex;justify-content:space-between;align-items:center;min-height:38px;margin-bottom:4px}
