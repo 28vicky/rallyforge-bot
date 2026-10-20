@@ -511,7 +511,7 @@ function stickyUpdate() {
     box = h("div", { id: "jumpbox", class: "jumpbox" },
       h("button", { class: "jump", id: "jumpUp", title: "Go to the top", onclick: () => { const q = $("#pages"); q.scrollTo({ top: 0, behavior: "smooth" }); } }, "\u2191"),
       h("button", { class: "jump", id: "jumpDown", title: "Go to the bottom", onclick: () => { const q = $("#pages"); q.scrollTo({ top: q.scrollHeight, behavior: "smooth" }); } }, "\u2193"));
-    document.body.appendChild(box);
+    (document.querySelector(".main") || document.body).appendChild(box);
   }
   const max = p.scrollHeight - p.clientHeight;
   $("#jumpUp").style.display = p.scrollTop > 160 ? "" : "none";
