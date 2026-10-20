@@ -6366,7 +6366,37 @@ def capture_city_pictures(dev, cfg, log, stop, progress=None):
             except Exception:
                 pass
 
+    def orb_shift(before, after):
+        """How far the map content moved, from matching picture features (works for any distance, also when the game glides on
+        after the swipe). -> (dx, dy, inliers) or None"""
+        x, y, w, h = CITY_VIEW
+        gb = cv2.cvtColor(before[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+        ga = cv2.cvtColor(after[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+        orb = cv2.ORB_create(1500, fastThreshold=10)
+        kb, db = orb.detectAndCompute(gb, None)
+        ka, da = orb.detectAndCompute(ga, None)
+        if db is None or da is None or len(kb) < 10 or len(ka) < 10:
+            return None
+        ms = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(db, da)
+        if len(ms) < 8:
+            return None
+        d = np.array([[ka[m.trainIdx].pt[0] - kb[m.queryIdx].pt[0], ka[m.trainIdx].pt[1] - kb[m.queryIdx].pt[1]] for m in ms])
+        best = None
+        for c in d:
+            n = int(np.sum(np.abs(d - c).max(axis=1) <= 3))
+            if best is None or n > best[0]:
+                best = (n, c)
+        sel = d[np.abs(d - best[1]).max(axis=1) <= 3]
+        return float(np.median(sel[:, 0])), float(np.median(sel[:, 1])), int(len(sel))
+
     def match_shift(before, after, cdx, cdy):
+        """-> (dx, dy, score): score 0..1 (1 = sure). Feature matching first; the shift search along the pan when too few features."""
+        r = orb_shift(before, after)
+        if r is not None and r[2] >= 20:
+            return r[0], r[1], min(1.0, r[2] / 60.0)
+        return match_shift_search(before, after, cdx, cdy)
+
+    def match_shift_search(before, after, cdx, cdy):
         """How far the content really moved along the commanded direction (0 .. 1.6x the command; the game stops the map at its
         edges, so it can be less), by trying every shift and keeping the one where the two pictures agree best.
         -> (dx, dy, score) with score = how much better the best shift is than the average one (higher = surer)."""
@@ -6382,7 +6412,7 @@ def capture_city_pictures(dev, cfg, log, stop, progress=None):
         lim = int(abs(cmd) * 1.6) + 2
         scores = []
         for a_ in range(0, lim + 1, 2):
-            for c_ in range(-8, 9, 2):
+            for c_ in range(-16, 17, 2):
                 sx, sy = (sign * a_, c_) if horiz else (c_, sign * a_)
                 # content moved by (sx, sy): before[r, c] shows up at after[r + sy, c + sx]
                 bx0, bx1 = max(0, -sx), min(W, W - sx)
@@ -6413,6 +6443,13 @@ def capture_city_pictures(dev, cfg, log, stop, progress=None):
         """Pan, then measure. -> None when the map did not move (edge), else (real dx, real dy, score, picture)"""
         try:                                                   # a building menu or pop-up from an earlier tap swallows the swipe: clear it first
             ensure_view(dev, cfg, stop, lambda *_: None, "city", tries=3)
+            for _k in range(3):                                # a pop-up over the city (the globe still shows, so the city counts as "showing"): its round X closes it
+                cx = find_close_x(dev.screenshot())
+                if not cx:
+                    break
+                log(f"[i] City pictures: closed a pop-up ({cx[0][0]},{cx[0][1]})")
+                dev.tap(cx[0][0], cx[0][1])
+                _nap(stop, 0.9, 1.3)
         except Exception:
             pass
         before = dev.screenshot()
@@ -6452,9 +6489,15 @@ def capture_city_pictures(dev, cfg, log, stop, progress=None):
             r = pan_measure(290 if axis == 0 else 0, 0 if axis == 0 else 430)
             if r is None:
                 break
+    for _k in range(3):
+        cx = find_close_x(dev.screenshot())
+        if not cx:
+            break
+        dev.tap(cx[0][0], cx[0][1])
+        _nap(stop, 0.9, 1.3)
     snap("corner", 0, 0, 1)
     direction = 1
-    for col in range(8):
+    for col in range(12):
         if stop.is_set():
             break
         for _ in range(6):
@@ -6465,7 +6508,7 @@ def capture_city_pictures(dev, cfg, log, stop, progress=None):
                 break
             snap(f"col{col} {'down' if direction == 1 else 'up'}", r[0], r[1], r[2])
             rep(f"Taking pictures (column {col + 1})", min(95, 8 + col * 11))
-        r = pan_measure(-240, 0)
+        r = pan_measure(-240, 0) or pan_measure(-240, 0)          # twice "no movement" = the right edge of the city
         if r is None:
             break
         snap(f"col{col} right", r[0], r[1], r[2])
