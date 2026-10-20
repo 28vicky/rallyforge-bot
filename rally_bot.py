@@ -6896,10 +6896,16 @@ def read_square(dev, cfg, log, stop, pos, expected="", levels=False):
     ic = ring = lab = None
     for attempt in (1, 2):                                  # a bubble over the building can eat the first tap
         dev.tap(int(pos[0]), int(pos[1]))
-        nap(0.8, 1.1)
-        ring = dev.screenshot()
-        ic = find_detail_icon(ring)
+        for _ in range(6):                                  # the camera glides to the building first: wait for the ring menu (up to ~4 s)
+            nap(0.6, 0.8)
+            ring = dev.screenshot()
+            ic = find_detail_icon(ring)
+            if ic or stop.is_set():
+                break
         if ic:
+            time.sleep(0.4)                                 # let the name label finish drawing
+            ring = dev.screenshot()
+            ic = find_detail_icon(ring) or ic
             break
     if not ic:
         log("[!]   no ring menu after tapping - nothing opened")
