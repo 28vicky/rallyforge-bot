@@ -688,3 +688,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 :root *,:root *::before,:root *::after{text-transform:none!important}
 :root .side h4,:root .actlab,:root .grp .cap,:root .pcard .phead b{letter-spacing:0}
 :root .side h4{font-size:13px}
+/* quiet pass: lighter weights, soft chips, near-empty footer */
+:root b,:root strong{font-weight:600}
+:root .chip{background:var(--field);border:0;color:var(--mute);font-weight:400;box-shadow:none}
+:root .chip.pill-ok{color:var(--good)}:root .chip.pill-bad{color:var(--bad)}
+:root .status{border-top:0;background:transparent;height:30px;font-size:12px;color:var(--mute);gap:18px}
+:root .status .l{opacity:.7}
+:root .status .sb-upd{font-weight:500}
+:root .panel{border-color:var(--line)}
+:root .panel h3{font-weight:600}
+:root .hint,:root .note{color:var(--mute)}
+:root .drow .dst,:root .row .chip{font-size:12.5px}
+:root .main{padding-bottom:36px}
