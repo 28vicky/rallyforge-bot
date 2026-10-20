@@ -713,7 +713,7 @@ function scopeBar(page, keys, what, fixed) {
     [h("option", { value: "", selected: serial === "" }, "All instances (default)")].concat((S.devices || []).filter((d) => d.id).map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || d.id))));
   const items = fixed !== undefined ? [] : [h("span", { class: "lab" }, "Settings for"), pick];
   if (serial && own) {
-    items.push(h("span", { class: "chip" }, "own " + what));
+    items.push(h("span", { class: "chip own" }, "own " + what));
     items.push(btn("Use the global " + what, () => { keys.forEach((k) => delete ov[k]); rerender(); }, "sm"));
   } else if (serial) {
     items.push(btn("Give this instance its own " + what, () => { keys.forEach((k) => { if (S.cfg[k] !== undefined) ov[k] = clone(S.cfg[k]); }); rerender(); }, "sm pri"));
@@ -1133,7 +1133,7 @@ PAGES.duties = function (fixed, only, compact) {
     if (!only) root.appendChild(panel("Duties",
       note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes, retries 3 times a day if it fails, then waits for the next reset. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
       h("div", { class: "row" }, fixed !== undefined ? null : h("span", { class: "lab" }, "Settings for"), fixed !== undefined ? null : pick,
-        serial && own.duties ? h("span", { class: "chip" }, "own settings") : null,
+        serial && own.duties ? h("span", { class: "chip own" }, "own settings") : null,
         serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the global setting") : null),
       note(serial ? "Changes here apply to this instance only and replace the global list for it. Pick 'All instances' to change the default for every instance that has no own settings." : "These are the defaults for every instance. Pick one instance to give it different settings."),
     ));
@@ -1180,7 +1180,7 @@ PAGES.duties = function (fixed, only, compact) {
     const c = j.conf;
     const set = async (o) => { const r = await act(api("crazy_eggs_set", { serial, ...o })); if (r) drawCe(r); };
     ce.appendChild(subset(serial ? "Crazy Eggs \u2013 this instance" : "Crazy Eggs \u2013 all instances",
-      serial && j.own && j.own.crazy_eggs ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
+      serial && j.own && j.own.crazy_eggs ? h("div", { class: "row" }, h("span", { class: "chip own" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "crazy_eggs" })); loadCe(); } }, "Use the global setting")) : null,
       note("Event Center > Activities > Crazy Eggs. The bot smashes every ready egg you switch on, closes the reward panel, and comes back when the next timer ends. The Lucky Hammer (1 a day) skips an egg's wait, so give it to the egg with the longest wait."),
       j.costs.map((k) => {
@@ -1226,7 +1226,7 @@ PAGES.duties = function (fixed, only, compact) {
     const c = j.conf;
     const set = async (o) => { const r = await act(api("wheel_set", { serial, ...o })); if (r) drawWh(r); };
     wh.appendChild(subset(serial ? "Wheel of Fortune \u2013 this instance" : "Wheel of Fortune \u2013 all instances",
-      serial && j.own && j.own.wheel ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
+      serial && j.own && j.own.wheel ? h("div", { class: "row" }, h("span", { class: "chip own" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "wheel" })); loadWh(); } }, "Use the global setting")) : null,
       note("Tavern > Wheel of Fortune. Each spin costs coins. The bot presses only the Spin buttons and closes the reward panel after every spin. With a big button it still finishes with smaller ones so the number of spins is exact."),
       h("div", { class: "row", style: { gap: "8px" } }, h("span", { class: "lab" }, "Spin button"),
@@ -1247,7 +1247,7 @@ PAGES.duties = function (fixed, only, compact) {
     const sumT = Object.values(j.plan).reduce((a, v) => a + (v.taps || 0), 0), sumG = Object.values(j.plan).reduce((a, v) => a + (v.greets || 0), 0);
     const usedT = Object.values(j.taps || {}).reduce((a, v) => a + v, 0), usedG = Object.values(j.greets || {}).reduce((a, v) => a + v, 0);
     ch.appendChild(subset(serial ? "Champions – this instance" : "Champions – all instances",
-      serial && j.own && j.own.champions ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
+      serial && j.own && j.own.champions ? h("div", { class: "row" }, h("span", { class: "chip own" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "champions" })); loadCh(); } }, "Use the global setting")) : null,
       note("Keep > Champions. Every account has the same champions but only a few are active; the bot skips the ones that are not (grey button at the bottom). The daily limit is " + j.max_taps + " taps and " + j.max_greets + " greetings for all champions together - put them all on one champion or share them out. Switch a champion on to make it the main one: it gets all the taps and greetings of the day in one click (the numbers can still be edited). Leave everything empty to use the champion the page opens on. Turn the 'Champions' duty on above. Needs the city map (the Keep)."),
       h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } },

@@ -719,3 +719,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .instbar .btn.bad.greyed,:root .instbar .btn.bad:disabled{background:transparent;color:var(--mute);border:var(--bd);opacity:.6}
 :root .actnow{font-family:var(--font);font-size:15px;font-weight:500}
 :root .insthead h2{font-weight:500;letter-spacing:-.02em}
+/* "own settings" marker: clearly visible, with a dot, so you know this instance has its own list */
+:root .chip.own{background:color-mix(in srgb,var(--accent1) 14%,transparent);color:var(--accent2);font-weight:500;padding:5px 12px 5px 22px;border-radius:999px;position:relative}
+:root .chip.own::before{content:"";position:absolute;left:10px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--accent1)}
