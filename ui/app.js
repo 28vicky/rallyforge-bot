@@ -361,13 +361,13 @@ function renderSide() {
     h("span", { class: "nm" }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   for (const d of S.devStatus) {
-    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["RUNNING", "STOPPED", ""].includes(devTag(d)) ? "" : devTag(d)), (d.joins && !(d.state === "pause" && d.resume_at) && !d.kicked_at) ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
+    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["RUNNING", "STOPPED", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
     sideDrag(L.lastChild, d.id);
-    const qb = (t, ico, fn) => h("button", { title: t, onclick: (e) => { e.stopPropagation(); fn(); } }, ico);
+    const qb = (t, ico, fn, dim) => h("button", { title: t, class: dim ? "dim" : "", onclick: (e) => { e.stopPropagation(); if (!dim) fn(); } }, ico);
     const nm = d.name || short(d.id);
     L.lastChild.appendChild(h("div", { class: "qact" }, ...(d.state === "run" || d.state === "pause"
       ? [qb(d.state === "pause" ? "Resume " + nm : "Pause " + nm, d.state === "pause" ? "\u25B6" : "\u275A\u275A", () => act(api("pause", { serial: d.id }))), qb("Stop " + nm, "\u25A0", () => act(api("stop", { serial: d.id })))]
-      : [qb("Start " + nm, "\u25B6", () => collectAndRun("start", { serial: d.id }))])));
+      : [qb("Start " + nm, "\u25B6", () => collectAndRun("start", { serial: d.id })), qb("Stop " + nm, "\u25A0", () => {}, true)])));
     if ((d.state === "pause" && d.resume_at) || (d.state === "run" && d.kicked_at)) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at || d.resume_at), "data-pre": d.kicked_at ? " back in " : "" })); }
   }
   tickPauseTimers();
