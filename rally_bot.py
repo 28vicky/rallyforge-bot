@@ -663,6 +663,8 @@ class Device:
         return img
 
     def _run(self, *a, timeout=20):
+        if len(a) > 1 and a[0] == "shell" and a[1] == "input":      # a tap / swipe / text: never while the instance is paused
+            pause_gate()
         return subprocess.run([self.adb, "-s", self.serial, *a], capture_output=True,
                               timeout=timeout, creationflags=NOWIN)
 
@@ -2000,6 +2002,17 @@ def housekeeping(log=None):
 
 # ------------------------------------------------------------------ helpers
 _TL = threading.local()                 # per bot thread: pace + speed counters
+
+
+def pause_gate():
+    """Block while this instance is paused from the GUI (taps and swipes call it, so a pause takes effect at the very next
+    action, also during start-up, the game-loading wait and long tasks). -> True when it had to wait."""
+    ctl, stop = getattr(_TL, "ctl", None), getattr(_TL, "stop", None)
+    waited = False
+    while ctl is not None and not ctl.run.is_set() and not (stop is not None and stop.is_set()):
+        waited = True
+        time.sleep(0.3)
+    return waited
 CPU_LEVELS = {1: 1.0, 2: 1.5, 3: 2.5, 4: 4.0}      # how much longer the pause between scans gets
 
 
@@ -4596,6 +4609,9 @@ def wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
     not_ready_since, last_clear, last_kick = None, 0.0, 0.0
     end = time.time() + cfg["game_load_timeout"]
     while time.time() < end and not stop.is_set():
+        if pause_gate():                                       # paused meanwhile: no clicks, no timeout, start counting again after the resume
+            good, not_ready_since = 0, None
+            end = time.time() + cfg["game_load_timeout"]
         try:
             screen = dev.screenshot()
         except Exception:
@@ -4721,6 +4737,7 @@ _HEAVY_LOCK = threading.RLock()            # only one emulator restart / game re
 
 def restart_emulator(dev, cfg, log, stop, why=""):
     """Close a stuck emulator (nicely first, then by force), start it again and wait until Evony is loaded."""
+    pause_gate()                                                  # never restart an emulator while it is paused
     if not _HEAVY_LOCK.acquire(blocking=False):
         log("[*] Another emulator is restarting - waiting for my turn (keeps the PC from overloading)")
         while not _HEAVY_LOCK.acquire(timeout=2):
@@ -6339,10 +6356,32 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
                 log(f"[!] Task '{task.get('name')}': {k} could not be brought into view (it is at {round(px)},{round(py)}) - skipped")
                 continue
-            if find_detail_icon(dev.screenshot()):          # a ring menu is still open from before: tapping the building would close it
-                close_ring(dev, stop, (px, py + 35))
-            dev.tap(int(px), int(py + float(task.get("tap_dy", 0))))
-            _nap(stop, 1.0, 1.4)
+            opened = False
+            for attempt in range(3):                        # tap the building; when no ring menu opens (a reward panel came up, the tap landed beside it) look again and retry
+                close_reward_panel(dev, stop, log)
+                if find_detail_icon(dev.screenshot()):      # a ring menu is still open from before: tapping the building would close it
+                    close_ring(dev, stop, (px, py + 35))
+                try:
+                    pre = dev.screenshot()
+                    cv2.circle(pre, (int(px), int(py + float(task.get("tap_dy", 0)))), 14, (0, 0, 255), 2)
+                    cv2.imwrite(str(USER / "debug" / "before_tap.png"), pre)
+                except Exception:
+                    pass
+                dev.tap(int(px), int(py + float(task.get("tap_dy", 0))))
+                _nap(stop, 1.0, 1.4)
+                shot = dev.screenshot()
+                if find_detail_icon(shot) or not any(str(t).split()[0] in ("ring_name", "champions", "tavern_catalog", "market_capture", "wheel") for t in task.get("steps", []) if str(t).strip()):
+                    opened = True
+                    break
+                log(f"[i]   no building menu opened at {k} (try {attempt + 1}/3) - looking again")
+                close_reward_panel(dev, stop, log)
+                nav.goto(tx, ty)
+                px, py = tx - nav.cx, ty - nav.cy
+                if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+                    break
+            if not opened:
+                log(f"[!] Task '{task.get('name')}': the menu of {k} did not open - skipped")
+                continue
             for st in task.get("steps", []):
                 run_step(dev, cfg, log, stop, st)
             leave_to_city(dev, cfg, stop)
@@ -6371,6 +6410,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             if not pos:
                 log(f"[!] Task '{task.get('name')}': {k} not found on screen - skipped")
                 continue
+            close_reward_panel(dev, stop, log)
             dev.tap(pos[0], pos[1] + float(task.get("tap_dy", 0)))
             _nap(stop, 1.0, 1.4)
             for st in task.get("steps", []):
@@ -6777,6 +6817,24 @@ def wheel_on_page(img):
 
 def wheel_reward_panel(img):
     return bool(find_text(img, ["Congratulations", "Continue"], region=(30, 150, 480, 650), cutoff=0.7))
+
+
+def close_reward_panel(dev, stop, log=None):
+    """A "Congratulations! / Continue" reward panel is lying over the city (left from an earlier task): close it,
+    otherwise the next tap lands on the panel. -> True when one was closed."""
+    closed = False
+    for _ in range(4):
+        if stop.is_set() or not wheel_reward_panel(dev.screenshot()):
+            break
+        closed = True
+        dev.tap(270, 754)
+        _nap(stop, 0.8, 1.1)
+        if wheel_reward_panel(dev.screenshot()):
+            dev.tap(270, 110)
+            _nap(stop, 0.6, 0.9)
+    if closed and log:
+        log("[i]   closed a reward panel that was in the way")
+    return closed
 
 
 def run_wheel(dev, cfg, log, stop):
@@ -7742,6 +7800,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
 def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     cfg = merge_device_cfg(cfg, serial)                              # per-instance overrides
     set_pacing(cfg)
+    _TL.ctl, _TL.stop = ctl, stop
 
     def nap(lo, hi=None):
         stop.wait(pace(random.uniform(lo, hi if hi is not None else lo)))
