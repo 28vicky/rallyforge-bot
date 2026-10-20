@@ -6423,6 +6423,21 @@ def run_market(dev, cfg, log, stop):
     log(f"[+] Black Market done: bought {total}; {refreshes} refresh(es)")
 
 
+def ring_building_name(shot):
+    """The name the game prints under the building whose ring menu is open: a known building name (comma separated when
+    two are read) or, failing that, whatever the label says. -> (name, ...) or None."""
+    try:
+        import difflib
+        hits = []
+        for t, _ in ocr_lines(shot[400:620, 110:430], 3.0):
+            m = difflib.get_close_matches(t.strip(), list(BUILDING_NAMES), n=1, cutoff=0.7)
+            if m:
+                hits.append(m[0])
+        return (", ".join(dict.fromkeys(hits)),) if hits else ring_label_free(shot)
+    except Exception:
+        return ring_label_free(shot)
+
+
 def run_step(dev, cfg, log, stop, step):
     """One step of a city task. Steps: tap x,y | tap_text A|B | tap_img name | repeat_text A|B | wait s | back |
     swipe x1,y1,x2,y2. A step that finds nothing is not an error."""
@@ -6444,17 +6459,7 @@ def run_step(dev, cfg, log, stop, step):
             cv2.imwrite(str(USER / "debug" / f"ring_{(arg or 'x').replace(' ', '_')}.png"), shot)
         except Exception:
             pass
-        got = None
-        try:
-            import difflib
-            hits = []
-            for t, _ in ocr_lines(shot[400:620, 110:430], 3.0):
-                m = difflib.get_close_matches(t.strip(), list(BUILDING_NAMES), n=1, cutoff=0.7)
-                if m:
-                    hits.append(m[0])
-            got = (", ".join(dict.fromkeys(hits)),) if hits else ring_label_free(shot)
-        except Exception:
-            got = ring_label_free(shot)
+        got = ring_building_name(shot)
         log(f"[i]   the menu that opened is called: {got[0] if got else 'no name read'}" + (f" (expected {arg})" if arg else ""))
         return
     if cmd == "market":
@@ -6595,7 +6600,20 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 dev.tap(int(px), int(py + float(task.get("tap_dy", 0))))
                 _nap(stop, 1.0, 1.4)
                 shot = dev.screenshot()
-                if find_detail_icon(shot) or not any(str(t).split()[0] in ("ring_name", "champions", "tavern_catalog", "market_capture", "wheel") for t in task.get("steps", []) if str(t).strip()):
+                ring_task = any(str(t).split()[0] in ("ring_name", "champions", "tavern_catalog", "market_capture", "wheel") for t in task.get("steps", []) if str(t).strip())
+                if find_detail_icon(shot) or not ring_task:
+                    if ring_task:                           # a menu opened - but is it the one we wanted? (a camera that is a little off opens the neighbour: Wisdom Dome instead of the Keep)
+                        got = ring_building_name(shot)
+                        want_nm = k.split("#")[0].lower()
+                        if got and got[0] and want_nm not in got[0].lower() and any(b.lower() in got[0].lower() for b in BUILDING_NAMES):
+                            log(f"[!]   the menu that opened is {got[0]}, not {k} (try {attempt + 1}/3) - closing it and aiming again")
+                            close_ring(dev, stop, (px, py + 35))
+                            leave_to_city(dev, cfg, stop)
+                            nav.goto(tx, ty)
+                            px, py = tx - nav.cx, ty - nav.cy
+                            if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+                                break
+                            continue
                     opened = True
                     break
                 log(f"[i]   no building menu opened at {k} (try {attempt + 1}/3) - looking again")
@@ -6606,6 +6624,9 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                     break
             if not opened:
                 log(f"[!] Task '{task.get('name')}': the menu of {k} did not open - skipped")
+                if find_detail_icon(dev.screenshot()):
+                    close_ring(dev, stop, (px, py + 35))
+                leave_to_city(dev, cfg, stop)
                 continue
             for st in task.get("steps", []):
                 run_step(dev, cfg, log, stop, st)
@@ -6663,12 +6684,25 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
 
 
 def leave_to_city(dev, cfg, stop):
-    """Close whatever a task opened. Back is only pressed while we are not on the city screen
-    (on the city screen it would open the quit dialog)."""
-    for _ in range(3):
-        if screen_state(dev.screenshot(), cfg) == "city":
+    """Close whatever a task opened (a building's panel, stacked pages, a ring menu). Back is only pressed while we are not
+    on the city screen (on the city screen it would open the quit dialog); a pop-up's round X is used when there is one."""
+    for i in range(10):
+        if stop.is_set():
+            return False
+        shot = dev.screenshot()
+        if screen_state(shot, cfg) in ("city", "rally_list") and not find_detail_icon(shot):
             return True
-        dev.back()
+        if cancel_quit_dialog(dev, shot, lambda *_: None):
+            _nap(stop, 0.8, 1.2)
+            continue
+        if find_detail_icon(shot) and screen_state(shot, cfg) == "city":
+            close_ring(dev, stop, (270, 430))
+            continue
+        cx = find_close_x(shot) if i % 2 == 0 else []
+        if cx:
+            dev.tap(cx[0][0], cx[0][1])
+        else:
+            dev.back()
         _nap(stop, 0.8, 1.2)
     return False
 
