@@ -3450,6 +3450,44 @@ def read_portrait_name(img, x, top):
     return " ".join(re.sub(r"[^A-Za-z.'\- ]", " ", txt).split()).strip(" .-")
 
 
+def read_portrait_name2(img, x, top):
+    """A second, differently prepared reading of the same name plate (single line, other scale / threshold)."""
+    c = img[top + 204:top + 242, x + 18:x + 146]
+    if c.size == 0:
+        return ""
+    g = cv2.resize(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY), None, fx=3, fy=3, interpolation=cv2.INTER_LANCZOS4)
+    b = 255 - cv2.threshold(cv2.GaussianBlur(g, (3, 3), 0), 150, 255, cv2.THRESH_BINARY)[1]
+    b = cv2.copyMakeBorder(b, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
+    try:
+        txt = pytesseract.image_to_string(b, config="--psm 7")
+    except Exception:
+        return ""
+    return " ".join(re.sub(r"[^A-Za-z.'\- ]", " ", txt.replace("|", "I")).split()).strip(" .-")
+
+
+_NAME_CONNECT = {"the", "of", "de", "di", "da", "del", "der", "den", "von", "van", "ibn", "bin", "al", "el", "la", "le", "du", "des", "y", "and", "d"}
+_ROMAN = {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"}
+
+
+def plausible_general_name(name):
+    """Looks like a general's name (words that start with a capital, connectors like 'the' / 'of', roman numerals) and not
+    like OCR junk. Used for generals that are not in the built-in list yet (the point of the library crawl)."""
+    words = str(name).split()
+    if not 1 <= len(words) <= 5 or len(re.sub(r"[^A-Za-z]", "", name)) < 4:
+        return False
+    for w in words:
+        core = w.strip(".'-")
+        if not core:
+            return False
+        if w.lower() in _NAME_CONNECT or core in _ROMAN:
+            continue
+        if not core[0].isupper() or len(core) < 3 or core.isupper() and len(core) > 4 or core[1:].lower() != core[1:] and not core[1:].isalpha():
+            return False
+        if re.search(r"[bcdfghjklmnpqrstvwxz]{5,}", core.lower()):
+            return False
+    return True
+
+
 def _words_to_labels(lines, gap=22):
     """OCR words of one strip -> [(label, x centre)] (words closer than `gap` pixels form one label)."""
     ws = sorted((w for _, row in lines for w in row), key=lambda w: w[1])
@@ -3506,9 +3544,15 @@ def crawl_portraits(dev, cfg, log, stop, progress=None):
                 name = next((n for n, g in found.items() if same_art(g["image"], art, 0.8)), "")   # same picture = same general
                 if not name:
                     name = snap_name(read_portrait_name(img, x, top), [])
-                    if not is_known_general(name):         # misread card (bad crop / OCR junk): do not store it
-                        log(f"[!] Skipped an unreadable card ({region}/{troop}): '{name}'")
-                        continue
+                    if not is_known_general(name):         # not in the built-in list: a new general, or a misread card
+                        second = snap_name(read_portrait_name2(img, x, top), [])
+                        key = lambda t: re.sub(r"[^a-z0-9]", "", str(t).lower())
+                        if is_known_general(second):
+                            name = second
+                        elif not (plausible_general_name(name) and key(name) == key(second)):      # accept a new name only when two different readings agree
+                            log(f"[!] Skipped a card that could not be read twice the same ({region}/{troop}): '{name}' / '{second}'")
+                            continue
+                        log(f"[+] New general found: {name}")
                     base, k = name, 2
                     while name in found:                  # same name, different picture (e.g. two skins)
                         name, k = f"{base} {k}", k + 1
