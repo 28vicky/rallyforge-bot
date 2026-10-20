@@ -5589,6 +5589,23 @@ def corner_pic():
         return None
 
 
+def gain_probe(dev, stop, log):
+    """Test aid (only with city_nav_squares.txt, on a city that fits the picture): swipe by known amounts and log how far the
+    map really moved, to learn how to count squares in other city styles."""
+    try:
+        for fx, fy, tx, ty in [(300, 400, 140, 400), (300, 400, 300, 160), (230, 300, 380, 560), (300, 600, 300, 520), (300, 460, 300, 480)]:
+            a = locate_in_city(dev.screenshot())
+            dev.swipe(fx, fy, tx, ty, 450)
+            _nap(stop, 1.0, 1.3)
+            b = locate_in_city(dev.screenshot())
+            if a and b:
+                log(f"[i]   swipe probe: finger {tx - fx},{ty - fy} -> camera moved {round(b[0] - a[0])},{round(b[1] - a[1])}")
+            else:
+                log(f"[i]   swipe probe: finger {tx - fx},{ty - fy} -> picture not matched ({bool(a)},{bool(b)})")
+    except Exception as e:
+        log(f"[i]   swipe probe failed: {e}")
+
+
 def learn_corner(nav, log):
     """Once, on a city that matches the stored picture: drag to the top-left corner and note where the picture says the
     camera is. Every other city style then counts its squares from the same place."""
@@ -6625,6 +6642,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 cp = corner_pic()
                 if cp:
                     nav.cx, nav.cy = cp
+                if (USER / "city_nav_squares.txt").exists():
+                    gain_probe(dev, stop, log)
         done_any = False
         for k in pkeys:
             tx, ty = pitems[k]
