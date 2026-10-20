@@ -1,5 +1,11 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.61", date: "2026-10-20",
+    new: ["One recovery routine for everything: if any window the bot did not expect opens (a building's page, stacked pages, a pop-up, a menu), it closes it, goes back to the city view and starts the task again once. It also checks which view (city or landscape) the game shows and switches only when needed."],
+    fixed: ["Champions, Wheel and other building tasks no longer get stuck on the wrong building (for example the Wisdom Dome instead of the Keep): the bot reads the name of the menu that opened, closes it if it is not the wanted building, aims again and retries.",
+            "Cities in another style (Europe, Russia, Japan ...) no longer confuse the bot: when the city does not look like the stored picture it counts the squares from the city corner, and taps the lower part of the building so tall buildings do not matter.",
+            "A task that fails now closes every leftover window and reward panel before the bot goes back to the rallies.",
+            "General library: finds the Recruit button by its word on every view, and adds new generals when two readings of the name agree."] },
   { v: "2.4.60", date: "2026-10-20",
     new: [],
     fixed: ["Pause now really pauses: the bot stops tapping at the very next action, also while it is starting up, waiting for the game to load or in the middle of a task. Before, a pause pressed during start-up was ignored and the bot kept tapping (and could even restart the emulator). An emulator is never restarted while paused."] },
