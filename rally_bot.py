@@ -212,6 +212,7 @@ DEFAULTS = {
     "city_enabled": False,                  # run the tasks (Tasks tab) while no rally is waiting
     "city_tasks": [],                       # [{name, enabled, target, steps, every_min}], see run_step()
     "duties": {},                           # {duty_id: {on, every_min}} - ready-made duties, see DUTY_LIBRARY
+    "wheel": {"button": 100, "spins": 100, "reserve": 0},   # Tavern > Wheel of Fortune: biggest button (1/10/100), spins to do (0 = until the coins are used up), coins to keep
     "champions": {"plan": {}},                      # plan {champion: {taps, greets}}; empty = all on the champion the page opens on
     "crazy_eggs": {"eggs": {}, "lucky": "max", "min_hammers": 0},   # eggs {cost: {on, daily}}, lucky = egg cost / "max" / "" (none)
     "city_icons": {},                       # extra / changed right-side icon positions {name: [x, y]}
@@ -6115,6 +6116,9 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "champions":
         run_champions(dev, cfg, log, stop)
         return
+    if cmd == "wheel":
+        run_wheel(dev, cfg, log, stop)
+        return
     if cmd == "text":
         dev.text(arg)
         _nap(stop, 0.8, 1.2)
@@ -6623,6 +6627,92 @@ def ch_greet_label(img):
     return out
 
 
+WHEEL_BTN = {100: (95, 924), 10: (269, 924), 1: (443, 924)}          # Spin buttons at the bottom of the Wheel of Fortune page
+WHEEL_COST = {100: 9000, 10: 900, 1: 100}
+WHEEL_COINS_BOX = (234, 128, 190, 48)
+WHEEL_ICON = (141, 328)                                              # "Wheel of Fortune" in the Tavern's ring menu
+
+
+def wheel_coins(img):
+    x, y, w, h = WHEEL_COINS_BOX
+    txt = " ".join(t for t, _ in ocr_lines(img[y:y + h, x:x + w], 3.0))
+    d = re.sub(r"[^0-9]", "", txt)
+    return int(d) if d else None
+
+
+def wheel_on_page(img):
+    return bool(find_text(img, ["Wheel of Fortune"], region=(100, 5, 340, 60), cutoff=0.7))
+
+
+def wheel_reward_panel(img):
+    return bool(find_text(img, ["Congratulations", "Continue"], region=(30, 150, 480, 650), cutoff=0.7))
+
+
+def run_wheel(dev, cfg, log, stop):
+    """Tavern's ring menu is open: open the Wheel of Fortune and spin with the button the user picked until the number
+    of spins is done, the coins run out (or fall to the reserve to keep) or something unexpected is on the screen.
+    The reward panel is closed by tapping its Continue / empty ground. Only the three Spin buttons are ever pressed."""
+    conf = {**{"button": 100, "spins": 100, "reserve": 0}, **(cfg.get("wheel") or {})}
+    big = int(conf["button"]) if int(conf["button"]) in WHEEL_BTN else 100
+    target = int(conf["spins"] or 0)                       # 0 = until the coins are used up
+    reserve = int(conf["reserve"] or 0)
+    shot = dev.screenshot()
+    if not wheel_on_page(shot):
+        p = find_text(shot, ["Wheel of Fortune", "Wheel of", "Fortune"], region=(0, 250, 300, 300), cutoff=0.7)
+        dev.tap(p[0], p[1] - 40) if p else dev.tap(*WHEEL_ICON)
+        _nap(stop, 2.2, 2.8)
+        shot = dev.screenshot()
+        if not wheel_on_page(shot):
+            raise RuntimeError("the Wheel of Fortune page did not open")
+    done = 0
+    fails = 0
+    while not stop.is_set():
+        shot = dev.screenshot()
+        if wheel_reward_panel(shot):                       # a reward panel is still up
+            dev.tap(270, 754)
+            _nap(stop, 0.8, 1.1)
+            continue
+        if not wheel_on_page(shot):
+            log("[!]  Wheel: not on the Wheel of Fortune page any more - stopped")
+            break
+        coins = wheel_coins(shot)
+        if coins is None:
+            log("[!]  Wheel: could not read the coins - stopped")
+            break
+        left = (target - done) if target else None
+        if left is not None and left <= 0:
+            log(f"[+]  Wheel: {done} spin(s) done")
+            break
+        pick = next((b for b in (100, 10, 1) if b <= big and (left is None or b <= left) and coins - WHEEL_COST[b] >= reserve), None)
+        if pick is None:
+            log(f"[+]  Wheel: stopped after {done} spin(s) - {coins:,} coins left (cost/keep-at-least {reserve:,})")
+            break
+        dev.tap(*WHEEL_BTN[pick])
+        shown = False
+        for _ in range(14):
+            _nap(stop, 0.5, 0.7)
+            if wheel_reward_panel(dev.screenshot()):
+                shown = True
+                break
+        if not shown:
+            fails += 1
+            log(f"[i]   Wheel: no reward panel after the {pick}-spin button ({fails}/3)")
+            if fails >= 3:
+                break
+            continue
+        fails = 0
+        done += pick
+        log(f"[i]   Wheel: {done} spin(s) done ({coins - WHEEL_COST[pick]:,} coins left)")
+        for _ in range(4):                                 # close the panel: Continue, else empty ground
+            dev.tap(270, 754)
+            _nap(stop, 0.8, 1.1)
+            if not wheel_reward_panel(dev.screenshot()):
+                break
+            dev.tap(270, 110)
+            _nap(stop, 0.6, 0.9)
+    return done
+
+
 def ch_snap(img, tag):
     try:
         d = USER / "debug"
@@ -6830,7 +6920,7 @@ DUTY_LIBRARY = [
      "target": "building:Keep+Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name"]},
     {"id": "tavern_wheel", "group": "Common tasks", "title": "Test: Tavern, Wheel of Fortune", "every_min": 60, "verified": False,
      "note": "Walks to the Tavern, opens its menu, taps Wheel of Fortune and looks at the page (nothing is spun).",
-     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "tap_text Wheel of Fortune|Wheel of|Fortune", "wait 2.5", "ring_name WheelPage"]},
+     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "wheel"]},
     {"id": "reach_tavern", "group": "Common tasks", "title": "Test: go to Tavern", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Tavern and opens its menu (nothing is pressed).",
      "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern"]},
