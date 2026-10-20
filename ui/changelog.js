@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.51", date: "2026-10-20",
+    new: [],
+    fixed: ["Using stamina items: on some accounts the bot could not read the \u201cOwn:\u201d line of the amount window and thought the window had not opened, so it skipped every rally for lack of stamina while the window was open with thousands of items. The window is now recognised by \u201cYou can receive\u201d alone (or Own + Max).", "Using stamina items: when an account has no item of a size (for example no 100-stamina items), the bot no longer taps where that row would be and opens a different item by mistake. It goes straight to the next size."] },
   { v: "2.4.50", date: "2026-10-20",
     new: ["The emulator name at the top of each page now stays pinned while you scroll (the page fades behind it), with small arrows to jump to the top or bottom.", "Generals picker: a search box that works in both views, and a Grid view (only generals with a picture) or a simple List view. The General Manager uses the same toggle.", "Hover an instance in the left list to get quick Start, Pause and Stop buttons.", "\u201cEmulator\u201d is now called \u201cInstance\u201d in the window.", "Status text in the left list (NO STAMINA, KICKED, back-in timer) is now easier to read."],
     fixed: ["The left list no longer scrolls sideways.", "An instance that is switched off (BlueStacks or MuMu) can now be started by the bot using its name, also when a MuMu and a BlueStacks instance share the same name. If it still cannot start, the log says why."] },
