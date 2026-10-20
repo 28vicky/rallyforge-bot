@@ -422,9 +422,10 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .two .lst .li img{background:rgba(127,127,127,.12)}
 
 /* emulator page: name, status and Start/Pause/Stop stay at the top while the page scrolls */
-.stickyhead{position:sticky;top:-4px;z-index:20;background:var(--bgc);padding:16px 6px 10px 2px;margin:0 -6px 12px -2px;border:0;border-radius:0;border-bottom:1px solid var(--line);box-shadow:0 6px 8px -6px rgba(0,0,0,.45)}
-.stickyhead>.row{margin-bottom:10px!important;margin-top:0!important}
-.stickyhead>.warnbar{margin-bottom:10px}
+.stickyhead{position:sticky;top:-4px;z-index:20;background:var(--bgc);padding:14px 6px 12px 2px;margin:0 -6px 6px -2px}
+.stickybox{background:var(--bgc);padding:12px 16px 4px;border-radius:var(--r1);border:var(--bd);box-shadow:0 4px 8px -4px rgba(0,0,0,.5)}
+.stickybox>.row{margin-bottom:10px!important;margin-top:0!important}
+.stickybox>.warnbar{margin-bottom:10px}
 
 /* general pickers: search and list are one box; both sides the same height */
 .ghead{display:flex;justify-content:space-between;align-items:center;min-height:38px;margin-bottom:4px}
