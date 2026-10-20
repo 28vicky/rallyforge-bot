@@ -6367,22 +6367,47 @@ def capture_city_pictures(dev, cfg, log, stop, progress=None):
                 pass
 
     def match_shift(before, after, cdx, cdy):
-        """How far the content really moved, by finding a piece of the first picture in the second one. -> (dx, dy, score)"""
+        """How far the content really moved along the commanded direction (0 .. 1.6x the command; the game stops the map at its
+        edges, so it can be less), by trying every shift and keeping the one where the two pictures agree best.
+        -> (dx, dy, score) with score = how much better the best shift is than the average one (higher = surer)."""
         x, y, w, h = CITY_VIEW
-        gb = cv2.cvtColor(before[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
-        ga = cv2.cvtColor(after[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
-        # the piece: the part of the first picture that is still on screen after the expected move (plus a margin)
-        mx, my = int(abs(cdx)) + 40, int(abs(cdy)) + 40
-        px0, px1 = (mx if cdx < 0 else 0) + 0, w - (mx if cdx > 0 else 0)
-        py0, py1 = (my if cdy < 0 else 0) + 0, h - (my if cdy > 0 else 0)
-        px0, px1 = (0 if cdx >= 0 else mx), (w if cdx <= 0 else w - mx)
-        py0, py1 = (0 if cdy >= 0 else my), (h if cdy <= 0 else h - my)
-        if px1 - px0 < 90 or py1 - py0 < 90:
-            px0, px1, py0, py1 = w // 2 - 60, w // 2 + 60, h // 2 - 100, h // 2 + 100
-        piece = gb[py0:py1, px0:px1]
-        res = cv2.matchTemplate(ga, piece, cv2.TM_CCOEFF_NORMED)
-        _mn, mxv, _a, loc = cv2.minMaxLoc(res)
-        return float(loc[0] - px0), float(loc[1] - py0), float(mxv)
+        def prep(im):
+            g = cv2.cvtColor(im[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+            return cv2.resize(g, (w // 2, h // 2), interpolation=cv2.INTER_AREA).astype("float32")
+        gb, ga = prep(before), prep(after)
+        H, W = gb.shape
+        horiz = abs(cdx) >= abs(cdy)
+        cmd = (cdx if horiz else cdy) / 2.0
+        sign = 1 if cmd >= 0 else -1
+        lim = int(abs(cmd) * 1.6) + 2
+        scores = []
+        for a_ in range(0, lim + 1, 2):
+            for c_ in range(-8, 9, 2):
+                sx, sy = (sign * a_, c_) if horiz else (c_, sign * a_)
+                # content moved by (sx, sy): before[r, c] shows up at after[r + sy, c + sx]
+                bx0, bx1 = max(0, -sx), min(W, W - sx)
+                by0, by1 = max(0, -sy), min(H, H - sy)
+                if (bx1 - bx0) * (by1 - by0) < 0.3 * W * H:
+                    continue
+                d = float(np.abs(gb[by0:by1, bx0:bx1] - ga[by0 + sy:by1 + sy, bx0 + sx:bx1 + sx]).mean())
+                scores.append((d, sx, sy))
+        if not scores:
+            return 0.0, 0.0, 0.0
+        scores.sort()
+        d0, sx0, sy0 = scores[0]
+        best = (d0, sx0, sy0)
+        for ddx in range(-1, 2):                             # refine to the pixel
+            for ddy in range(-1, 2):
+                sx, sy = sx0 + ddx, sy0 + ddy
+                bx0, bx1 = max(0, -sx), min(W, W - sx)
+                by0, by1 = max(0, -sy), min(H, H - sy)
+                if (bx1 - bx0) * (by1 - by0) < 0.3 * W * H:
+                    continue
+                d = float(np.abs(gb[by0:by1, bx0:bx1] - ga[by0 + sy:by1 + sy, bx0 + sx:bx1 + sx]).mean())
+                if d < best[0]:
+                    best = (d, sx, sy)
+        mean_d = sum(t[0] for t in scores) / len(scores)
+        return best[1] * 2.0, best[2] * 2.0, max(0.0, 1.0 - best[0] / max(mean_d, 1e-6))
 
     def pan_measure(dx, dy):
         """Pan, then measure. -> None when the map did not move (edge), else (real dx, real dy, score, picture)"""
@@ -6397,11 +6422,14 @@ def capture_city_pictures(dev, cfg, log, stop, progress=None):
             _nap(stop, 0.8, 1.0)
             after = dev.screenshot()
             mx, my, sc = match_shift(before, after, cdx, cdy)
-            if sc >= 0.55 and (abs(mx) > 3 or abs(my) > 3):
+            moved_px = max(abs(mx), abs(my))
+            if moved_px <= 3 and sc >= 0.5:
+                return None                                    # the same picture: the map is at its edge
+            if sc >= 0.35:
                 return mx, my, sc, after
-            if sc >= 0.55:
-                break                                          # sure it is the same picture: the edge
-            log(f"[i] City pictures: pan {dx:.0f},{dy:.0f} - match {sc:.2f} at {mx:.0f},{my:.0f} (try {attempt + 1})")
+            log(f"[i] City pictures: pan {dx:.0f},{dy:.0f} - unsure (score {sc:.2f}, shift {mx:.0f},{my:.0f}) try {attempt + 1}")
+            if attempt == 1:
+                return cdx * 1.0, cdy * 1.0, sc, after         # keep going with the commanded move (marked unsure by its low score)
         return None
 
     def snap(tag, mx, my, resp):
@@ -7405,6 +7433,12 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             _nap(stop, 0.8, 1.2)
             continue
         unknown += 1
+        try:                                                  # keep what the game showed when nothing was recognised (look at it to teach the bot this screen)
+            if unknown <= 3:
+                (USER / "debug").mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(USER / "debug" / f"unknown_{re.sub(r'[^0-9A-Za-z]+', '_', getattr(dev, 'serial', 'x'))}_{int(time.time())}.png"), shot)
+        except Exception:
+            pass
         cx = find_close_x(shot) if unknown % 2 == 1 else []
         if cx:
             dev.tap(cx[0][0], cx[0][1])
@@ -7413,6 +7447,9 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             toggled += 1
             dev.tap(*VIEW_TOGGLE)
             say("[*] Recovery: screen not recognised - tapped the city / landscape button")
+        elif unknown % 2 == 0:                                # Android Back does nothing on the Alliance page and other full pages: the round arrow top-left leaves them
+            dev.tap(36, 38)
+            say("[*] Recovery: unexpected page - tapped its round Back arrow (top left)")
         else:
             dev.back()
             say("[*] Recovery: unexpected window - pressed Back")
