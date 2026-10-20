@@ -6176,6 +6176,32 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(p[0], p[1] - 38)                           # the icon sits just above its caption
         return True
+    if kind == "building" and picture_items(dev) is not None and str(name).lower().split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
+        pitems = picture_items(dev)                          # the camera is found by the whole-city picture; positions come from the mapper or the built-in default
+        want = str(name).lower()
+        pkeys = sorted(k for k in pitems if k.split("#")[0].lower() == want.split("#")[0] and (("#" not in want) or k.lower() == want))
+        nav = nav_state.get("anav")
+        if nav is None:
+            nav = CityNav(dev, stop, log)
+            nav.absolute = True
+            nav_state["anav"] = nav
+        done_any = False
+        for k in pkeys[:int(task.get("count", 1) or 1)]:
+            tx, ty = pitems[k]
+            log(f"[*] Going to {k} by the city picture")
+            nav.goto(tx, ty)
+            px, py = tx - nav.cx, ty - nav.cy
+            x0, y0, w, h = SAFE_TAP_AREA
+            if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+                log(f"[!] Task '{task.get('name')}': {k} could not be brought into view (it is at {round(px)},{round(py)}) - skipped")
+                continue
+            dev.tap(int(px), int(py + float(task.get("tap_dy", 0))))
+            _nap(stop, 1.0, 1.4)
+            for st in task.get("steps", []):
+                run_step(dev, cfg, log, stop, st)
+            leave_to_city(dev, cfg, stop)
+            done_any = True
+        return None if done_any else False
     if kind == "building":
         items = city_map_items(dev)
         keys = sorted(k for k in items if k.split("#")[0].lower() == name.lower().split("#")[0]
@@ -6899,6 +6925,27 @@ UNIQUE_BUILDINGS = {k.lower() for k in FIXED_OFFSETS_FROM_SHRINE}               
 CITY_SQUARES = {int(k): v for k, v in {"1": ["Keep", 319, -218], "2": ["Tavern", 232, -27], "3": ["Shrine", 30, -29], "4": ["Victory Column", -684, -334], "5": ["Council of State", 73, -452], "6": ["Ideal Land", 291, -487], "7": ["Dragon Cliff", 704, -430], "8": ["Arsenal", -85, -379], "9": ["Triumphal Arch", 222, -388], "10": ["Academy", 65, -302], "11": ["Military Academy", 502, -280], "12": ["Research Factory", -443, -204], "13": ["Barracks", -206, -199], "14": ["Wisdom Dome", 682, -177], "15": ["Warehouse", -21, -172], "16": ["Art Hall", -655, -123], "17": ["Prison", -378, -118], "18": ["Holy Palace", 515, -103], "19": ["Trap Factory", -210, -27], "20": ["Archer Camp", 658, 13], "21": ["Pasture", -810, -29], "22": ["Stables", -581, 52], "23": ["Market", -432, 116], "24": ["Workshop", 80, 111], "25": ["War Hall", 424, 103], "26": ["Embassy", 240, 190], "27": ["Hospital", -68, 280], "28": ["Rally Spot", 653, 221], "29": ["Walls", -473, 290], "30": ["Battlefield", -704, 359], "31": ["Bounty Cave", -473, 475], "32": ["Wonder", -999, -208], "33": ["Subordinate City", -1058, -523], "34": ["Watchtower", -1160, -88], "35": ["Archer Tower 1", -1085, 673], "36": ["Archer Tower 2", -990, 731], "37": ["Army Camp", 535, 421]}.items()}
 
 CALIB_STOPS = [(1141, 609), (1312, 588), (1000, 800), (1400, 800), (700, 650), (1000, 450), (1400, 450), (600, 900), (1450, 700)]
+
+
+def picture_items(dev):
+    """Building positions in the whole-city picture frame: what the square mapper saved for this emulator, and for every
+    building it did not save the built-in default (the numbered squares). -> {"Keep#1": [x, y], ...} or None when the
+    city picture is not available."""
+    if city_picture() is None:
+        return None
+    ent = load_city().get(getattr(dev, "serial", "default")) or {}
+    items = {}
+    if ent.get("frame") == "picture":
+        items.update({k: list(v) for k, v in ent.get("items", {}).items()})
+    have = {k.split("#")[0].lower() for k in items}
+    for n, (nm, ox, oy) in CITY_SQUARES.items():
+        if n in PARKED_SQUARES:
+            continue
+        base = re.sub(r"\s*\d+$", "", nm)
+        if base.lower() in have:
+            continue
+        items[f"{base}#1"] = [round(SHRINE_LABEL_IN_PICTURE[0] + ox), round(SHRINE_LABEL_IN_PICTURE[1] + oy)]
+    return items
 
 
 def city_map_items(dev):
