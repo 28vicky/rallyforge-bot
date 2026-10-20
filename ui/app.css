@@ -535,3 +535,35 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 #pages>*{animation:rfIn .28s ease both}
 .jump{background:var(--btn);border:var(--bd);color:var(--fg)}
 .jump:hover{background:var(--accent1);color:#fff}
+
+/* ===== Ivory / Midnight: flat, quiet surfaces (thin borders, no lift, no glow, small radii) ===== */
+:is([data-pal="ivory"],[data-pal="midnight"]){--r1:12px;--r2:9px;--sh:none;--sh2:none}
+:is([data-pal="ivory"],[data-pal="midnight"]) .app{background:var(--bg)}
+:is([data-pal="ivory"],[data-pal="midnight"]) .btn:hover,
+:is([data-pal="ivory"],[data-pal="midnight"]) .inst:hover,
+:is([data-pal="ivory"],[data-pal="midnight"]) .iconbtn:hover{transform:none;border-color:var(--accent1)}
+:is([data-pal="ivory"],[data-pal="midnight"]) .btn:active{box-shadow:none;transform:none;opacity:.85}
+:is([data-pal="ivory"],[data-pal="midnight"]) .btn.pri,
+:is([data-pal="ivory"],[data-pal="midnight"]) .btn.on,
+:is([data-pal="ivory"],[data-pal="midnight"]) .seg button.on{box-shadow:none}
+:is([data-pal="ivory"],[data-pal="midnight"]) .main{padding:18px 26px 40px;gap:14px}
+/* sidebar: quiet rows, selected one filled */
+:is([data-pal="ivory"],[data-pal="midnight"]) .side{padding:16px 12px 46px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .inst{background:transparent;border-color:transparent;padding:9px 12px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .inst:hover{background:var(--btn);border-color:var(--line)}
+:is([data-pal="ivory"],[data-pal="midnight"]) .inst.sel{background:var(--accent);border-color:var(--accent1);color:var(--accfg)}
+/* header and toolbar: one thin line instead of a raised block */
+:is([data-pal="ivory"],[data-pal="midnight"]) .top b{color:var(--fg);font-size:20px;font-weight:650}
+:is([data-pal="ivory"],[data-pal="midnight"]) .top img{box-shadow:none;border-radius:10px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .ribbon{background:transparent;border:var(--bd);gap:10px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .grp{border-right-color:var(--line)}
+:is([data-pal="ivory"],[data-pal="midnight"]) .grp .cap{letter-spacing:.08em;opacity:.8}
+:is([data-pal="ivory"],[data-pal="midnight"]) .btn{background:var(--btn);font-weight:500}
+/* tabs: a segmented strip, active tab is a neutral chip */
+:is([data-pal="ivory"],[data-pal="midnight"]) .tabs{gap:2px;padding:4px;border-radius:12px;background:var(--card);border:var(--bd);align-self:flex-start;display:inline-flex}
+:is([data-pal="ivory"],[data-pal="midnight"]) .tab{border-radius:8px;padding:7px 13px;font-size:14px;font-weight:500}
+:is([data-pal="ivory"],[data-pal="midnight"]) .tab.on{background:var(--line);color:var(--fg);box-shadow:none}
+/* cards */
+:is([data-pal="ivory"],[data-pal="midnight"]) .panel{padding:18px 20px;margin-bottom:14px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .panel h3{color:var(--fg);font-size:14.5px;font-weight:650;letter-spacing:0;text-transform:none;margin-bottom:10px}
+:is([data-pal="ivory"],[data-pal="midnight"]) .stickyhead::before{display:none}
