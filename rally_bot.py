@@ -5960,6 +5960,50 @@ def market_match(img, slot, tpl_name, threshold):
     return float(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED).max())
 
 
+def _icon_hash(img):
+    g = cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), (9, 8), interpolation=cv2.INTER_AREA).astype("int16")
+    bits = (g[:, 1:] > g[:, :-1]).flatten()
+    return int("".join("1" if b else "0" for b in bits), 2)
+
+
+def run_market_capture(dev, cfg, log, stop):
+    """The Market's ring menu is open: open the Black Market and save a picture of every item on sale into the item
+    library (USER/market_library). Pictures already in the library (same look) are not saved again. Nothing is bought
+    and nothing is refreshed."""
+    img = dev.screenshot()
+    if not market_on_screen(img):
+        p = find_text(img, ["Black Market", "Black"], region=(0, 150, 400, 500), cutoff=0.7)
+        if not p:
+            raise RuntimeError("the Black Market icon is not in the Market's menu")
+        dev.tap(p[0], p[1] - 40)
+        _nap(stop, 2.2, 3.0)
+        img = dev.screenshot()
+    if not market_on_screen(img):
+        raise RuntimeError("the Black Market did not open")
+    lib = USER / "market_library"
+    lib.mkdir(parents=True, exist_ok=True)
+    known = []
+    for f in lib.glob("*.png"):
+        t = cv2.imread(str(f))
+        if t is not None:
+            known.append(_icon_hash(t))
+    new = 0
+    slots = market_slots(img)
+    for i, sl in enumerate(slots, 1):
+        x, y, w, h = sl["icon"]
+        crop = img[y:y + h, x:x + w]
+        if crop.size == 0:
+            continue
+        hh = _icon_hash(crop)
+        if any(bin(hh ^ k).count("1") <= 5 for k in known):
+            continue
+        known.append(hh)
+        cv2.imwrite(str(lib / f"item_{int(time.time())}_{i}.png"), crop)
+        new += 1
+    log(f"[+]  Black Market: {len(slots)} item(s) on sale, {new} new picture(s) saved to the library ({len(known)} in total)")
+    cv2.imwrite(str(USER / "debug" / "black_market.png"), img)
+
+
 def run_market(dev, cfg, log, stop):
     """On the Black Market screen: buy the wanted items (gems / resources / both), refresh the shop as set."""
     wanted = market_wanted(cfg)
@@ -6115,6 +6159,9 @@ def run_step(dev, cfg, log, stop, step):
         return
     if cmd == "champions":
         run_champions(dev, cfg, log, stop)
+        return
+    if cmd == "market_capture":
+        run_market_capture(dev, cfg, log, stop)
         return
     if cmd == "wheel":
         run_wheel(dev, cfg, log, stop)
@@ -6925,6 +6972,9 @@ DUTY_LIBRARY = [
     {"id": "tavern_wheel", "group": "Common tasks", "title": "Test: Tavern, Wheel of Fortune", "every_min": 60, "verified": False,
      "note": "Walks to the Tavern, opens its menu, taps Wheel of Fortune and looks at the page (nothing is spun).",
      "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "wheel"]},
+    {"id": "market_capture", "group": "Common tasks", "title": "Test: Black Market pictures", "every_min": 60, "verified": False,
+     "note": "Walks to the Market, opens the Black Market and saves a picture of every item on sale into the item library (nothing is bought or refreshed).",
+     "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market", "market_capture"]},
     {"id": "reach_tavern", "group": "Common tasks", "title": "Test: go to Tavern", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Tavern and opens its menu (nothing is pressed).",
      "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern"]},

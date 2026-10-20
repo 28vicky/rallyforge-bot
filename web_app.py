@@ -94,6 +94,7 @@ class Controller:
         self.events = collections.deque(maxlen=60)      # (id, kind, data) the interface should react to once
         self.shots = collections.OrderedDict()          # token -> screenshot (540x960)
         self.scan_found = []
+        self.city_jobs = {}                                   # serial -> {"running", "stop", "progress"}: every instance maps its own city, the others stay free
         self.jobs = {"city": {"running": False, "stop": None}, "generals": {"running": False, "stop": None, "count": 0}, "catalog": {"running": False, "stop": None, "count": 0}}
         self.tg = None
         self.tg_ready = False
@@ -881,16 +882,31 @@ class Controller:
                 self.event("city_done")
         threading.Thread(target=work, daemon=True).start()
 
+    def city_job(self, serial, start=False):
+        """The city-mapper job of one instance. start=True checks that this instance can be mapped now and claims it."""
+        job = self.city_jobs.setdefault(serial, {"running": False, "stop": None, "progress": None})
+        if start:
+            if job["running"]:
+                raise ApiError("This instance is already mapping its city.")
+            d = self.dev.get(serial)
+            if d and d.get("state") == "run":
+                raise ApiError("Stop (or pause) this instance first - the mapper and the bot would both use its screen. The other instances can keep running.")
+        return job
+
+    def city_any_running(self):
+        return any(j["running"] for j in self.city_jobs.values())
+
+    def city_jobs_state(self):
+        return {k: {"running": j["running"], "progress": j.get("progress")} for k, j in self.city_jobs.items() if j["running"]}
+
     def scan_city(self, serial):
-        job = self.jobs["city"]
-        if job["running"]:
-            raise ApiError("The city mapper is already running.")
+        job = self.city_job(serial, start=True)
         adb = rb.find_adb(self.cfg.get("adb_path") or "auto")
         if not adb:
             raise ApiError("ADB not found. Set the ADB path in Settings.")
         stop = threading.Event()
         job.update(running=True, stop=stop, progress=None)
-        cfg = dict(self.cfg)
+        cfg = rb.merge_device_cfg(rb.load_config(), serial)          # this instance's own settings
 
         def work():
             try:
@@ -900,19 +916,18 @@ class Controller:
                 self.log(f"[!] City mapper: {e}")
             finally:
                 job["running"] = False
-                self.event("city_done")
+                job["progress"] = None
+                self.event("city_done", {"serial": serial})
         threading.Thread(target=work, daemon=True).start()
 
     def scan_city_taps(self, serial):
-        job = self.jobs["city"]
-        if job["running"]:
-            raise ApiError("The city mapper is already running.")
+        job = self.city_job(serial, start=True)
         adb = rb.find_adb(self.cfg.get("adb_path") or "auto")
         if not adb:
             raise ApiError("ADB not found. Set the ADB path in Settings.")
         stop = threading.Event()
         job.update(running=True, stop=stop, progress=None)
-        cfg = dict(self.cfg)
+        cfg = rb.merge_device_cfg(rb.load_config(), serial)          # this instance's own settings
 
         def work():
             try:
@@ -922,13 +937,14 @@ class Controller:
                 self.log(f"[!] City tap test: {e}")
             finally:
                 job["running"] = False
-                self.event("city_done")
+                job["progress"] = None
+                self.event("city_done", {"serial": serial})
         threading.Thread(target=work, daemon=True).start()
 
     # ---- map the city by hand: the user clicks each building in a live picture of the emulator
     def manual_open(self, serial):
-        if self.jobs["city"]["running"]:
-            raise ApiError("The city mapper is already running.")
+        if self.city_job(serial)["running"]:
+            raise ApiError("This instance is already mapping its city.")
         adb = rb.find_adb(self.cfg.get("adb_path") or "auto")
         if not adb:
             raise ApiError("ADB not found. Set the ADB path in Settings.")
@@ -1492,7 +1508,7 @@ class Api:
         ram = getattr(c, "ram", None) or rb.memory_info()
         return {"seq": last, "logs": logs, "acts": acts, "events": events, "devs": c.status_list(),
                 "tg": {"status": c.tg_status, "ready": c.tg_ready},
-                "ram": ram, "city": c.jobs["city"]["running"], "city_progress": c.jobs["city"].get("progress"),
+                "ram": ram, "city": c.city_any_running() or c.jobs["city"]["running"], "city_progress": None, "city_jobs": c.city_jobs_state(),
                 "gen_scan": {"running": c.jobs["generals"]["running"], "count": c.jobs["generals"].get("count", 0)},
                 "catalog": {"running": c.jobs["catalog"]["running"], "count": c.jobs["catalog"].get("count", 0)},
                 "lic": c.lic.info() if c.lic.on else None,
@@ -1872,8 +1888,13 @@ class Api:
         return {"rows": rows, "extra": extra, "scanned": data.get("scanned"), "seconds": data.get("seconds")}
 
     def scan_city_stop(self, p):
+        serial = p.get("serial")
+        jobs = [self.c.city_jobs.get(serial)] if serial else list(self.c.city_jobs.values())
+        for j in jobs:
+            if j and j.get("stop"):
+                j["stop"].set()
         st = self.c.jobs["city"].get("stop")
-        if st:
+        if st and not serial:
             st.set()
         return {}
 

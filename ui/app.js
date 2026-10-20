@@ -345,6 +345,7 @@ async function loadProfileFlow() {
 
 // ------------------------------------------------------------------ sidebar / tabs / pages
 function devTag(d) {
+  if (S.cityJobs && S.cityJobs[d.id] && S.cityJobs[d.id].running) return "MAPPING CITY";
   const t = { run: "RUNNING", pause: "PAUSED", stop: "STOPPED", error: "PROBLEM" }[d.state] || "";
   if (d.state === "run" && d.kicked_at) return "KICKED";
   if (d.state === "run" && d.no_stamina) return "NO STAMINA";
@@ -630,6 +631,9 @@ async function poll() {
     S.catScan = j.catalog || { running: false, count: 0 };
     S.city = j.city;
     S.cityProg = j.city_progress || null;
+    S.cityJobs = j.city_jobs || {};
+    const ck = Object.keys(S.cityJobs).join("|");
+    if (ck !== S.cityKey) { S.cityKey = ck; renderSide(); }
     if (j.lic) {
       const wasOk = S.license && S.license.valid;
       const bad = j.lic.required && !j.lic.valid;
@@ -693,7 +697,7 @@ async function handleEvent(ev) {
   if (ev.k === "toast") toast(d.msg, d.kind);
   else if (ev.k === "devices") { const j = await act(api("state")); if (j) { S.devices = j.devices; if (S.sel === "control" && S.tab === "dashboard") rerender(); } }
   else if (ev.k === "bosses") { const j = await act(api("state", {}, { quiet: true })); if (j) { S.bosses = j.bosses; if (window.refreshBosses) refreshBosses(); } }
-  else if (ev.k === "city_done") { closeScanBox(); if (window.showCityResult) showCityResult(); const j = await act(api("state")); if (j) { S.cityInfo = j.city_info; if (window.refreshCityInfo) refreshCityInfo(); } toast("City mapper finished.", "ok"); }
+  else if (ev.k === "city_done") { const sr = ev.d && ev.d.serial; if (sr) { S.cityDone = { ...(S.cityDone || {}), [sr]: true }; if (S.cityJobs) delete S.cityJobs[sr]; if (window.drawCityProgress) drawCityProgress(); } else { closeScanBox(); if (window.showCityResult) showCityResult(); } const j = await act(api("state")); if (j) { S.cityInfo = j.city_info; if (window.refreshCityInfo) refreshCityInfo(); } toast("City mapper finished.", "ok"); }
   else if (ev.k === "scan_done") scanGeneralsDone(d);
   else if (ev.k === "catalog_done") catalogDone(d);
   else if (ev.k === "update_none") toast(`You are up to date (version ${d.version}).`, "ok");
