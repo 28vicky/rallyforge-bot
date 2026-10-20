@@ -5091,16 +5091,17 @@ def safe_shift(before, after, cmd_dx, cmd_dy):
     """city_shift, but never believe an impossible answer: the map cannot move further than the finger did (repeating
     pictures such as rows of troops fool the matcher). -> (dx, dy) of the map content between the two screenshots."""
     dx, dy, resp = city_shift(before, after)
+    G = 1.9                                                # the game moves the map up to ~1.5x as far as the finger (measured on a real city): allow it
     ok = (resp >= 0.05
-          and min(0, cmd_dx) - 30 <= dx <= max(0, cmd_dx) + 30
-          and min(0, cmd_dy) - 30 <= dy <= max(0, cmd_dy) + 30)
+          and min(0, cmd_dx * G) - 30 <= dx <= max(0, cmd_dx * G) + 30
+          and min(0, cmd_dy * G) - 30 <= dy <= max(0, cmd_dy * G) + 30)
     if ok:
         return dx, dy
     x, y, w, h = CITY_VIEW
     diff = float(cv2.absdiff(before[y:y + h, x:x + w], after[y:y + h, x:x + w]).mean())
     if diff < 2.0:                                         # the picture did not change: the map did not move (edge)
         return 0.0, 0.0
-    return cmd_dx * 0.9, cmd_dy * 0.9                      # it moved but the match is not trustworthy: use the finger
+    return cmd_dx * 1.45, cmd_dy * 1.45                    # it moved but the match is not trustworthy: use the finger (the map follows it ~1.45x)
 
 
 def match_building(text, cutoff=0.82):
