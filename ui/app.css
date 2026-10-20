@@ -735,3 +735,10 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .sub:hover,:root .seg button:hover,:root .segb:hover{color:var(--fg)}
 :root .sub.on,:root .seg button.on,:root .segb.on,:root .ownseg button.on{background:var(--card);color:var(--fg);box-shadow:0 0 0 1px var(--line),0 1px 2px rgba(0,0,0,.10)}
 :root .seg.small .segb{padding:4px 10px;font-size:13px}
+
+/* instance card: play/pause/stop appear only on hover, over the right end of the name row; a long name is cut with "..." instead of running under them */
+:root .inst{position:relative}
+:root .inst .qact{position:absolute;right:8px;top:8px;margin-left:0;gap:2px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:2}
+:root .inst:hover .qact,:root .inst:focus-within .qact{opacity:1;pointer-events:auto}
+:root .inst .qact button{width:26px;height:22px}
+:root .inst:hover .nm,:root .inst:focus-within .nm{padding-right:62px}
