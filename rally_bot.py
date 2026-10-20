@@ -6093,7 +6093,17 @@ def run_step(dev, cfg, log, stop, step):
             cv2.imwrite(str(USER / "debug" / f"ring_{(arg or 'x').replace(' ', '_')}.png"), shot)
         except Exception:
             pass
-        got = ring_label_free(shot)
+        got = None
+        try:
+            import difflib
+            hits = []
+            for t, _ in ocr_lines(shot[400:620, 110:430], 3.0):
+                m = difflib.get_close_matches(t.strip(), list(BUILDING_NAMES), n=1, cutoff=0.7)
+                if m:
+                    hits.append(m[0])
+            got = (", ".join(dict.fromkeys(hits)),) if hits else ring_label_free(shot)
+        except Exception:
+            got = ring_label_free(shot)
         log(f"[i]   the menu that opened is called: {got[0] if got else 'no name read'}" + (f" (expected {arg})" if arg else ""))
         return
     if cmd == "market":
