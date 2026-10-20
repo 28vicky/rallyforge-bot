@@ -199,6 +199,8 @@ DEFAULTS = {
     "tg_auto_min": 0,                       # ask again every N minutes (0 = only when you press the button)
     "tg_min_level": 0,                      # ignore bosses below this level when a task uses {boss_x} {boss_y}
     "tg_pick": "nearest",                   # nearest | highest
+    "tg_feed_chats": "",                    # chats / channels / bots to watch for coordinates (comma separated: @username, link or the name in your chat list)
+    "tg_keep_min": 60,                      # forget a coordinate in the live list after this many minutes (0 = keep until cleared)
     "sidebar_open": True,                   # emulator list on the left (toggle with the header button, Ctrl+B or F9)
     "ui_pal": "amber",                      # amber | sage
     "ui_mode": "dark",                      # dark | light | auto
@@ -4876,6 +4878,61 @@ def set_bosses(items, source=""):
             pass
 
 
+FEED_FILE = USER / "coords_feed.json"
+_feed, _feed_stats = [], {"messages": 0, "with_coords": 0, "chats": [], "last": 0}
+_feed_lock = threading.Lock()
+
+
+def feed_add(items, chat="", keep_min=60):
+    """A chat message with positions: add them to the live list (the same X,Y in the same chat only refreshes its time)."""
+    now = time.time()
+    with _feed_lock:
+        if keep_min:
+            _feed[:] = [f for f in _feed if now - f["t"] <= keep_min * 60]
+        for it in items:
+            for f in _feed:
+                if f["x"] == it["x"] and f["y"] == it["y"] and f.get("chat") == chat and f.get("name") == it.get("name"):
+                    f["t"] = now
+                    break
+            else:
+                _feed.insert(0, {**it, "chat": chat, "t": now})
+        del _feed[500:]
+        try:
+            FEED_FILE.write_text(json.dumps({"items": _feed}, indent=1), encoding="utf-8")
+        except Exception:
+            pass
+
+
+def feed_note(chat, had_coords):
+    with _feed_lock:
+        _feed_stats["messages"] += 1
+        _feed_stats["with_coords"] += 1 if had_coords else 0
+        _feed_stats["last"] = time.time()
+
+
+def feed_get(keep_min=60):
+    now = time.time()
+    with _feed_lock:
+        if not _feed and FEED_FILE.exists():
+            try:
+                _feed[:] = json.loads(FEED_FILE.read_text(encoding="utf-8")).get("items", [])
+            except Exception:
+                pass
+        if keep_min:
+            _feed[:] = [f for f in _feed if now - f["t"] <= keep_min * 60]
+        return list(_feed), dict(_feed_stats)
+
+
+def feed_clear():
+    with _feed_lock:
+        _feed.clear()
+        _feed_stats.update({"messages": 0, "with_coords": 0})
+        try:
+            FEED_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
 def get_bosses():
     with _boss_lock:
         if not _bosses and BOSS_FILE.exists():
@@ -4955,6 +5012,59 @@ class TgLink:
                 return "password"
             return "ok"
         return self._call(go(), 40)
+
+    async def _resolve(self, name):
+        """@username, t.me link, number (chat id) or the chat's name as in your Telegram list -> entity, or None."""
+        n = re.sub(r"^https?://t\.me/", "", str(name).strip()).lstrip("@")
+        if not n:
+            return None
+        try:
+            return await self.client.get_entity(int(n) if re.fullmatch(r"-?\d+", n) else n)
+        except Exception:
+            pass
+        async for d in self.client.iter_dialogs():
+            if (d.name or "").strip().lower() == n.lower():
+                return d.entity
+        return None
+
+    def listen_feed(self, chats, on_update=None, keep_min=60):
+        """Watch every message (new or edited, also from other bots) of the named chats and add each position in it to the live list."""
+        names = [t.strip() for t in re.split(r"[,;\n]+", str(chats)) if t.strip()]
+        if not names:
+            return []
+
+        async def go():
+            from telethon import events
+            await self._connect()
+            ents, labels = [], []
+            for nm in names:
+                e = await self._resolve(nm)
+                if e is None:
+                    self.log(f"[!] Telegram: no chat called '{nm}' - use the name as in your chat list, or @username")
+                    continue
+                ents.append(e)
+                labels.append(getattr(e, "title", None) or getattr(e, "username", None) or str(nm))
+            if not ents:
+                raise RuntimeError("none of the chats to watch could be found")
+
+            async def handler(event):
+                txt = event.raw_text or ""
+                items = parse_bosses(txt)
+                try:
+                    chat = (await event.get_chat())
+                    chat = getattr(chat, "title", None) or getattr(chat, "username", None) or getattr(chat, "first_name", "") or ""
+                except Exception:
+                    chat = ""
+                feed_note(chat, bool(items))
+                if items:
+                    feed_add(items, chat, keep_min)
+                if on_update:
+                    on_update(items)
+            for ev in (events.NewMessage(chats=ents), events.MessageEdited(chats=ents)):
+                self.client.add_event_handler(handler, ev)
+            _feed_stats["chats"] = labels
+            return labels
+        return self._call(go(), 60)
 
     def listen(self, bot, on_update=None):
         """Read every message the bot sends (new or edited) and keep the boss list up to date."""

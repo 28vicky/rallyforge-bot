@@ -832,7 +832,31 @@ PAGES.telegram = function () {
     note("Type the message exactly as you do in the bot's chat (a command or a button's text, e.g. 'Barb Lv7'). Every answer the bot sends is read for lines like 'Lv7 Witch (xy: 719 539) 94km'. In a task you can use {boss_x}, {boss_y}, {boss_level} and {boss_name} in a step, and the step 'text 123' types a number into the game."),
     h("div", { class: "row", style: { marginBottom: "12px" } }, btn("Ask now", () => run("tg_fetch"), "pri"),
       btn("Copy selected X Y", async () => { if (selB === null) return; const b = S.bosses[selB]; try { await navigator.clipboard.writeText(`${b.x} ${b.y}`); toast("Copied.", "ok"); } catch (e) { toast(`${b.x} ${b.y}`); } })), bosses);
-  return h("div", {}, login, boss);
+  // live list of every coordinate that shows up in the chats you watch
+  const feedBox = h("div", {});
+  const feedChats = h("input", { type: "text", value: c.tg_feed_chats || "", placeholder: "@channel, group name as in your Telegram list" });
+  const drawFeed = (j) => {
+    if (!j) return;
+    const ago = (t) => { const s = Math.max(0, Math.round(j.now - t)); return s < 60 ? s + " s" : s < 3600 ? Math.round(s / 60) + " min" : Math.round(s / 3600) + " h"; };
+    const t = listTable(["Seen", "Chat", "Level", "Name", "X", "Y", "km"], j.items.map((b) => ({ cells: [ago(b.t) + " ago", b.chat || "", b.level || "", b.name, b.x, b.y, b.km ?? ""] })), null, null);
+    feedBox.innerHTML = "";
+    feedBox.appendChild(h("div", { class: "row", style: { gap: "10px", flexWrap: "wrap", margin: "8px 0" } },
+      h("span", { class: "chip" }, "messages read: " + j.stats.messages), h("span", { class: "chip" }, "with coordinates: " + j.stats.with_coords),
+      h("span", { class: "chip" }, "watching: " + ((j.stats.chats || []).join(", ") || "nothing yet")),
+      btn("Clear list", async () => { drawFeed(await act(api("coords_clear"))); })));
+    feedBox.appendChild(t.el);
+  };
+  const loadFeed = async () => { if (!feedBox.isConnected) return; const j = await api("coords", {}, { quiet: true }).catch(() => null); drawFeed(j); };
+  const feedTimer = setInterval(() => { if (!feedBox.isConnected && feedBox.dataset.shown) clearInterval(feedTimer); else loadFeed(); }, 3000);
+  setTimeout(() => { feedBox.dataset.shown = "1"; loadFeed(); }, 300);
+  const live = panel("Live coordinates (everything that appears in the chats you watch)",
+    grid2(fld("Chats / channels to watch (comma separated)", feedChats),
+      fld("Forget a coordinate after (min, 0 = never)", inp(c, "tg_keep_min", { type: "int", cls: "short" }))),
+    h("div", { class: "row", style: { margin: "10px 0" } },
+      btn("Start watching", async () => { c.tg_feed_chats = feedChats.value; const j = await act(api("coords_watch", { cfg: c })); if (j) { drawFeed(j); toast("Watching.", "ok"); } }, "pri")),
+    note("Log in above first. Use the chat's name exactly as in your Telegram list, or its @username. Every new or edited message there is read for lines like 'Lv7 Witch (xy: 719 539) 94km' (also when another bot wrote it); each coordinate is listed here with the time it was seen. Messages without that form are counted but not listed."),
+    feedBox);
+  return h("div", {}, login, live, boss);
 };
 
 // ====================================================================== reliability / schedule & alerts / updates

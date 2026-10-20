@@ -1121,6 +1121,17 @@ class Controller:
 
     def _tg_listen(self, tg):
         tg.listen(self.cfg.get("tg_boss_bot") or "@EvonyBossBot", on_update=lambda items: self.event("bosses"))
+        self._tg_listen_feed(tg)
+
+    def _tg_listen_feed(self, tg):
+        chats = str(self.cfg.get("tg_feed_chats") or "").strip()
+        if chats:
+            try:
+                labels = tg.listen_feed(chats, on_update=lambda items: self.event("coords"), keep_min=int(self.cfg.get("tg_keep_min", 60) or 0))
+                self.tg_status = "Logged in - watching " + ", ".join(labels or [chats])
+            except Exception as e:
+                self.tg_status = f"Problem: {e}"
+                self.log(f"[!] Telegram: {e}")
 
     def tg_connect(self):
         def fn(tg):
@@ -1975,6 +1986,23 @@ class Api:
     def tg_logout(self, p):
         self.c.tg_logout()
         return {}
+
+    def coords(self, p):
+        items, stats = rb.feed_get(int(self.c.cfg.get("tg_keep_min", 60) or 0))
+        return {"items": items, "stats": stats, "now": time.time(), "chats": str(self.c.cfg.get("tg_feed_chats") or ""),
+                "status": self.c.tg_status, "ready": bool(self.c.tg_ready)}
+
+    def coords_watch(self, p):
+        """Save the chats to watch and start watching them (the Telegram login must be done)."""
+        self.c.apply_config(p.get("cfg"))
+        if not self.c.tg_ready or self.c.tg is None:
+            raise ApiError("Log in to Telegram first (above).")
+        self.c._tg_listen_feed(self.c.tg)
+        return self.coords(p)
+
+    def coords_clear(self, p):
+        rb.feed_clear()
+        return self.coords(p)
 
     def tg_fetch(self, p):
         self.c.apply_config(p.get("cfg"))
