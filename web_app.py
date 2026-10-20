@@ -1385,7 +1385,7 @@ class Api:
         matrix = []
         for d in self.c.devices:
             eff = rb.merge_device_cfg(self.c.cfg, d["id"])
-            row = {"emu": names[d["id"]], "tasks": bool(eff.get("city_enabled")), "duties": []}
+            row = {"id": d["id"], "emu": names[d["id"]], "tasks": bool(eff.get("city_enabled")), "duties": []}
             for du in rb.DUTY_LIBRARY:
                 st, txt = rb.duty_status(d["id"], du["id"], eff)
                 if st != "off":

@@ -420,6 +420,8 @@ function instancePage(serial) {
     ["duties", "Duties", () => [PAGES.duties(serial)]],
     ["crazy_eggs", "Crazy Eggs", () => [PAGES.duties(serial, "crazy_eggs")]],
     ["champions", "Champions", () => [PAGES.duties(serial, "champions")]],
+    ["itinerary", "Itinerary", () => [instItinerary(serial)]],
+    ["history", "Log history", () => [instHistory(serial)]],
   ];
   if (!S.instTab) { try { S.instTab = localStorage.getItem("rf_inst_tab") || ""; } catch (e) { S.instTab = ""; } }
   if (!ITABS.some((t) => t[0] === S.instTab)) S.instTab = "run";
@@ -439,6 +441,53 @@ function instancePage(serial) {
   setTimeout(refreshInstanceControls, 0);
   return wrap;
 }
+// ====================================================================== per-instance Itinerary and Log history (read only)
+function instItinerary(serial) {
+  const root = h("div", {});
+  const fmtT = (t) => new Date(t * 1000).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  const grp = (title, rows, bad) => rows.length ? h("div", { class: "itgrp" + (bad ? " bad" : "") }, h("div", { class: "ithead" }, title + " (" + rows.length + ")"),
+    ...rows.map((r) => h("div", { class: "itrow" }, h("span", { class: "itwhen" }, r.when), h("span", { class: "itname" }, r.name)))) : null;
+  const load = async () => {
+    if (!root.isConnected) return;
+    const j = await api("task_history", {}, { quiet: true }).catch(() => null);
+    if (!j) return;
+    const row = (j.matrix || []).find((m) => m.id === serial);
+    const d = (row && row.duties) || [];
+    const mk = (f) => d.filter(f).map((x) => ({ when: x.text, name: x.title }));
+    const mine = (j.events || []).filter((e) => row && e.emu === row.emu).slice(0, 12).map((e) => ({ when: fmtT(e.t), name: e.task + (e.ok ? "" : " - failed" + (e.msg ? ": " + e.msg : "")) }));
+    root.innerHTML = "";
+    const parts = [grp("Overdue - waiting to run", mk((x) => x.status === "due" || x.status === "retry"), true), grp("Gave up today", mk((x) => x.status === "gaveup"), true),
+      grp("Coming up", mk((x) => x.status === "waiting")), grp("Done today", mk((x) => x.status === "done")), grp("Latest things the bot did here", mine)].filter(Boolean);
+    root.appendChild(panel("Itinerary",
+      note("What this instance has to do, in plain order. Red = late or given up. Switch things on or off under Duties and Tasks; changes are picked up without stopping the instance."),
+      row && !row.tasks ? h("div", { class: "chip pill-bad", style: { margin: "6px 0" } }, "Tasks are off for this instance") : null,
+      ...(parts.length ? parts : [note("Nothing is switched on yet. Turn duties on under Duties and they appear here.")])));
+  };
+  root.appendChild(note("Loading..."));
+  setTimeout(load, 0);
+  const t = setInterval(() => { if (!root.isConnected) clearInterval(t); else load(); }, 10000);
+  return root;
+}
+function instHistory(serial) {
+  const root = h("div", {});
+  const q = h("input", { type: "search", placeholder: "Search this instance's log...  (for example: stamina, joined, kicked)", style: { width: "100%", marginBottom: "8px" } });
+  const only = h("label", { class: "tgl", style: { marginBottom: "8px" } }, h("input", { type: "checkbox" }), h("span", { class: "sw" }), "Only problems");
+  const body = h("div", { class: "histlog" });
+  const draw = () => {
+    if (!root.isConnected) return;
+    const f = q.value.trim().toLowerCase(), bad = only.querySelector("input").checked;
+    const rows = S.logs.filter((l) => l.s === serial && (!f || l.t.toLowerCase().includes(f)) && (!bad || l.t.startsWith("[!]") || l.t.startsWith("[-]"))).slice(-400).reverse();
+    body.innerHTML = "";
+    if (!rows.length) { body.appendChild(note("No lines yet" + (f || bad ? " for this search." : "."))); return; }
+    for (const l of rows) body.appendChild(h("div", { class: "hrow " + lineClass(l.t) }, l.t));
+  };
+  q.addEventListener("input", draw); only.querySelector("input").addEventListener("change", draw);
+  root.appendChild(panel("Log history - this instance", h("div", {}, q, only), body));
+  draw();
+  const t = setInterval(() => { if (!root.isConnected) clearInterval(t); else draw(); }, 3000);
+  return root;
+}
+
 function refreshInstanceControls() {
   const s = $("#instStatus");
   if (!s || S.sel === "control") return;

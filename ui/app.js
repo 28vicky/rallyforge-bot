@@ -361,10 +361,11 @@ function renderSide() {
   for (const d of S.devStatus) {
     L.appendChild(item(d.id, `${d.idx}. ${d.name || short(d.id)}`, (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [devTag(d), (d.joins && !(d.state === "pause" && d.resume_at) && !d.kicked_at) ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
     sideDrag(L.lastChild, d.id);
-    L.lastChild.appendChild(h("div", { class: "qact" },
-      h("button", { title: "Start " + (d.name || short(d.id)), class: d.state === "run" && !d.paused ? "on" : "", onclick: (e) => { e.stopPropagation(); collectAndRun("start", { serial: d.id }); } }, "\u25B6"),
-      h("button", { title: "Pause / resume", class: d.state === "pause" ? "on" : "", onclick: (e) => { e.stopPropagation(); act(api("pause", { serial: d.id })); } }, "\u275A\u275A"),
-      h("button", { title: "Stop", onclick: (e) => { e.stopPropagation(); act(api("stop", { serial: d.id })); } }, "\u25A0")));
+    const qb = (t, ico, fn) => h("button", { title: t, onclick: (e) => { e.stopPropagation(); fn(); } }, ico);
+    const nm = d.name || short(d.id);
+    L.lastChild.appendChild(h("div", { class: "qact" }, ...(d.state === "run" || d.state === "pause"
+      ? [qb(d.state === "pause" ? "Resume " + nm : "Pause " + nm, d.state === "pause" ? "\u25B6" : "\u275A\u275A", () => act(api("pause", { serial: d.id }))), qb("Stop " + nm, "\u25A0", () => act(api("stop", { serial: d.id })))]
+      : [qb("Start " + nm, "\u25B6", () => collectAndRun("start", { serial: d.id }))])));
     if ((d.state === "pause" && d.resume_at) || (d.state === "run" && d.kicked_at)) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at || d.resume_at), "data-pre": d.kicked_at ? " back in " : "" })); }
   }
   tickPauseTimers();
@@ -420,6 +421,9 @@ function paintRunState() {
   document.querySelectorAll("[data-act]").forEach((b) => {
     b.className = b.className.replace(/\bcur-\w+/g, "").replace(/\s+/g, " ").trim();
     if (st !== "run" && map[st] && map[st] === b.dataset.act) b.classList.add("cur-" + st);   // only Paused / Stopped stay lit; running = all normal
+    // buttons that do nothing right now are greyed out (one instance only): Start while running, Pause and Stop while stopped
+    const off = S.sel !== "control" && ((st === "run" && b.dataset.act === "start") || ((st === "stop" || st === "idle" || st === "error") && (b.dataset.act === "pause" || b.dataset.act === "stop")));
+    b.classList.toggle("greyed", !!off);
   });
 }
 function ribbonLabels() {

@@ -448,10 +448,17 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 
 /* quick Start / Pause / Stop on an instance card (appear on hover) */
 .inst{position:relative}
-.inst .qact{position:absolute;right:8px;top:7px;display:flex;gap:4px;opacity:0;pointer-events:none;transition:opacity .12s}
+.inst .qact{position:absolute;right:8px;top:7px;display:flex;gap:2px;opacity:0;pointer-events:none;transition:opacity .12s}
 .inst:hover .qact{opacity:1;pointer-events:auto}
-.inst .qact button{width:24px;height:24px;border-radius:7px;border:var(--bd);background:var(--btn);color:var(--fg);font-size:10px;line-height:1;padding:0;display:grid;place-content:center;cursor:pointer;box-shadow:var(--sh2)}
-.inst .qact button:hover{background:var(--accent);color:var(--accfg)}
-.inst .qact button.on{color:var(--good)}
-.inst.sel .qact button{background:rgba(0,0,0,.22);color:var(--accfg);border-color:transparent}
+.inst .qact button{width:24px;height:24px;border-radius:6px;border:0;background:transparent;color:var(--fg);font-size:12px;line-height:1;padding:0;display:grid;place-content:center;cursor:pointer;box-shadow:none}
+.inst .qact button:hover{background:rgba(255,255,255,.14);color:var(--accent2)}
+.greyed{opacity:.38;pointer-events:none;filter:grayscale(.6)}
+.inst.sel .qact button{background:transparent;color:var(--accfg)}
 .inst.sel .qact button:hover{background:rgba(0,0,0,.4)}
+
+/* itinerary + log history */
+.itgrp{margin:10px 0}.ithead{font-weight:600;color:var(--accent2);padding:6px 0;border-bottom:var(--bd)}
+.itrow{display:flex;gap:16px;padding:7px 4px;border-bottom:1px solid var(--line)}.itwhen{width:150px;flex:none;color:var(--mute)}
+.itgrp.bad .ithead{color:var(--bad)}.itgrp.bad .itrow{background:rgba(220,70,70,.12)}.itgrp.bad .itwhen{color:var(--bad)}
+.histlog{max-height:460px;overflow:auto;font:13px/1.5 ui-monospace,Consolas,monospace}.hrow{padding:3px 6px;border-bottom:1px solid var(--line);white-space:pre-wrap;word-break:break-word}
+.hrow.e{color:var(--bad)}.hrow.w{color:var(--warn)}
