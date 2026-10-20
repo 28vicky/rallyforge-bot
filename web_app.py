@@ -368,7 +368,7 @@ class Controller:
             elif "presets" in box or box is cfg:
                 box["presets"] = on or [1]                  # the box follows the cards
 
-    OWN_API_KEYS = ("duties", "crazy_eggs", "champions")      # changed through their own calls (switches on the Duties page), not by the page's autosave
+    OWN_API_KEYS = ("duties", "crazy_eggs", "champions", "wheel")      # changed through their own calls (switches on the Duties page), not by the page's autosave
 
     def apply_config(self, posted, devices=None, managed=False):
         """Merge what the interface sends into the saved settings (checked first), keep it for the bots.
@@ -1379,7 +1379,7 @@ class Api:
 
     def _own(self, scope):
         ov = (self.c.cfg.get("per_device") or {}).get(scope, {}) if scope else {}
-        return {"duties": "duties" in ov, "crazy_eggs": "crazy_eggs" in ov, "champions": "champions" in ov}
+        return {"duties": "duties" in ov, "crazy_eggs": "crazy_eggs" in ov, "champions": "champions" in ov, "wheel": "wheel" in ov}
 
     def duties(self, p):
         scope = self._scope(p)
@@ -1418,7 +1418,7 @@ class Api:
     def scope_reset(self, p):
         """Drop this emulator's own duties / Crazy Eggs copy so it follows the global setting again."""
         scope, key = self._scope(p), str(p.get("key", ""))
-        if scope and key in ("duties", "crazy_eggs", "champions"):
+        if scope and key in ("duties", "crazy_eggs", "champions", "wheel"):
             per = {s: dict(v) for s, v in (self.c.cfg.get("per_device") or {}).items()}
             per.get(scope, {}).pop(key, None)
             self.c.save({"per_device": per}, managed=True)
@@ -1451,6 +1451,53 @@ class Api:
         self._save_scoped(scope, "crazy_eggs", c)
         return self.crazy_eggs(p)
 
+    def _rn_targets(self, p):
+        scope = self._scope(p)
+        return [scope] if scope else [d["id"] for d in self.c.devices] or ["default"]
+
+    def _rn_catalog(self):
+        cat = [{"id": "duty:" + d["id"], "title": d["title"], "group": d["group"]} for d in rb.DUTY_LIBRARY]
+        for t in self.c.cfg.get("city_tasks") or []:
+            if t.get("name"):
+                cat.append({"id": "task:" + t["name"], "title": t["name"], "group": "Your own tasks"})
+        return cat
+
+    def run_now(self, p):
+        """'Run a task now': the list of every task and what is queued to run first on this emulator."""
+        cat = self._rn_catalog()
+        titles = {c["id"]: c["title"] for c in cat}
+        scope = self._scope(p)
+        serial = scope or (self.c.devices[0]["id"] if self.c.devices else "default")
+        queue = [{"id": i, "title": titles.get(i, i)} for i in rb.run_now_list(serial)]
+        return {"tasks": cat, "queue": queue, "serial": scope}
+
+    def run_now_add(self, p):
+        tid = str(p.get("id", ""))
+        if tid not in {c["id"] for c in self._rn_catalog()}:
+            raise ApiError("Unknown task.")
+        for s in self._rn_targets(p):
+            rb.run_now_set(s, rb.run_now_list(s) + [tid])
+        return self.run_now(p)
+
+    def run_now_remove(self, p):
+        tid = str(p.get("id", ""))
+        for s in self._rn_targets(p):
+            rb.run_now_done(s, tid)
+        return self.run_now(p)
+
+    def wheel(self, p):
+        scope = self._scope(p)
+        return {"conf": rb.wheel_conf(self._eff(scope)), "own": self._own(scope)}
+
+    def wheel_set(self, p):
+        scope = self._scope(p)
+        c = rb.wheel_conf(self._eff(scope))
+        for k in ("button", "spins", "reserve"):
+            if k in p:
+                c[k] = p[k]
+        self._save_scoped(scope, "wheel", rb.wheel_conf({"wheel": c}))
+        return self.wheel(p)
+
     def champions(self, p):
         scope = self._scope(p)
         conf = rb.ch_conf(self._eff(scope))
@@ -1464,7 +1511,12 @@ class Api:
         scope = self._scope(p)
         plan = {k: dict(v) for k, v in rb.ch_conf(self._eff(scope))["plan"].items()}
         name = str(p.get("name", ""))
-        if name in rb.CHAMPIONS:
+        if name in rb.CHAMPIONS and "main" in p:                # the switch on a champion: ON = this champion gets the whole day (all taps + all greetings), OFF = none
+            if p["main"]:
+                plan = {name: {"taps": rb.CH_TAPS, "greets": rb.CH_GREETS}}
+            else:
+                plan.pop(name, None)
+        elif name in rb.CHAMPIONS:
             e = plan.setdefault(name, {"taps": 0, "greets": 0})
             if "taps" in p:
                 e["taps"] = max(0, min(int(float(p["taps"] or 0)), rb.CH_TAPS))

@@ -1,5 +1,18 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.58", date: "2026-10-20",
+    new: ["Wheel of Fortune is now a daily task (Duties page): the bot walks to the Tavern, opens the Wheel and spins with the button you choose (once / \u00d710 / \u00d7100), for the number of spins you set or until the coins are used up, keeping the coins you want to keep. Settings can be different for every instance.",
+          "Run a task now: pick any task on the Duties page and press Run first - the bot does it next, before everything else, even if the task is off or already done today."],
+    fixed: ["Installing an update no longer fails right after a release: if the server still shows an older copy of a file, the app waits and asks again."] },
+  { v: "2.4.57", date: "2026-10-20",
+    new: ["Champions: a switch on every champion makes it the main one - one click gives it all the daily taps and greetings (you can still edit the numbers)."],
+    fixed: [] },
+  { v: "2.4.56", date: "2026-10-20",
+    new: ["Keep and Tavern are now found by a picture of the whole city that ships with the app, so city tasks such as Champions work on every account without running the city mapper first. If an account's city does not match the picture, the bot falls back to the older way."],
+    fixed: ["The bot closes the building menu it opened before going to the next building, so the next tap no longer closes it again."] },
+  { v: "2.4.55", date: "2026-10-20",
+    new: [],
+    fixed: ["Pressing Start (or the play button) on a paused instance now resumes it straight away. Before, nothing happened until the pause time ran out."] },
   { v: "2.4.53", date: "2026-10-20",
     new: ["Stamina items now fill stamina all the way up (slider to the very end, up to 9,999) by default. Settings that were still on \u201cgame default\u201d are switched to \u201cFull\u201d once; if you change it afterwards, your choice stays.", "The \u201cExact number of items\u201d box only shows when \u201cexact number\u201d is chosen."],
     fixed: ["Full stamina: if a quick slide of the bar did not move it (one refill used just 2 items), the bot now tries again with a slower slide. The game's own Max button is not used, because it stops at 100 stamina."] },
