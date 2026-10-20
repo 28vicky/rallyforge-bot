@@ -1,5 +1,9 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.58", date: "2026-10-20",
+    new: ["Wheel of Fortune is now a daily task (Duties page): the bot walks to the Tavern, opens the Wheel and spins with the button you choose (once / \u00d710 / \u00d7100), for the number of spins you set or until the coins are used up, keeping the coins you want to keep. Settings can be different for every instance.",
+          "Run a task now: pick any task on the Duties page and press Run first - the bot does it next, before everything else, even if the task is off or already done today."],
+    fixed: ["Installing an update no longer fails right after a release: if the server still shows an older copy of a file, the app waits and asks again."] },
   { v: "2.4.57", date: "2026-10-20",
     new: ["Champions: a switch on every champion makes it the main one - one click gives it all the daily taps and greetings (you can still edit the numbers)."],
     fixed: [] },

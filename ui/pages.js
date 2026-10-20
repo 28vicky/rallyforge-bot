@@ -938,7 +938,7 @@ PAGES.duties = function (fixed, only) {
   const draw = () => {
     root.innerHTML = "";
     if (fixed === undefined) root.appendChild(hist);
-    const pick = h("select", { onchange: (e) => { serial = e.target.value; load(); loadCe(); loadCh(); } },
+    const pick = h("select", { onchange: (e) => { serial = e.target.value; load(); loadCe(); loadCh(); loadWh(); loadRn(); } },
       [h("option", { value: "", selected: serial === "" }, "All instances (default)")].concat(S.devices.map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || short(d.id)))));
     if (!only) root.appendChild(panel("Duties",
       note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes, retries 3 times a day if it fails, then waits for the next reset. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
@@ -947,6 +947,7 @@ PAGES.duties = function (fixed, only) {
         serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the global setting") : null),
       note(serial ? "Changes here apply to this instance only and replace the global list for it. Pick 'All instances' to change the default for every instance that has no own settings." : "These are the defaults for every instance. Pick one instance to give it different settings."),
     ));
+    if (!only) root.appendChild(rn);
     for (const g of GROUPS) {
       const list = rows.filter((r) => r.group === g && (!only || r.id === only));
       if (!list.length) continue;
@@ -955,7 +956,7 @@ PAGES.duties = function (fixed, only) {
         h("span", { class: "hint", style: { flex: "1", margin: "0 14px" } }, r.note, " · ", r.schedule),
         r.verified ? null : h("span", { class: "chip", title: "Steps are a first guess and have not been watched on a real instance yet" }, "untested"),
         h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text)),
-        (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null,
+        (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null, (r.on && r.id === "wheel") ? wh : null,
         (only && !r.on) ? note("Switch it on above and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean))));
     }
   };
@@ -1011,6 +1012,43 @@ PAGES.duties = function (fixed, only) {
         h("span", { class: "chip" }, j.lucky_used ? "Lucky Hammer used today" : (c.lucky ? "Lucky Hammer ready" : "Lucky Hammer off")))));
   };
   const loadCe = async () => { const j = await act(api("crazy_eggs", { serial })); if (j) drawCe(j); };
+  // Run a task now: the bot does the picked task first, before everything else, on this instance (or on all)
+  const rn = h("div", {});
+  let rnPick = "";
+  const drawRn = (j) => {
+    rn.innerHTML = "";
+    const set = async (name, o) => { const r = await act(api(name, { serial, ...o })); if (r) drawRn(r); };
+    const sel = h("select", { onchange: (e) => { rnPick = e.target.value; } }, h("option", { value: "" }, "Pick a task\u2026"),
+      j.tasks.map((t) => h("option", { value: t.id, selected: t.id === rnPick }, t.group + " \u2013 " + t.title)));
+    rn.appendChild(panel("Run a task now",
+      note("Pick any task and the bot does it next, before everything else (even before a waiting rally), once. It works even if the task is switched off or already done today, and also when 'Do the tasks' is off. It starts as soon as the instance is running" + (serial ? "." : ", on every instance.")),
+      h("div", { class: "row", style: { gap: "8px" } }, sel,
+        h("button", { class: "btn primary", onclick: () => { if (rnPick) set("run_now_add", { id: rnPick }); } }, "Run first")),
+      j.queue.length ? h("div", { class: "row", style: { gap: "6px", flexWrap: "wrap", marginTop: "8px" } }, h("span", { class: "lab" }, "Waiting:"),
+        j.queue.map((q, i) => h("span", { class: "chip" }, (i + 1) + ". " + q.title + " ",
+          h("a", { href: "#", title: "Cancel", onclick: (e) => { e.preventDefault(); set("run_now_remove", { id: q.id }); } }, "\u00d7")))) : null));
+  };
+  const loadRn = async () => { const j = await act(api("run_now", { serial })); if (j) drawRn(j); };
+  // Wheel of Fortune: which spin button, how many spins, coins to keep
+  const wh = h("div", {});
+  const drawWh = (j) => {
+    wh.innerHTML = "";
+    const c = j.conf;
+    const set = async (o) => { const r = await act(api("wheel_set", { serial, ...o })); if (r) drawWh(r); };
+    wh.appendChild(subset(serial ? "Wheel of Fortune \u2013 this instance" : "Wheel of Fortune \u2013 all instances",
+      serial && j.own && j.own.wheel ? h("div", { class: "row" }, h("span", { class: "chip" }, "own settings"),
+        h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "wheel" })); loadWh(); } }, "Use the global setting")) : null,
+      note("Tavern > Wheel of Fortune. Each spin costs coins. The bot presses only the Spin buttons and closes the reward panel after every spin. With a big button it still finishes with smaller ones so the number of spins is exact."),
+      h("div", { class: "row", style: { gap: "8px" } }, h("span", { class: "lab" }, "Spin button"),
+        [1, 10, 100].map((b) => h("button", { class: "btn" + (c.button === b ? " primary" : ""), onclick: () => set({ button: b }) }, "Spin " + (b === 1 ? "once" : "\u00d7" + b)))),
+      h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Number of spins"),
+        h("input", { type: "number", class: "short", min: 0, value: c.spins || "", placeholder: "until out", onchange: (ev) => set({ spins: ev.target.value }) }),
+        h("span", { class: "hint" }, "e.g. 100, 1000 or 999999. Empty / 0 = spin until the coins are used up.")),
+      h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Coins to keep"),
+        h("input", { type: "number", class: "short", min: 0, value: c.reserve || "", placeholder: "0", onchange: (ev) => set({ reserve: ev.target.value }) }),
+        h("span", { class: "hint" }, "never spin if it would leave fewer coins than this"))));
+  };
+  const loadWh = async () => { const j = await act(api("wheel", { serial })); if (j) drawWh(j); };
   // Champions: how many of the daily 15 taps and 10 greetings each champion gets (this instance or all)
   const ch = h("div", {});
   const drawCh = (j) => {
@@ -1042,6 +1080,6 @@ PAGES.duties = function (fixed, only) {
       })));
   };
   const loadCh = async () => { const j = await act(api("champions", { serial })); if (j) drawCh(j); };
-  draw(); load(); loadCe(); loadCh(); loadHist();
+  draw(); load(); loadCe(); loadCh(); loadWh(); loadRn(); loadHist();
   return root;
 };

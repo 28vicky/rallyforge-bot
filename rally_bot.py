@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.57"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.58"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -3673,6 +3673,21 @@ def _download(url, limit=12_000_000, timeout=25):
     return data
 
 
+def _download_checked(url, sha, name, limit=12_000_000, log=print):
+    """Download and compare the checksum. GitHub's cache can serve an old copy for a few minutes right after a release:
+    then wait and ask again with a cache-busting address instead of failing at once."""
+    last = None
+    for attempt in range(4):
+        u = url if attempt == 0 else url + ("&" if "?" in url else "?") + f"cb={int(time.time())}{attempt}"
+        data = _download(u, limit)
+        if hashlib.sha256(data).hexdigest() == sha:
+            return data
+        last = name
+        log(f"[i] {name}: the server still shows an older copy - trying again in a few seconds ({attempt + 1}/4)")
+        time.sleep(6 * (attempt + 1))
+    raise ValueError(f"{last} is not fully published yet - try again in a few minutes.")
+
+
 def sync_monster_pack(log=print):
     """The published list can carry a pack of monster pictures. Download the ones this PC does not have yet (never
     replaces a picture you already have). -> number of new pictures."""
@@ -3805,9 +3820,7 @@ def install_update(info, log=print):
     try:
         for name, meta in man["files"].items():
             log(f"[*] Downloading {name}")
-            data = _download(urllib.parse.urljoin(base, meta.get("url", name)))
-            if hashlib.sha256(data).hexdigest() != meta["sha256"]:
-                raise ValueError(f"{name} does not match its checksum - download refused.")
+            data = _download_checked(urllib.parse.urljoin(base, meta.get("url", name)), meta["sha256"], name, log=log)
             if name.endswith(".py"):
                 compile(data, name, "exec")                   # a broken file is never installed
             (tmp / name).parent.mkdir(parents=True, exist_ok=True)
@@ -3817,9 +3830,9 @@ def install_update(info, log=print):
             raise ValueError("rally_bot.py does not carry the version the update announces.")
         pics = []
         for name, meta in (man.get("templates") or {}).items():
-            data = _download(urllib.parse.urljoin(base, meta.get("url", name)), 2_000_000)
-            if hashlib.sha256(data).hexdigest() != meta["sha256"] or not data.startswith(b"\x89PNG"):
-                raise ValueError(f"{name} does not match its checksum - download refused.")
+            data = _download_checked(urllib.parse.urljoin(base, meta.get("url", name)), meta["sha256"], name, 2_000_000, log=log)
+            if not data.startswith(b"\x89PNG"):
+                raise ValueError(f"{name} is not a picture - download refused.")
             pics.append((name, data, bool(meta.get("overwrite"))))
         (tmp / "manifest.json").write_text(json.dumps(man, indent=2), encoding="utf-8")
     except Exception:
@@ -6408,6 +6421,13 @@ CE_ACTIVITIES_TAB = (270, 100)                                                  
 CE_COSTS = ["3", "6", "8", "12"]
 
 
+def wheel_conf(cfg):
+    c = dict(cfg.get("wheel") or {})
+    b = int(float(c.get("button", 1) or 1))
+    return {"button": b if b in WHEEL_BTN else 1, "spins": max(0, min(int(float(c.get("spins", 10) or 0)), 9999999)),
+            "reserve": max(0, min(int(float(c.get("reserve", 0) or 0)), 999999999))}
+
+
 def ce_conf(cfg):
     c = dict(cfg.get("crazy_eggs") or {})
     eggs = {k: {"on": True, "daily": 0} for k in CE_COSTS}
@@ -6763,7 +6783,7 @@ def run_wheel(dev, cfg, log, stop):
     """Tavern's ring menu is open: open the Wheel of Fortune and spin with the button the user picked until the number
     of spins is done, the coins run out (or fall to the reserve to keep) or something unexpected is on the screen.
     The reward panel is closed by tapping its Continue / empty ground. Only the three Spin buttons are ever pressed."""
-    conf = {**{"button": 1, "spins": 10, "reserve": 0}, **(cfg.get("wheel") or {})}
+    conf = wheel_conf(cfg)
     big = int(conf["button"]) if int(conf["button"]) in WHEEL_BTN else 100
     target = int(conf["spins"] or 0)                       # 0 = until the coins are used up
     reserve = int(conf["reserve"] or 0)
@@ -7019,6 +7039,9 @@ DUTY_LIBRARY = [
     {"id": "champions", "group": "Daily activities", "title": "Champions", "every_min": 0, "verified": False,
      "note": "Keep > Champions: 15 taps and 10 greetings a day on the champions you pick (only active ones). Needs the city map (Keep).",
      "target": "building:Keep", "tap_dy": 0, "steps": ["wait 1.2", "champions"]},
+    {"id": "wheel", "group": "Daily activities", "title": "Wheel of Fortune", "every_min": 0, "verified": False,
+     "note": "Tavern > Wheel of Fortune: spins with the button you pick (1 / 10 / 100) for the number of spins you set, or until the coins are used up. Needs the city map (Tavern).",
+     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "wheel"]},
     {"id": "crazy_eggs", "group": "Common tasks", "title": "Crazy Eggs", "every_min": 1, "verified": False,
      "note": "Smashes the ready eggs, closes the reward panel, comes back when each timer ends; Lucky Hammer once a day on the egg you pick.",
      "target": "tpl:event_center_icon|Center",
@@ -7063,6 +7086,33 @@ def duty_record(serial, duty_id, ok, msg=""):
             pass
 
 
+def run_now_list(serial):
+    """Tasks the user asked to run first on this emulator ('Run a task now' on the Duties page)."""
+    return [str(x) for x in ((load_duty_state().get("_run_now") or {}).get(serial or "default") or [])]
+
+
+def run_now_set(serial, ids):
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        rn = data.setdefault("_run_now", {})
+        if ids:
+            rn[serial or "default"] = list(dict.fromkeys(ids))
+        else:
+            rn.pop(serial or "default", None)
+        try:
+            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def run_now_done(serial, tid):
+    run_now_set(serial, [x for x in run_now_list(serial) if x != tid])
+
+
+def tasks_active(cfg, serial):
+    return bool(cfg.get("city_enabled")) or bool(run_now_list(serial))
+
+
 def duty_status(serial, duty_id, cfg):
     """-> (status, text): status is off | waiting | due | done | retry | gaveup."""
     conf = (cfg.get("duties") or {}).get(duty_id) or {}
@@ -7097,6 +7147,26 @@ def duty_status(serial, duty_id, cfg):
     return "due", "Due"
 
 
+def run_now_tasks(cfg, serial):
+    out = []
+    for tid in run_now_list(serial):
+        if tid.startswith("duty:") and tid[5:] in DUTY_BY_ID:
+            d = DUTY_BY_ID[tid[5:]]
+            t = {k: d[k] for k in ("target", "steps") if k in d}
+            t["name"], t["count"] = tid, d.get("count", 1)
+            out.append(t)
+        elif tid.startswith("task:"):
+            for c in cfg.get("city_tasks") or []:
+                if c.get("name", "") == tid[5:]:
+                    out.append(dict(c))
+                    break
+            else:
+                run_now_done(serial, tid)
+        else:
+            run_now_done(serial, tid)
+    return out
+
+
 def duty_tasks_due(cfg, serial):
     out = []
     for d in DUTY_LIBRARY:
@@ -7110,6 +7180,11 @@ def duty_tasks_due(cfg, serial):
 
 def city_tasks_due(cfg, last_run, serial=""):
     now = time.time()
+    first = run_now_tasks(cfg, serial)
+    if first:                                                    # asked for by the user: these go before everything else
+        return first
+    if not cfg.get("city_enabled"):
+        return []
     out = []
     for t in cfg.get("city_tasks") or []:
         if not t.get("enabled", True):
@@ -7616,6 +7691,8 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         shown = DUTY_BY_ID[duty_id]["title"] if duty_id in DUTY_BY_ID else name
         log(f"[*] {'Duty' if duty_id else 'City task'}: {shown}")
         last_run[name] = time.time()
+        for rid in (name, "task:" + name):                      # a 'run now' request is used up once the task is started
+            run_now_done(getattr(dev, "serial", ""), rid)
         result = None
         if task_needs_city_map(t) and not city_map_items(dev):
             log(f"[!] '{shown}' needs the city map. {CITY_MAP_HELP}")
@@ -8426,7 +8503,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             log(f"[i] Picture collector: {e}")
                     if now >= aj_next[0]:
                         aj_next[0] = now + auto_join_renew(dev, cfg, log, stop, act)
-                    elif cfg.get("city_enabled") and now >= city_block[0] and (due := city_tasks_due(cfg, city_last, serial)):
+                    elif tasks_active(cfg, serial) and now >= city_block[0] and (due := city_tasks_due(cfg, city_last, serial)):
                         log(f"[*] Auto-Join is running - going to the city for {len(due)} task(s)")      # the game joins rallies by itself meanwhile
                         if reach_city():
                             run_city_tasks(dev, cfg, log, stop, due, city_last)
@@ -8439,12 +8516,12 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         act("step", text="Auto-Join is on - next check in %d min" % max(1, int((aj_next[0] - now) // 60)))
                         if now - city_why[0] > 300:                       # say why no city trip is made (tasks off / nothing due / blocked)
                             city_why[0] = now
-                            nd = len(city_tasks_due(cfg, city_last, serial)) if cfg.get("city_enabled") else 0
+                            nd = len(city_tasks_due(cfg, city_last, serial))
                             log(f"[i] No city trip now: tasks {'on' if cfg.get('city_enabled') else 'OFF'}, {nd} due, blocked for {max(0, int(city_block[0] - now))} s")
                         nap(5, 8)
                     continue
             if not rallies_on:                                    # tasks only: stay in the city and work through them
-                due = city_tasks_due(cfg, city_last, serial) if cfg.get("city_enabled") else []
+                due = city_tasks_due(cfg, city_last, serial)
                 if st == "city":
                     if due:
                         log(f"[*] Running {len(due)} task(s)")
@@ -8466,7 +8543,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 city_day[0] = _game_day()
                 city_last.clear()
                 log("[*] The game day reset - all tasks start again")
-            if (not target or cfg.get("tasks_first", True)) and cfg.get("city_enabled") and st == "rally_list" and now >= city_block[0]:
+            if (not target or cfg.get("tasks_first", True) or run_now_list(serial)) and tasks_active(cfg, serial) and st == "rally_list" and now >= city_block[0]:
                 due = city_tasks_due(cfg, city_last, serial)
                 if due:
                     log(f"[*] {'No rally waiting' if not target else 'A task is due, it goes before rallies'} - going to the city for {len(due)} task(s)")
