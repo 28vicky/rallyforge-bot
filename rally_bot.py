@@ -5278,12 +5278,12 @@ def locate_in_city(shot, min_score=0.55):
     g = city_picture()
     if g is None:
         return None
-    t = cv2.cvtColor(shot[150:700, 60:440], cv2.COLOR_BGR2GRAY)
+    t = cv2.cvtColor(shot[300:700, 60:440], cv2.COLOR_BGR2GRAY)     # the lower middle: the sky, clouds and top bubbles change, the buildings do not
     res = cv2.matchTemplate(g, t, cv2.TM_CCOEFF_NORMED)
     _, mv, _, ml = cv2.minMaxLoc(res)
     if mv < min_score:
         return None
-    return ml[0] - 60, ml[1] - 150, float(mv)
+    return ml[0] - 60, ml[1] - 300, float(mv)
 
 
 def ring_label_free(shot, centre=(270, 450)):
