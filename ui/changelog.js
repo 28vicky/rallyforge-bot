@@ -1,5 +1,9 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.65", date: "2026-10-21",
+    new: ["A short walkthrough: the first time you open the app it asks if you would like it (where to click, how to set up your presets and start the bot). Say yes or no once and it never asks again; More > Take the tour opens it whenever you want.",
+          "Monsters: levels 1 and 2 added for Savage Tiger, Arachne, Carcinus, Serpopard, Dugger, Barbary Pirate, Nasu, Harpy and Temple Guard."],
+    fixed: ["Instance list: Start / Pause / Stop show only when you hover a name, and a long name is cut with ... instead of running under them."] },
   { v: "2.4.64", date: "2026-10-21",
     new: ["The Silver Lionheart Knight (Cinnabar) and other points bosses are never joined: they are hit once for alliance points, so no account needs to join them."],
     fixed: [] },
