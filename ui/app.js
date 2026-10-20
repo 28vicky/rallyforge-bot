@@ -361,6 +361,10 @@ function renderSide() {
   for (const d of S.devStatus) {
     L.appendChild(item(d.id, `${d.idx}. ${d.name || short(d.id)}`, (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [devTag(d), (d.joins && !(d.state === "pause" && d.resume_at) && !d.kicked_at) ? "joins " + d.joins : ""].filter(Boolean).join(" · ")));
     sideDrag(L.lastChild, d.id);
+    L.lastChild.appendChild(h("div", { class: "qact" },
+      h("button", { title: "Start " + (d.name || short(d.id)), class: d.state === "run" && !d.paused ? "on" : "", onclick: (e) => { e.stopPropagation(); collectAndRun("start", { serial: d.id }); } }, "\u25B6"),
+      h("button", { title: "Pause / resume", class: d.state === "pause" ? "on" : "", onclick: (e) => { e.stopPropagation(); act(api("pause", { serial: d.id })); } }, "\u275A\u275A"),
+      h("button", { title: "Stop", onclick: (e) => { e.stopPropagation(); act(api("stop", { serial: d.id })); } }, "\u25A0")));
     if ((d.state === "pause" && d.resume_at) || (d.state === "run" && d.kicked_at)) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at || d.resume_at), "data-pre": d.kicked_at ? " back in " : "" })); }
   }
   tickPauseTimers();
