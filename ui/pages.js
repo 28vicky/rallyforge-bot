@@ -890,7 +890,7 @@ PAGES.themes = function () {
     look.append(
       row("Buttons", segOf("ui_btn", [["raised", "Plain"], ["tinted", "Accent tint"]], "raised"), "Tint the buttons with the accent colour."),
       row("Borders", segOf("ui_border", [["subtle", "Subtle"], ["accent", "Accent"]], "subtle"), "Outline of cards, buttons and boxes."),
-      row("Text size", segOf("ui_text", [[85, "Small"], [100, "Normal"], [115, "Large"], [130, "Extra large"]], 100), "Makes everything in the window bigger or smaller."),
+      row("Text size", segOf("ui_text", [[75, "Small"], [85, "Normal"], [100, "Large"], [115, "Largest"]], 85), "Makes everything in the window bigger or smaller."),
       row("Instance name", segOf("ui_name", [[20, "Small"], [24, "Medium"], [30, "Large"], [38, "Huge"]], 24), "Size of the name at the top of each instance page."),
       row("Corners", segOf("ui_round", [["sharp", "Sharp"], ["normal", "Soft"], ["round", "Round"]], "normal"), "How round the cards and buttons are."));
   };
@@ -903,7 +903,7 @@ PAGES.themes = function () {
     panel("Accent colour", note("Pick a colour for the highlights: the active tab, switches, the selected instance and the focus outlines. The text colour on top of it is chosen automatically so it stays readable."),
       h("div", { class: "row", style: { gap: "12px" } }, sw, picker, hexIn)),
     panel("Look", look,
-      h("div", { class: "row", style: { marginTop: "6px" } }, btn("Reset look", () => { setLook({ ui_accent: "", ui_btn: "raised", ui_border: "subtle", ui_round: "normal", ui_text: 100, ui_name: 24 }); drawLook(); }, "", "refresh"))));
+      h("div", { class: "row", style: { marginTop: "6px" } }, btn("Reset look", () => { setLook({ ui_accent: "", ui_btn: "raised", ui_border: "subtle", ui_round: "normal", ui_text: 85, ui_name: 24 }); drawLook(); }, "", "refresh"))));
 };
 
 // ====================================================================== license (sold edition only)

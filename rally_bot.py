@@ -204,7 +204,7 @@ DEFAULTS = {
     "ui_mode": "dark",                      # dark | light | auto
     "ui_accent": "",                        # "" = the theme's own colour, else #rrggbb
     "ui_btn": "raised", "ui_border": "subtle", "ui_round": "normal",   # raised|tinted, subtle|accent, sharp|normal|round
-    "ui_text": 100,                         # whole-window text size in percent (85-150)
+    "ui_text": 85,                          # whole-window text size in percent (70-150)
     "ui_name": 24,                          # emulator name heading size in px (18-40)
     "rally_enabled": True,                  # join rallies (first priority); off = the bot only does the tasks
     "game_reset_utc": "00:00",               # when the game's daily reset happens (UTC, HH:MM); daily duties start again then
