@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.52", date: "2026-10-20",
+    new: [],
+    fixed: ["A BlueStacks emulator that the bot closed (for example after the game did not load) could not be started again (\u201cno launcher found for this emulator type\u201d) when BlueStacks keeps its data on another drive such as E:. The bot now finds BlueStacks\u2019 settings on every drive, and it also notes how each running BlueStacks instance was started, so it can always start that instance again."] },
   { v: "2.4.51", date: "2026-10-20",
     new: [],
     fixed: ["Using stamina items: on some accounts the bot could not read the \u201cOwn:\u201d line of the amount window and thought the window had not opened, so it skipped every rally for lack of stamina while the window was open with thousands of items. The window is now recognised by \u201cYou can receive\u201d alone (or Own + Max).", "Using stamina items: when an account has no item of a size (for example no 100-stamina items), the bot no longer taps where that row would be and opens a different item by mistake. It goes straight to the next size."] },

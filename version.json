@@ -1,9 +1,9 @@
 {
-  "version": "2.4.51",
-  "notes": "Stamina items: the amount window is recognised even when the Own line cannot be read; missing item sizes are skipped instead of opening the wrong item.",
+  "version": "2.4.52",
+  "notes": "BlueStacks emulators the bot closed can be started again when BlueStacks keeps its data on another drive (e.g. E:).",
   "files": {
     "rally_bot.py": {
-      "sha256": "8ba3dff81d04459b209800dccd0f03bb7eb52e9d1ab45bc1155a9ccbaa6163aa"
+      "sha256": "0bcd4d7a47cbd7445388326c17fd41639a5bf0a7c5bcf8ba7e4a6bbafd9bf414"
     },
     "web_app.py": {
       "sha256": "35c7fee927ede0f0891c5ced224c0a8cb8cc7acdd307ebf8e7614287952ce6a2"
@@ -18,7 +18,7 @@
       "sha256": "c39281368962c67e3d6e5f30e8d98930a4ae1c4bae1341b4546c89480ccb228a"
     },
     "ui/changelog.js": {
-      "sha256": "afc686fbe87463000b2f8154cc0802a5e6cfc3861d09320d1a0351ace3dae6a2"
+      "sha256": "feff0b66904f7d23ea76c9fccd58dacc3cb001dff59b7ffd0e2abc2b5d9a18b8"
     },
     "ui/dialogs.js": {
       "sha256": "6f6438682092c6db775f9b91a5aa7f94cd55fdfb73cb53a42119ded7e6a674d6"
@@ -133,5 +133,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "bb2b2b7c1ef6ef1f08c96316f46e4f267e1ae2117dacebefb63e29336e153aea"
+  "sig": "135e7fa4561130cc26071cb33f3dc2f3289ea39139c28d24ba08840f4ddb1a79"
 }

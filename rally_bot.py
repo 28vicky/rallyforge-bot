@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.51"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.52"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -455,11 +455,16 @@ _BS_DEFAULT = (r"C:\ProgramData\BlueStacks_nxt\bluestacks.conf",
 def bluestacks_confs():
     """Every bluestacks.conf that can be found: the usual places, any BlueStacks* folder under ProgramData, the data folder
     BlueStacks wrote into the registry (it can be on another drive), and the other drives' ProgramData."""
+    now = time.time()
+    if _BS_CACHE[1] and now - _BS_CACHE[0] < 60:
+        return list(_BS_CACHE[1])
     out = list(_BS_DEFAULT)
     try:
         import glob
-        for root in (os.environ.get("ProgramData", r"C:\ProgramData"),):
-            out += glob.glob(os.path.join(root, "BlueStacks*", "bluestacks.conf"))
+        roots = [os.environ.get("ProgramData", r"C:\ProgramData")] + [f"{d}:\\ProgramData" for d in "CDEFGH"]
+        for root in roots:                                   # BlueStacks can keep its data on another drive (e.g. E:\ProgramData)
+            if os.path.isdir(root):
+                out += glob.glob(os.path.join(root, "BlueStacks*", "bluestacks.conf"))
     except Exception:
         pass
     try:
@@ -483,9 +488,11 @@ def bluestacks_confs():
         if c.lower() not in seen and os.path.isfile(c):
             seen.add(c.lower())
             res.append(c)
+    _BS_CACHE[0], _BS_CACHE[1] = now, list(res)
     return res
 
 
+_BS_CACHE = [0.0, []]
 BLUESTACKS_CONFS = tuple(_BS_DEFAULT)
 
 
@@ -4097,7 +4104,7 @@ def bluestacks_instance(serial, name=None):
         return None
     want = str(name).strip().lower()
     hits = set()
-    for conf in BLUESTACKS_CONFS:
+    for conf in bluestacks_confs():
         try:
             txt = Path(conf).read_text(errors="ignore")
         except Exception:
@@ -4116,7 +4123,7 @@ def _bluestacks_by_port(serial):
         port = int(m.group(1)) + 1 if m else None
     if port is None:
         return None
-    for conf in BLUESTACKS_CONFS:
+    for conf in bluestacks_confs():
         try:
             txt = Path(conf).read_text(errors="ignore")
         except Exception:
@@ -4129,11 +4136,66 @@ def _bluestacks_by_port(serial):
 
 def bluestacks_player(adb=None):
     cands = [Path(adb).parent / "HD-Player.exe"] if adb else []
-    for pf in (os.environ.get("ProgramFiles", r"C:\Program Files"),
-               os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")):
+    pfs = [os.environ.get("ProgramFiles", r"C:\Program Files"), os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")]
+    pfs += [f"{d}:\\Program Files" for d in "CDEFGH"]
+    for pf in pfs:
         for d in ("BlueStacks_nxt", "BlueStacks_nxt_cn", "BlueStacks"):
             cands.append(Path(pf) / d / "HD-Player.exe")
+    try:
+        import winreg
+        for key in ("SOFTWARE\\BlueStacks_nxt", "SOFTWARE\\BlueStacks_nxt_cn", "SOFTWARE\\BlueStacks"):
+            for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+                try:
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key, 0, winreg.KEY_READ | view) as k:
+                        cands.append(Path(winreg.QueryValueEx(k, "InstallDir")[0]) / "HD-Player.exe")
+                except OSError:
+                    pass
+    except Exception:
+        pass
     return next((c for c in cands if c.exists()), None)
+
+
+_LAUNCH_FILE = USER / "emulator_launch.json"
+_LAUNCH_SEEN = set()
+
+
+def _launch_memory():
+    try:
+        return json.loads(_LAUNCH_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def remember_launch(serial, pid=None):
+    """Note how a running BlueStacks instance was started (HD-Player.exe path + --instance, read from the process that owns
+    its ADB port), so the bot can start it again after closing it, even when bluestacks.conf is somewhere unexpected."""
+    m = re.fullmatch(r"(?:127\.0\.0\.1|localhost):(\d+)", serial)
+    if not m or os.name != "nt":
+        return None
+    try:
+        if pid is None:
+            out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True,
+                                 timeout=20, creationflags=NOWIN).stdout
+            pids = [int(p) for lp, p in re.findall(r"TCP\s+\S+:(\d+)\s+\S+\s+LISTENING\s+(\d+)", out) if lp == m.group(1)]
+            if not pids:
+                return None
+            pid = pids[0]
+        line = subprocess.run(["powershell", "-NoProfile", "-Command",
+                               f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"],
+                              capture_output=True, text=True, timeout=25, creationflags=NOWIN).stdout.strip()
+        exe = re.match(r'\s*"([^"]+\.exe)"|\s*(\S+\.exe)', line, re.I)
+        inst = re.search(r'--instance[\s=]+"?([\w.-]+)', line)
+        exe = (exe.group(1) or exe.group(2)) if exe else ""
+        if not exe or not inst or Path(exe).name.lower() != "hd-player.exe" or not Path(exe).exists():
+            return None
+        mem = _launch_memory()
+        mem[serial] = {"exe": exe, "instance": inst.group(1)}
+        tmp = _LAUNCH_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(mem, indent=1), encoding="utf-8")
+        os.replace(tmp, _LAUNCH_FILE)
+        return mem[serial]
+    except Exception:
+        return None
 
 
 def mumu_manager(adb=None):
@@ -4237,6 +4299,8 @@ def kill_listener(serial, log):
                                   text=True, timeout=15, creationflags=NOWIN).stdout.split(",")[0].strip('" \r\n')
             if not name or name.lower() in PROTECTED:
                 continue
+            if name.lower() == "hd-player.exe":
+                remember_launch(serial, pid)                # so the same instance can be started again afterwards
             log(f"[*] Ending {name} (process {pid}) that owns port {port}")
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, timeout=30,
                            creationflags=NOWIN)
@@ -4263,6 +4327,9 @@ def emulator_launch_command(serial, adb, cfg):
     player = bluestacks_player(adb) if inst else None
     if inst and player:
         return [str(player), "--instance", inst]
+    mem = _launch_memory().get(serial)                       # how this instance was running last time (noted from its process)
+    if mem and Path(mem.get("exe", "")).exists() and mem.get("instance"):
+        return [mem["exe"], "--instance", mem["instance"]]
     return None
 
 
@@ -4449,14 +4516,18 @@ def bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
     """Make sure the emulator is running and Evony is open (and, if we had to start it, loaded)."""
     adb, serial = dev.adb, dev.serial
     restarted = False
+    if serial not in _LAUNCH_SEEN and device_online(adb, serial):
+        _LAUNCH_SEEN.add(serial)
+        threading.Thread(target=remember_launch, args=(serial,), daemon=True).start()
     if not device_online(adb, serial):
         if not cfg["auto_launch_emulator"]:
             raise RuntimeError(f"Device {serial} is offline (enable 'start the emulator automatically').")
         cmd = emulator_launch_command(serial, adb, cfg)
         if not cmd:
             _inst = bluestacks_instance(serial, (cfg.get("device_names") or {}).get(serial))
-            _why = ("BlueStacks instance not found in bluestacks.conf (checked %d file(s) for port/name)" % len([c for c in BLUESTACKS_CONFS if Path(c).exists()])
-                    if not _inst and any(Path(c).exists() for c in BLUESTACKS_CONFS) else
+            _confs = bluestacks_confs()
+            _why = ("BlueStacks instance not found in bluestacks.conf (checked %d file(s) for port/name)" % len(_confs)
+                    if not _inst and _confs else
                     "BlueStacks player (HD-Player.exe) not found" if _inst else "no launcher found for this emulator type")
             log(f"[!] Cannot start {serial}: {_why}")
             raise RuntimeError("The emulator is off and I do not know how to start it (" + _why + "). "
