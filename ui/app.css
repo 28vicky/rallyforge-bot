@@ -674,3 +674,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 .sub{padding:6px 14px;border-radius:999px;border:var(--bd);background:var(--card);color:var(--mute);font:inherit;font-size:14px;cursor:pointer}
 .sub:hover{color:var(--fg)}
 .sub.on{background:var(--fg);color:var(--bg);border-color:transparent}
+/* presets: calm, no cyan or glow */
+.pbadge{background:var(--line);color:var(--fg);font-weight:600}
+.armed{color:var(--mute);font-weight:500}
+.pcard{background:var(--card);box-shadow:none;border-radius:12px}
+.pcard .phead b{font-weight:600;letter-spacing:.02em}
+.pfill{background:var(--accent1)}
