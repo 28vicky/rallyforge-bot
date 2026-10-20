@@ -5165,7 +5165,7 @@ class CityNav:
                 return False
             if not self.localize():
                 lost += 1
-                if lost >= 3:
+                if lost >= 7:
                     self.log("[!]   the screen is not recognised as the city (ad or window in the way?)")
                     return False
                 _nap(self.stop, 0.6, 0.9)
@@ -6988,11 +6988,11 @@ def ring_label(shot, expected, pos):
 def close_ring(dev, stop, label_pos):
     """Close the open ring menu by tapping the same building again (the game closes it). Never Back: on the city screen
     Back asks to quit the game. -> True when the ring is gone."""
-    for _ in range(2):
+    for _ in range(3):
         if not find_detail_icon(dev.screenshot()):
             return True
         dev.tap(int(label_pos[0]), int(label_pos[1] - 35))
-        _nap(stop, 0.6, 0.9)
+        _nap(stop, 0.8, 1.1)                                 # the game zooms back out after the ring closes
     return not find_detail_icon(dev.screenshot())
 
 
