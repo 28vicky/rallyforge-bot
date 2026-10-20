@@ -4077,7 +4077,26 @@ def ldconsole_path(adb=None):
     return None
 
 
-def bluestacks_instance(serial):
+def bluestacks_instance(serial, name=None):
+    """BlueStacks instance id (e.g. Pie64_3) for an ADB address; when the port is not found (a stopped instance, or the
+    conf lists another port) the instance's display name is tried (the name in BlueStacks = the name in the bot)."""
+    inst = _bluestacks_by_port(serial)
+    if inst or not name:
+        return inst
+    want = str(name).strip().lower()
+    hits = set()
+    for conf in BLUESTACKS_CONFS:
+        try:
+            txt = Path(conf).read_text(errors="ignore")
+        except Exception:
+            continue
+        for i, dn in re.findall(r'bst\.instance\.(\w+)\.display_name="([^"]*)"', txt):
+            if dn.strip().lower() == want:
+                hits.add(i)
+    return hits.pop() if len(hits) == 1 else None
+
+
+def _bluestacks_by_port(serial):
     m = re.fullmatch(r"127\.0\.0\.1:(\d+)", serial)
     port = int(m.group(1)) if m else None
     if port is None:
@@ -4228,7 +4247,7 @@ def emulator_launch_command(serial, adb, cfg):
         con = ldconsole_path(adb)
         if con:
             return [str(con), "launch", "--index", str((int(m.group(1)) - 5554) // 2)]
-    inst = bluestacks_instance(serial)
+    inst = bluestacks_instance(serial, (cfg.get("device_names") or {}).get(serial))
     player = bluestacks_player(adb) if inst else None
     if inst and player:
         return [str(player), "--instance", inst]
@@ -4423,7 +4442,12 @@ def bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
             raise RuntimeError(f"Device {serial} is offline (enable 'start the emulator automatically').")
         cmd = emulator_launch_command(serial, adb, cfg)
         if not cmd:
-            raise RuntimeError("The emulator is off and I do not know how to start it. "
+            _inst = bluestacks_instance(serial, (cfg.get("device_names") or {}).get(serial))
+            _why = ("BlueStacks instance not found in bluestacks.conf (checked %d file(s) for port/name)" % len([c for c in BLUESTACKS_CONFS if Path(c).exists()])
+                    if not _inst and any(Path(c).exists() for c in BLUESTACKS_CONFS) else
+                    "BlueStacks player (HD-Player.exe) not found" if _inst else "no launcher found for this emulator type")
+            log(f"[!] Cannot start {serial}: {_why}")
+            raise RuntimeError("The emulator is off and I do not know how to start it (" + _why + "). "
                                "Set a launch command for this instance.")
         if not wait_for_ram(cfg, log, stop, "starting the emulator"):
             if stop.is_set():
