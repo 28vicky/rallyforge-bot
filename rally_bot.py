@@ -4910,7 +4910,7 @@ BUILDING_NAMES = [
     "Watchtower", "Fountain of the Gods", "Triumphal Arch", "Military Academy", "Pasture", "Hospital",
     "Workshop", "Smithy", "Siege Workshop", "Beacon Tower", "Treasury", "Marketplace",
 ]
-BUILDING_NAMES += ["Stable", "Forge", "War Hall", "Portal", "Black Market"]
+BUILDING_NAMES += ["Stable", "Forge", "War Hall", "Portal", "Black Market", "Dragon Cliff", "Archer Tower"]   # last two read from the PC client / emulator labels
 BUILDING_ALIASES = {"Stables": "Stable", "Smithy": "Forge", "Black Market": "Market"}          # the game's wording -> our name
 EXPECTED_BUILDINGS = [                                                # what a finished city map must contain
     "Keep", "Rally Spot", "Holy Palace", "Workshop", "Military Academy", "Council of State", "Research Factory",
