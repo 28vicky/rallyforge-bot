@@ -712,11 +712,12 @@ function scopeBar(page, keys, what, fixed) {
   const pick = h("select", { onchange: (e) => { S.scope[page] = e.target.value; rerender(); } },
     [h("option", { value: "", selected: serial === "" }, "All instances (default)")].concat((S.devices || []).filter((d) => d.id).map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || d.id))));
   const items = fixed !== undefined ? [] : [h("span", { class: "lab" }, "Settings for"), pick];
-  if (serial && own) {
-    items.push(h("span", { class: "chip own" }, "own " + what));
-    items.push(btn("Use the global " + what, () => { keys.forEach((k) => delete ov[k]); rerender(); }, "sm"));
-  } else if (serial) {
-    items.push(btn("Give this instance its own " + what, () => { keys.forEach((k) => { if (S.cfg[k] !== undefined) ov[k] = clone(S.cfg[k]); }); rerender(); }, "sm pri"));
+  if (serial) {
+    const toOwn = () => { keys.forEach((k) => { if (S.cfg[k] !== undefined) ov[k] = clone(S.cfg[k]); }); rerender(); };
+    const toGlobal = async () => { if (await confirmBox("Use the global " + what, "This instance's own " + what + " will be discarded and it will use the global one again. Continue?")) { keys.forEach((k) => delete ov[k]); rerender(); } };
+    items.push(h("div", { class: "seg ownseg" },
+      h("button", { class: own ? "" : "on", onclick: () => { if (own) toGlobal(); } }, "Global " + what),
+      h("button", { class: own ? "on" : "", onclick: () => { if (!own) toOwn(); } }, "Own " + what + " for this instance")));
   }
   const msg = !serial ? "These are the defaults for every instance that has no own " + what + "."
     : own ? "Changes here apply to this instance only."
