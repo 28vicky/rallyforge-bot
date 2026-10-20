@@ -1,5 +1,10 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.62", date: "2026-10-20",
+    new: ["Building tasks now work in every city style (Europe, Russia, Japan, Arabic ...): when the city does not look like the stored picture, the bot reads the building names written under the buildings, works out where the wanted building is, moves the map there and taps it. No per-account map is needed."],
+    fixed: ["Champions: the Keep is tapped on its body (tall palaces were missed), and when the Champion caption cannot be read the bot taps the icon above the Detail icon.",
+            "Camera counting accepts that the map moves about 1.45 times the finger.",
+            "Accounts that already have their own city map keep using it in other city styles."] },
   { v: "2.4.61", date: "2026-10-20",
     new: ["One recovery routine for everything: if any window the bot did not expect opens (a building's page, stacked pages, a pop-up, a menu), it closes it, goes back to the city view and starts the task again once. It also checks which view (city or landscape) the game shows and switches only when needed."],
     fixed: ["Champions, Wheel and other building tasks no longer get stuck on the wrong building (for example the Wisdom Dome instead of the Keep): the bot reads the name of the menu that opened, closes it if it is not the wanted building, aims again and retries.",
