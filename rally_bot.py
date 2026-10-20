@@ -5298,7 +5298,7 @@ def ring_label_free(shot, centre=(270, 450)):
             if not group:
                 return
             txt = " ".join(w[0] for w in group).strip(" .,:;|-_*")
-            if len(txt) >= 3 and re.fullmatch(r"[A-Za-z' ]+", txt) and txt.lower() not in ("lv", "level", "vip", "i"):
+            if len(txt) >= 4 and re.fullmatch(r"[A-Za-z' ]+", txt) and txt.lower() not in ("lv", "level", "vip", "i"):
                 gx = sum(w[1] for w in group) / len(group) + 40
                 gy = sum(w[2] for w in group) / len(group) + 120
                 d = (gx - centre[0]) ** 2 + (gy - centre[1]) ** 2
@@ -7019,7 +7019,14 @@ def read_square(dev, cfg, log, stop, pos, expected="", levels=False):
     if not ic:
         log("[!]   no ring menu after tapping - nothing opened")
         return None
-    lab = ring_label_free(ring) or ring_label(ring, expected, pos)
+    lab = ring_label_free(ring)
+    for _ in range(3):                                      # the label may still be drawing: look again
+        if lab or stop.is_set():
+            break
+        nap(0.5, 0.7)
+        ring = dev.screenshot()
+        lab = ring_label_free(ring)
+    lab = lab or ring_label(ring, expected, pos)
     if not levels:
         if not lab:
             log("[!]   ring menu is open but the building name could not be read")
