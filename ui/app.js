@@ -514,8 +514,8 @@ function stickyUpdate() {
     document.body.appendChild(box);
   }
   const max = p.scrollHeight - p.clientHeight;
-  $("#jumpUp").style.display = p.scrollTop > 160 ? "" : "none";
-  $("#jumpDown").style.display = max > 300 && p.scrollTop < max - 160 ? "" : "none";
+  $("#jumpUp").classList.toggle("on", p.scrollTop > 160);
+  $("#jumpDown").classList.toggle("on", max > 200 && p.scrollTop < max - 80);
 }
 document.addEventListener("scroll", (e) => { if (e.target && e.target.id === "pages") stickyUpdate(); }, true);
 setInterval(stickyUpdate, 700);

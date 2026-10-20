@@ -443,6 +443,8 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 /* jump to top / bottom */
 .jumpbox{position:fixed;right:26px;bottom:52px;z-index:60;display:flex;flex-direction:column;gap:8px}
 .jump{width:38px;height:38px;border-radius:50%;border:var(--bd);background:var(--btn);color:var(--accent2);font-size:18px;line-height:1;cursor:pointer;box-shadow:var(--sh2);display:grid;place-content:center;padding:0}
+.jump{opacity:0;transform:translateY(6px);pointer-events:none;transition:opacity .18s,transform .18s}
+.jump.on{opacity:1;transform:none;pointer-events:auto}
 .jump:hover{background:var(--accent);color:var(--accfg)}
 
 /* quick Start / Pause / Stop on an instance card (appear on hover) */
