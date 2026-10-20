@@ -6572,7 +6572,9 @@ def ch_name(img):
 
 
 def ch_on_page(img):
-    return bool(find_text(img, ["Champion"], region=(150, 20, 240, 80), cutoff=0.75))
+    if find_text(img, ["Champion"], region=(150, 20, 240, 80), cutoff=0.6):
+        return True
+    return ch_name(img) is not None                        # the champion's name banner only exists on this page
 
 
 def ch_inactive(img):
