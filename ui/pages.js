@@ -97,6 +97,7 @@ function maxToggle(panelEl) {
   if (!document.getElementById("maxStyle")) {
     const st = document.createElement("style"); st.id = "maxStyle";
     st.textContent = ".pmax-host>.panel:not(.pmax){display:none}.panel.pmax{display:flex;flex-direction:column;box-sizing:border-box;margin-bottom:0}" +
+      ".hint{font-size:12.5px;opacity:.7;margin:2px 0 8px;line-height:1.4}.tgview{display:none}.tgview.on{display:block}.panel.pmax .tgviews{flex:1;min-height:0;display:flex;flex-direction:column}.panel.pmax .tgview.on{flex:1;min-height:0;display:flex;flex-direction:column}" +
       ".panel.pmax .tlist{max-height:none;flex:1;min-height:0}.panel.pmax .pmax-fill{flex:1;min-height:0;display:flex;flex-direction:column}.panel.pmax .pmax-fill>div{flex:1;min-height:0;display:flex;flex-direction:column}";
     document.head.appendChild(st);
   }
@@ -834,10 +835,11 @@ PAGES.market = function () {
 // ====================================================================== telegram
 PAGES.telegram = function () {
   const c = S.cfg;
+  const panel = (title, ...kids) => h("div", { class: "tgview" }, title ? h("h3", {}, title) : null, kids);   // one view of the single Telegram window
   const code = h("input", { type: "text", class: "short" });
   const pw = h("input", { type: "password" });
   const run = (name, extra) => act(api(name, Object.assign({ cfg: c }, extra || {})));
-  const login = panel("Telegram login (your own account)",
+  const login = panel(null,
     note("1) On my.telegram.org -> 'API development tools' create an app and copy the api_id and api_hash. 2) Enter them with your phone number (with country code, e.g. +911234567890) and press 'Send code'. 3) Type the code Telegram sends you (and your two-step password if you have one) and press 'Log in'. You only do this once: the login is saved on this PC."),
     grid2(fld("api_id", inp(c, "tg_api_id")), fld("api_hash", inp(c, "tg_api_hash", { type: "password" })), fld("Phone number", inp(c, "tg_phone", { ph: "+911234567890" })),
       fld("Login code", code), fld("Two-step password (if any)", pw)),
@@ -852,7 +854,7 @@ PAGES.telegram = function () {
     bosses.innerHTML = ""; bosses.appendChild(t.el);
   };
   refreshBosses();
-  const boss = panel("Boss finder bot",
+  const boss = panel(null,
     grid2(fld("Bot to read", inp(c, "tg_boss_bot")), fld("Message to send it", inp(c, "tg_boss_command")),
       fld("Ask again every (min, 0 = only on the button)", inp(c, "tg_auto_min", { type: "int", cls: "short" })),
       fld("Tasks use bosses of level at least", h("div", { class: "row" }, inp(c, "tg_min_level", { type: "int", cls: "short" }), sel(c, "tg_pick", ["nearest", "highest"])))),
@@ -862,20 +864,18 @@ PAGES.telegram = function () {
   // live list of every coordinate that shows up in the chats you watch
   const feedBox = h("div", {});
   const feedChats = h("input", { type: "text", value: c.tg_feed_chats || "", placeholder: "@channel, group name as in your Telegram list", onchange: () => { c.tg_feed_chats = feedChats.value; act(api("coords_chats", { chats: feedChats.value }, { quiet: true })); } });
-  let liveMax = null;
   const keepOpts = [[10, "10 minutes"], [20, "20 minutes"], [30, "30 minutes"], [60, "1 hour"], [180, "3 hours"], [0, "Until I clear the list"]];
   const keepSel = h("select", { onchange: async (e) => { c.tg_keep_min = Number(e.target.value); const j = await act(api("coords_keep", { minutes: c.tg_keep_min })); if (j) { drawFeed(j); toast("Saved.", "ok"); } } },
     ...keepOpts.map(([v, t]) => h("option", { value: v, selected: Number(c.tg_keep_min ?? 60) === v }, t)));
   const drawFeed = (j) => {
     if (!j) return;
-    if (!liveMax) liveMax = maxToggle(live);
     const ago = (t) => { const s = Math.max(0, Math.round(j.now - t)); return s < 60 ? s + " s" : s < 3600 ? Math.round(s / 60) + " min" : Math.round(s / 3600) + " h"; };
     const t = listTable(["Seen", "Chat", "Level", "Name", "X", "Y", "km"], j.items.map((b) => ({ cells: [ago(b.t) + " ago", b.chat || "", b.level || "", b.name, b.x, b.y, b.km ?? ""] })), null, null);
     feedBox.innerHTML = "";
-    feedBox.appendChild(h("div", { class: "row", style: { gap: "10px", flexWrap: "wrap", margin: "8px 0" } },
+    feedBox.appendChild(h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap", margin: "6px 0", alignItems: "center" } },
       h("span", { class: "chip" }, "messages read: " + j.stats.messages), h("span", { class: "chip" }, "with coordinates: " + j.stats.with_coords),
       h("span", { class: "chip" }, "watching: " + ((j.stats.chats || []).join(", ") || "nothing yet")),
-      btn("Clear list", async () => { drawFeed(await act(api("coords_clear"))); }), liveMax));
+      btn("Clear list", async () => { drawFeed(await act(api("coords_clear"))); })));
     feedBox.appendChild(t.el);
   };
   const libBox = h("div", {});
@@ -894,16 +894,35 @@ PAGES.telegram = function () {
   const loadFeed = async () => { if (!feedBox.isConnected) return; const j = await api("coords", {}, { quiet: true }).catch(() => null); drawFeed(j); if (j && j.stats.messages !== libTick) { libTick = j.stats.messages; loadLib(); } };
   const feedTimer = setInterval(() => { if (!feedBox.isConnected && feedBox.dataset.shown) clearInterval(feedTimer); else loadFeed(); }, 3000);
   setTimeout(() => { feedBox.dataset.shown = "1"; loadFeed(); }, 300);
-  const live = panel("Live coordinates (everything that appears in the chats you watch)",
-    grid2(fld("Chats / channels to watch (comma separated)", feedChats),
-      fld("Keep coordinates for (older ones are removed by themselves)", keepSel)),
-    h("div", { class: "row", style: { margin: "10px 0" } },
+  const live = panel(null,
+    h("div", { class: "row", style: { gap: "10px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "6px" } },
+      h("div", { style: { flex: "1 1 260px" } }, fld("Chats / channels to watch (comma separated)", feedChats)),
+      h("div", { style: { flex: "0 0 190px" } }, fld("Keep coordinates for", keepSel)),
       btn("Start watching", async () => { c.tg_feed_chats = feedChats.value; const j = await act(api("coords_watch", { cfg: c })); if (j) { drawFeed(j); toast("Watching.", "ok"); } }, "pri")),
-    note("Log in above first. Use the chat's name exactly as in your Telegram list, or its @username. Every new or edited message there is read for lines like 'Lv7 Witch (xy: 719 539) 94km' (also when another bot wrote it); each coordinate is listed here with the time it was seen. Messages without that form are counted but not listed."),
+    h("div", { class: "hint" }, "Use the chat's name as in your Telegram list or its @username (log in on the Login tab first). Every new or edited message is read for lines like 'Lv7 Witch (xy: 719 539) 94km'. Older coordinates stay saved in the Library."),
     h("div", { class: "pmax-fill" }, feedBox));
-  const lib = panel("Coordinate library (every coordinate ever seen, kept for good so tasks can use them later)", libBox);
+  const lib = panel(null, h("div", { class: "hint" }, "Every coordinate ever seen, kept for good so tasks can use them later."), h("div", { class: "pmax-fill" }, libBox));
   setTimeout(loadLib, 400);
-  return h("div", {}, login, live, lib, boss);
+  // ONE window: buttons on top switch between the views; Maximize makes the whole window fill the right section
+  const views = [["live", "Live coordinates", live], ["lib", "Library", lib], ["boss", "Boss finder", boss], ["login", "Login", login]];
+  let cur = "live";
+  try { cur = localStorage.getItem("rf_tg_view") || "live"; } catch (e) {}
+  if (!views.some((v) => v[0] === cur)) cur = "live";
+  const win = h("div", { class: "panel" });
+  const bar = h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap", marginBottom: "12px", alignItems: "center" } });
+  const area = h("div", { class: "tgviews" });
+  const show = (id) => {
+    cur = id;
+    try { localStorage.setItem("rf_tg_view", id); } catch (e) {}
+    views.forEach(([k, , el]) => el.classList.toggle("on", k === id));
+    [...bar.querySelectorAll("button[data-v]")].forEach((b) => b.classList.toggle("pri", b.dataset.v === id));
+  };
+  views.forEach(([k, t, el]) => { const b = btn(t, () => show(k)); b.dataset.v = k; bar.appendChild(b); area.appendChild(el); });
+  bar.appendChild(h("div", { style: { flex: 1 } }));
+  bar.appendChild(maxToggle(win));
+  win.appendChild(bar); win.appendChild(area);
+  show(cur);
+  return h("div", {}, win);
 };
 
 // ====================================================================== reliability / schedule & alerts / updates
