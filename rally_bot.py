@@ -4083,6 +4083,9 @@ def bluestacks_instance(serial, name=None):
     inst = _bluestacks_by_port(serial)
     if inst or not name:
         return inst
+    _m = re.fullmatch(r"127\.0\.0\.1:(\d+)", serial)
+    if _m and int(_m.group(1)) >= 16000:          # a MuMu 12 port: not a BlueStacks instance even if a BlueStacks one has the same name
+        return None
     want = str(name).strip().lower()
     hits = set()
     for conf in BLUESTACKS_CONFS:
@@ -4166,7 +4169,7 @@ def mumu_index(serial, adb, name=None):
         found = walk(data)
         if found not in (None, "None"):
             return found
-        if name:
+        if name and port >= 16000:            # MuMu 12 lives on ports 16384+; BlueStacks (5555+) must never be matched to a MuMu instance of the same name
             want = str(name).strip().lower()
             hits = []
 
