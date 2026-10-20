@@ -724,3 +724,5 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .chip.own::before{content:"";position:absolute;left:10px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--accent1)}
 .ownseg button{padding:7px 16px;font-size:14px}
 .ownseg button.on{background:var(--accent1);color:var(--accfg)}
+/* one rule for "selected": filled with the accent colour */
+:root .sub.on{background:var(--accent1);color:var(--accfg);border-color:transparent}
