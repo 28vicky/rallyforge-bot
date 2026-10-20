@@ -7191,6 +7191,18 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
     if not numbers and mine and time.time() - mine.get("t", 0) < 6 * 3600 and mine.get("done"):
         done_before = set(mine["done"])
         order = [n for n in order if n not in done_before]
+        try:                                                 # drop saved reads that are not in the done list (a read that was found wrong and cleared)
+            _d = load_city()
+            _e = _d.get(serial) or {}
+            _lv = _e.get("levels", {})
+            _drop = [k for k in list(_e.get("items", {})) if _lv.get(k, {}).get("square") not in done_before]
+            if _drop:
+                for k in _drop:
+                    _e["items"].pop(k, None)
+                    _lv.pop(k, None)
+                save_city(_d)
+        except Exception:
+            pass
         if order:
             log(f"[*] Squares: carrying on from the last run - {len(done_before)} squares already read, {len(order)} to go")
         else:
