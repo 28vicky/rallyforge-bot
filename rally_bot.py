@@ -8222,6 +8222,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     aj_next = [0.0]
     aj_scan = [0.0]                       # last time the rally list was read for monster pictures while the game's Auto-Join joins
     city_last, city_block = {}, [0.0]
+    city_why = [0.0]
     city_day = [_game_day()]
     last_watch = time.time()
     off_list = [None]                                         # since when we have not been on the rally list
@@ -8444,6 +8445,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         recover()
                     else:
                         act("step", text="Auto-Join is on - next check in %d min" % max(1, int((aj_next[0] - now) // 60)))
+                        if now - city_why[0] > 300:                       # say why no city trip is made (tasks off / nothing due / blocked)
+                            city_why[0] = now
+                            nd = len(city_tasks_due(cfg, city_last, serial)) if cfg.get("city_enabled") else 0
+                            log(f"[i] No city trip now: tasks {'on' if cfg.get('city_enabled') else 'OFF'}, {nd} due, blocked for {max(0, int(city_block[0] - now))} s")
                         nap(5, 8)
                     continue
             if not rallies_on:                                    # tasks only: stay in the city and work through them

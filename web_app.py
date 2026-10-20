@@ -424,6 +424,12 @@ class Controller:
     # ------------------------------------------------------------------ start / stop
     def start_instance(self, serial, cfg=None):
         d = self.dev.get(serial)
+        if d is not None and self.running(serial) and d["ctl"].paused:       # Start on a paused instance = carry on now (it used to do nothing)
+            d["pause_tok"], d["resume_at"] = None, None
+            d["ctl"].resume()
+            d["state"] = "run"
+            self.log("[i] Resumed", serial)
+            return
         if d is None or self.running(serial) or d.get("starting"):
             return
         lim = self.lic.limit()
