@@ -6513,7 +6513,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 except Exception:
                     pass
                 dev.expect_city = False                     # from the tap on, a window opening is expected
-                lower = ((0, -30, 18) if nav_state["mode"] == "labels" else (int(cfg.get("city_tap_dy", 22) or 0), 44, 0))[attempt]      # labels sit at the building's foot; picture mode aims at the LOWER part so a tall Keep does not move the tap off it
+                lower = ((-45, -90, -15) if nav_state["mode"] == "labels" else (int(cfg.get("city_tap_dy", 22) or 0), 44, 0))[attempt]      # labels sit at the building's foot; picture mode aims at the LOWER part so a tall Keep does not move the tap off it
                 dev.tap(int(px), int(py + float(task.get("tap_dy", 0)) + lower))
                 _nap(stop, 1.0, 1.4)
                 shot = dev.screenshot()
