@@ -5040,6 +5040,14 @@ class CityNav:
         x, y, w, h = CITY_VIEW
         want_x, want_y = mapx - (x + w / 2), mapy - (y + h / 2)
         self.pan(want_x - self.cx, want_y - self.cy)
+        for _ in range(3):                                   # the city is a diamond: near a corner the map will not slide
+            rx, ry = want_x - self.cx, want_y - self.cy      # sideways until you have gone down (or up) far enough,
+            if abs(rx) < 40 and abs(ry) < 40:                # so do the other direction first, then come back
+                break
+            if abs(ry) >= 25:
+                self.pan(0, ry)
+            self.pan(want_x - self.cx, 0)
+            self.pan(want_x - self.cx, want_y - self.cy)
         return mapx - self.cx, mapy - self.cy
 
 
@@ -5868,7 +5876,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         dev.tap(p[0], p[1] - 38)                           # the icon sits just above its caption
         return True
     if kind == "building":
-        items = (load_city().get(dev.serial if hasattr(dev, "serial") else "default") or {}).get("items", {})
+        items = city_map_items(dev)
         keys = sorted(k for k in items if k.split("#")[0].lower() == name.lower().split("#")[0]
                       and (("#" not in name) or k.lower() == name.lower()))
         if not keys:
@@ -5880,6 +5888,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             nav_state["nav"] = nav
         for k in keys[:int(task.get("count", 1) or 1)]:
             pos = find_building(dev, stop, log, nav, k.split("#")[0], items[k], items, k)
+            if not pos and k.split("#")[0] == "Keep":
+                pos = calibrate_keep(dev, stop, log, nav)
             if not pos:
                 log(f"[!] Task '{task.get('name')}': {k} not found on screen - skipped")
                 continue
@@ -6555,8 +6565,60 @@ def city_tasks_due(cfg, last_run, serial=""):
 CITY_MAP_HELP = "The city map for this emulator is missing. Open the City page and run the City Mapper first - every task that uses a building (Black Market, Tavern, troops, resources...) needs it."
 
 
+# Buildings that sit at the same place in every city. The pixel position on the map drifts a little between runs
+# (and between accounts), so it is only a first guess: calibrate_keep() finds the Tavern (a fixed building) and goes
+# from there to the Keep, then saves the real Keep position into this emulator's city map once, for good.
+FIXED_BUILDINGS = {"Keep#1": [1141, 609]}
+ANCHOR_TO_KEEP = {"Tavern": (88, -137), "Shrine": (316, -141)}   # Keep label minus anchor label (map pixels, measured on Kiravik's screen)
+CALIB_STOPS = [(1141, 609), (1312, 588), (1000, 800), (1400, 800), (700, 650), (1000, 450), (1400, 450), (600, 900), (1450, 700)]
+
+
 def city_map_items(dev):
-    return (load_city().get(getattr(dev, "serial", "default")) or {}).get("items", {})
+    items = dict((load_city().get(getattr(dev, "serial", "default")) or {}).get("items", {}))
+    for k, v in FIXED_BUILDINGS.items():
+        items.setdefault(k, list(v))
+    return items
+
+
+def calibrate_keep(dev, stop, log, nav):
+    """The Keep is not where the map says: sweep the city for the Keep or a fixed neighbour (Tavern), walk from it to
+    the Keep, confirm the Keep's name label there and save its position. -> (screen x, screen y) or None."""
+    serial = dev.serial if hasattr(dev, "serial") else "default"
+    log("[*] Keep: calibrating the city map from the Tavern (one time)")
+    nav.to_origin()
+    for sx, sy in CALIB_STOPS:
+        if stop.is_set():
+            return None
+        nav.goto(sx, sy)
+        labels, _, _ = look_with_names(dev, stop, nav)
+        seen = ", ".join(f"{n}({mx},{my})" for n, mx, my in labels)
+        log(f"[i] Keep calibration: stop {sx},{sy} camera {round(nav.cx)},{round(nav.cy)} - names read: {seen or 'none'}")
+        est = None
+        for n, mx, my in labels:
+            if n == "Keep":
+                est = (mx, my)
+                break
+        if est is None:
+            for n, mx, my in labels:
+                if n in ANCHOR_TO_KEEP:
+                    est = (mx + ANCHOR_TO_KEEP[n][0], my + ANCHOR_TO_KEEP[n][1])
+                    break
+        if est is None:
+            continue
+        nav.goto(*est)
+        labels, _, _ = look_with_names(dev, stop, nav)
+        keeps = [(mx, my) for n, mx, my in labels if n == "Keep" and abs(mx - est[0]) < 150 and abs(my - est[1]) < 150]
+        if not keeps:
+            log("[i] Keep calibration: no Keep label at the expected place yet - looking on")
+            continue
+        mx, my = min(keeps, key=lambda c: (c[0] - est[0]) ** 2 + (c[1] - est[1]) ** 2)
+        data = load_city()
+        data.setdefault(serial, {}).setdefault("items", {})["Keep#1"] = [round(mx), round(my)]
+        save_city(data)
+        log(f"[+] Keep found and saved on the city map at {round(mx)},{round(my)}")
+        return mx - nav.cx, my - nav.cy
+    log("[!] Keep calibration: could not find the Keep or the Tavern")
+    return None
 
 
 def task_needs_city_map(t):
