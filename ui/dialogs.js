@@ -165,8 +165,8 @@ function genViewGet() { try { return localStorage.getItem("rf_genview") === "gri
 function genViewSet(v) { try { localStorage.setItem("rf_genview", v); } catch (e) {} }
 function genSorted(arr) { return arr.slice().sort((a, b) => (b.pic !== false) - (a.pic !== false) || a.name.toLowerCase().localeCompare(b.name.toLowerCase())); }
 function genViewBar(onchange) {
-  const mk = (v, label) => h("button", { class: "btn sm" + (genViewGet() === v ? " pri" : ""), title: v === "grid" ? "Only generals that have a picture, shown as thumbnails" : "Every general, one per line", onclick: () => { genViewSet(v); box.querySelectorAll("button").forEach((b) => b.classList.toggle("pri", b.dataset.v === genViewGet())); onchange(); } }, label);
-  const box = h("div", { class: "row", style: { gap: "6px" } }, mk("list", "\u2630 List"), mk("grid", "\u25A6 Grid"));
+  const mk = (v, label) => h("button", { class: "btn sm gv" + (genViewGet() === v ? " pri" : ""), title: v === "grid" ? "Only generals that have a picture, shown as thumbnails" : "Every general, one per line", onclick: () => { genViewSet(v); box.querySelectorAll("button").forEach((b) => b.classList.toggle("pri", b.dataset.v === genViewGet())); onchange(); } }, label);
+  const box = h("div", { class: "row", style: { gap: "6px" } }, mk("list", [h("span", { class: "gvi" }, "\u2630"), "List"]), mk("grid", [h("span", { class: "gvi" }, "\u25A6"), "Grid"]));
   box.querySelectorAll("button").forEach((b, i) => (b.dataset.v = i ? "grid" : "list"));
   return box;
 }

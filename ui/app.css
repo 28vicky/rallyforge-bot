@@ -433,3 +433,8 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .gbox>input:focus{outline:none;border-bottom-color:var(--accent1)}
 .gbox>.row{flex:none;margin:6px 8px!important}
 .gbox>.lst,.two .gbox>.lst{flex:1 1 auto;min-height:0!important;max-height:none!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;overflow:auto}
+
+.ghead .lab{line-height:1;display:flex;align-items:center}
+.ghead .row{align-items:center}
+.btn.gv{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13px;line-height:1;padding:7px 11px}
+.btn.gv .gvi{font-size:11px;line-height:1;display:inline-block}
