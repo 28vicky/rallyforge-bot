@@ -6108,7 +6108,189 @@ def scan_city_taps_old(dev, cfg, log, stop, progress=None):
     return got
 
 
+# ---------------------------------------------------------------- city mapper by names (works in every city style)
+def _layout_load(serial):
+    with _OFF_LOCK:
+        return {k: list(v) for k, v in ((_off_load().get("_layout") or {}).get(serial or "default") or {}).items()}
+
+
+def _layout_save(serial, layout):
+    with _OFF_LOCK:
+        _off_load().setdefault("_layout", {})[serial or "default"] = {k: [round(v[0], 1), round(v[1], 1)] for k, v in layout.items()}
+        try:
+            CITY_OFFSETS_FILE.write_text(json.dumps(_OFF_CACHE), encoding="utf-8")
+        except OSError:
+            pass
+
+
+class NameStitcher:
+    """Builds one coordinate frame out of many looks. Each look gives names with their screen positions; names seen in two looks
+    tell how far the map moved between them (no camera counting, no pictures - only the names, so it works in every style).
+    S (screen) = G (frame) + T (shift of this look)."""
+    def __init__(self):
+        self.pts = {}                                       # "Name#k" -> [sum_x, sum_y, n] in the frame G
+        self.T = (0.0, 0.0)
+        self.looks = 0
+
+    def _inst(self, name):
+        return [(k, v) for k, v in self.pts.items() if k.split("#")[0] == name]
+
+    def add(self, labels, pred_T=None):
+        """labels = [(name, sx, sy)]. pred_T = expected shift (previous T + the commanded pan). -> (new names, how the shift was found)."""
+        pred = pred_T if pred_T is not None else self.T
+        votes = []
+        for n, sx, sy in labels:
+            best = None
+            for k, v in self._inst(n):
+                gx, gy = v[0] / v[2], v[1] / v[2]
+                tx, ty = sx - gx, sy - gy
+                d = ((tx - pred[0]) ** 2 + (ty - pred[1]) ** 2) ** 0.5
+                if best is None or d < best[0]:
+                    best = (d, tx, ty, k)
+            if best and best[0] < 140:
+                votes.append(best)
+        how = "predicted"
+        if votes:
+            xs = sorted(v[1] for v in votes)
+            ys = sorted(v[2] for v in votes)
+            T = (xs[len(xs) // 2], ys[len(ys) // 2])
+            how = f"{len(votes)} shared name(s)"
+        else:
+            T = pred
+        self.T = T
+        self.looks += 1
+        new = []
+        for n, sx, sy in labels:
+            gx, gy = sx - T[0], sy - T[1]
+            hit = None
+            for k, v in self._inst(n):
+                if abs(v[0] / v[2] - gx) < 110 and abs(v[1] / v[2] - gy) < 90:
+                    hit = k
+                    break
+            if hit:
+                v = self.pts[hit]
+                v[0] += gx; v[1] += gy; v[2] += 1
+            else:
+                k, i = f"{n}#1", 1
+                while k in self.pts:
+                    i += 1
+                    k = f"{n}#{i}"
+                self.pts[k] = [gx, gy, 1]
+                new.append(k)
+        return new, how
+
+    def layout(self):
+        return {k: (v[0] / v[2], v[1] / v[2]) for k, v in self.pts.items()}
+
+
+def scan_city_names(dev, cfg, log, stop, progress=None):
+    """Map the whole city by reading the building names - no camera counting. A sweep of fixed finger pans; every look is
+    stitched to the previous one through the names they share. Saves the layout of this instance (distances between every
+    pair of buildings, used by the aiming) and the city map entry. -> {name: [x, y]}"""
+    dev.arm_guard(cfg, log, stop)
+    dev.guard_city = True
+    serial = dev.serial if hasattr(dev, "serial") else "default"
+    t0 = time.time()
+    st = NameStitcher()
+    stats = {"text": "Reading the city", "pct": 3}
+    x0, y0, w0, h0 = CITY_VIEW
+
+    def report(phase="sweeping"):
+        if not progress:
+            return
+        mapped, missing = city_report({k: 0 for k in st.pts})
+        el = time.time() - t0
+        pct = 100 if phase == "done" else stats["pct"]
+        try:
+            progress({"phase": phase, "pct": pct, "left": int(el * (100 - pct) / pct) if pct >= 8 else None, "text": stats["text"],
+                      "stops": st.looks, "total": max(st.looks, 28), "row": 0, "mapped": mapped, "missing": missing,
+                      "expected": expected_buildings({k: 0 for k in st.pts}), "seconds": int(el)})
+        except Exception:
+            pass
+
+    def moved(a, b):
+        return float(cv2.absdiff(a[y0:y0 + h0, x0:x0 + w0], b[y0:y0 + h0, x0:x0 + w0]).mean()) >= 2.0
+
+    def pan(dx, dy):
+        """Move the map content by about (dx, dy). -> (really moved?, commanded dx, dy)"""
+        dx, dy = max(-290, min(290, dx)), max(-440, min(440, dy))
+        before = dev.screenshot()
+        pan_content(dev, stop, dx, dy)
+        after = dev.screenshot()
+        if not moved(before, after):
+            return False, 0.0, 0.0
+        try:                                                # how far the picture really moved (image matching), the finger move only as the limit of what is believable
+            ax, ay = safe_shift(before, after, dx / GAIN, dy / GAIN)
+        except Exception:
+            ax, ay = dx, dy
+        return True, ax, ay
+
+    def look(pred):
+        labs = labels_on_screen(dev, stop)
+        labs = [l for l in labs if l[0] not in RESOURCE_BUILDINGS]
+        new, how = st.add(labs, pred)
+        mapped, _m = city_report({k: 0 for k in st.pts})
+        log(f"[i] City mapper: look {st.looks}: {len(labs)} name(s) ({', '.join(l[0] for l in labs) or 'none'}) - {how}; {len(st.pts)} buildings so far")
+        report()
+        return labs
+
+    # 1. top-left corner: push the map down and to the right until it stops moving
+    stats["text"] = "Going to the top-left corner of the city"
+    report()
+    for axis in (0, 1):
+        for _ in range(10):
+            if stop.is_set():
+                break
+            mv, _a, _b = pan(290 if axis == 0 else 0, 0 if axis == 0 else 430)
+            if not mv:
+                break
+    stats["pct"] = 10
+    stats["text"] = "Reading the city"
+    # 2. serpentine sweep: columns of looks, left to right, up and down
+    pred = (0.0, 0.0)
+    look(None)
+    T_sum = [0.0, 0.0]
+    direction = 1
+    cols = 0
+    while cols < 12 and not stop.is_set():
+        rowmoves = 0
+        while rowmoves < 8 and not stop.is_set():
+            mv, dx, dy = pan(0, -direction * 400)               # content up (camera down) when direction = 1
+            if not mv:
+                break
+            rowmoves += 1
+            look((st.T[0] + 0, st.T[1] + dy))
+            stats["pct"] = min(95, stats["pct"] + 2)
+        cols += 1
+        mv, dx, dy = pan(-290, 0)                                # next column: content left (camera right)
+        if not mv:
+            break
+        look((st.T[0] + dx, st.T[1]))
+        direction = -direction
+        stats["pct"] = min(95, 10 + cols * 11)
+    dev.guard_city = False
+    layout = st.layout()
+    # 3. save: the layout (distances) for the aiming and a city map entry for the screens
+    _layout_save(serial, layout)
+    items = {k: [round(v[0]), round(v[1])] for k, v in layout.items()}
+    mapped, missing = city_report(items)
+    data = load_city()
+    data[serial] = {"items": items, "scanned": int(time.time()), "missing": missing, "stops": st.looks,
+                    "seconds": int(time.time() - t0), "frame": "names"}
+    save_city(data)
+    stats["text"] = "Saving the map"
+    report("done")
+    log(f"[+] City mapper (names): {len(mapped)} of {len(expected_buildings(items))} buildings mapped in {int(time.time() - t0)} s, {st.looks} looks"
+        + (f". Not found: {', '.join(missing)}" if missing else " - the city map is complete"))
+    return items
+
+
 def scan_city(dev, cfg, log, stop, progress=None):
+    """The city mapper: reads the building names (works in every city style)."""
+    return scan_city_names(dev, cfg, log, stop, progress)
+
+
+def scan_city_sweep_old(dev, cfg, log, stop, progress=None):
     """Sweep the whole city, read the building names and save where each one is on the map. -> {name: [x, y]}"""
     dev.arm_guard(cfg, log, stop)
     dev.guard_city = True
@@ -6913,6 +7095,11 @@ def estimate_from_names(serial, want, labs, pri):
     then the built-in layout scaled by what was measured on this account. -> (x, y, how) or None."""
     with _OFF_LOCK:
         pairs = dict(_off_load().get(serial or "default") or {})
+    lay = _layout_load(serial)
+    if want + "#1" in lay:                                  # the mapper stitched every building into one frame: exact offsets
+        ests = [(lx + lay[want + "#1"][0] - lay[ln + "#1"][0], ly + lay[want + "#1"][1] - lay[ln + "#1"][1]) for ln, lx, ly in labs if ln + "#1" in lay]
+        if ests:
+            return sum(e[0] for e in ests) / len(ests), sum(e[1] for e in ests) / len(ests), "mapped layout"
     direct, hops = [], []
     for ln, lx, ly in labs:
         m = _measured(pairs, ln, want)
@@ -7942,7 +8129,8 @@ def picture_items(dev):
 
 
 def city_map_items(dev):
-    items = dict((load_city().get(getattr(dev, "serial", "default")) or {}).get("items", {}))
+    ent = load_city().get(getattr(dev, "serial", "default")) or {}
+    items = {} if ent.get("frame") == "names" else dict(ent.get("items", {}))      # a names-frame map is only for the aiming, not for walking by counting
     for k, v in FIXED_BUILDINGS.items():
         items.setdefault(k, list(v))
     return items
