@@ -1,24 +1,24 @@
 {
-  "version": "2.4.73",
-  "notes": "Full contrast check: small text and greyed-out states are easier to read.",
+  "version": "2.4.74",
+  "notes": "Duties run on their own, Viking join fix, screen-size warning, Pause all fix, layout tidy",
   "files": {
     "rally_bot.py": {
-      "sha256": "f8efd795bdc702e1f69afa56a5d329fe7c903d5b6138c74257ac51d1e46d4523"
+      "sha256": "c42e51c447a743a076f58b6491383431979fb62be6c11166a81288734c413e85"
     },
     "web_app.py": {
-      "sha256": "e2ea8d660e002925f24cee25dee5e2b1f4c23f2f7ed1d25cacfec896529ca782"
+      "sha256": "a7bfea98520db0453d0f7e0cdb898d1b1591e571dae2981722c6ecb861090b81"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "e391377df0ef8cf8dbfe8ae7758130873c118c968565a89f1b79596bb0cddff1"
+      "sha256": "614124079d3fc07c68f6d6b0f2b49acebcdcc0b378a39d3266bd1e901ed80a4a"
     },
     "ui/app.js": {
       "sha256": "5ea38d08e0ced333fd50c5ada6e0f0df334a8086b92054e889ef460ef6916864"
     },
     "ui/changelog.js": {
-      "sha256": "5827b3a4c804ab37924524209f6b10d126102c16f76f335c31c96688d9f8510b"
+      "sha256": "81cc7bc940ee02a250e425e83096a0fbbabfdb3534bb76728170ea1af7b5c6ac"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -1483,5 +1483,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "f0e8fe9efef321781fc868f3be3a252431f3d822429a4d60d2e06c9c62f805a1"
+  "sig": "8e998fc079b51bd3a841e659e80e296dc1d4f385aefd0051a15809fb5eba8ad5"
 }
