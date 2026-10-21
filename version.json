@@ -1,9 +1,9 @@
 {
-  "version": "2.4.76",
-  "notes": "Update restart shows a countdown and the instance it waits for; click to restart at once",
+  "version": "2.4.77",
+  "notes": "Bot waits out the red wifi lag icon before tapping",
   "files": {
     "rally_bot.py": {
-      "sha256": "519d1568bc705611f3424922a1c80de56d855b4a2b5238bb216faa5511d86471"
+      "sha256": "d8de0b3b254d9e6bc383134cf9de9f303229c58619c5ba3c3657d39dc99d9abb"
     },
     "web_app.py": {
       "sha256": "dd38308d99cd67dddbeeca3fc9c164c1813c6429654ab72c82ceee0b24485738"
@@ -18,7 +18,7 @@
       "sha256": "80fea900aa159afc279877792916141728ffe3fdb374180955ffe7b810ad2081"
     },
     "ui/changelog.js": {
-      "sha256": "d30481354f8dffc42b8dd74be15d9908c49f8c9921c7ad153837e377b60ba247"
+      "sha256": "e98f8be0b342c1cda149cdb9e29ace1c623d9d697bc447f9b3757b89e81e6a71"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -1476,6 +1476,9 @@
     "join_button.png": {
       "sha256": "271ba437e6793b6f2179e8e6ea923f29f49bfed07b45ac208a0f5696f1ee4ac1"
     },
+    "lag_wifi.png": {
+      "sha256": "87b27e637e0de7ceeb05d4e19baf1bc5ad3243d08332ff23173797455b33d438"
+    },
     "rally_icon.png": {
       "sha256": "a8e83f9d54048e01c976346571b9df98cc8112da9d0c5054a1b7ec71f836686e"
     },
@@ -1483,5 +1486,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "f208323bc360d21bdbdbed7d9d38fcab1ed1112822ac96304ee02a0163e2e385"
+  "sig": "34555fcb564854b547f77e6db4b354e42a7f487364cc46540d212538de9bdcd8"
 }
