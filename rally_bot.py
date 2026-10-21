@@ -7716,7 +7716,9 @@ def run_now_done(serial, tid):
 
 
 def tasks_active(cfg, serial):
-    return bool(cfg.get("city_enabled")) or bool(run_now_list(serial))
+    if cfg.get("city_enabled") or run_now_list(serial):
+        return True
+    return any((v or {}).get("on") for v in (cfg.get("duties") or {}).values())   # a duty that is switched on runs by itself, tasks on or off
 
 
 def duty_status(serial, duty_id, cfg):
@@ -7790,7 +7792,7 @@ def city_tasks_due(cfg, last_run, serial=""):
     if first:                                                    # asked for by the user: these go before everything else
         return first
     if not cfg.get("city_enabled"):
-        return []
+        return duty_tasks_due(cfg, serial)                       # duties do not need the task switch
     out = []
     for t in cfg.get("city_tasks") or []:
         if not t.get("enabled", True):
