@@ -922,10 +922,9 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .inst .ichip.off{background:transparent;border:1px dashed var(--off)}
 .inst:hover .ichip{visibility:hidden}
 
-/* sidebar show/hide: a small round handle on the sidebar's edge (\u2039 hides); when hidden it sits at the window's left edge (\u203a shows) */
-.sbhandle{position:absolute;top:26px;left:228px;z-index:5;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--mute);box-shadow:0 1px 3px rgba(0,0,0,.08);cursor:pointer;display:grid;place-content:center;padding:0;font:600 15px/1 var(--font,inherit);transition:left .22s ease,color .15s,border-color .15s}
-.sbhandle::before{content:"\2039"}
-.sbhandle:hover{color:var(--accent1);border-color:var(--accent1)}
-.app.nosb .sbhandle{left:6px}
-.app.nosb .sbhandle::before{content:"\203A"}
-@media (max-width:900px){.sbhandle{left:188px}}
+/* sidebar show/hide: a button at the top-left of the page header, before the instance name */
+.sidebtn{width:34px;height:34px;flex:none;border-radius:8px;border:1px solid transparent;background:transparent;cursor:pointer;display:grid;place-content:center;gap:4px;padding:0}
+.sidebtn i{display:block;width:16px;height:2px;border-radius:2px;background:var(--mute)}
+.sidebtn:hover{background:var(--card);border-color:var(--line)}
+.sidebtn:hover i{background:var(--accent1)}
+.top .sidebtn{margin-right:auto}
