@@ -762,3 +762,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 [data-mode] .btn.cur-pause,[data-mode] .btn.cur-stop,[data-mode] .ribbon .btn.cur-pause,[data-mode] .ribbon .btn.cur-stop{color:var(--accfg)!important}
 [data-mode] .btn.cur-pause .ico,[data-mode] .btn.cur-stop .ico,[data-mode] .ribbon .btn.cur-pause .ico,[data-mode] .ribbon .btn.cur-stop .ico{color:var(--accfg)!important}
 [data-mode] .btn.cur-pause .ico svg,[data-mode] .btn.cur-stop .ico svg{stroke:currentColor}
+
+/* the "Paused / countdown" line on an instance card: same colour as the card text, so it can never blend into the background */
+.inst small,.inst small .ptimer,.inst.sel small,.inst.sel small .ptimer{color:inherit;opacity:1}
+.inst:not(.sel) small .ptimer{color:var(--mute)}
