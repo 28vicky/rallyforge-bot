@@ -7800,7 +7800,9 @@ def _wait_view(dev, cfg, stop, want, secs=60):
         _nap(stop, 1.5, 1.8)
         shot = dev.screenshot()
         v = view_of(shot, cfg)
-        if v == want or (want == "landscape" and v == "world"):
+        if want == "landscape" and v == "world":           # the world map never stands still (clouds, marches): seen once is enough
+            return shot
+        if v == want:
             if prev is not None and float(np.mean(cv2.absdiff(prev[100:860:6, ::6], shot[100:860:6, ::6]))) < 2.0:
                 return shot
             prev = shot
