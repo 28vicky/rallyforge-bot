@@ -1,12 +1,12 @@
 {
-  "version": "2.4.65",
-  "notes": "Walkthrough question, monster levels 1-2, instance card hover buttons",
+  "version": "2.4.66",
+  "notes": "General Manager: Scan Tavern portraits (adds every general's picture to the library).",
   "files": {
     "rally_bot.py": {
-      "sha256": "546b0486afabe7374ded48f999901de9e8bd7970ee49d1c38eb7581a23b291c1"
+      "sha256": "4c3ff0d5b7b9df13b4664f8d1b1633f771b92b42c71617886c8ee11bb1316137"
     },
     "web_app.py": {
-      "sha256": "891199c5803a1de779e1d668b2e15e6eeb21bcd93f58f76769c716158cbd26e2"
+      "sha256": "ba00b9c6ccc6224af57391a6a94d071d20e14f2053848e4d4c5bcd7ba2a2f2be"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,10 +18,10 @@
       "sha256": "fe6023bd746daf614a1813647817199d99f1014107fcd788fdccd0b4a2463028"
     },
     "ui/changelog.js": {
-      "sha256": "5fd1552238dfbc261bccfd38b69410f80089347c091bd37ec77a00985f759457"
+      "sha256": "ae7c2f0e8ec2c61d0f08c2b752f2f04122fd06fd53187e1e9af9232bbb3f1682"
     },
     "ui/dialogs.js": {
-      "sha256": "40549bd7764a94cf5129436895741a90d80d7fa051fd8948742d18f28e841df7"
+      "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
     },
     "ui/fonts.css": {
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
@@ -150,5 +150,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "e29649627df94143cb626701d140963283d50cc02f09257bc869f1444fc08eab"
+  "sig": "c50a38bbc3768b4d36d477105abc85caaa424dbf479c39a8b7534cd63edb273d"
 }
