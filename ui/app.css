@@ -770,3 +770,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 /* pause / stop quick buttons on an instance card: bigger icons, buttons closer together */
 .inst .qact{gap:0;top:5px;right:6px}
 .inst .qact button{width:30px;height:30px;font-size:16px;border-radius:8px}
+
+/* Paused / Stopped top buttons: solid amber / red with the skin's own "text on colour" shade, in every skin */
+[data-mode] .btn.cur-pause,[data-mode] .ribbon .btn.cur-pause{background:var(--warn)!important;color:var(--accfg)!important;border-color:transparent!important}
+[data-mode] .btn.cur-stop,[data-mode] .ribbon .btn.cur-stop{background:var(--bad)!important;color:var(--accfg)!important;border-color:transparent!important}
