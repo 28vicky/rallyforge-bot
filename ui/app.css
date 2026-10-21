@@ -766,3 +766,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 /* the "Paused / countdown" line on an instance card: same colour as the card text, so it can never blend into the background */
 .inst small,.inst small .ptimer,.inst.sel small,.inst.sel small .ptimer{color:inherit;opacity:1}
 .inst:not(.sel) small .ptimer{color:var(--mute)}
+
+/* pause / stop quick buttons on an instance card: bigger icons, buttons closer together */
+.inst .qact{gap:0;top:5px;right:6px}
+.inst .qact button{width:30px;height:30px;font-size:16px;border-radius:8px}
