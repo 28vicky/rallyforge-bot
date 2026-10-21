@@ -1,24 +1,24 @@
 {
-  "version": "2.4.70",
-  "notes": "7 key generals get list-style pictures so they are found by picture.",
+  "version": "2.4.71",
+  "notes": "Readable buttons in every skin, Universal wording, Auto-Join time left, equal page margins, Monsters is the universal list.",
   "files": {
     "rally_bot.py": {
-      "sha256": "a3208ef7475c366be574c7eac5869d389a4fc7aa32c386a00e0473878f6aa176"
+      "sha256": "b0c923438f20e0bd2e09005378dfa0862c80359f294cb87c4b847f01ceca1075"
     },
     "web_app.py": {
-      "sha256": "ba00b9c6ccc6224af57391a6a94d071d20e14f2053848e4d4c5bcd7ba2a2f2be"
+      "sha256": "e2ea8d660e002925f24cee25dee5e2b1f4c23f2f7ed1d25cacfec896529ca782"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "b6b8300dbb3735ca8785808fdc51369d1e4c33bbf6e514ecd99924eb1515f8bd"
+      "sha256": "db8f8e6f712c702056a0a44faab593b0f716b24c573bac82cce75ad94e9355e9"
     },
     "ui/app.js": {
-      "sha256": "fe6023bd746daf614a1813647817199d99f1014107fcd788fdccd0b4a2463028"
+      "sha256": "5ea38d08e0ced333fd50c5ada6e0f0df334a8086b92054e889ef460ef6916864"
     },
     "ui/changelog.js": {
-      "sha256": "08461d63d4e951b2007977008d94316e797a5052e8d6ed5787208d8d4a6caf1a"
+      "sha256": "88d21bc5250ebb5eacc8cd489eae679a40c7bef2b69edfcbb9fc5c7281fbfe3c"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -30,10 +30,10 @@
       "sha256": "a3f4da00c3578367f379516ccf7be16b4d594bb21091d14856f6a25983409dd9"
     },
     "ui/pages.js": {
-      "sha256": "a782a74f37bd3aab5caf82bd4ca6807740978a7416a24c3187cd72fa571d3b3c"
+      "sha256": "1c977bbd1e0dc082ee1f0439eed26914cded40eb7dca13a9dcaf6c50e0dae019"
     },
     "ui/tour.js": {
-      "sha256": "d548d1510058cf04ade2a5a6c9166fe04ba37e24e2a4effab60fc7ab4e82acbb"
+      "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
     }
   },
   "mode": "ask",
@@ -1483,5 +1483,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "07c9f7c6f5e5bc170c998dbf547f9aea5a009e1f7b4293454d7c0a52ce31be55"
+  "sig": "eaed0f40a8ac0fbf79ecdb5b43a9fe132d053156e42492cde52777a7b1f307eb"
 }
