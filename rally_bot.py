@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.68"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.69"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -2449,6 +2449,15 @@ def _gen_tpl(name):
         return _gen_cache[name]
 
 
+def _portrait_card_art(name):
+    """True when the only picture of this general is a full-body card from Tavern > Portraits (catalogue art, taller
+    than wide). Those are for showing the general; on the 'Select a General' screen the bot finds it by name instead."""
+    if not _is_catalog_art(name):
+        return False
+    t = _gen_tpl(name)
+    return t is not None and t.shape[0] > t.shape[1] * 1.15
+
+
 def _is_catalog_art(name):
     for d in generals_dirs()[:2]:
         if (d / f"{name}.png").exists():
@@ -3173,6 +3182,9 @@ def choose_general(dev, name, cfg, log, stop, role="main"):
     if view == "grid" and general_image(name) is None:     # no picture of this general on this PC: find it by its name
         view = "list"
         log(f"[i] No picture of '{name}' yet - looking for it by name (list view)")
+    elif view == "grid" and _portrait_card_art(name):      # only the full-body Tavern portrait: it does not look like the list's thumbnail
+        view = "list"
+        log(f"[i] '{name}' has only a Tavern portrait picture - looking for it by name (list view)")
     tr = tab_row(screen)
     if tr is not None:                                   # both screens: the buttons are found by their pictures
         if not set_list_view(dev, view, log, stop):

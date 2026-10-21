@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.69", date: "2026-10-21",
+    new: [],
+    fixed: ["Picking a listed general: a general whose only picture is a full-body Tavern portrait (from the general library) is again found by reading its name in the list view. Those portraits do not look like the small pictures on the 'Select a General' screen, so looking for them by picture could miss the general."] },
   { v: "2.4.68", date: "2026-10-21",
     new: ["The general library now has a picture of nearly every general in the game: 310 more (Europe, America, Japan, Korea, China, Russia, Arabia and Others), 331 in total. Each picture shows the whole general, with its name as the game writes it."],
     fixed: [] },
