@@ -170,7 +170,6 @@ DEFAULTS = {
     # generals: names = pictures in the generals folder, "" = keep whatever the preset set
     "general_main": [],                     # a list, best first: the bot tries the next one if a general is not available
     "popup_outside_tap": [8, 480],          # where to tap to close an unknown dialog (outside it, left edge)
-    "popup_x_tap": [477, 141],              # last try on an unknown dialog: the usual X spot (offer pop-ups with a round X on the frame corner)
     "general_assistant_optional": False,    # True: when no assistant general can be selected, join with the main general only
     "general_assistant": [],                # (a single name as text still works)
     "general_idle_only": True,              # skip generals that are busy (not "Idle")
@@ -3077,7 +3076,6 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
     th = min(cfg["threshold"], 0.85)
     closed = 0
     outside_done = False
-    x_spot_done = False
     back_arrow_taps = 0
     for _ in range(rounds):
         if stop.is_set():
@@ -3139,14 +3137,6 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
             ox, oy = cfg.get("popup_outside_tap") or (8, 480)
             dev.tap(int(ox), int(oy))
             log(f"[*] Unknown pop-up - waited until it was steady, tapped outside it ({ox},{oy})")
-            closed += 1
-            _nap(stop, 1.0, 1.5)
-            continue
-        if not x_spot_done:                                # tapping outside did not close it: try the usual X spot once (offer pop-ups with a round X on the corner)
-            x_spot_done = True
-            ox, oy = cfg.get("popup_x_tap") or (477, 141)
-            dev.tap(int(ox), int(oy))
-            log(f"[*] Unknown pop-up - tapping outside did not close it, tapped the usual X spot ({ox},{oy})")
             closed += 1
             _nap(stop, 1.0, 1.5)
             continue
@@ -8903,7 +8893,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     log("[*] Unknown page with a Back arrow - tapped the Back arrow")
                     nap(1.2, 1.8)
                     continue
-            if st == "unknown" and outside_taps[0] < 3:       # a dialog we have no picture of: wait until it is steady, then tap beside it
+            if st == "unknown" and outside_taps[0] < 2:       # a dialog we have no picture of: wait until it is steady, then tap beside it
                 outside_taps[0] += 1
                 prev = screen
                 for _w in range(6):
@@ -8912,12 +8902,6 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     if float(np.mean(cv2.absdiff(prev[40:920:8, ::8], cur[40:920:8, ::8]))) < 1.5:
                         break
                     prev = cur
-                if outside_taps[0] >= 3:                   # third try: the usual X spot (some offer pop-ups ignore taps outside)
-                    ox, oy = cfg.get("popup_x_tap") or (477, 141)
-                    dev.tap(int(ox), int(oy))
-                    log(f"[*] Unknown pop-up - tapping outside did not close it, tapped the usual X spot ({ox},{oy})")
-                    nap(1.0, 1.5)
-                    continue
                 ox, oy = cfg.get("popup_outside_tap") or (8, 480)
                 if outside_taps[0] >= 2:                   # second try: the opposite edge
                     ox = 540 - int(ox)
@@ -8959,7 +8943,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             elif st == "city" and cfg.get("rally_nav_tap"):
                 dev.tap(*cfg["rally_nav_tap"])
                 log("[*] Tapped the saved spot to reach the rally list")
-            elif st == "city" and outside_taps[0] < 3:       # the navigation button is hidden: probably a card-style pop-up (no X) over the city
+            elif st == "city" and outside_taps[0] < 2:       # the navigation button is hidden: probably a card-style pop-up (no X) over the city
                 outside_taps[0] += 1
                 prev = screen
                 for _w in range(6):
@@ -8968,12 +8952,6 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     if float(np.mean(cv2.absdiff(prev[40:920:8, ::8], cur[40:920:8, ::8]))) < 1.5:
                         break
                     prev = cur
-                if outside_taps[0] >= 3:                   # third try: the usual X spot (some offer pop-ups ignore taps outside)
-                    ox, oy = cfg.get("popup_x_tap") or (477, 141)
-                    dev.tap(int(ox), int(oy))
-                    log(f"[*] Navigation button hidden - tapping outside did not help, tapped the usual X spot ({ox},{oy})")
-                    nap(1.0, 1.5)
-                    continue
                 ox, oy = cfg.get("popup_outside_tap") or (8, 480)
                 if outside_taps[0] >= 2:                   # second try: the opposite edge
                     ox = 540 - int(ox)
