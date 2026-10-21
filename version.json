@@ -1,9 +1,9 @@
 {
-  "version": "2.4.68",
-  "notes": "Picture of nearly every general in the general library (331).",
+  "version": "2.4.69",
+  "notes": "Generals with only a Tavern portrait are found by name again.",
   "files": {
     "rally_bot.py": {
-      "sha256": "fdfc5f3c0a4c6ba9c1ff267fac82013787a0309a07df2288271837c0e5f98fea"
+      "sha256": "55614d6ff9fb0af70f83c4804d49f27f8c52d8e1fff79ca0b3ba457dd174678b"
     },
     "web_app.py": {
       "sha256": "ba00b9c6ccc6224af57391a6a94d071d20e14f2053848e4d4c5bcd7ba2a2f2be"
@@ -18,7 +18,7 @@
       "sha256": "fe6023bd746daf614a1813647817199d99f1014107fcd788fdccd0b4a2463028"
     },
     "ui/changelog.js": {
-      "sha256": "ccbc836059cfb9db2300bcd374fafe5dbb34556f61313cc3fcfa10500fa63f42"
+      "sha256": "80f3b27be6e2fb4b86a3322b4189f87698ca4b1c1589942830a69d487a862171"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -1462,5 +1462,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "d08d026c96c665bd42ae28ba55990b65523f8c2eeac968e9511c88e24911b4b1"
+  "sig": "c606a5cf94f56e314bf81c427cd72819eab2019778e1a8bb53641d68b4fe81ba"
 }
