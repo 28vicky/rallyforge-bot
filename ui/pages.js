@@ -157,8 +157,7 @@ PAGES.dashboard = function () {
       btn("Add", () => addFound([a.id]), "sm pri"))),
     avail.length > 1 ? h("div", { class: "row", style: { marginTop: "8px" } }, btn("Add all " + avail.length, () => addFound(avail.map((a) => a.id)), "sm")) : null) : null;
   const ctl = h("div", { class: "row", style: { marginBottom: "16px" } },
-    btn("Start all", () => collectAndRun("start", { serial: "all" }), "pri"), btn("Pause all", () => act(api("pause", { serial: "all" }))),
-    btn("Resume all", () => act(api("resume"))), btn("Stop all", () => act(api("stop", { serial: "all" })), "bad"),
+    btn("Resume all", () => act(api("resume"))),                   // Start / Pause / Stop all live in the top bar and the sidebar
     btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
   const log = panel(null, activityBox(null, "Activity - all instances"));
   return h("div", {}, found, dev, ctl, log);
