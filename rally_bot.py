@@ -8976,7 +8976,16 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         log(f"[+] Monster filter: {cfg['monster_mode']} {cfg['monster_list']} "
             f"(unknown monsters: {cfg['monster_unknown']})")
 
+    duty_log_at = [0.0]
     while not stop.is_set():
+        if time.time() - duty_log_at[0] > 900:                # every 15 min: what the duties are waiting for, so a silent duty is visible
+            duty_log_at[0] = time.time()
+            try:
+                rows = [f"{d['title']}: {duty_status(serial, d['id'], cfg)[1]}" for d in DUTY_LIBRARY if (cfg.get('duties') or {}).get(d['id'], {}).get('on')]
+                if rows:
+                    log("[i] Duties - " + "; ".join(rows) + ("" if tasks_active(cfg, serial) else "  (not running: tasks off)"))
+            except Exception:
+                pass
         if ctl is not None and not ctl.run.is_set():          # paused from the GUI (only between actions)
             log("[i] Paused")
             while not ctl.run.is_set() and not stop.is_set():
