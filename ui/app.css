@@ -922,7 +922,10 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .inst .ichip.off{background:transparent;border:1px dashed var(--off)}
 .inst:hover .ichip{visibility:hidden}
 
-/* sidebar show/hide: one button on the right (instance header, and the top bar on Control settings) - the sidebar itself has none */
-.top .burger,.app.nosb .top .burger{display:grid}
-:root .burger{background:var(--card);border:1px solid var(--line);box-shadow:none}
-:root .burger:hover{border-color:var(--accent1)}
+/* sidebar show/hide: a small round handle on the sidebar's edge (\u2039 hides); when hidden it sits at the window's left edge (\u203a shows) */
+.sbhandle{position:absolute;top:26px;left:228px;z-index:5;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--mute);box-shadow:0 1px 3px rgba(0,0,0,.08);cursor:pointer;display:grid;place-content:center;padding:0;font:600 15px/1 var(--font,inherit);transition:left .22s ease,color .15s,border-color .15s}
+.sbhandle::before{content:"\2039"}
+.sbhandle:hover{color:var(--accent1);border-color:var(--accent1)}
+.app.nosb .sbhandle{left:6px}
+.app.nosb .sbhandle::before{content:"\203A"}
+@media (max-width:900px){.sbhandle{left:188px}}

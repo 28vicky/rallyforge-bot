@@ -185,8 +185,6 @@ let logViews = [];                               // {el, serial|null} : every lo
 function layout() {
   const root = $("#root");
   root.innerHTML = "";
-  const burger = () => h("div", { class: "burger", title: "Show / hide the instance list (Ctrl+B)", onclick: toggleSide },
-    h("i"), h("i"), h("i"));
   root.appendChild(h("div", { class: "app" + (S.cfg.sidebar_open === false ? " nosb" : ""), id: "app" },
     h("div", { class: "side" },
       h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }),
@@ -201,7 +199,7 @@ function layout() {
           h("button", { class: "btn olstop", type: "button", title: "Stop every instance", onclick: () => act(api("stop", { serial: "all" })) }, "Stop all")),
         h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
     h("div", { class: "main" },
-      h("div", { class: "top" }, burger(), h("img", { src: "/assets/logo.png", alt: "" }),
+      h("div", { class: "top" }, h("img", { src: "/assets/logo.png", alt: "" }),
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
         h("button", { class: "btn sm newbtn", id: "newBtn", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "What\u2019s new"),
         h("span", { class: "sum", id: "sum" }),
@@ -209,6 +207,7 @@ function layout() {
       h("div", { class: "ribbon", id: "ribbon" }),
       h("div", { class: "tabs", id: "tabs" }),
       h("div", { class: "pages", id: "pages" })),
+    h("button", { class: "sbhandle", type: "button", title: "Hide / show the instance list (Ctrl+B)", "aria-label": "Hide or show the instance list", onclick: toggleSide }),
     h("div", { class: "status" },
       h("span", { class: "l", title: S.copyright || "" }, "RallyForge Bot " + S.version + "  \u00b7  by " + (S.author || "Kiravik")), h("span", { id: "sbRun" }, "0 running"), h("span", { id: "sbLic" }),
       h("span", { id: "sbRam" }), h("span", { id: "sbTg" }), h("span", { id: "sbUpd", class: "sb-upd", style: { display: "none" } }))));
