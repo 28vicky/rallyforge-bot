@@ -801,3 +801,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .btn:disabled,:root .btn.greyed{opacity:1;color:var(--mute);background:var(--btn);border:var(--bd)}
 .status .l,.status .l *{opacity:1}
 .pcard.off{opacity:.88}
+
+/* the side-margin trick must never create a horizontal scrollbar */
+.pages{overflow-x:hidden}
