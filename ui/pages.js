@@ -633,6 +633,7 @@ function presetPanels(c, inst) {
     inst ? null : h("div", { class: "row" }, btn("Manage generals...", openGeneralManager, "pri"), S.dev ? btn("Scan generals from the game...", scanGeneralsFlow) : null,
       S.dev ? btn("Build general catalogue (developer)...", catalogFlow) : null, S.dev ? btn("Open catalogue folder", () => act(api("catalog_open")), "sm") : null,
       S.dev ? btn("Record city frames (developer)...", cityCaptureFlow) : null, S.dev ? btn("Open city capture folder", () => act(api("city_capture_open")), "sm") : null,
+      S.dev ? btn("Record a flow (developer)...", flowRecordFlow) : null, S.dev ? btn("Open flows folder", () => act(api("flow_open")), "sm") : null,
       S.dev ? btn("Add general from screenshot...", () => addGeneralFlow()) : null, S.dev ? btn("Capture a button / pop-up from screenshot...", captureTemplate) : null));
   return [bp, gen];
 }
@@ -864,6 +865,7 @@ PAGES.tasks = function (fixed) {
   refreshCityInfo();
   const tasks = panel("City tasks (buildings and the right-side buttons)",
     h("div", { class: "row", style: { gap: "28px" } }, tog(c, "rally_enabled", "Join rallies (always first)"), tog(c, "city_enabled", "Do the tasks below (and duties)"), tog(c, "tasks_first", "A task that is due goes before rallies, then the bot comes back")),
+    note("Tip for best results: on each instance, open the city once and pinch it fully out (two fingers together). The bot finds buildings by reading the names under them, and a zoomed-in city shows too few names."),
     note("Rallies come first: the bot only leaves the rally list when no rally is available, runs the tasks that are due (top of the list first) and goes back. Switch 'Join rallies' off to make the bot do only the tasks. Building tasks need the city mapper to have run once."),
     holder,
     h("div", { class: "row", style: { marginTop: "12px" } }, btn("Add ready-made task...", addExample, "pri"), btn("Add custom", async () => { const r = await taskDialog(null); if (r) { c.city_tasks.push(r); draw(); } }),
@@ -884,7 +886,7 @@ PAGES.tasks = function (fixed) {
 
 // ====================================================================== market
 const PAY = [["gems", "Gems only"], ["resources", "Resources only"], ["both", "Gems or resources"]];
-const REFRESH = [["none", "Do not refresh"], ["count", "Refresh this many times"], ["all", "All out (no limit - until refreshing is no longer possible)"]];
+const REFRESH = [["none", "Do not refresh"], ["count", "Refresh this many times"], ["all", "Until the gem floor (keeps refreshing and buying)"]];
 PAGES.market = function () {
   const c = S.cfg;
   c.market_items = c.market_items || [];
@@ -917,6 +919,8 @@ PAGES.market = function () {
   const opts = panel("Buying and refreshing",
     grid2(fld("Pay with (for new items)", sel(c, "market_pay", PAY)), fld("When the shop has none of them", sel(c, "market_refresh_mode", REFRESH)),
       fld("How many refreshes", inp(c, "market_refresh_n", { type: "int", cls: "short" })), fld("Most gems to spend per visit (0 = keep going until the gems run out)", inp(c, "market_max_gems", { type: "int", cls: "short" }))),
+    grid2(fld("Keep at least this many gems (0 = no floor)", inp(c, "market_min_gems", { type: "int", cls: "short" })),
+      fld("Keep at least this much gold (0 = no floor)", inp(c, "market_min_gold", { type: "int", cls: "short" }))),
     h("div", { style: { margin: "14px 0" } }, tog(c, "market_paid_refresh", "Also refresh with gems when the free refreshes are used up (costs gems!)")),
     btn("Add the 'Black Market' city task", () => {
       if (c.city_tasks && c.city_tasks.some((t) => t.name === "Black Market")) return toast("There is already a 'Black Market' task.");
@@ -1233,7 +1237,14 @@ PAGES.duties = function (fixed, only, compact) {
         j.queue.map((q, i) => h("span", { class: "chip" }, (i + 1) + ". " + q.title + " ",
           h("a", { href: "#", title: "Cancel", onclick: (e) => { e.preventDefault(); set("run_now_remove", { id: q.id }); } }, "\u00d7")))) : null));
   };
-  const loadRn = async () => { const j = await act(api("run_now", { serial })); if (j) drawRn(j); };
+  let rnLast = "";
+  const loadRn = async () => { const j = await act(api("run_now", { serial })); if (j) { rnLast = JSON.stringify(j.queue); drawRn(j); } };
+  // the queue empties when the bot starts the task: refresh it every 10 s (redraw only when it changed, so an open picker is not reset)
+  const rnTick = setInterval(async () => {
+    if (!document.body.contains(rn)) { clearInterval(rnTick); return; }
+    const j = await api("run_now", { serial }, { quiet: true }).catch(() => null);
+    if (j && j.queue && JSON.stringify(j.queue) !== rnLast) { rnLast = JSON.stringify(j.queue); drawRn(j); }
+  }, 10000);
   // Wheel of Fortune: which spin button, how many spins, coins to keep
   const wh = h("div", {});
   const drawWh = (j) => {

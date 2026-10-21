@@ -186,12 +186,14 @@ DEFAULTS = {
     "max_troops": 1,                        # skip a preset that already holds more than this many troops (0 = off)
     "market_items": [],                     # [{name, pay: gems|resources|both}], picture saved as template mk_<name>
     "market_pay": "gems",                   # default payment for items without their own: gems / resources / both
-    "market_refresh_mode": "none",          # none | count | all
-    "market_refresh_n": 5,
+    "market_refresh_mode": "count",         # none | count | all (all = until the gem floor / no more refreshing)
+    "market_refresh_n": 3,                  # 3 = the game's free refreshes
     "market_paid_refresh": False,           # refresh with gems when the free refreshes are used up
     "market_max_gems": 0,                   # most gems to spend in one visit (0 = no limit; required for paid refreshes)
     "market_refresh_cost": 50,              # gems a paid refresh costs if it cannot be read
     "market_match": 0.78,
+    "market_min_gems": 0,                   # never let a gem purchase / paid refresh take the gems below this (0 = no floor)
+    "market_min_gold": 0,                   # never let a gold purchase take the gold below this (gem-priced goods are still bought)
     "tg_api_id": "",                        # from https://my.telegram.org -> API development tools
     "tg_api_hash": "",
     "tg_phone": "",                         # your number with country code, e.g. +911234567890
@@ -3108,9 +3110,19 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         if tap_alliance_war_row(dev, shot, log):          # the Alliance page is not a pop-up: go on into Alliance War
             _nap(stop, 1.5, 2.2)
             break
+        if world_map(shot):                                # the world map: the globe goes to the city (Back / the portrait would loop)
+            dev.tap(*VIEW_TOGGLE)
+            log("[*] On the world map - tapped the globe to go to the city")
+            closed += 1
+            _nap(stop, 3.0, 4.0)
+            continue
         try:                                               # a full page (Alliance Science, event, ...) has the gold Back arrow top left: it is not a pop-up
             _hsv = cv2.cvtColor(shot[8:80, 5:75], cv2.COLOR_BGR2HSV)
             _gold = cv2.countNonZero(cv2.inRange(_hsv, (12, 110, 150), (32, 255, 255)))
+            _bar = cv2.cvtColor(shot[8:58, 120:420], cv2.COLOR_BGR2HSV)   # a full page has a red title bar; the world map / city do not
+            _red = float((((_bar[:, :, 0] < 10) | (_bar[:, :, 0] > 170)) & (_bar[:, :, 1] > 80) & (_bar[:, :, 2] > 40)).mean())
+            if _red < 0.5:                                 # gold in the corner is the player's portrait (world map): use the globe switch instead
+                _gold = 0
         except Exception:
             _gold = 0
         if _gold > 250 and back_arrow_taps < 6:
@@ -4433,7 +4445,11 @@ def app_foreground(adb, serial, pkg):
     return pkg in out
 
 
+_FRESH_START = set()              # serials whose game was just (re)started: the first settled picture is saved once
+
+
 def start_app(adb, serial, pkg):
+    _FRESH_START.add(serial)
     _adb(adb, serial, "shell", "monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1")
 
 
@@ -4743,6 +4759,32 @@ def settle_game(dev, cfg, log, stop):
         log("[*] The game did not look fully calm - carrying on")
 
 
+def save_start_picture(dev, cfg, log, keep=30):
+    """Right after a game start has settled (nothing moved yet): save one picture in debug/game_start/<serial>/ and,
+    when it is the city, log how far it is from the previous start's city picture. Only looks - never taps."""
+    try:
+        shot = dev.screenshot()
+        view = view_of(shot, cfg) or "unknown"
+        out = USER / "debug" / "game_start" / re.sub(r"[^\w.-]", "_", dev.serial)
+        out.mkdir(parents=True, exist_ok=True)
+        prev = sorted(out.glob("*_city.png"))
+        name = f"{time.strftime('%Y%m%d-%H%M%S')}_{view}.png"
+        cv2.imwrite(str(out / name), shot)
+        if view == "city" and prev:
+            old = cv2.imread(str(prev[-1]))
+            if old is not None and old.shape == shot.shape:
+                d = float(np.mean(cv2.absdiff(old[100:860:4, ::4], shot[100:860:4, ::4])))
+                sx, sy, conf = city_shift(old, shot)
+                log(f"[i] Game start picture ({view}) vs last start: difference {d:.1f} (0-5 = same place), "
+                    f"shift {sx:.0f},{sy:.0f} (confidence {conf:.2f})")
+        else:
+            log(f"[i] Game start picture saved ({view})")
+        for p in sorted(out.glob("*.png"))[:-keep]:
+            p.unlink(missing_ok=True)
+    except Exception as e:
+        log(f"[!] Could not save the game start picture: {e}")
+
+
 
 KICKED = {}                       # serial -> time (epoch s) when the wait after being kicked ends (shown in the emulator list)
 TAKEBACK = {}                     # serial -> Event: set from the interface to end the wait after being kicked
@@ -4833,6 +4875,9 @@ def wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
             if good >= cfg["stable_checks"]:
                 log("[+] The game is loaded and stable")
                 settle_game(dev, cfg, log, stop)
+                if dev.serial in _FRESH_START and not stop.is_set():
+                    _FRESH_START.discard(dev.serial)
+                    save_start_picture(dev, cfg, log)
                 return not stop.is_set()
         else:
             good = 0
@@ -5584,6 +5629,153 @@ def zoom_out_city(dev, stop, log, max_tries=3):
     return ok_any
 
 
+class FlowRecorder:
+    """Developer tool: records the owner playing a flow by hand (taps, long presses, swipes read from the emulator's
+    touch events) with a small screenshot before and after each step, so a duty can be written from it later.
+    Saved in USER/flows/<name>/: steps.json + NN_before.jpg (tap marked) + NN_after.jpg."""
+
+    def __init__(self, serial, adb, name, log=print):
+        self.serial, self.adb, self.log = serial, adb, log
+        safe = re.sub(r"[^A-Za-z0-9 _-]", "", name).strip().replace(" ", "_") or "flow"
+        self.dir = USER / "flows" / f"{time.strftime('%Y%m%d-%H%M%S')}_{safe}"
+        self.name, self.steps, self.error = name, [], ""
+        self.stop_ev = threading.Event()
+        self.proc = None
+        self.frames = []                     # (time, small image) - the last few seconds, for "before" pictures
+        self.lock = threading.Lock()
+        self.dev = None
+        self.maxx = self.maxy = 0
+        self.t0 = time.time()
+
+    def _touch_device(self):
+        out = subprocess.run([self.adb, "-s", self.serial, "shell", "getevent", "-pl"], capture_output=True,
+                             text=True, timeout=15, creationflags=NOWIN).stdout
+        best = None
+        for block in re.split(r"\nadd device \d+: ", "\n" + out):
+            m = re.match(r"\s*(\S+)", block)
+            mx = re.search(r"ABS_MT_POSITION_X\s*:.*?max (\d+)", block)
+            my = re.search(r"ABS_MT_POSITION_Y\s*:.*?max (\d+)", block)
+            if m and mx and my:
+                best = (m.group(1), int(mx.group(1)), int(my.group(1)))
+                break
+        if not best:
+            raise RuntimeError("No touch screen found on this emulator (getevent shows no ABS_MT_POSITION).")
+        return best
+
+    def start(self):
+        self.dev = Device(self.serial, self.adb)
+        self.dev.connect()
+        self.dev._lag_busy = True            # record the screen as it is: no lag waiting, no pop-up closing
+        node, self.maxx, self.maxy = self._touch_device()
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.proc = subprocess.Popen([self.adb, "-s", self.serial, "shell", "getevent", "-lt", node],
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                                     creationflags=NOWIN, bufsize=1)
+        threading.Thread(target=self._frames_loop, daemon=True).start()
+        threading.Thread(target=self._events_loop, daemon=True).start()
+        self.log(f"[*] Recording flow '{self.name}' on {self.serial} - play it in the game now")
+
+    def _frames_loop(self):
+        while not self.stop_ev.is_set():
+            try:
+                img = cv2.resize(self.dev.screenshot(), (270, 480), interpolation=cv2.INTER_AREA)
+                with self.lock:
+                    self.frames.append((time.time(), img))
+                    self.frames = self.frames[-8:]
+            except Exception as e:
+                self.error = f"screenshot: {e}"
+            self.stop_ev.wait(0.6)
+
+    def _to_screen(self, rx, ry):
+        w, h = EXPECTED_SIZE
+        if self.maxx > self.maxy:            # touch panel reported in landscape: swap to the portrait screen
+            rx, ry, mx, my = ry, rx, self.maxy, self.maxx
+        else:
+            mx, my = self.maxx, self.maxy
+        return round(rx * w / max(mx, 1)), round(ry * h / max(my, 1))
+
+    def _events_loop(self):
+        x = y = None                         # latest raw finger position
+        touching, start, ended = False, None, False
+        for line in self.proc.stdout:
+            if self.stop_ev.is_set():
+                break
+            parts = line.replace("[", " ").replace("]", " ").split()
+            if len(parts) < 3:
+                continue
+            code, val = parts[-2], parts[-1]
+            try:
+                if code == "ABS_MT_POSITION_X":
+                    x = int(val, 16)
+                elif code == "ABS_MT_POSITION_Y":
+                    y = int(val, 16)
+                elif code in ("BTN_TOUCH", "ABS_MT_TRACKING_ID"):
+                    up = val == "UP" or val.lower() == "ffffffff"
+                    if up and touching:
+                        ended = True
+                    elif not up:
+                        touching = True
+                elif code == "SYN_REPORT":
+                    if touching and start is None and x is not None and y is not None:
+                        start = (time.time(), x, y)
+                    if ended:
+                        if start is not None:
+                            self._step(start, (time.time(), x, y))
+                        touching, start, ended = False, None, False
+            except ValueError:
+                continue
+
+    def _step(self, down, up):
+        t1, rx1, ry1 = down
+        t2, rx2, ry2 = up
+        x1, y1 = self._to_screen(rx1, ry1)
+        x2, y2 = self._to_screen(rx2, ry2)
+        dist, held = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5, t2 - t1
+        kind = "swipe" if dist > 25 else ("long_press" if held > 0.8 else "tap")
+        n = len(self.steps) + 1
+        with self.lock:
+            before = [f for f in self.frames if f[0] <= t1 - 0.1]
+            img = (before[-1] if before else (self.frames[0] if self.frames else (0, None)))[1]
+        step = {"n": n, "kind": kind, "x": x1, "y": y1, "at_s": round(t1 - self.t0, 1), "held_s": round(held, 2)}
+        if kind == "swipe":
+            step.update(x2=x2, y2=y2)
+        if img is not None:
+            pic = img.copy()
+            cv2.circle(pic, (x1 // 2, y1 // 2), 9, (0, 0, 255), 2)
+            if kind == "swipe":
+                cv2.arrowedLine(pic, (x1 // 2, y1 // 2), (x2 // 2, y2 // 2), (0, 0, 255), 2)
+            cv2.imwrite(str(self.dir / f"{n:02d}_before.jpg"), pic, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        self.steps.append(step)
+
+        def after():
+            time.sleep(1.5)
+            try:
+                a = cv2.resize(self.dev.screenshot(), (270, 480), interpolation=cv2.INTER_AREA)
+                cv2.imwrite(str(self.dir / f"{n:02d}_after.jpg"), a, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            except Exception:
+                pass
+        threading.Thread(target=after, daemon=True).start()
+        self.log(f"[*] Flow step {n}: {kind} at {x1},{y1}" + (f" -> {x2},{y2}" if kind == "swipe" else ""))
+        self._save()
+
+    def _save(self):
+        data = {"name": self.name, "serial": self.serial, "screen": list(EXPECTED_SIZE), "touch_max": [self.maxx, self.maxy],
+                "recorded": time.strftime("%Y-%m-%d %H:%M"), "version": VERSION, "steps": self.steps}
+        (self.dir / "steps.json").write_text(json.dumps(data, indent=1), encoding="utf-8")
+
+    def stop(self):
+        self.stop_ev.set()
+        try:
+            if self.proc:
+                self.proc.kill()
+        except Exception:
+            pass
+        time.sleep(1.6)                      # let the last "after" picture land
+        self._save()
+        self.log(f"[+] Flow '{self.name}' saved: {len(self.steps)} steps in {self.dir}")
+        return {"steps": len(self.steps), "path": str(self.dir)}
+
+
 class CityNav:
     """Moves around the city map and remembers where the camera is (relative to the top-left corner)."""
 
@@ -5768,7 +5960,8 @@ def learn_corner(nav, log):
 
 _CITY_PIC = {}
 SAFE_TAP_AREA = (95, 215, 335, 470)                        # x, y, w, h of the screen where a tap can only hit the city (emulator px)
-SHRINE_LABEL_IN_PICTURE = (1372.2, 576.9)                    # the Shrine label in the whole-city picture (emulator px); the square offsets count from here
+SHRINE_ROUTE = False      # owner 21 Oct 20:48: the Shrine search (reading map labels) is dropped - buildings are found by the city picture + saved plot, checked by the menu name
+SHRINE_LABEL_IN_PICTURE = (1372.2, 576.9)                   # the Shrine label in the whole-city picture (emulator px); the square offsets count from here
 
 
 def city_picture():
@@ -6380,7 +6573,8 @@ def market_slots(img):
         right = hsv[:, int(w * 0.35):]
         red = (cv2.countNonZero(cv2.inRange(right, (0, 150, 150), (8, 255, 255)))
                + cv2.countNonZero(cv2.inRange(right, (172, 150, 150), (179, 255, 255))))
-        out.append({"btn": (x, y, w, h), "gem": gem, "afford": red < 40,
+        gold = (not gem) and cv2.countNonZero(cv2.inRange(left, (15, 120, 150), (35, 255, 255))) / left[:, :, 0].size > 0.03
+        out.append({"btn": (x, y, w, h), "gem": gem, "gold": gold, "afford": red < 40,
                     "icon": (max(0, x - 8), max(0, y - int(h * 2.9)), w + 16, int(h * 2.8))})
     return out
 
@@ -6450,6 +6644,97 @@ def refresh_cost(img, refresh, default=50):
     return int(default)
 
 
+def market_totals(img):
+    """The gold (left) and gem (right) totals in the row under the shop picture -> (gold, gems); None when unread."""
+    def num(x0, x1):
+        best = None
+        try:
+            for _t, ws in ocr_lines(img[282:330, x0:x1], 3.0):
+                for w in ws:
+                    d = re.sub(r"\D", "", w[0])
+                    if len(d) >= 3 and (best is None or len(d) > len(str(best))):
+                        best = int(d)
+        except Exception:
+            pass
+        return best
+    gold, gems = num(0, 275), num(265, 540)              # each half on its own: read together, one of them is often lost
+    return gold, gems
+
+
+def market_dialog(img):
+    """A box over the shop -> "buy" ('Are you sure you want to purchase X?' + Confirm), "rebuy" ('You will consume 1
+    Rebuy Chance...' + gem button + red X) or None."""
+    try:
+        lines = " ".join(t.lower() for t, _ in ocr_lines(img[300:600, 20:520], 2.0))   # below the shop's own "Rebuy Chance(s) for Today" line
+        if "consume" in lines or "again" in lines:
+            return "rebuy"
+        if "sure" in lines or "purchase" in lines:
+            return "buy"
+    except Exception:
+        pass
+    if not market_on_screen(img):                          # text unread: tell them apart by the green button's height
+        gb = _green_button(img, (60, 470, 420, 240))
+        if gb and 530 <= gb[1] <= 605:
+            return "buy"
+        if gb and gb[1] > 620:
+            return "rebuy"
+    return None
+
+
+REBUY_CLOSE = (486, 274)   # red X of the Rebuy box (540x960)
+
+
+def _green_button(img, region):
+    """The biggest green button inside region (x, y, w, h) -> centre (x, y) or None."""
+    x0, y0, w0, h0 = region
+    hsv = cv2.cvtColor(img[y0:y0 + h0, x0:x0 + w0], cv2.COLOR_BGR2HSV)
+    m = cv2.inRange(hsv, (40, 90, 50), (85, 255, 200))
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    best = None
+    for c in cs:
+        x, y, w, h = cv2.boundingRect(c)
+        if 80 < w < 260 and 25 < h < 70 and (best is None or w * h > best[2] * best[3]):
+            best = (x, y, w, h)
+    return (x0 + best[0] + best[2] / 2, y0 + best[1] + best[3] / 2) if best else None
+
+
+def market_confirm(dev, log, stop):
+    """After tapping a price: wait for the purchase question (up to ~4 s), tap Confirm, check the box closed.
+    -> True when Confirm was tapped and the box is gone."""
+    kind = None
+    for _ in range(4):
+        shot = dev.screenshot()
+        kind = market_dialog(shot)
+        if kind:
+            break
+        if stop.is_set():
+            return False
+        _nap(stop, 0.8, 1.1)
+    else:
+        log("[i] Black Market: no purchase question appeared")
+        return False
+    if kind == "rebuy":                                     # buying it again costs a Rebuy Chance: not decided yet -> close, do not buy
+        log("[i] Black Market: this would use a Rebuy Chance - closed the box, not bought")
+        dev.tap(*REBUY_CLOSE)
+        _nap(stop, 0.9, 1.2)
+        return False
+    for _ in range(2):
+        p = find_text(shot, ["Confirm"], region=(60, 470, 420, 200), cutoff=0.6) or _green_button(shot, (60, 470, 420, 200))
+        if not p:
+            log("[!] Black Market: the Confirm button was not found")
+            cv2.imwrite(str(USER / "debug" / "black_market_confirm.png"), shot)
+            return False
+        dev.tap(*p)
+        _nap(stop, 1.0, 1.4)
+        shot = dev.screenshot()
+        if not market_dialog(shot):
+            return True
+    log("[!] Black Market: the purchase question is still open after tapping Confirm")
+    cv2.imwrite(str(USER / "debug" / "black_market_confirm.png"), shot)
+    return False
+
+
 def market_wanted(cfg):
     out = []
     for it in cfg.get("market_items") or []:
@@ -6516,33 +6801,54 @@ def run_market_capture(dev, cfg, log, stop):
 def run_market(dev, cfg, log, stop):
     """On the Black Market screen: buy the wanted items (gems / resources / both), refresh the shop as set."""
     wanted = market_wanted(cfg)
-    if not wanted:
-        log("[!] Black Market: no wanted items with a picture - add some on the Market tab")
-        return
     img = dev.screenshot()
-    if not market_on_screen(img):
-        p = find_text(img, ["Black Market"])
+    if not market_on_screen(img):                          # the Market's ring menu is open: tap the Black Market icon (above its caption)
+        p = find_text(img, ["Black Market", "Black"], region=(0, 150, 540, 600), cutoff=0.7)
         if p:
-            dev.tap(*p)
-            _nap(stop, 1.5, 2.0)
+            dev.tap(p[0], p[1] - 40)
+            _nap(stop, 2.2, 3.0)
             img = dev.screenshot()
     if not market_on_screen(img):
-        log("[!] Black Market: the shop is not open")
+        raise RuntimeError("the Black Market did not open")
+    if not wanted:                                         # the shop is open (proves the way there) but there is nothing to buy
+        gold, gems = market_totals(img)
+        log(f"[i] Black Market open: gold {gold if gold is not None else '?'}, gems {gems if gems is not None else '?'}; "
+            "no goods picked on the Market tab - nothing bought, no refresh")
         return
     mode = cfg.get("market_refresh_mode", "none")
     limit = int(cfg.get("market_refresh_n", 0) or 0) if mode == "count" else (float("inf") if mode == "all" else 0)
     paid_ok = bool(cfg.get("market_paid_refresh"))
     budget = int(cfg.get("market_max_gems", 0) or 0)
     th = float(cfg.get("market_match", 0.78))
+    min_gems = int(cfg.get("market_min_gems", 0) or 0)
+    min_gold = int(cfg.get("market_min_gold", 0) or 0)
     spent = refreshes = 0
     no_change = 0
     bought, failed = {}, set()                              # failed: slot numbers that did not sell (until the next refresh)
-    log(f"[*] Black Market: looking for {', '.join(w[0] for w in wanted)}")
+    gold, gems = market_totals(img)
+    log(f"[*] Black Market: looking for {', '.join(w[0] for w in wanted)}; gold {gold if gold is not None else '?'}, "
+        f"gems {gems if gems is not None else '?'} (keep at least {min_gold:,} gold, {min_gems:,} gems)")
     while not stop.is_set():
         img = dev.screenshot()
+        for _w in range(4):                                  # a confirm dialog / reward pop-up can sit over the shop for a moment
+            if market_on_screen(img) or stop.is_set():
+                break
+            kd = market_dialog(img)
+            if kd == "rebuy":
+                dev.tap(*REBUY_CLOSE)
+                _nap(stop, 0.9, 1.2)
+            elif kd == "buy":                                 # a purchase question left open: answer it (we wanted the item)
+                market_confirm(dev, log, stop)
+            else:
+                _nap(stop, 1.0, 1.5)
+            img = dev.screenshot()
         if not market_on_screen(img):
-            log("[!] Black Market: the shop closed")
+            cv2.imwrite(str(USER / "debug" / "black_market_closed.png"), img)
+            log("[!] Black Market: the shop is no longer on screen (picture saved: debug/black_market_closed.png)")
             break
+        g2, m2 = market_totals(img)
+        gold = g2 if g2 is not None else gold
+        gems = m2 if m2 is not None else gems
         again = False
         for si, slot in enumerate(market_slots(img)):
             if si in failed:
@@ -6558,18 +6864,35 @@ def run_market(dev, cfg, log, stop):
                     log(f"[i] {name} is for sale but you cannot afford it")
                 elif slot["gem"] and budget and price and spent + price > budget:
                     log(f"[i] {name} costs {price:,} gems - over the gem limit")
+                elif slot["gem"] and min_gems and (price is None or gems is None):
+                    log(f"[i] {name}: price or gem total not readable - not bought (gem floor {min_gems:,})")
+                elif slot["gem"] and min_gems and gems - price < min_gems:
+                    log(f"[i] {name} costs {price:,} gems - would leave {gems - price:,}, under the floor of {min_gems:,}")
+                elif slot.get("gold") and min_gold and (price is None or gold is None):
+                    log(f"[i] {name}: price or gold total not readable - not bought (gold floor {min_gold:,})")
+                elif slot.get("gold") and min_gold and gold - price < min_gold:
+                    log(f"[i] {name} costs {price:,} gold - would leave {gold - price:,}, under the floor of {min_gold:,}")
                 else:
                     bx, by, bw, bh = slot["btn"]
+                    g0, m0 = market_totals(img)
                     dev.tap(bx + bw / 2, by + bh / 2)
-                    _nap(stop, 0.9, 1.3)
-                    p = find_text(dev.screenshot(), ["Confirm", "Buy", "Purchase", "OK"])
-                    if p:
-                        dev.tap(*p)
-                        _nap(stop, 0.9, 1.3)
+                    ok_buy = market_confirm(dev, log, stop)       # "Are you sure you want to purchase X?" -> Confirm
                     after = dev.screenshot()
-                    if market_on_screen(after) and market_match(after, slot, tname, th) >= th:
-                        failed.add(si)                       # still there: the purchase did not go through
-                        log(f"[!] {name} is still for sale after tapping it - not bought")
+                    for _w in range(4):                          # the shop comes back after the dialog / reward pop-up
+                        if market_on_screen(after) or stop.is_set():
+                            break
+                        _nap(stop, 0.8, 1.2)
+                        after = dev.screenshot()
+                    g1, m1 = market_totals(after) if market_on_screen(after) else (None, None)
+                    paid = (slot["gem"] and m0 is not None and m1 is not None and m1 < m0) or \
+                           ((not slot["gem"]) and g0 is not None and g1 is not None and g1 < g0)
+                    gone = market_on_screen(after) and market_match(after, slot, tname, th) < th
+                    if not ok_buy or not (paid or (gone and (m1 is None or m0 is None))):
+                        failed.add(si)                       # the purchase did not go through
+                        log(f"[!] {name}: not bought (confirm {'tapped' if ok_buy else 'not found'}; "
+                            f"{'gems' if slot['gem'] else 'gold'} {m0 if slot['gem'] else g0} -> {m1 if slot['gem'] else g1})")
+                        if not market_on_screen(after):
+                            cv2.imwrite(str(USER / "debug" / "black_market_not_bought.png"), after)
                     else:
                         bought[name] = bought.get(name, 0) + 1
                         if slot["gem"] and price:
@@ -6593,6 +6916,9 @@ def run_market(dev, cfg, log, stop):
             cost = refresh_cost(img, refresh, cfg.get("market_refresh_cost", 50))
             if budget and spent + cost > budget:
                 log("[i] Black Market: the gem limit is reached")
+                break
+            if min_gems and (gems is None or gems - cost < min_gems):
+                log(f"[i] Black Market: a paid refresh ({cost} gems) would go under the gem floor of {min_gems:,} - stopping")
                 break
         before = _market_sig(img)
         dev.tap(refresh[0] + refresh[2] / 2, refresh[1] + refresh[3] / 2)
@@ -6683,6 +7009,12 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "wheel":
         run_wheel(dev, cfg, log, stop)
         return
+    if cmd == "alliance_science":
+        run_alliance_science(dev, cfg, log, stop)
+        return
+    if cmd == "view_reset_test":
+        run_view_reset_test(dev, cfg, log, stop)
+        return
     if cmd == "text":
         dev.text(arg)
         _nap(stop, 0.8, 1.2)
@@ -6734,6 +7066,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(*pos)
         return True
+    if kind == "self":                                     # the step finds its own way from the city (e.g. alliance_science)
+        return True
     if kind == "xy":
         x, y = [float(v) for v in name.split(",")[:2]]
         dev.tap(x, y)
@@ -6763,8 +7097,46 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(p[0], p[1] - 38)                           # the icon sits just above its caption
         return True
-    if kind == "building" and not nav_state.get("picture_bad") and not (PICTURE_BAD.get(getattr(dev, "serial", "")) and city_map_items(dev)) and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
-        pitems = picture_items(dev)                          # the camera is found by the whole-city picture; positions come from the mapper or the built-in default
+    bases = [nm.split("#")[0].strip() for nm in str(name).split("+") if nm.strip()]
+    if SHRINE_ROUTE and kind == "building" and bases and all(b.lower() in SQUARE_BASES for b in bases) and str(cfg.get("city_nav", "auto")).lower() != "picture":
+        done = found_shrine = False                          # every building visit starts from the Shrine, in every city style
+        for b in bases:
+            if stop.is_set():
+                break
+            leave_to_city(dev, cfg, stop, log)
+            r = shrine_plot_task(dev, cfg, log, stop, task, nav_state, b)
+            if r == "noshrine":
+                break
+            found_shrine = True
+            done = done or r is None
+        if found_shrine:
+            return None if done else False
+        log("[i] Falling back to the stored city picture")
+    if kind == "building" and not nav_state.get("picture_bad") and not PICTURE_BAD.get(getattr(dev, "serial", "")) and picture_items(dev) is not None:
+        have = {k.split("#")[0].lower() for k in picture_items(dev)}
+        for nm in str(name).split("+"):
+            base = nm.split("#")[0].strip()
+            if base and base.lower() not in have and base.lower() not in RESOURCE_LOWER:
+                if not nav_state.get("anav"):
+                    nv = CityNav(dev, stop, log)
+                    nv.absolute = True
+                    nv.quiet = True
+                    nav_state["anav"] = nv
+                serial_p = getattr(dev, "serial", "")
+                if PLOT_NOMATCH.get(serial_p) or find_plot(dev, cfg, log, stop, nav_state["anav"], base) == "nomatch":
+                    PLOT_NOMATCH[serial_p] = True
+                    if SHRINE_ROUTE and "+" not in str(name):  # count the plots from the Shrine (fixed buildings are the same in every style)
+                        leave_to_city(dev, cfg, stop, log)
+                        r = shrine_plot_task(dev, cfg, log, stop, task, nav_state, base)
+                        if r is None:
+                            return None
+                    nav_state["mode"] = "labels"               # another city style: walk by the names under the buildings
+                    pr = building_priors().get(BUILDING_ALIASES.get(base, base)) or building_priors().get(base)
+                    if pr:
+                        nav_state.setdefault("extra", {})[f"{base}#1"] = [round(SHRINE_LABEL_IN_PICTURE[0] + pr[0]), round(SHRINE_LABEL_IN_PICTURE[1] + pr[1])]
+                leave_to_city(dev, cfg, stop, log)
+    if kind == "building" and not nav_state.get("picture_bad") and not (PICTURE_BAD.get(getattr(dev, "serial", "")) and own_city_map(dev)) and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in {**picture_items(dev), **nav_state.get("extra", {})}}:
+        pitems = {**picture_items(dev), **nav_state.get("extra", {})}                          # the camera is found by the whole-city picture; positions come from the mapper or the built-in default
         pkeys = []
         for nm in str(name).lower().split("+"):                # "Keep+Tavern" = visit the Keep, then the Tavern
             want = nm.strip()
@@ -6790,7 +7162,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             nav.goto(tx, ty)
             if first and not nav.seen_city:                 # the stored picture does not fit this city style
                 PICTURE_BAD[serial_] = True
-                if city_map_items(dev):                     # this account has its own city map: the closed-loop older way
+                if own_city_map(dev):                       # this account has its own city map: the closed-loop older way
                     nav_state["picture_bad"] = True
                     return "older"
                 nav_state["mode"] = "labels"
@@ -6953,7 +7325,14 @@ def pan_content(dev, stop, dx, dy):
     _nap(stop, 0.9, 1.2)
 
 
-def aim_by_labels(dev, cfg, log, stop, name, tries=14):
+SWEEP = [(0, 280), (280, 0), (0, -280), (0, -280), (-280, 0), (-280, 0), (0, 280), (0, 280), (0, 280),
+         (280, 0), (280, 0), (280, 0), (0, -280), (0, -280), (0, -280), (0, -280)]   # content moves: a square spiral around the start
+
+
+ZOOM_HINT = "City is zoomed in too far - pinch the city fully out once (two fingers together), then the bot can read the building names"
+
+
+def aim_by_labels(dev, cfg, log, stop, name, tries=24):
     """Bring a building into the safe tap area by reading the names written under the buildings - works in every city
     style, no picture and no counting needed. Whatever names are in view tell where the wanted building should be
     (their relative places are known); the map is moved that way and the names are read again, until the wanted
@@ -6963,7 +7342,7 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=14):
     if want not in pri:
         return None
     x0, y0, w, h = SAFE_TAP_AREA
-    lost = 0
+    lost = blank = 0
     for i in range(tries):
         if stop.is_set():
             return None
@@ -6979,10 +7358,17 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=14):
         ests = [(lx + pri[want][0] - pri[ln][0], ly + pri[want][1] - pri[ln][1]) for ln, lx, ly in labs if ln in pri]
         if not ests:
             lost += 1
-            if lost > 2:
-                if not ensure_view(dev, cfg, stop, log, "city", tries=4):
-                    return None
-            pan_content(dev, stop, 0, 150 if lost % 2 else -150)   # nothing readable here: look somewhere else
+            blank = blank + 1 if not labs else 0
+            if blank >= 3:                                 # not one name read three times running: the city is zoomed in too far
+                log("[!] " + ZOOM_HINT)
+                raise RuntimeError(ZOOM_HINT)
+            if lost == 3 and not ensure_view(dev, cfg, stop, log, "city", tries=4):
+                return None
+            if lost > len(SWEEP):
+                return None
+            dx, dy = SWEEP[lost - 1]                       # no known building in view (city edge, forest): sweep outward in a growing square
+            log(f"[i]   no known building name in view ({', '.join(l[0] for l in labs) or 'nothing read'}) - looking further ({lost}/{len(SWEEP)})")
+            pan_content(dev, stop, dx, dy)
             continue
         lost = 0
         ex = sum(e[0] for e in ests) / len(ests)
@@ -6992,10 +7378,38 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=14):
     return None
 
 
+_WM_NOTE = [0.0, ""]                                       # last time a 'not the world map' screen was saved, and what was read
+
+
+def world_map(shot):
+    """The world map (after the globe button): its bottom-left buttons 'Bookmarks' / 'World Map' are not in the city."""
+    try:
+        if find_text(shot, ["World Map", "Bookmarks"], region=(0, 600, 200, 330), cutoff=0.75) is not None:
+            return True
+        texts = [t for t, _ in ocr_lines(shot[600:930, 0:200], 2.5, bright=True)]
+        texts += [t for t, _ in ocr_lines(shot[800:930, 80:460], 2.5, bright=True)]   # the X:0634 Y:0591 box at the bottom
+        joined = " ".join(texts).lower()
+        hit = ("world" in joined and "map" in joined) or "bookmark" in joined or re.search(r"x\W{0,2}\d{3,4}\W+y\W{0,2}\d{3,4}", joined) is not None
+        if not hit and time.time() - _WM_NOTE[0] > 60:     # diagnostics: what was read when the world map was not recognised
+            _WM_NOTE[0] = time.time()
+            try:
+                cv2.imwrite(str(USER / "debug" / "not_world_map.png"), shot)
+            except Exception:
+                pass
+            _WM_NOTE[1] = joined[:120]
+        return hit
+    except Exception:
+        return False
+
+
 def view_of(shot, cfg):
-    """Which view the game shows: 'city', 'landscape' (the rally-list / world view) or 'other' (a window, a page, a pop-up)."""
+    """Which view the game shows: 'city', 'landscape' (the rally-list view), 'world' (the world map) or 'other'."""
     st = screen_state(shot, cfg)
-    return "city" if st == "city" else "landscape" if st == "rally_list" else "other"
+    if st == "city":
+        return "city"
+    if st == "rally_list":
+        return "landscape"
+    return "world" if world_map(shot) else "other"
 
 
 def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
@@ -7022,6 +7436,11 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             return True
         if ring:
             close_ring(dev, stop, (270, 430))
+            continue
+        if v == "world" and want == "city":                 # the world map: the globe button goes back to the city (Back would ask to quit)
+            say("[*] Recovery: on the world map - tapped the globe to go to the city")
+            dev.tap(*VIEW_TOGGLE)
+            _nap(stop, 3.0, 4.0)
             continue
         if v in ("city", "landscape"):                      # the other main view: switch (twice at most)
             if toggled >= 2:
@@ -7698,6 +8117,182 @@ def run_champions(dev, cfg, log, stop):
     log(f"[+]  Champions done: {total_taps} tap(s), {total_greets} greet(s) this run" + (f"; taps today {used}/{CH_TAPS}" if used is not None else ""))
 
 
+# ------------------------------------------------------------ test: does world map -> city reset the camera?
+def _wait_view(dev, cfg, stop, want, secs=60):
+    """Wait until the game shows `want` ('city' / 'landscape') and the picture is steady. -> last screenshot or None."""
+    t0, prev = time.time(), None
+    while time.time() - t0 < secs and not stop.is_set():
+        _nap(stop, 1.5, 1.8)
+        shot = dev.screenshot()
+        v = view_of(shot, cfg)
+        if want == "landscape" and v == "world":           # the world map never stands still (clouds, marches): seen once is enough
+            return shot
+        if v == want:
+            if prev is not None and float(np.mean(cv2.absdiff(prev[100:860:6, ::6], shot[100:860:6, ::6]))) < 2.0:
+                return shot
+            prev = shot
+        else:
+            prev = None
+    return None
+
+
+def run_view_reset_test(dev, cfg, log, stop):
+    """From the city: 3 rounds of (move the camera) -> globe -> world map -> globe -> city, saving the city picture each
+    time (debug/view_reset/). If the 3 city pictures match, the city always opens at the same camera place."""
+    out = USER / "debug" / "view_reset"
+    out.mkdir(parents=True, exist_ok=True)
+    moves = [(0, 0), (240, -300), (-260, 260)]
+    pics = []
+    for i, (dx, dy) in enumerate(moves):
+        if stop.is_set():
+            return
+        if dx or dy:
+            pan_content(dev, stop, dx, dy)
+            _nap(stop, 1.5, 2.0)
+            moved = dev.screenshot()
+            cv2.imwrite(str(out / f"{i}_moved.png"), moved)
+        dev.tap(*VIEW_TOGGLE)
+        if _wait_view(dev, cfg, stop, "landscape") is None:
+            cv2.imwrite(str(out / f"{i}_no_world.png"), dev.screenshot())
+            log(f"[i]   reset test: bottom-left / coordinate text read: '{_WM_NOTE[1]}'")
+            raise RuntimeError(f"round {i + 1}: the world map did not come up")
+        dev.tap(*VIEW_TOGGLE)
+        shot = _wait_view(dev, cfg, stop, "city", 90)
+        if shot is None:
+            raise RuntimeError(f"round {i + 1}: the city did not come back")
+        cv2.imwrite(str(out / f"{i}_city.png"), shot)
+        pics.append(shot)
+        if dx or dy:
+            d_moved = float(np.mean(cv2.absdiff(moved[100:860:4, ::4], shot[100:860:4, ::4])))
+            log(f"[i]   reset test round {i + 1}: camera moved by {dx},{dy} before; difference moved -> after reset {d_moved:.1f}")
+    for i in (1, 2):
+        d = float(np.mean(cv2.absdiff(pics[0][100:860:4, ::4], pics[i][100:860:4, ::4])))
+        sx, sy, conf = city_shift(pics[0], pics[i])
+        log(f"[+]  reset test: city after round 1 vs round {i + 1}: difference {d:.1f} (0-5 = same place), shift {sx:.0f},{sy:.0f} (confidence {conf:.2f})")
+    log("[i]   reset test pictures saved in debug/view_reset")
+
+
+# ------------------------------------------------------------ alliance science
+def as_remaining(img):
+    """'Remaining Donations: 13/13' on the Alliance Science page -> (left, max) or None."""
+    try:
+        for t, _ws in ocr_lines(img[150:300, 0:360], 2.5):
+            m = re.search(r"(\d{1,2})\s*[/\\l|]\s*(\d{1,2})", t)
+            if m and ("onat" in t.lower() or "emain" in t.lower() or len(_ws) <= 3):
+                a, b = int(m.group(1)), int(m.group(2))
+                if 0 <= a <= b <= 50:
+                    return a, b
+        c = img[185:235, 0:240]
+        g = cv2.resize(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY), None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+        for b in (g, 255 - cv2.threshold(g, 130, 255, cv2.THRESH_BINARY)[1]):
+            t = pytesseract.image_to_string(b, config="--psm 6")
+            m = re.search(r"(\d{1,2})\s*[/\\l|]\s*(\d{1,2})", t)
+            if m and int(m.group(1)) <= int(m.group(2)) <= 50:
+                return int(m.group(1)), int(m.group(2))
+    except Exception:
+        pass
+    return None
+
+
+def as_donate_button(img):
+    """The green Donate button (top-most on the page, right side) -> (x, y) or None. Text first, colour as fallback."""
+    p = find_text(img, ["Donate"], region=(300, 300, 240, 560), cutoff=0.75)
+    if p:
+        return p
+    hsv = cv2.cvtColor(img[300:860, 300:540], cv2.COLOR_BGR2HSV)
+    m = cv2.morphologyEx(cv2.inRange(hsv, (40, 90, 50), (85, 255, 230)), cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    boxes = [cv2.boundingRect(c) for c in cs]
+    boxes = [b for b in boxes if 80 < b[2] < 170 and 30 < b[3] < 65]
+    if not boxes:
+        return None
+    x, y, w, h = min(boxes, key=lambda b: b[1])
+    return x + w // 2 + 300, y + h // 2 + 300
+
+
+def as_snap(img, tag):
+    try:
+        (USER / "debug").mkdir(exist_ok=True)
+        cv2.imwrite(str(USER / "debug" / f"alliance_science_{tag}.png"), img)
+    except Exception:
+        pass
+
+
+def run_alliance_science(dev, cfg, log, stop):
+    """From the city: Alliance button -> Alliance Science row -> tap Donate on the recommended science until the day's
+    donations are used up. Only the free daily donations; nothing that costs gems is pressed."""
+    shot = dev.screenshot()
+    h = find(shot, "rally_icon", 0.8) if has_template("rally_icon") else None
+    pos = (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
+    dev.tap(*pos)
+    _nap(stop, 1.8, 2.4)
+    row = None
+    for i in range(4):                                     # the Science row is below the fold: scroll the menu up
+        shot = dev.screenshot()
+        if i == 0:
+            as_snap(shot, "1_alliance")
+        row = find_text(shot, ["Alliance Science", "Science"], region=(60, 420, 360, 470), cutoff=0.75)
+        if row or stop.is_set():
+            break
+        dev.swipe(316, 778, 303, 548, 450)
+        _nap(stop, 1.0, 1.4)
+    if not row:
+        as_snap(dev.screenshot(), "2_failed")
+        raise RuntimeError("the Alliance Science row was not found on the Alliance page")
+    dev.tap(*row)
+    _nap(stop, 1.8, 2.4)
+    shot = dev.screenshot()
+    as_snap(shot, "3_science")
+    rem = as_remaining(shot)
+    btn = as_donate_button(shot)
+    if rem is None and not (btn and find_text(shot, ["Alliance Science", "Science"], region=(0, 0, 540, 340), cutoff=0.7)):
+        raise RuntimeError("the Alliance Science page did not open")
+    if rem is None:                                        # counter not readable: tap one at a time while the green button stays
+        log("[i]   Alliance Science: the donation counter is not readable - donating one at a time")
+        n = 0
+        while n < int(cfg.get("alliance_science_max", 13) or 13) and not stop.is_set():
+            b = as_donate_button(dev.screenshot())
+            if not b:
+                break
+            dev.tap(*b)
+            n += 1
+            _nap(stop, 0.7, 1.0)
+        as_snap(dev.screenshot(), "5_done")
+        log(f"[+]  Alliance Science: {n} donation tap(s)")
+        return
+    left, top = rem
+    log(f"[i]   Alliance Science: donations left {left}/{top}")
+    if left == 0:
+        log("[+]  Alliance Science: all donations already done today")
+        return
+    if not btn:
+        raise RuntimeError("no Donate button on the recommended science")
+    done = 0
+    while left > 0 and done < 60 and not stop.is_set():
+        for _ in range(min(left, 5)):                      # quick taps work; re-read the counter every 5
+            dev.tap(*btn)
+            _nap(stop, 0.3, 0.45)
+            done += 1
+        _nap(stop, 0.8, 1.1)
+        shot = dev.screenshot()
+        r = as_remaining(shot)
+        if r is None:                                      # something covered the page (a dialog?) - do not keep tapping
+            as_snap(shot, "4_unknown")
+            log("[!]  Alliance Science: the page changed while donating - stopping")
+            break
+        if r[0] >= left:                                   # nothing was used: the button moved or the science is maxed
+            nb = as_donate_button(shot)
+            if not nb or nb == btn:
+                log("[!]  Alliance Science: the donations did not go down - stopping")
+                break
+            btn = nb
+        left = r[0]
+    as_snap(dev.screenshot(), "5_done")
+    log(f"[+]  Alliance Science done: {top - left} of {top} donations used today" + ("" if left == 0 else f", {left} left"))
+    if left > 0:
+        raise RuntimeError(f"{left} donation(s) left")
+
+
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
 DUTY_FILE = USER / "duties_state.json"
 _DUTY_LOCK = threading.Lock()
@@ -7747,6 +8342,15 @@ DUTY_LIBRARY = [
     {"id": "reach_market", "group": "Common tasks", "title": "Test: go to Market", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Market and opens its menu (nothing is pressed).",
      "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market"]},
+    {"id": "alliance_science", "group": "Daily activities", "title": "Alliance Science", "verified": False,
+     "note": "Alliance > Alliance Science: uses the day's free donations on the recommended science. Never spends gems.",
+     "target": "self:", "every_min": 240, "steps": ["alliance_science"]},
+    {"id": "black_market", "group": "Daily activities", "title": "Black Market", "every_min": 0, "verified": False,
+     "note": "Market > Black Market: buys the goods on the Market tab, refreshes as set there, keeps the gem and gold floors. Finds the Market by trying the building plots once, then remembers it.",
+     "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market", "market"]},
+    {"id": "view_reset_test", "group": "Common tasks", "title": "Test: city camera reset (globe)", "every_min": 1440, "verified": False,
+     "note": "Moves the camera, goes to the world map and back three times and saves the city picture each time - checks the city always opens at the same place. Nothing is pressed in the city.",
+     "target": "self:", "steps": ["view_reset_test"]},
     {"id": "reach_embassy", "group": "Common tasks", "title": "Test: go to Embassy", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Embassy and opens its menu (nothing is pressed).",
      "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Embassy"]},
@@ -7950,7 +8554,201 @@ def picture_items(dev):
         if base.lower() in have or base.lower() not in DEFAULT_PICTURE_BUILDINGS:
             continue
         items[f"{base}#1"] = [round(SHRINE_LABEL_IN_PICTURE[0] + ox), round(SHRINE_LABEL_IN_PICTURE[1] + oy)]
+    for nm, n in (ent.get("plots") or {}).items():         # changeable buildings found by trying the plots (find_plot)
+        if nm.lower() not in have and int(n) in CITY_SQUARES:
+            _nm, ox, oy = CITY_SQUARES[int(n)]
+            items[f"{nm}#1"] = [round(SHRINE_LABEL_IN_PICTURE[0] + ox), round(SHRINE_LABEL_IN_PICTURE[1] + oy)]
     return items
+
+
+CHANGEABLE_PLOTS = [n for n, (nm, _x, _y) in CITY_SQUARES.items()
+                    if n not in PARKED_SQUARES and re.sub(r"\s*\d+$", "", nm).lower() not in DEFAULT_PICTURE_BUILDINGS]
+
+
+def save_plot(dev, name, number):
+    serial = getattr(dev, "serial", "default")
+    with _CITY_LOCK:
+        data = load_city()
+        ent = data.setdefault(serial, {})
+        ent.setdefault("plots", {})[name] = int(number)
+        save_city(data)
+
+
+def forget_plot(dev, name):
+    serial = getattr(dev, "serial", "default")
+    with _CITY_LOCK:
+        data = load_city()
+        if (data.get(serial) or {}).get("plots", {}).pop(name, None) is not None:
+            save_city(data)
+
+
+def find_plot(dev, cfg, log, stop, nav, name):
+    """A changeable building (Market, Embassy ...) has no known place on this account: walk the changeable plots of the
+    numbered city map, tap each, read the name under the ring menu and save the plot that holds `name` (other changeable
+    buildings read on the way are saved too). Only on a city that matches the stored picture. -> plot number or None."""
+    x0, y0, w, h = SAFE_TAP_AREA
+    want = BUILDING_ALIASES.get(name, name).lower()
+    order = sorted(CHANGEABLE_PLOTS, key=lambda n: (re.sub(r"\s*\d+$", "", CITY_SQUARES[n][0]).lower() != want, n))
+    known = {k.lower() for k in ((load_city().get(getattr(dev, "serial", "default")) or {}).get("plots") or {})}
+    log(f"[*] {name} is not on this account's map yet - trying the building plots ({len(order)} plots)")
+    first = True
+    for n in order:
+        if stop.is_set():
+            return None
+        nm0, ox, oy = CITY_SQUARES[n]
+        tx, ty = SHRINE_LABEL_IN_PICTURE[0] + ox, SHRINE_LABEL_IN_PICTURE[1] + oy
+        nav.seen_city = False
+        leave_to_city(dev, cfg, stop)
+        nav.goto(tx, ty)
+        if first and not nav.seen_city:
+            log(f"[i] {name}: this city does not match the stored city picture - counting the plots from the Shrine instead")
+            return "nomatch"
+        first = False
+        px, py = tx - nav.cx, ty - nav.cy
+        if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+            log(f"[i]   plot {n}: could not be brought into view")
+            continue
+        close_reward_panel(dev, stop, log)
+        dev.expect_city = False
+        dev.tap(int(px), int(py + int(cfg.get("city_tap_dy", 22) or 0)))
+        _nap(stop, 1.1, 1.5)
+        shot = dev.screenshot()
+        if not find_detail_icon(shot):
+            log(f"[i]   plot {n}: no building menu opened")
+            leave_to_city(dev, cfg, stop)
+            continue
+        got = ring_building_name(shot)
+        read = (got[0] if got else "") or ""
+        log(f"[i]   plot {n}: {read or 'name not read'}")
+        close_ring(dev, stop, (px, py + 35))
+        for b in [x.strip() for x in read.split(",") if x.strip()]:
+            bn = BUILDING_ALIASES.get(b, b)
+            if bn.lower() == want:
+                save_plot(dev, name, n)
+                log(f"[+] {name} found on plot {n} - saved for this account")
+                return n
+            if bn.lower() not in DEFAULT_PICTURE_BUILDINGS and bn.lower() not in known and bn in BUILDING_NAMES and bn.lower() not in RESOURCE_LOWER:
+                save_plot(dev, bn, n)                     # another changeable building: remember it too
+                known.add(bn.lower())
+    log(f"[!] {name} was not found on any plot")
+    return None
+
+
+SQUARE_BASES = {}
+for _n, (_nm, _x, _y) in CITY_SQUARES.items():
+    SQUARE_BASES.setdefault(re.sub(r"\s*\d+$", "", _nm).lower(), _n)
+
+
+def lock_shrine(dev, cfg, log, stop, nav_state):
+    """THE first step of every building visit, in every city style: find the Shrine (from the name of any fixed building),
+    go there and lock the camera on it by reading the fixed names around it. -> (nav, (shrine map x, y)) or (None, None)."""
+    if nav_state.get("shrine") and nav_state.get("snav"):
+        return nav_state["snav"], nav_state["shrine"]
+    nav = CityNav(dev, stop, log)
+    nav_state["snav"] = nav
+    log("[*] Locking the camera on the Shrine")
+    shrine = None
+    nav.cx = nav.cy = 0.0                                  # first look where the city view already is (it opens near the Keep): no corner drag needed
+    for i, (dx, dy) in enumerate([(0, 0), (0, 300), (300, 0), (0, -300), (0, -300), (-300, 0), (-300, 0), (0, 300), (0, 300)]):
+        if stop.is_set():
+            return None, None
+        if i:
+            nav.pan(dx, dy)
+        labels, _, _ = look_with_names(dev, stop, nav)
+        log(f"[i]   Shrine search {i + 1}/9: names read: {', '.join(n for n, _, _ in labels) or 'none'}")
+        for n, mx, my in labels:
+            off = FIXED_OFFSETS_FROM_SHRINE.get(BUILDING_ALIASES.get(n, n))
+            if off:
+                shrine = (mx - off[0], my - off[1])
+                break
+        if shrine:
+            break
+    if not shrine:
+        log("[i]   no fixed building near the start - searching from the city corner")
+        shrine = locate_shrine(dev, stop, log, nav)
+    if not shrine:
+        log("[!] The Shrine could not be found - no fixed building name was read")
+        return None, None
+    nav.goto(*shrine)
+    labels, _, _ = look_with_names(dev, stop, nav)
+    est = [(mx - off[0], my - off[1]) for n, mx, my in labels
+           for off in [FIXED_OFFSETS_FROM_SHRINE.get(BUILDING_ALIASES.get(n, n))] if off]
+    if est:
+        shrine = (sum(e[0] for e in est) / len(est), sum(e[1] for e in est) / len(est))
+    log(f"[+] Camera locked on the Shrine ({len(est)} fixed name(s) in view: {', '.join(n for n, _, _ in labels) or 'none'})")
+    nav_state["shrine"] = shrine
+    return nav, shrine
+
+
+def shrine_plot_task(dev, cfg, log, stop, task, nav_state, base):
+    """Another city style (the stored picture does not fit): find the Shrine by reading the name of any fixed building,
+    then count from it to each changeable plot, tap it and read the name under the ring menu. The plot holding `base` is
+    saved for this account and the task's steps run on its open menu. -> None when done, False when not found."""
+    nav, shrine = lock_shrine(dev, cfg, log, stop, nav_state)
+    if not shrine:
+        return "noshrine"
+    want = BUILDING_ALIASES.get(base, base).lower()
+    saved = ((load_city().get(getattr(dev, "serial", "default")) or {}).get("plots") or {}).get(base)
+    if base.lower() in DEFAULT_PICTURE_BUILDINGS and base.lower() in SQUARE_BASES:
+        order = [SQUARE_BASES[base.lower()]]              # a fixed building: its plot is the same in every city
+    else:
+        order = sorted(CHANGEABLE_PLOTS, key=lambda n: (re.sub(r"\s*\d+$", "", CITY_SQUARES[n][0]).lower() != want, n))
+        if saved in order:
+            order.remove(saved)
+            order.insert(0, saved)
+    log(f"[*] Going to {base}" + ("" if len(order) == 1 else f" (trying {len(order)} plots)"))
+    x0, y0, w, h = SAFE_TAP_AREA
+    for n in order:
+        if stop.is_set():
+            return False
+        nm0, ox, oy = CITY_SQUARES[n]
+        tx, ty = shrine[0] + ox, shrine[1] + oy
+        leave_to_city(dev, cfg, stop)
+        dev.expect_city = True
+        nav.goto(tx, ty)
+        px, py = tx - nav.cx, ty - nav.cy
+        if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+            log(f"[i]   plot {n}: could not be brought into view")
+            continue
+        close_reward_panel(dev, stop, log)
+        dev.expect_city = False
+        dev.tap(int(px), int(py))
+        _nap(stop, 1.1, 1.5)
+        shot = dev.screenshot()
+        if not find_detail_icon(shot):
+            log(f"[i]   plot {n}: no building menu opened")
+            leave_to_city(dev, cfg, stop)
+            continue
+        got = ring_building_name(shot)
+        read = (got[0] if got else "") or ""
+        log(f"[i]   plot {n}: {read or 'name not read'}")
+        lab = ring_label(shot, nm0, (px, py))
+        if lab:                                            # the label shows where the plot really is: correct the camera drift
+            nav.cx, nav.cy = tx - lab[1], ty - (lab[2] - 35)
+        names = [BUILDING_ALIASES.get(b.strip(), b.strip()).lower() for b in read.split(",") if b.strip()]
+        if want in names:
+            if saved != n:
+                save_plot(dev, base, n)
+                log(f"[+] {base} found on plot {n} - saved for this account")
+            for st in task.get("steps", []):
+                run_step(dev, cfg, log, stop, st)
+            leave_to_city(dev, cfg, stop, log)
+            if find_detail_icon(dev.screenshot()):
+                close_ring(dev, stop, (px, py + 35))
+            return None
+        close_ring(dev, stop, (px, py + 35))
+    log(f"[!] {base} was not found on any plot")
+    return False
+
+
+RESOURCE_LOWER = {"quarry", "sawmill", "mine", "farm"}
+PLOT_NOMATCH = {}                                          # serial -> True: the city picture does not fit, changeable buildings are found by their names
+
+
+def own_city_map(dev):
+    """True when the City Mapper saved buildings for this emulator (the built-in Keep guess does not count): without one,
+    a city that does not fit the stored picture is walked by reading the building names."""
+    return bool((load_city().get(getattr(dev, "serial", "default")) or {}).get("items"))
 
 
 def city_map_items(dev):

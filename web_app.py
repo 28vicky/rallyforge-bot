@@ -1092,6 +1092,36 @@ class Controller:
                 m["dev"].guard_city = False
         self.manual = None
 
+    # ---- developer tool: record a flow played by hand (taps + before/after pictures)
+    def flow_start(self, serial, name):
+        if getattr(self, "flow", None) and not self.flow.stop_ev.is_set():
+            raise ApiError("A flow is already being recorded. Stop it first.")
+        if self.running(serial):
+            raise ApiError("Stop this instance first - its own taps would be recorded too.")
+        adb = rb.find_adb(self.cfg.get("adb_path") or "auto")
+        if not adb:
+            raise ApiError("ADB not found. Set the ADB path in Settings.")
+        rec = rb.FlowRecorder(serial, adb, name or "flow", lambda t: self.log(t, serial))
+        try:
+            rec.start()
+        except Exception as e:
+            raise ApiError(f"Could not start recording: {e}")
+        self.flow = rec
+        return {"path": str(rec.dir)}
+
+    def flow_state(self):
+        r = getattr(self, "flow", None)
+        if not r:
+            return {"active": False}
+        return {"active": not r.stop_ev.is_set(), "steps": len(r.steps), "path": str(r.dir), "error": r.error,
+                "last": r.steps[-1] if r.steps else None}
+
+    def flow_stop(self):
+        r = getattr(self, "flow", None)
+        if not r or r.stop_ev.is_set():
+            return {"steps": 0, "path": str(r.dir) if r else ""}
+        return r.stop()
+
     def city_info(self):
         data = rb.load_city()
         return [f"{k}: {len(v.get('items', {}))} buildings" for k, v in data.items()]
@@ -1936,6 +1966,21 @@ class Api:
     def scan_city(self, p):
         self.c.scan_city(p["serial"])
         return {}
+
+    def flow_start(self, p):
+        return self.c.flow_start(p["serial"], p.get("name", ""))
+
+    def flow_state(self, p):
+        return self.c.flow_state()
+
+    def flow_stop(self, p):
+        return self.c.flow_stop()
+
+    def flow_open(self, p):
+        root = rb.USER / "flows"
+        root.mkdir(parents=True, exist_ok=True)
+        open_path(root)
+        return {"path": str(root)}
 
     def manual_open(self, p):
         self.c.manual_open(p["serial"])
