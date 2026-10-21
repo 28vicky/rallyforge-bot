@@ -787,3 +787,9 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 
 /* the page scrollbar sits in the side margin, so cards line up with the button bar and tabs on both sides */
 .pages{margin-right:-10px;padding:4px 0 20px 2px}
+
+/* Stop / Stop all: always clearly red (outline + light tint), solid red on hover, in the top bar and everywhere else */
+:root .ribbon .btn.bad{background:color-mix(in srgb,var(--bad) 12%,var(--btn));color:var(--bad);border:1px solid var(--bad)}
+:root .ribbon .btn.bad .ico{color:var(--bad)!important}
+:root .ribbon .btn.bad:hover:not(:disabled),:root .ribbon .btn.bad:focus-visible{background:var(--bad);color:var(--accfg);border-color:var(--bad)}
+:root .ribbon .btn.bad:hover .ico,:root .ribbon .btn.bad:focus-visible .ico{color:var(--accfg)!important}
