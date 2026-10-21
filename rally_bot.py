@@ -8396,6 +8396,11 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         else:
             dev.connect()
         dev.screenshot()
+        try:                                              # warn only: the bot keeps running on another screen size, but it can fail there
+            ok_screen, msg_screen = dev.ensure_screen(log)
+            log(("[+] " if ok_screen else "[!] ") + msg_screen + ("" if ok_screen else " The bot can fail on a different screen size."))
+        except Exception:
+            pass
     except Exception as e:
         notify(cfg, serial, f"Could not start: {e}")
         return log(f"[!] {e}")
