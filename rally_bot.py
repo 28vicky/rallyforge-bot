@@ -7183,6 +7183,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 continue
             px, py = pos
             opened = False
+            wrong = 0                                       # how often a neighbour's menu opened instead
             for attempt in range(3):                        # tap the building; when no ring menu opens (a reward panel came up, the tap landed beside it) look again and retry
                 close_reward_panel(dev, stop, log)
                 if find_detail_icon(dev.screenshot()):      # a ring menu is still open from before: tapping the building would close it
@@ -7205,6 +7206,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                         want_nm = k.split("#")[0].lower()
                         if got and got[0] and want_nm not in got[0].lower() and any(b.lower() in got[0].lower() for b in BUILDING_NAMES):
                             log(f"[!]   the menu that opened is {got[0]}, not {k} (try {attempt + 1}/3) - closing it and aiming again")
+                            wrong += 1
                             close_ring(dev, stop, (px, py + 35))
                             leave_to_city(dev, cfg, stop, log)
                             dev.expect_city = True
@@ -7224,6 +7226,9 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 px, py = pos
             if not opened:
                 log(f"[!] Task '{task.get('name')}': the menu of {k} did not open - skipped")
+                if wrong >= 3:                              # the saved spot is wrong (e.g. counted another way): forget it, the next try searches the plots again
+                    forget_plot(dev, k.split("#")[0])
+                    log(f"[i]   the saved spot of {k.split('#')[0]} opens another building - forgotten, it is searched again on the next try")
                 if find_detail_icon(dev.screenshot()):
                     close_ring(dev, stop, (px, py + 35))
                 leave_to_city(dev, cfg, stop)
