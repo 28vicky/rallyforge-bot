@@ -373,7 +373,7 @@ function renderSide() {
   L.innerHTML = "";
   const item = (key, label, dot, extra) => h("div", { class: "inst st-" + (dot || "run") + (S.sel === key ? " sel" : ""), onclick: () => { S.sel = key; renderSide(); renderTabs(); renderPage(); } },
     dot ? h("span", { class: "dot " + dot }) : h("span", { class: "dot run", style: { background: "var(--accent1)" } }),
-    h("span", { class: "nm" }, label), extra ? h("small", {}, extra) : null);
+    h("span", { class: "nm", title: label }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   const ic = $("#instCnt"); if (ic) ic.textContent = S.devStatus.length + " total";
   for (const d of S.devStatus) {
