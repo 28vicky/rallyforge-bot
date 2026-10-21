@@ -187,10 +187,17 @@ function layout() {
     h("i"), h("i"), h("i"));
   root.appendChild(h("div", { class: "app" + (S.cfg.sidebar_open === false ? " nosb" : ""), id: "app" },
     h("div", { class: "side" },
-      h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }), h("span", {}, "RallyForge")),
-      h("h4", {}, "Instances", burger()),
+      h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }),
+        h("div", { class: "bt" }, h("b", {}, "RallyForge"), h("small", {}, "Automation Hub")),
+        h("button", { class: "vpill", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "v" + S.version)),
+      h("h4", {}, h("span", {}, "Instances"), h("span", { class: "cnt", id: "instCnt" }), burger()),
       h("div", { class: "inst-list", id: "instList" }),
-      h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }), h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
+      h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }),
+        h("div", { class: "sflab" }, "All instances"),
+        h("div", { class: "allbtns" },
+          h("button", { class: "btn olpause", type: "button", title: "Pause every running instance", onclick: () => act(api("pause", { serial: "all" })) }, "Pause all"),
+          h("button", { class: "btn olstop", type: "button", title: "Stop every instance", onclick: () => act(api("stop", { serial: "all" })) }, "Stop all")),
+        h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
     h("div", { class: "main" },
       h("div", { class: "top" }, burger(), h("img", { src: "/assets/logo.png", alt: "" }),
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
@@ -358,10 +365,11 @@ function renderSide() {
   const L = $("#instList");
   if (!L || S.dragging) return;          // do not redraw under the mouse while an instance is being dragged
   L.innerHTML = "";
-  const item = (key, label, dot, extra) => h("div", { class: "inst" + (S.sel === key ? " sel" : ""), onclick: () => { S.sel = key; renderSide(); renderTabs(); renderPage(); } },
+  const item = (key, label, dot, extra) => h("div", { class: "inst st-" + (dot || "run") + (S.sel === key ? " sel" : ""), onclick: () => { S.sel = key; renderSide(); renderTabs(); renderPage(); } },
     dot ? h("span", { class: "dot " + dot }) : h("span", { class: "dot run", style: { background: "var(--accent1)" } }),
     h("span", { class: "nm" }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
+  const ic = $("#instCnt"); if (ic) ic.textContent = S.devStatus.length + " total";
   for (const d of S.devStatus) {
     L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
     sideDrag(L.lastChild, d.id);
@@ -498,6 +506,7 @@ function renderPage() {
   const keep = (S.sel !== "control" && lastPageSel && lastPageSel !== "control" && lastPageSel !== S.sel) ? p.scrollTop : 0;
   p.innerHTML = "";
   p.scrollTop = 0;
+  const ap = $("#app"); if (ap) ap.classList.toggle("inst-mode", S.sel !== "control");
   if (S.sel === "control") {
     const fn = PAGES[S.tab] || PAGES.dashboard;
     p.appendChild(fn());

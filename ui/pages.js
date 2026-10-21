@@ -299,7 +299,7 @@ function instancePage(serial) {
     { label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "");
   const bar = h("div", { class: "row instbar" },
     btn("Take game back now", () => act(api("takeback", { serial }))),
-    stBtn("Start", () => collectAndRun("start", { serial })), stBtn("Pause", () => act(api("pause", { serial }))), stBtn("Stop", () => act(api("stop", { serial })), "bad"), moreBtn);
+    stBtn("Start", () => collectAndRun("start", { serial }), "pri"), stBtn("Pause", () => act(api("pause", { serial })), "warnb"), stBtn("Stop", () => act(api("stop", { serial })), "bad"), moreBtn);
   const head = h("div", { class: "row insthead", style: { margin: "0 0 12px", gap: "14px", alignItems: "center" } },
     h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx),
     status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial), h("span", { style: { flex: "1" } }), bar);
@@ -383,16 +383,10 @@ function instancePage(serial) {
     if (!others.length) return toast("There is no other instance.");
     menu(e.currentTarget, others.map((o) => ({ label: o.name || o.id, run: () => { S.cfg.per_device[serial] = clone(S.cfg.per_device[o.id] || {}); rerender(); } })));
   };
-  const panelEl = panel("Settings for this instance only  (blank or (universal) = use the universal setting)", fields,
-    h("details", { style: { marginTop: "14px" }, open: Object.keys(ov).some((k) => IF_KEYS.has(k) && !BASIC.has(k) && !PKEYS0.has(k)) },
-      h("summary", { style: { cursor: "pointer", color: "var(--accent2)", fontWeight: "600" } }, "More settings (rarely needed)"),
-      h("div", { style: { marginTop: "12px" } }, moreFields),
-      h("div", { class: "field", style: { marginTop: "14px" } }, h("label", {}, "Advanced: any other setting as JSON"), adv,
-        h("div", { class: "hint", style: { fontSize: "11.5px", opacity: ".65" } }, "Only for settings that have no field above, e.g. {\"threshold\": 0.8}. Leave empty if unsure."))),
+  const panelEl = panel("Instance settings", note("Blank or (universal) = use the universal setting from Control settings."), fields,
     h("div", { class: "row", style: { marginTop: "14px" } }, btn("Copy settings from...", copyMenu, "sm"),
       btn("Use these on ALL instances", () => { for (const x of S.devices) if (x.id && x.id !== serial) S.cfg.per_device[x.id] = clone(S.cfg.per_device[serial] || {}); toast("Copied to all other instances.", "ok"); }, "sm"),
-      btn("Clear (use universal)", () => { S.cfg.per_device[serial] = {}; rerender(); }, "sm"),
-      btn("Save", saveAll, "sm pri")));
+      btn("Clear (use universal)", () => { S.cfg.per_device[serial] = {}; rerender(); }, "sm")));
   // ---- own presets & generals (stored in this instance's overrides; blank = the universal ones)
   const PKEYS = ["bot_presets", "preset_mode", "general_main", "general_assistant", "general_main_tab", "general_assistant_tab", "general_main_fav",
     "general_assistant_fav", "general_on_fail", "general_idle_only", "general_assistant_optional", "general_view", "max_troops"];
@@ -464,30 +458,55 @@ function instancePage(serial) {
   const mapPanel = () => panel("Map the city",
     note("The bot needs to know where the buildings are. Scan city reads the names while it holds a finger on the screen. Map by hand and Map by squares are the manual ways when scanning does not fit your city style."),
     h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } }, btn("Scan city", () => scanCityFlow(serial)), btn("Map by hand", () => manualMapFlow(serial)), btn("Map by squares", () => scanCityTapsFlow(serial))));
+  // Settings tab: section menu on the left (Advanced dimmed, last), Save / Discard bar pinned to the bottom
+  const settingsTab = () => {
+    const snap = clone(ov);
+    const secs = [
+      ["phone", "Phone and start", () => [phone, autoStart]],
+      ["inst", "Instance settings", () => [panelEl]],
+      ["adv", "Advanced", () => [panel("Advanced (rarely needed)", moreFields,
+        h("div", { class: "field", style: { marginTop: "14px" } }, h("label", {}, "Any other setting as JSON"), adv,
+          h("div", { class: "hint" }, "Only for settings that have no field above, e.g. {\"threshold\": 0.8}. Leave empty if unsure.")))]],
+    ];
+    S.sec = S.sec || {};
+    if (!secs.some((x) => x[0] === S.sec.settings)) S.sec.settings = "phone";
+    const menuEl = h("nav", { class: "setnav" }), area = h("div", { class: "setarea" });
+    const show = (k) => {
+      S.sec.settings = k;
+      [...menuEl.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
+      area.innerHTML = "";
+      for (const e of secs.find((x) => x[0] === k)[2]()) area.appendChild(e);
+    };
+    secs.forEach(([k, l]) => menuEl.appendChild(h("button", { class: "setlnk" + (k === "adv" ? " dim" : ""), "data-k": k, onclick: () => show(k) }, l)));
+    show(S.sec.settings);
+    const bar = h("div", { class: "savebar" }, h("span", { class: "sbtxt" }, "Changes apply to " + (dev.name || short(serial)) + " only and save by themselves after 2 s"),
+      btn("Discard", () => { S.cfg.per_device[serial] = clone(snap); rerender(); toast("Changes discarded.", "ok"); }),
+      btn("Save changes", saveAll, "pri"));
+    return [h("div", { class: "setgrid" }, menuEl, h("div", {}, area, bar))];
+  };
   const ITABS = [
-    ["dash", "Dashboard", () => {
-      const a = activityBox(serial, "Activity");
+    ["ov", "Overview", () => {
+      const a = activityBox(serial, "Now executing");
       const L = a.querySelector(".actleft"), R = a.querySelector(".actright");
       return [h("div", { class: "dutygrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
     }],
-    ["rallies", "Rallies", () => sections("rallies", [
-      ["mon", "Monsters", () => [PAGES.monsters(serial)]],
-      ["gen", "Generals & presets", () => ownP],
-      ["sta", "Stamina", () => [staminaPanel(ov, S.cfg)]],
-      ["aj", "Auto-Join", () => [autoJoin]]])],
-    ["activities", "Activities", () => [PAGES.duties(serial)]],
-    ["city", "City", () => sections("city", [
-      ["tasks", "Tasks", () => [PAGES.tasks(serial)]],
-      ["market", "Market", () => [PAGES.market()]],
+    ["routines", "Routines", () => sections("routines", [
+      ["duties", "Daily duties", () => [PAGES.duties(serial)]],
+      ["tasks", "City tasks", () => [PAGES.tasks(serial)]],
+      ["market", "Black Market", () => [PAGES.market()]],
+      ["aj", "Auto-Join", () => [autoJoin]],
       ["map", "Map the city", () => [mapPanel()]]])],
-    ["itinerary", "Plan", () => [instItinerary(serial)]],
-    ["history", "Log", () => [instHistory(serial)]],
-    ["settings", "Settings", () => sections("settings", [
-      ["phone", "Phone and start", () => [phone, autoStart]],
-      ["all", "All other settings", () => [panelEl]]])],
+    ["rally", "Rally setup", () => sections("rally", [
+      ["mon", "Monsters", () => [PAGES.monsters(serial)]],
+      ["gen", "March presets & generals", () => ownP],
+      ["sta", "Stamina", () => [staminaPanel(ov, S.cfg)]]])],
+    ["logs", "Itinerary & Logs", () => [h("div", { class: "loggrid" }, instItinerary(serial), instHistory(serial))]],
+    ["settings", "Settings", settingsTab],
   ];
+  const OLD_TAB = { dash: "ov", activities: "routines", rallies: "rally", city: "routines", itinerary: "logs", history: "logs" };
   if (!S.instTab) { try { S.instTab = localStorage.getItem("rf_inst_tab") || ""; } catch (e) { S.instTab = ""; } }
-  if (!ITABS.some((t) => t[0] === S.instTab)) S.instTab = "dash";
+  S.instTab = OLD_TAB[S.instTab] || S.instTab;
+  if (!ITABS.some((t) => t[0] === S.instTab)) S.instTab = "ov";
   const body = h("div", {});
   const tabRow = h("div", { class: "tabs", style: { margin: "4px 0 0" } });
   const showTab = (k) => {
@@ -495,7 +514,7 @@ function instancePage(serial) {
     try { localStorage.setItem("rf_inst_tab", k); } catch (e) {}
     [...tabRow.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
     body.innerHTML = "";
-    if (k !== "dash" && k !== "activities") {
+    if (k !== "ov") {
       const nv = h("span", { class: "nowtxt" }, actNow(serial));
       body.appendChild(h("div", { class: "nowstrip" }, h("span", { class: "actlab" }, "Now"), nv));
       const iv = setInterval(() => { if (!nv.isConnected) clearInterval(iv); else nv.textContent = actNow(serial); }, 2000);
@@ -1146,7 +1165,7 @@ PAGES.duties = function (fixed, only, compact) {
         h("span", { class: "dst " + (r.status === "done" ? "ok" : r.status === "gaveup" ? "bad" : "") }, r.on ? r.status_text : "Off"))).concat(onRows.length ? [] : [note("No duty is switched on yet.")])),
         h("div", { class: "row", style: { marginTop: "10px", justifyContent: "space-between" } },
           h("span", { class: "hint" }, onRows.length > 7 ? "+" + (onRows.length - 7) + " more switched on" : onRows.length + " switched on"),
-          h("button", { class: "btn sm", onclick: () => S.gotoInstTab && S.gotoInstTab("activities") }, "Manage all duties \u2192"))));
+          h("button", { class: "btn sm", onclick: () => { S.sec = S.sec || {}; S.sec.routines = "duties"; if (S.gotoInstTab) S.gotoInstTab("routines"); } }, "Manage all duties \u2192"))));
       return;
     }
     if (!only) root.appendChild(panel("Duties",
@@ -1232,7 +1251,7 @@ PAGES.duties = function (fixed, only, compact) {
     rn.appendChild(panel("Run a task now",
       note("Pick any task and the bot does it next, before everything else (even before a waiting rally), once. It works even if the task is switched off or already done today, and also when 'Do the tasks' is off. It starts as soon as the instance is running" + (serial ? "." : ", on every instance.")),
       h("div", { class: "row", style: { gap: "8px" } }, sel,
-        h("button", { class: "btn primary", onclick: () => { if (rnPick) set("run_now_add", { id: rnPick }); } }, "Run first")),
+        h("button", { class: "btn primary", onclick: () => { if (rnPick) set("run_now_add", { id: rnPick }); } }, "Run now")),
       j.queue.length ? h("div", { class: "row", style: { gap: "6px", flexWrap: "wrap", marginTop: "8px" } }, h("span", { class: "lab" }, "Waiting:"),
         j.queue.map((q, i) => h("span", { class: "chip" }, (i + 1) + ". " + q.title + " ",
           h("a", { href: "#", title: "Cancel", onclick: (e) => { e.preventDefault(); set("run_now_remove", { id: q.id }); } }, "\u00d7")))) : null));
