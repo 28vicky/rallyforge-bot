@@ -1,8 +1,5 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
-  { v: "2.4.76", date: "2026-10-21",
-    new: [],
-    fixed: ["Update restart no longer looks stuck: the status bar counts down to the restart and names the instance it waits for (at most 30 s). Click it to restart at once; the running instances start again by themselves."] },
   { v: "2.4.75", date: "2026-10-21",
     new: [],
     fixed: ["Cerberus is now decided by the monster list like every other monster (the hidden \u201cCerberus rallies\u201d switch is gone). Tick or untick it on the Monsters tab."] },

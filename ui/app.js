@@ -702,11 +702,10 @@ function updateSummary() {
     const U = S.update;
     u.style.display = U ? "" : "none";
     if (U) {
-      const wait = U.waiting_for && U.waiting_for.length ? ` (waiting for ${U.waiting_for.join(", ")} to finish a join)` : "";
-      u.textContent = S.restartNow ? `Restarting now\u2026 the window closes and opens again in about 20\u201330 s` : U.needs_restart ? `\u2714 Version ${U.version} installed \u2013 click to restart now` : U.restarting ? `\u2714 Version ${U.version} installed \u2013 restarting in ${U.restart_in || 0} s${wait} \u2013 click to restart now`
+      u.textContent = U.needs_restart ? `\u2714 Version ${U.version} installed \u2013 click to restart now` : U.restarting ? `\u2714 Version ${U.version} installed \u2013 restarting in a moment, the instances start again by themselves\u2026`
         : U.installing ? `Installing ${U.version}\u2026 please wait` : `\u2B06 Update ${U.version} available \u2013 click to install`;
-      u.title = (U.notes || "") + (U.installing ? "" : U.restarting ? "\nClick: restart now; the running instances start again by themselves" : "\nClick: install it, restart the app and start the running instances again");
-      u.onclick = S.restartNow ? null : U.needs_restart ? (() => { S.restartNow = true; act(api("restart")); }) : U.restarting ? (() => { S.restartNow = true; act(api("restart_update_now")); }) : U.installing ? null : updateNow;
+      u.title = (U.notes || "") + (U.installing || U.restarting ? "" : "\nClick: install it, restart the app and start the running instances again");
+      u.onclick = U.needs_restart ? (() => act(api("restart"))) : (U.installing || U.restarting) ? null : updateNow;
     }
   }
   const ts = $("#tgStatus"); if (ts) ts.textContent = S.tg.status;

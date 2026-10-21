@@ -1286,29 +1286,15 @@ class Controller:
 
     def _maybe_restart(self):
         """An update was installed: restart by itself at a quiet moment (no emulator in the middle of a join, or after
-        30 s at the latest). The emulators that were running start again on their own after the restart."""
+        1 minute at the latest). The emulators that were running start again on their own after the restart."""
         if not self.restart_pending or not getattr(self, "_auto_restart", False):
             return
         now = time.time()
         since = getattr(self, "_pending_since", None) or now
         self._pending_since = since
         busy = [d["name"] or s for s, d in self.dev.items() if self.running(s) and d.get("busy_until", 0) > now]
-        self._restart_wait = busy
-        if busy and now - since < self.RESTART_MAX_WAIT:
+        if busy and now - since < 60:
             return
-        self.restart_for_update()
-
-    RESTART_MAX_WAIT = 30                               # seconds the update restart waits for running joins to finish
-
-    def restart_info(self):
-        """-> (seconds left before the update restart, names of the emulators it waits for)."""
-        since = getattr(self, "_pending_since", None)
-        left = max(0, int(self.RESTART_MAX_WAIT - (time.time() - since))) if since else self.RESTART_MAX_WAIT
-        return left, list(getattr(self, "_restart_wait", []) or [])
-
-    def restart_for_update(self):
-        """Restart now for the installed update; the emulators that were running start again by themselves."""
-        now = time.time()
         running = [s for s in self.dev if self.running(s)]
         try:
             self.RESUME_FILE.write_text(json.dumps({"serials": running, "t": now}), encoding="utf-8")
@@ -1609,7 +1595,6 @@ class Api:
                 "update": ({"version": c._pending_update["version"], "notes": c._pending_update.get("notes", ""),
                             "installing": bool(getattr(c, "_installing", False)),
                             "restarting": bool(c.restart_pending and getattr(c, "_auto_restart", False)),   # installed: restarts at the next quiet moment
-                            "restart_in": c.restart_info()[0], "waiting_for": c.restart_info()[1],
                             "needs_restart": bool(c.restart_pending and not getattr(c, "_auto_restart", False))}
                            if getattr(c, "_pending_update", None) else None)}
 
@@ -2077,16 +2062,7 @@ class Api:
         return {"ok_send": bool(ok), "msg": msg}
 
     def restart(self, p):
-        if self.c.restart_pending:                    # an installed update: the running instances start again too
-            self.c.restart_for_update()
-            return {}
         self.c.restart_app()
-        return {}
-
-    def restart_update_now(self, p):
-        """Status bar clicked while the installed update waits for a quiet moment: restart at once (instances resume)."""
-        self.c.restart_pending = False
-        threading.Timer(0.3, lambda: self.c._safe(self.c.restart_for_update)).start()
         return {}
 
     def quit(self, p):
