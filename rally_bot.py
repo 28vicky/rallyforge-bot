@@ -7005,7 +7005,11 @@ def pan_content(dev, stop, dx, dy):
     _nap(stop, 0.9, 1.2)
 
 
-def aim_by_labels(dev, cfg, log, stop, name, tries=14):
+SWEEP = [(0, 280), (280, 0), (0, -280), (0, -280), (-280, 0), (-280, 0), (0, 280), (0, 280), (0, 280),
+         (280, 0), (280, 0), (280, 0), (0, -280), (0, -280), (0, -280), (0, -280)]   # content moves: a square spiral around the start
+
+
+def aim_by_labels(dev, cfg, log, stop, name, tries=24):
     """Bring a building into the safe tap area by reading the names written under the buildings - works in every city
     style, no picture and no counting needed. Whatever names are in view tell where the wanted building should be
     (their relative places are known); the map is moved that way and the names are read again, until the wanted
@@ -7031,10 +7035,13 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=14):
         ests = [(lx + pri[want][0] - pri[ln][0], ly + pri[want][1] - pri[ln][1]) for ln, lx, ly in labs if ln in pri]
         if not ests:
             lost += 1
-            if lost > 2:
-                if not ensure_view(dev, cfg, stop, log, "city", tries=4):
-                    return None
-            pan_content(dev, stop, 0, 150 if lost % 2 else -150)   # nothing readable here: look somewhere else
+            if lost == 3 and not ensure_view(dev, cfg, stop, log, "city", tries=4):
+                return None
+            if lost > len(SWEEP):
+                return None
+            dx, dy = SWEEP[lost - 1]                       # no known building in view (city edge, forest): sweep outward in a growing square
+            log(f"[i]   no known building name in view ({', '.join(l[0] for l in labs) or 'nothing read'}) - looking further ({lost}/{len(SWEEP)})")
+            pan_content(dev, stop, dx, dy)
             continue
         lost = 0
         ex = sum(e[0] for e in ests) / len(ests)
