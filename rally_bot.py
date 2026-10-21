@@ -6807,10 +6807,16 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                     nv.absolute = True
                     nv.quiet = True
                     nav_state["anav"] = nv
-                find_plot(dev, cfg, log, stop, nav_state["anav"], base)
+                serial_p = getattr(dev, "serial", "")
+                if PLOT_NOMATCH.get(serial_p) or find_plot(dev, cfg, log, stop, nav_state["anav"], base) == "nomatch":
+                    PLOT_NOMATCH[serial_p] = True
+                    nav_state["mode"] = "labels"               # another city style: walk by the names under the buildings
+                    pr = building_priors().get(BUILDING_ALIASES.get(base, base)) or building_priors().get(base)
+                    if pr:
+                        nav_state.setdefault("extra", {})[f"{base}#1"] = [round(SHRINE_LABEL_IN_PICTURE[0] + pr[0]), round(SHRINE_LABEL_IN_PICTURE[1] + pr[1])]
                 leave_to_city(dev, cfg, stop, log)
-    if kind == "building" and not nav_state.get("picture_bad") and not (PICTURE_BAD.get(getattr(dev, "serial", "")) and city_map_items(dev)) and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
-        pitems = picture_items(dev)                          # the camera is found by the whole-city picture; positions come from the mapper or the built-in default
+    if kind == "building" and not nav_state.get("picture_bad") and not (PICTURE_BAD.get(getattr(dev, "serial", "")) and city_map_items(dev)) and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in {**picture_items(dev), **nav_state.get("extra", {})}}:
+        pitems = {**picture_items(dev), **nav_state.get("extra", {})}                          # the camera is found by the whole-city picture; positions come from the mapper or the built-in default
         pkeys = []
         for nm in str(name).lower().split("+"):                # "Keep+Tavern" = visit the Keep, then the Tavern
             want = nm.strip()
@@ -8170,8 +8176,8 @@ def find_plot(dev, cfg, log, stop, nav, name):
         leave_to_city(dev, cfg, stop)
         nav.goto(tx, ty)
         if first and not nav.seen_city:
-            log(f"[!] {name}: this city does not match the stored city picture - plots cannot be tried here")
-            return None
+            log(f"[i] {name}: this city does not match the stored city picture - finding it by reading the building names instead")
+            return "nomatch"
         first = False
         px, py = tx - nav.cx, ty - nav.cy
         if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
@@ -8204,6 +8210,7 @@ def find_plot(dev, cfg, log, stop, nav, name):
 
 
 RESOURCE_LOWER = {"quarry", "sawmill", "mine", "farm"}
+PLOT_NOMATCH = {}                                          # serial -> True: the city picture does not fit, changeable buildings are found by their names
 
 
 def city_map_items(dev):
