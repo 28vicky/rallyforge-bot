@@ -778,3 +778,9 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 /* primary / selected buttons keep their solid colour (":root .btn" had reset every button to the plain colour, leaving white text on white) */
 :root .btn.pri,:root .btn.on{background:var(--accent);color:var(--accfg);border-color:transparent}
 :root .ribbon .btn.pri{background:var(--accent);color:var(--accfg)}
+
+/* red buttons outside the top bar (Stop all ...) keep their solid colour; one consistent height and padding for all buttons */
+:root .btn.bad:not(.ib){background:var(--bad);color:var(--accfg);border-color:transparent}
+:root .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:0 16px;line-height:1.2}
+:root .btn.sm{min-height:30px;padding:0 12px}
+:root .btn.ib{min-height:36px}
