@@ -6797,19 +6797,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(p[0], p[1] - 38)                           # the icon sits just above its caption
         return True
-    if kind == "building" and not nav_state.get("picture_bad") and not PICTURE_BAD.get(getattr(dev, "serial", "")) and picture_items(dev) is not None:
-        have = {k.split("#")[0].lower() for k in picture_items(dev)}
-        for nm in str(name).split("+"):
-            base = nm.split("#")[0].strip()
-            if base and base.lower() not in have and base.lower() not in RESOURCE_LOWER:
-                if not nav_state.get("anav"):
-                    nv = CityNav(dev, stop, log)
-                    nv.absolute = True
-                    nv.quiet = True
-                    nav_state["anav"] = nv
-                find_plot(dev, cfg, log, stop, nav_state["anav"], base)
-                leave_to_city(dev, cfg, stop, log)
-    if kind == "building" and not nav_state.get("picture_bad") and not (PICTURE_BAD.get(getattr(dev, "serial", "")) and city_map_items(dev)) and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
+    if kind == "building" and not nav_state.get("picture_bad") and not (PICTURE_BAD.get(getattr(dev, "serial", "")) and own_city_map(dev)) and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
         pitems = picture_items(dev)                          # the camera is found by the whole-city picture; positions come from the mapper or the built-in default
         pkeys = []
         for nm in str(name).lower().split("+"):                # "Keep+Tavern" = visit the Keep, then the Tavern
@@ -6836,7 +6824,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             nav.goto(tx, ty)
             if first and not nav.seen_city:                 # the stored picture does not fit this city style
                 PICTURE_BAD[serial_] = True
-                if city_map_items(dev):                     # this account has its own city map: the closed-loop older way
+                if own_city_map(dev):                       # this account has its own city map: the closed-loop older way
                     nav_state["picture_bad"] = True
                     return "older"
                 nav_state["mode"] = "labels"
@@ -6999,7 +6987,11 @@ def pan_content(dev, stop, dx, dy):
     _nap(stop, 0.9, 1.2)
 
 
-def aim_by_labels(dev, cfg, log, stop, name, tries=14):
+SWEEP = [(0, 280), (280, 0), (0, -280), (0, -280), (-280, 0), (-280, 0), (0, 280), (0, 280), (0, 280),
+         (280, 0), (280, 0), (280, 0), (0, -280), (0, -280), (0, -280), (0, -280)]   # content moves: a square spiral around the start
+
+
+def aim_by_labels(dev, cfg, log, stop, name, tries=24):
     """Bring a building into the safe tap area by reading the names written under the buildings - works in every city
     style, no picture and no counting needed. Whatever names are in view tell where the wanted building should be
     (their relative places are known); the map is moved that way and the names are read again, until the wanted
@@ -7025,10 +7017,13 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=14):
         ests = [(lx + pri[want][0] - pri[ln][0], ly + pri[want][1] - pri[ln][1]) for ln, lx, ly in labs if ln in pri]
         if not ests:
             lost += 1
-            if lost > 2:
-                if not ensure_view(dev, cfg, stop, log, "city", tries=4):
-                    return None
-            pan_content(dev, stop, 0, 150 if lost % 2 else -150)   # nothing readable here: look somewhere else
+            if lost == 3 and not ensure_view(dev, cfg, stop, log, "city", tries=4):
+                return None
+            if lost > len(SWEEP):
+                return None
+            dx, dy = SWEEP[lost - 1]                       # no known building in view (city edge, forest): sweep outward in a growing square
+            log(f"[i]   no known building name in view ({', '.join(l[0] for l in labs) or 'nothing read'}) - looking further ({lost}/{len(SWEEP)})")
+            pan_content(dev, stop, dx, dy)
             continue
         lost = 0
         ex = sum(e[0] for e in ests) / len(ests)
@@ -8204,6 +8199,12 @@ def find_plot(dev, cfg, log, stop, nav, name):
 
 
 RESOURCE_LOWER = {"quarry", "sawmill", "mine", "farm"}
+
+
+def own_city_map(dev):
+    """True when the City Mapper saved buildings for this emulator (the built-in Keep guess does not count): without one,
+    a city that does not fit the stored picture is walked by reading the building names."""
+    return bool((load_city().get(getattr(dev, "serial", "default")) or {}).get("items"))
 
 
 def city_map_items(dev):
