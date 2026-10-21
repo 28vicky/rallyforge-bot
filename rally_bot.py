@@ -6810,6 +6810,11 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 serial_p = getattr(dev, "serial", "")
                 if PLOT_NOMATCH.get(serial_p) or find_plot(dev, cfg, log, stop, nav_state["anav"], base) == "nomatch":
                     PLOT_NOMATCH[serial_p] = True
+                    if "+" not in str(name):                   # count the plots from the Shrine (fixed buildings are the same in every style)
+                        leave_to_city(dev, cfg, stop, log)
+                        r = shrine_plot_task(dev, cfg, log, stop, task, nav_state, base)
+                        if r is None:
+                            return None
                     nav_state["mode"] = "labels"               # another city style: walk by the names under the buildings
                     pr = building_priors().get(BUILDING_ALIASES.get(base, base)) or building_priors().get(base)
                     if pr:
@@ -8183,7 +8188,7 @@ def find_plot(dev, cfg, log, stop, nav, name):
         leave_to_city(dev, cfg, stop)
         nav.goto(tx, ty)
         if first and not nav.seen_city:
-            log(f"[i] {name}: this city does not match the stored city picture - finding it by reading the building names instead")
+            log(f"[i] {name}: this city does not match the stored city picture - counting the plots from the Shrine instead")
             return "nomatch"
         first = False
         px, py = tx - nav.cx, ty - nav.cy
@@ -8214,6 +8219,71 @@ def find_plot(dev, cfg, log, stop, nav, name):
                 known.add(bn.lower())
     log(f"[!] {name} was not found on any plot")
     return None
+
+
+def shrine_plot_task(dev, cfg, log, stop, task, nav_state, base):
+    """Another city style (the stored picture does not fit): find the Shrine by reading the name of any fixed building,
+    then count from it to each changeable plot, tap it and read the name under the ring menu. The plot holding `base` is
+    saved for this account and the task's steps run on its open menu. -> None when done, False when not found."""
+    nav = nav_state.get("snav")
+    if nav is None:
+        nav = CityNav(dev, stop, log)
+        nav_state["snav"] = nav
+    if not nav_state.get("shrine"):
+        log("[*] Finding the Shrine (fixed buildings) to count the plots from")
+        nav_state["shrine"] = locate_shrine(dev, stop, log, nav)
+    shrine = nav_state.get("shrine")
+    if not shrine:
+        log("[!] The Shrine could not be found - no fixed building name was read")
+        return False
+    want = BUILDING_ALIASES.get(base, base).lower()
+    saved = ((load_city().get(getattr(dev, "serial", "default")) or {}).get("plots") or {}).get(base)
+    order = sorted(CHANGEABLE_PLOTS, key=lambda n: (re.sub(r"\s*\d+$", "", CITY_SQUARES[n][0]).lower() != want, n))
+    if saved in order:
+        order.remove(saved)
+        order.insert(0, saved)
+    x0, y0, w, h = SAFE_TAP_AREA
+    for n in order:
+        if stop.is_set():
+            return False
+        nm0, ox, oy = CITY_SQUARES[n]
+        tx, ty = shrine[0] + ox, shrine[1] + oy
+        leave_to_city(dev, cfg, stop)
+        dev.expect_city = True
+        nav.goto(tx, ty)
+        px, py = tx - nav.cx, ty - nav.cy
+        if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+            log(f"[i]   plot {n}: could not be brought into view")
+            continue
+        close_reward_panel(dev, stop, log)
+        dev.expect_city = False
+        dev.tap(int(px), int(py))
+        _nap(stop, 1.1, 1.5)
+        shot = dev.screenshot()
+        if not find_detail_icon(shot):
+            log(f"[i]   plot {n}: no building menu opened")
+            leave_to_city(dev, cfg, stop)
+            continue
+        got = ring_building_name(shot)
+        read = (got[0] if got else "") or ""
+        log(f"[i]   plot {n}: {read or 'name not read'}")
+        lab = ring_label(shot, nm0, (px, py))
+        if lab:                                            # the label shows where the plot really is: correct the camera drift
+            nav.cx, nav.cy = tx - lab[1], ty - (lab[2] - 35)
+        names = [BUILDING_ALIASES.get(b.strip(), b.strip()).lower() for b in read.split(",") if b.strip()]
+        if want in names:
+            if saved != n:
+                save_plot(dev, base, n)
+                log(f"[+] {base} found on plot {n} - saved for this account")
+            for st in task.get("steps", []):
+                run_step(dev, cfg, log, stop, st)
+            leave_to_city(dev, cfg, stop, log)
+            if find_detail_icon(dev.screenshot()):
+                close_ring(dev, stop, (px, py + 35))
+            return None
+        close_ring(dev, stop, (px, py + 35))
+    log(f"[!] {base} was not found on any plot")
+    return False
 
 
 RESOURCE_LOWER = {"quarry", "sawmill", "mine", "farm"}
