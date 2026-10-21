@@ -795,6 +795,39 @@ class Device:
             self.sx = self.sy = 1.0
         if self.guard and not self._guard_busy and time.time() - self._guard_t > 2.0:
             img = self._guard_check(img)
+        if not getattr(self, "_lag_busy", False):
+            img = self._lag_wait(img)
+        return img
+
+    def _lag_wait(self, img):
+        """Evony shows a red wifi icon mid-screen while the game lags (usually the PC is overloaded); taps made then
+        get lost and rallies are missed. Hold this instance still until the icon goes, then let the game settle (max 20 s)."""
+        try:
+            if not lag_icon(img):
+                return img
+        except Exception:
+            return img
+        self._lag_busy = True
+        log = self.guard[1] if self.guard else None
+        stop = self.guard[2] if self.guard else None
+        self.lag_count = getattr(self, "lag_count", 0) + 1
+        t0 = time.time()
+        try:
+            if log:
+                log(f"[!] Game lagging (red wifi icon) - waiting for it to clear (#{self.lag_count} this run)")
+            while time.time() - t0 < 20 and not (stop is not None and stop.is_set()):
+                time.sleep(1.5)
+                img = self.screenshot()
+                if not lag_icon(img):
+                    time.sleep(1.0)                  # let the game catch up before the next tap
+                    img = self.screenshot()
+                    if log:
+                        log(f"[+] Game settled after {time.time() - t0:.0f}s")
+                    return img
+            if log:
+                log("[!] Still lagging after 20 s - carrying on")
+        finally:
+            self._lag_busy = False
         return img
 
     def tap(self, x, y):
@@ -927,6 +960,22 @@ def template_path(name):
         if p.exists():
             return p
     return None
+
+
+LAG_REGION = (120, 330, 300, 300)            # the red wifi "lag" icon sits in the middle of the screen
+
+
+def lag_icon(img):
+    """True while Evony's red wifi (connection lag) icon is on screen. Needs lag_wifi.png."""
+    if not has_template("lag_wifi"):
+        return False
+    x, y, w, h = LAG_REGION
+    area, t = img[y:y + h, x:x + w], tpl("lag_wifi")
+    for f in (1.0, 0.9, 1.1):
+        tt = t if f == 1.0 else cv2.resize(t, None, fx=f, fy=f)
+        if float(cv2.matchTemplate(area, tt, cv2.TM_CCOEFF_NORMED).max()) >= 0.6:
+            return True
+    return False
 
 
 def has_template(name):
