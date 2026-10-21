@@ -8938,23 +8938,47 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     levels = bool(cfg.get("squares_levels", False))
     res = read_square(dev, cfg, log, stop, (px, py), name, levels)
     used = (0, 0)
-    if res is None and nav.absolute and not stop.is_set():   # nothing opened: the square sits a little off in this city style - feel around it (the spot that works is remembered)
-        for dx, dy in ((0, 40), (0, -40), (40, 0), (-40, 0)):
+    if res is None and nav.absolute and not stop.is_set():   # nothing opened: the square sits a little off in this city style - probe a grid around it (the spot that works is remembered)
+        fixed = BUILDING_ALIASES.get(name, name).lower() in DEFAULT_PICTURE_BUILDINGS
+        pts = sorted(((gx * 34, gy * 34) for gx in range(-3, 4) for gy in range(-3, 4) if (gx, gy) != (0, 0)),
+                     key=lambda p: p[0] ** 2 + p[1] ** 2)[:30]
+        known_names = {n.lower() for n in BUILDING_NAMES} | {BUILDING_ALIASES.get(n, n).lower() for n in BUILDING_NAMES}
+        log(f"[*] Square {number} ({name}): probing around the spot")
+        for dx, dy in pts:
             if stop.is_set():
                 break
             qx, qy = px + dx, py + dy
             if not (x0 <= qx <= x0 + w and y0 <= qy <= y0 + h):
                 continue
-            try:                                             # a ring left open by the last try must go first
-                if find_detail_icon(dev.screenshot()):
-                    close_ring(dev, stop, (270, 465))
-            except Exception:
-                pass
-            log(f"[*] Square {number} ({name}): feeling around - tapping {round(qx)},{round(qy)}")
-            res = read_square(dev, cfg, log, stop, (qx, qy), name, levels)
-            if res:
-                used = (dx, dy)
-                break
+            dev.tap(int(qx), int(qy))
+            _nap(stop, 1.1, 1.4)
+            shot = dev.screenshot()
+            ic = find_detail_icon(shot)
+            if not ic:
+                try:
+                    if view_of(shot, cfg) != "city":
+                        leave_to_city(dev, cfg, stop)
+                except Exception:
+                    pass
+                continue
+            time.sleep(0.4)
+            shot = dev.screenshot()
+            lab = ring_label(shot, "", (qx, qy)) or None
+            if not lab:
+                r = ring_label_free(shot)
+                lab = r if r and r[0].lower() in known_names else None
+            if not lab:
+                close_ring(dev, stop, (270, 465))
+                continue
+            got_n = BUILDING_ALIASES.get(lab[0], lab[0])
+            learn_square_offset(got_n, tx + dx - shrine[0], ty + dy - shrine[1], log)
+            log(f"[i]   probe at {round(qx)},{round(qy)} opened '{lab[0]}'")
+            if fixed and got_n.lower() != BUILDING_ALIASES.get(name, name).lower():
+                close_ring(dev, stop, (lab[1], lab[2]))      # a different building: remembered, keep looking for the expected one
+                continue
+            res = (lab[0], 0, (lab[1], lab[2]))
+            used = (dx, dy)
+            break
     if res and res[2] and nav.absolute:                      # the camera place is read from the picture each time: only close the ring
         if not close_ring(dev, stop, res[2]):
             log("[!]   the ring menu would not close - stopping so nothing is pressed by mistake")
