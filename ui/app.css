@@ -814,3 +814,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 [data-pal="amber"][data-mode="light"]{--mute:#5c584f;--good:#2f6f43}
 .pgens.dis{opacity:.85}
 .tab.grp .chev{opacity:1}
+
+/* buttons whose icon is hidden (0 wide) must not keep the icon gap: text was 8px off-centre (left 20px vs right 12px) */
+:root .btn.ib{gap:0}
+:root .btn.ib .ico{margin:0}
