@@ -615,7 +615,7 @@ function presetPanels(c, inst) {
     note("Tap an empty slot to arm that preset, \u2715 to switch it off. 'Start from first' always tries the lowest armed preset first; 'Rotate' takes them in turn. 'Game default' marches with the generals already saved in the game preset (nothing is searched). 'Listed' uses the generals you list on that card: if the preset already holds one of them the bot just marches, otherwise it searches for it and sets it. 'Skip if no general' skips a preset whose game preset has an empty slot and tries the next one.") ,
     h("div", { class: "row" }, h("span", { class: "lab" }, "Universal: skip a preset that already has more than this many troops (0 = off)"), inp(c, "max_troops", { type: "int", cls: "short" })));
   const favs = ["leave", "on", "off"];
-  const gen = panel("Generals and teaching the bot",
+  const gen = panel("Generals",
     grid2(fld("Main generals (best first)", genField(c, "general_main", "Main generals")), fld("Assistant generals (best first)", genField(c, "general_assistant", "Assistant generals")),
       fld("Main generals: look in this category", sel(c, "general_main_tab", tabOptions, { num: true })), fld("Main: favourites filter (heart)", sel(c, "general_main_fav", favs)),
       fld("Assistant generals: look in this category", sel(c, "general_assistant_tab", tabOptions, { num: true })), fld("Assistant: favourites filter (heart)", sel(c, "general_assistant_fav", favs)),
