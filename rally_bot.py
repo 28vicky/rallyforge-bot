@@ -697,6 +697,43 @@ class Device:
                                "settings (BlueStacks: Settings > Advanced > Android Debug Bridge) "
                                "and check the device ID.")
 
+    def ensure_screen(self, log=None):
+        """Startup check: the emulator screen must be 540x960 at 240 dpi. Reads `wm size` / `wm density`, sets them when
+        different and checks again. -> (True, message) when it is right, (False, message) when it could not be fixed."""
+        say = log or (lambda m: None)
+
+        def read():
+            size = dens = None
+            try:
+                out = (self._run("shell", "wm", "size", timeout=10).stdout or b"").decode("utf8", "ignore")
+                found = re.findall(r"(?:Override|Physical) size:\s*(\d+)x(\d+)", out)
+                if found:
+                    size = tuple(map(int, found[-1]))          # an override line comes last and wins
+                out = (self._run("shell", "wm", "density", timeout=10).stdout or b"").decode("utf8", "ignore")
+                found = re.findall(r"(?:Override|Physical) density:\s*(\d+)", out)
+                if found:
+                    dens = int(found[-1])
+            except Exception:
+                pass
+            return size, dens
+
+        want_size, want_dpi = EXPECTED_SIZE, 240
+        size, dens = read()
+        if size == want_size and dens == want_dpi:
+            return True, f"Screen {size[0]}x{size[1]} at {dens} dpi - OK"
+        say(f"[!] Screen is {size and '%dx%d' % size} at {dens} dpi, expected {want_size[0]}x{want_size[1]} at {want_dpi} dpi - trying to set it")
+        try:
+            self._run("shell", "wm", "size", f"{want_size[0]}x{want_size[1]}", timeout=10)
+            self._run("shell", "wm", "density", str(want_dpi), timeout=10)
+        except Exception:
+            pass
+        time.sleep(2.0)
+        size, dens = read()
+        if size == want_size and dens == want_dpi:
+            return True, f"Screen set to {size[0]}x{size[1]} at {dens} dpi"
+        return False, (f"Could not set the screen to {want_size[0]}x{want_size[1]} at {want_dpi} dpi (it is "
+                       f"{size and '%dx%d' % size} at {dens} dpi). Set the resolution in the emulator's own settings.")
+
     def _grab_raw(self):
         """Raw pixels are much lighter for the emulator than PNG (no compression on its side)."""
         r = self._run("exec-out", "screencap", timeout=15)
