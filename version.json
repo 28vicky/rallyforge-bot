@@ -1,9 +1,9 @@
 {
-  "version": "2.4.66",
-  "notes": "General Manager: Scan Tavern portraits (adds every general's picture to the library).",
+  "version": "2.4.67",
+  "notes": "18 more general pictures (Europe) in the general library.",
   "files": {
     "rally_bot.py": {
-      "sha256": "4c3ff0d5b7b9df13b4664f8d1b1633f771b92b42c71617886c8ee11bb1316137"
+      "sha256": "f4170487e210d42616c71d2c1fbc126aca01d3ad148677153ed2d410a0ba26ae"
     },
     "web_app.py": {
       "sha256": "ba00b9c6ccc6224af57391a6a94d071d20e14f2053848e4d4c5bcd7ba2a2f2be"
@@ -18,7 +18,7 @@
       "sha256": "fe6023bd746daf614a1813647817199d99f1014107fcd788fdccd0b4a2463028"
     },
     "ui/changelog.js": {
-      "sha256": "ae7c2f0e8ec2c61d0f08c2b752f2f04122fd06fd53187e1e9af9232bbb3f1682"
+      "sha256": "8357e9b78dfb477b0aec199fccd73b289e80d4573b4fa2964ec31d07f796dc79"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -38,9 +38,77 @@
   },
   "mode": "ask",
   "catalog": {
+    "art/Arminius.png": {
+      "sha256": "a06cf1610ee609d0d1c27c11f69466810af10c92aa445580b72a463e59d68b1d",
+      "url": "catalog/art/Arminius.png"
+    },
+    "art/Barbarossa.png": {
+      "sha256": "1987e3e38a7968f0d3a4184b147530314dfde182bd60c531ef266f0c26e356a2",
+      "url": "catalog/art/Barbarossa.png"
+    },
+    "art/Charles Martel.png": {
+      "sha256": "c7957cebc316e3e00a842f41e5c9e99213e720824753d86f97cbe3948a44dafe",
+      "url": "catalog/art/Charles%20Martel.png"
+    },
+    "art/Charles the Great.png": {
+      "sha256": "e34b8a804437fe841058715b2ae8bf3e64671b1a2820779f3d20e0281b35b94e",
+      "url": "catalog/art/Charles%20the%20Great.png"
+    },
+    "art/Cnut the Great.png": {
+      "sha256": "9f137ec14e23ed52796c37a524daa66a123e3adf7d284aa2726414e8c4783a90",
+      "url": "catalog/art/Cnut%20the%20Great.png"
+    },
+    "art/Constantine the Great.png": {
+      "sha256": "dc9d8b63a5778020aa524aa1e699de7bfc2c15f4a7227714be41e929901ab119",
+      "url": "catalog/art/Constantine%20the%20Great.png"
+    },
+    "art/Edward the Black Prince.png": {
+      "sha256": "aef00d86db3c01a966de46f234164b8dda628002e3a61aa6a95aac8131dca884",
+      "url": "catalog/art/Edward%20the%20Black%20Prince.png"
+    },
+    "art/Flavius Aetius.png": {
+      "sha256": "fb0e373277befe2fe0de20d301a77e61f513f5de6516436bbfd93d9cfaf2911c",
+      "url": "catalog/art/Flavius%20Aetius.png"
+    },
+    "art/Gustavus Adolphus.png": {
+      "sha256": "69f3f8eb651885737da045469c2c0779eef177d06d686520b00071157b8c7877",
+      "url": "catalog/art/Gustavus%20Adolphus.png"
+    },
+    "art/Isabella.png": {
+      "sha256": "968f1398b6f7db1c28495c3d3eed4237378fda82c53522b7f6832f93efc876e9",
+      "url": "catalog/art/Isabella.png"
+    },
+    "art/Jadwiga.png": {
+      "sha256": "328055469ce6364fb5e0b7b81dbb1c3a7c9e47a96ee4baaeae0c1d5612f4c14d",
+      "url": "catalog/art/Jadwiga.png"
+    },
+    "art/John I of Portugal.png": {
+      "sha256": "3e5a8e87f91a93665d43ae36c6e01b1b196a4845ae70a8c288f9ba243c7b0805",
+      "url": "catalog/art/John%20I%20of%20Portugal.png"
+    },
+    "art/King Arthur.png": {
+      "sha256": "e0c959bc58e79ec39d255f293caf90fc51f397d11a6b7393e62e55e8d54aafcf",
+      "url": "catalog/art/King%20Arthur.png"
+    },
+    "art/Napoleon.png": {
+      "sha256": "013533accc626d8467b8b8da40721f043cac231f67e90ac8c654f292397f9f5d",
+      "url": "catalog/art/Napoleon.png"
+    },
     "art/Nathanael Greene.png": {
       "sha256": "8075a249420c506f62bf96e44961cae207198b3427aa53df4f059312e784c6c3",
       "url": "catalog/art/Nathanael%20Greene.png"
+    },
+    "art/Queen Boudica.png": {
+      "sha256": "c39ef41f288d22e421476c0479e78baa0ffae0a52638005d7ccee043bf743a2c",
+      "url": "catalog/art/Queen%20Boudica.png"
+    },
+    "art/Richard the Lionheart.png": {
+      "sha256": "d6eea902173a0f51c3e966b573008731e36f712a5998809305a83f2515c69596",
+      "url": "catalog/art/Richard%20the%20Lionheart.png"
+    },
+    "art/Roland.png": {
+      "sha256": "046a34e3115e0b74237e0ae8b1ec5fed62ec58a39ce1bcd97b7da5bc532be702",
+      "url": "catalog/art/Roland.png"
     },
     "art/Sanada.png": {
       "sha256": "f1777eca1e9c84d24571efc499b03aed49d758699b81b02c484072514a5dfc48",
@@ -49,6 +117,10 @@
     "art/Spartacus.png": {
       "sha256": "0dfeae22ceecea2cdf46a60960a50d3a939343f33560770a804215a65bac4425",
       "url": "catalog/art/Spartacus.png"
+    },
+    "art/William Wallace.png": {
+      "sha256": "4d6fe717963ebac01bb870d70f76def00ed4f66a1420beb9828ae81ca39a5d13",
+      "url": "catalog/art/William%20Wallace.png"
     }
   },
   "monsters": {
@@ -150,5 +222,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "c50a38bbc3768b4d36d477105abc85caaa424dbf479c39a8b7534cd63edb273d"
+  "sig": "a47dd132fed60bb0577e1f39ca8216ce974e062ee8237562038fa716daa529b2"
 }
