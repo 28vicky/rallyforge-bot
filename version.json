@@ -1,9 +1,9 @@
 {
-  "version": "2.4.74",
-  "notes": "Duties run on their own, Viking join fix, screen-size warning, Pause all fix, layout tidy",
+  "version": "2.4.75",
+  "notes": "Cerberus follows the monster list; duties run on their own; layout and Pause all fixes",
   "files": {
     "rally_bot.py": {
-      "sha256": "c42e51c447a743a076f58b6491383431979fb62be6c11166a81288734c413e85"
+      "sha256": "a22fcc4c9d759ebd29bce1dd99a8b703a24277d6f3a999cf4edb222dbdf7c3e0"
     },
     "web_app.py": {
       "sha256": "a7bfea98520db0453d0f7e0cdb898d1b1591e571dae2981722c6ecb861090b81"
@@ -18,7 +18,7 @@
       "sha256": "5ea38d08e0ced333fd50c5ada6e0f0df334a8086b92054e889ef460ef6916864"
     },
     "ui/changelog.js": {
-      "sha256": "81cc7bc940ee02a250e425e83096a0fbbabfdb3534bb76728170ea1af7b5c6ac"
+      "sha256": "991c52c181f5d77738141130418f56daf42b8b949c036e7e70b303ff2f326e1f"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -30,7 +30,7 @@
       "sha256": "a3f4da00c3578367f379516ccf7be16b4d594bb21091d14856f6a25983409dd9"
     },
     "ui/pages.js": {
-      "sha256": "1c977bbd1e0dc082ee1f0439eed26914cded40eb7dca13a9dcaf6c50e0dae019"
+      "sha256": "8abe7f0f4ed8b62a32b7315e9a815f35a396935b2e4b1b2095a4454792765d02"
     },
     "ui/tour.js": {
       "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
@@ -1483,5 +1483,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "8e998fc079b51bd3a841e659e80e296dc1d4f385aefd0051a15809fb5eba8ad5"
+  "sig": "e800b08eab1e1b79733d10740a50fd52dfdf6ee1d220cdc3a3d81114f2ce7f84"
 }
