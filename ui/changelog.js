@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.73", date: "2026-10-21",
+    new: [],
+    fixed: ["A full contrast check of every page in all skins: small grey text, greyed-out preset cards, the footer line, the menu arrows and error lines in the light skins are now easy to read."] },
   { v: "2.4.72", date: "2026-10-21",
     new: [],
     fixed: ["Dark skins: text on coloured buttons is now readable (dark text on orange / teal), and greyed-out buttons such as Stop all no longer fade into the background.", "Amber light skin: stronger button colour for easier reading.", "No more horizontal scrollbar and extra space on the right of the pages."] },

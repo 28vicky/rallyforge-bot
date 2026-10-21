@@ -804,3 +804,13 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 
 /* the side-margin trick must never create a horizontal scrollbar */
 .pages{overflow-x:hidden}
+
+/* ---- audit round 2 (21 Oct): small text and greyed-out states stay readable ---- */
+:root .status .l{opacity:1}
+.tab.grp .chev{opacity:.9}
+.pgens.dis{opacity:.7;filter:grayscale(.3)}
+.pcard.off{opacity:.92}
+[data-mode="light"] .log .e,[data-mode="light"] .chip.e{color:var(--bad)}
+[data-pal="amber"][data-mode="light"]{--mute:#5c584f;--good:#2f6f43}
+.pgens.dis{opacity:.85}
+.tab.grp .chev{opacity:1}
