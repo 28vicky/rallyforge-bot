@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.67", date: "2026-10-21",
+    new: ["18 more general pictures in the general library (Europe): Charles Martel, Flavius Aetius, Queen Boudica, William Wallace, John I of Portugal, Arminius, Cnut the Great, Jadwiga, Napoleon, Charles the Great, King Arthur, Roland, Constantine the Great, Richard the Lionheart, Isabella, Gustavus Adolphus, Edward the Black Prince, Barbarossa. Each picture shows the whole general."],
+    fixed: [] },
   { v: "2.4.66", date: "2026-10-21",
     new: ["General Manager: new \u201cScan Tavern portraits\u2026\u201d button. Open Tavern > Recruit General > Portraits in the game yourself (no city map needed) and the bot adds every general's picture and name to your general library. It only adds - nothing already in the library is removed - and it fills in pictures that were missing. One account is enough: the Portraits page shows every general of the game."],
     fixed: [] },
