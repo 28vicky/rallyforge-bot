@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.72", date: "2026-10-21",
+    new: [],
+    fixed: ["Dark skins: text on coloured buttons is now readable (dark text on orange / teal), and greyed-out buttons such as Stop all no longer fade into the background.", "Amber light skin: stronger button colour for easier reading.", "No more horizontal scrollbar and extra space on the right of the pages."] },
   { v: "2.4.71", date: "2026-10-21",
     new: ["Auto-Join tab: shows the time left on the game's Auto-Join and when it was last read.", "Monsters tab is now the universal list (no instance picker). Take the tour moved to Setup > Settings.", "\u201cGlobal\u201d is now \u201cUniversal\u201d; instance name size \u201cHuge\u201d is now \u201cExtra Large\u201d; clearer text for what happens when you play on another device."],
     fixed: ["Add, Stop all, Paused and other coloured buttons were white-on-white and unreadable in some skins; the paused line on an instance card was invisible; the Midnight dark and Amber light skins have better contrast; all buttons share one height; the page margins are now equal on both sides."] },
