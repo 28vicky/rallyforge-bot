@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.68", date: "2026-10-21",
+    new: ["The general library now has a picture of nearly every general in the game: 310 more (Europe, America, Japan, Korea, China, Russia, Arabia and Others), 331 in total. Each picture shows the whole general, with its name as the game writes it."],
+    fixed: [] },
   { v: "2.4.67", date: "2026-10-21",
     new: ["18 more general pictures in the general library (Europe): Charles Martel, Flavius Aetius, Queen Boudica, William Wallace, John I of Portugal, Arminius, Cnut the Great, Jadwiga, Napoleon, Charles the Great, King Arthur, Roland, Constantine the Great, Richard the Lionheart, Isabella, Gustavus Adolphus, Edward the Black Prince, Barbarossa. Each picture shows the whole general."],
     fixed: [] },
