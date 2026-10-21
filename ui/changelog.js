@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.78", date: "2026-10-21",
+    new: [],
+    fixed: ["Offer pop-ups that ignore taps outside them (e.g. Double Down Package Coupon) are now closed with their X, instead of the bot restarting the game."] },
   { v: "2.4.77", date: "2026-10-21",
     new: [],
     fixed: ["When the game lags (red wifi icon in the middle of the screen) the bot now waits for it to clear, then taps - no more Join taps lost to lag. The log shows how often each instance lags."] },
