@@ -58,6 +58,8 @@ Starter prompt for any chat: "Read CLAUDE.md and HANDOFF.md (section PARALLEL WO
 
 PC: free
 
+PENDING RELEASE: 2.4.76 (T8 update-restart) is ready on branch `rel-2476` (VERSION + changelog done). Publish = merge rel-2476 into main, push files, check_release, sign with UPDATE_KEY from the PC, push version.json last. Needs a session with the PC folder %APPDATA%\RallyForgeBot linked.
+
 ### Task board
 | ID | Task | Branch | Area (may edit) | Clash with | Status |
 |---|---|---|---|---|---|
