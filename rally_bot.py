@@ -5726,14 +5726,32 @@ def _locate_in(g, shot, min_score):
         return None
     res = cv2.matchTemplate(g, t, cv2.TM_CCOEFF_NORMED)
     _, mv, _, ml = cv2.minMaxLoc(res)
-    if mv < min_score:
-        return None
-    r2 = res.copy()                                          # a second, different place that matches almost as well = lawns / walls look alike: do not trust
-    r2[max(0, ml[1] - 60):ml[1] + 60, max(0, ml[0] - 60):ml[0] + 60] = -1
-    second = float(r2.max())
-    if mv < 0.88 and mv - second < 0.04:
-        return None
-    return ml[0] - 60, ml[1] - 250, float(mv)
+    if mv >= min_score:
+        r2 = res.copy()                                      # a second, different place that matches almost as well = lawns / walls look alike: do not trust
+        r2[max(0, ml[1] - 60):ml[1] + 60, max(0, ml[0] - 60):ml[0] + 60] = -1
+        second = float(r2.max())
+        if mv >= 0.88 or mv - second >= 0.04:
+            return ml[0] - 60, ml[1] - 250, float(mv)
+    # a stitched picture has seams, so the whole screen may not match as one piece: match five parts and take the place most of them agree on
+    parts = []
+    for (x0, y0, w, h) in ((0, 0, 190, 240), (190, 0, 190, 240), (0, 240, 190, 240), (190, 240, 190, 240), (95, 120, 190, 240)):
+        p = t[y0:y0 + h, x0:x0 + w]
+        if float(p.std()) < 10:
+            continue
+        r = cv2.matchTemplate(g, p, cv2.TM_CCOEFF_NORMED)
+        _, pv, _, pl = cv2.minMaxLoc(r)
+        if pv >= 0.5:
+            parts.append((float(pv), pl[0] - x0, pl[1] - y0))
+    best = []
+    for a in parts:
+        near = [q for q in parts if abs(q[1] - a[1]) <= 6 and abs(q[2] - a[2]) <= 6]
+        if len(near) > len(best):
+            best = near
+    if len(best) >= 3 or (len(best) == 2 and min(q[0] for q in best) >= 0.6):
+        xs = sorted(q[1] for q in best)
+        ys = sorted(q[2] for q in best)
+        return xs[len(xs) // 2] - 60, ys[len(ys) // 2] - 250, float(sum(q[0] for q in best) / len(best))
+    return None
 
 
 def locate_in_city(shot, min_score=0.55):
