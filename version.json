@@ -1,9 +1,9 @@
 {
-  "version": "2.4.67",
-  "notes": "18 more general pictures (Europe) in the general library.",
+  "version": "2.4.68",
+  "notes": "Picture of nearly every general in the general library (331).",
   "files": {
     "rally_bot.py": {
-      "sha256": "f4170487e210d42616c71d2c1fbc126aca01d3ad148677153ed2d410a0ba26ae"
+      "sha256": "fdfc5f3c0a4c6ba9c1ff267fac82013787a0309a07df2288271837c0e5f98fea"
     },
     "web_app.py": {
       "sha256": "ba00b9c6ccc6224af57391a6a94d071d20e14f2053848e4d4c5bcd7ba2a2f2be"
@@ -18,7 +18,7 @@
       "sha256": "fe6023bd746daf614a1813647817199d99f1014107fcd788fdccd0b4a2463028"
     },
     "ui/changelog.js": {
-      "sha256": "8357e9b78dfb477b0aec199fccd73b289e80d4573b4fa2964ec31d07f796dc79"
+      "sha256": "ccbc836059cfb9db2300bcd374fafe5dbb34556f61313cc3fcfa10500fa63f42"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -38,89 +38,1329 @@
   },
   "mode": "ask",
   "catalog": {
+    "art/Abd al-Rahman I.png": {
+      "sha256": "4d70a564e3382b6998790c7d961b095bef82a1561c0acd90a8a5257c9efcc2df",
+      "url": "catalog/art/Abd%20al-Rahman%20I.png"
+    },
+    "art/Aethelflaed.png": {
+      "sha256": "6c7ff288581dac9d3972af4ba62f5da4d5a7101cb5ef8d7f1119e0a217c93c54",
+      "url": "catalog/art/Aethelflaed.png"
+    },
+    "art/Ahmose I.png": {
+      "sha256": "30612e3746cbc3a9fcaa96125057d8ae72efcf769a86cc55cfdbd91158192011",
+      "url": "catalog/art/Ahmose%20I.png"
+    },
+    "art/Akechi Mitsuhide.png": {
+      "sha256": "e9c20cedd92ce51fbfcc70fce0dfec84751d64fb897c210e739622cafd7470b3",
+      "url": "catalog/art/Akechi%20Mitsuhide.png"
+    },
+    "art/Alessandra.png": {
+      "sha256": "1bd4c892b0a9aa819b2fab1e1f5479221147587a22e361b73a1a7b8ae1b4b6e6",
+      "url": "catalog/art/Alessandra.png"
+    },
+    "art/Alexander Hamilton.png": {
+      "sha256": "a5071bf1278baeea09645a5d31980cefd97e4406b0ef1220dc58831e5d73b0f4",
+      "url": "catalog/art/Alexander%20Hamilton.png"
+    },
+    "art/Alexander Nevsky.png": {
+      "sha256": "79a804044b42f9be946d4e75a26614361daf6de62d29f7145f4dd8e87fe687f3",
+      "url": "catalog/art/Alexander%20Nevsky.png"
+    },
+    "art/Alexander the Great.png": {
+      "sha256": "b73e655393a7dc493fbba7efeed90944bb8a72f845b447233936ea05bb976554",
+      "url": "catalog/art/Alexander%20the%20Great.png"
+    },
+    "art/Alfred the Great.png": {
+      "sha256": "c9eeedbb0e6e5ba109fc62a3945a63f3e28f69be87d66d5189dc6015c880fa5f",
+      "url": "catalog/art/Alfred%20the%20Great.png"
+    },
+    "art/Algernon Sidney.png": {
+      "sha256": "30292fc43a2b87aef21320d27c065535734f41bd1afd79a8377234b85a2105ba",
+      "url": "catalog/art/Algernon%20Sidney.png"
+    },
+    "art/Amir Timur.png": {
+      "sha256": "a87238bb63fcef49f7fbc2dca5437f0fbe2f268a110224472fca564401155aee",
+      "url": "catalog/art/Amir%20Timur.png"
+    },
+    "art/Amr ibn al-As.png": {
+      "sha256": "f011764c048c40b4790095cfa63d97633a85f3682f507d163ffa184024a098d5",
+      "url": "catalog/art/Amr%20ibn%20al-As.png"
+    },
+    "art/Andre Massena.png": {
+      "sha256": "bfc432eef9b45689048ebe0064cf538ccb7209fa9f3ada50d5b53481f890d234",
+      "url": "catalog/art/Andre%20Massena.png"
+    },
+    "art/Andrew Jackson.png": {
+      "sha256": "663d5cf4e774a7941f8c23b98d93d187a7d2fb787da262cdf16a799a3fe4b60c",
+      "url": "catalog/art/Andrew%20Jackson.png"
+    },
+    "art/Antara.png": {
+      "sha256": "1938b7733894c2683c9c23f4f4caa2ee238b490e56f0cd54a1eba6d0630134c5",
+      "url": "catalog/art/Antara.png"
+    },
     "art/Arminius.png": {
-      "sha256": "a06cf1610ee609d0d1c27c11f69466810af10c92aa445580b72a463e59d68b1d",
+      "sha256": "907dc57048cd0d9b8a7470f3121577f3ef10079ecd71e32baec5247067d26d73",
       "url": "catalog/art/Arminius.png"
     },
+    "art/Artemis.png": {
+      "sha256": "b4046cd5e533484f4919d18ac559fb42a8a4c8b49bbd050b30f9ba7438cd2306",
+      "url": "catalog/art/Artemis.png"
+    },
+    "art/Artemisia I.png": {
+      "sha256": "c5ed62720f399469e416663a970c3c6f15ee2bddcb008ec66656512b44c01f81",
+      "url": "catalog/art/Artemisia%20I.png"
+    },
+    "art/Arthur Wellesley.png": {
+      "sha256": "e89359ef0bd88c4d901f82450d3e5c3988f0d3afd871388bdf951bc9aa9036be",
+      "url": "catalog/art/Arthur%20Wellesley.png"
+    },
+    "art/Ashoka.png": {
+      "sha256": "ada4eca0e09a1e3b643c6e8dc994e6f303b1df255413fa518f346b7b08f71d64",
+      "url": "catalog/art/Ashoka.png"
+    },
+    "art/Askia Muhammad I.png": {
+      "sha256": "fdf64813a4d4ee3192fd214525dfcef4b3e8a3eb580b9ec15ffabeb442eb8852",
+      "url": "catalog/art/Askia%20Muhammad%20I.png"
+    },
+    "art/Attila.png": {
+      "sha256": "9fbd4480dd5cce8bd07fbf93841dd658aacd8f62f1acf328906165dcdebd5a40",
+      "url": "catalog/art/Attila.png"
+    },
+    "art/Aurelian.png": {
+      "sha256": "73b1186e7bbf901ecef6850193b2055157de4282f670d1cd816beae9a0f009e7",
+      "url": "catalog/art/Aurelian.png"
+    },
+    "art/Babur.png": {
+      "sha256": "64e1e7797380792325dd21bb404e65df0ec2d3e061d4ae0a9e2b21ff678d5c1b",
+      "url": "catalog/art/Babur.png"
+    },
+    "art/Baibars.png": {
+      "sha256": "04df418db9dbd4798fc76ac07549fed95399e1a3131dd69fd86b27f6c01f7dee",
+      "url": "catalog/art/Baibars.png"
+    },
+    "art/Baldwin IV.png": {
+      "sha256": "ee819e370dc5c6a41fca9cb2ca53b9f2c78cd46ca585cf5384dccd676eafe129",
+      "url": "catalog/art/Baldwin%20IV.png"
+    },
+    "art/Ban Chao.png": {
+      "sha256": "5adc7a0bad7a14a1f302126072034b89d28071de83c965547e7806cd95ab05a9",
+      "url": "catalog/art/Ban%20Chao.png"
+    },
     "art/Barbarossa.png": {
-      "sha256": "1987e3e38a7968f0d3a4184b147530314dfde182bd60c531ef266f0c26e356a2",
+      "sha256": "7d4356564bf954b5b1c0c183251e06aa695cf1006b9c7d1413859612f4f79f45",
       "url": "catalog/art/Barbarossa.png"
     },
+    "art/Basil II.png": {
+      "sha256": "4656ec0b9b49554e0e1cba01609c2cf06f628f684527fe4da4917a7b8ecde45a",
+      "url": "catalog/art/Basil%20II.png"
+    },
+    "art/Beowulf.png": {
+      "sha256": "02414d81ba7dbe25b6051607740f26718569573957d3ef64516f61595fdb4558",
+      "url": "catalog/art/Beowulf.png"
+    },
+    "art/Bertrand du Guesclin.png": {
+      "sha256": "325d27f2318cecd64fb0b902211fbe9cad44d90f4ffbdb790bdd42a918c6857a",
+      "url": "catalog/art/Bertrand%20du%20Guesclin.png"
+    },
+    "art/Blanche.png": {
+      "sha256": "14211040068fbe8f7f5bed2c26fd11c8f7754913419c38c4ff1b3b540ec451cb",
+      "url": "catalog/art/Blanche.png"
+    },
+    "art/Brian Boru.png": {
+      "sha256": "d21f4e982a877ac762cacbfb87608b7057883ad1704b89772f6106892f9cd809",
+      "url": "catalog/art/Brian%20Boru.png"
+    },
+    "art/Caesar.png": {
+      "sha256": "63d7d56ad944745bb8bf598c76a4c18744ac718b05fc82c2e5c26a146da04ed6",
+      "url": "catalog/art/Caesar.png"
+    },
+    "art/Carus.png": {
+      "sha256": "009867df5c843eef444a6e5c04c2d768ec04d7e79049e260a7dc5fa0e57d8080",
+      "url": "catalog/art/Carus.png"
+    },
+    "art/Casimir Pulaski.png": {
+      "sha256": "8db29886080de581a6bb0ed24a95d4dda86a2b914241a559134f4f09f1ee81c6",
+      "url": "catalog/art/Casimir%20Pulaski.png"
+    },
+    "art/Caterina Sforza.png": {
+      "sha256": "4c25fefe3f171be2e1ff54a85d8d64ef6979f0511e36f5319d7f1a867eda7c17",
+      "url": "catalog/art/Caterina%20Sforza.png"
+    },
+    "art/Catherine II.png": {
+      "sha256": "1b48060e963cb8c69674447ef20b0c77d7268d01f6b1c9611906d888a4a36c53",
+      "url": "catalog/art/Catherine%20II.png"
+    },
+    "art/Champlain.png": {
+      "sha256": "c4aa9c8f3be01314a788614d54112bb5c8ea294b67dbad2d0290666ebd46d055",
+      "url": "catalog/art/Champlain.png"
+    },
     "art/Charles Martel.png": {
-      "sha256": "c7957cebc316e3e00a842f41e5c9e99213e720824753d86f97cbe3948a44dafe",
+      "sha256": "0dec7a38554a71f26d59517d3f7e83cfce4e8ee2ac692aa998105913c773a2f4",
       "url": "catalog/art/Charles%20Martel.png"
     },
+    "art/Charles V.png": {
+      "sha256": "5534b7d87ce89ab7c713cd021f28edddbe4be14274797a300a11d2204183c8d8",
+      "url": "catalog/art/Charles%20V.png"
+    },
+    "art/Charles VI.png": {
+      "sha256": "b7c57c6e35da2c6d49f17961e2ef5d8705981772242121e112eb7f8636f961f6",
+      "url": "catalog/art/Charles%20VI.png"
+    },
+    "art/Charles XII.png": {
+      "sha256": "900586277b8b914f7ef151275b5e96c327206aac0484df3f43c3012991ca3a06",
+      "url": "catalog/art/Charles%20XII.png"
+    },
     "art/Charles the Great.png": {
-      "sha256": "e34b8a804437fe841058715b2ae8bf3e64671b1a2820779f3d20e0281b35b94e",
+      "sha256": "4bb312073c8916af9984d08f920b29c8798c88979afc0bf80e121f6a428c5a12",
       "url": "catalog/art/Charles%20the%20Great.png"
     },
+    "art/Cheng Yaojin.png": {
+      "sha256": "c6f92177515d2b4d6a6d9ee3c479a392fbee88d317bdd3aa6505014bc7254f49",
+      "url": "catalog/art/Cheng%20Yaojin.png"
+    },
+    "art/Christina.png": {
+      "sha256": "af5890f6c3b551f325ea7bcdfabb9538f61bb15951c3c2a354275ce8e5a26c48",
+      "url": "catalog/art/Christina.png"
+    },
+    "art/Cimon.png": {
+      "sha256": "100ea9bc93ee6533fbeed8b03f920d4738680258c94e0d67f0b8d9111e8a1893",
+      "url": "catalog/art/Cimon.png"
+    },
+    "art/Cleopatra.png": {
+      "sha256": "3b30f23e60d45037dd4ac39aaefe8ed890e3e1797606e7106a30dfd750ad899f",
+      "url": "catalog/art/Cleopatra.png"
+    },
+    "art/Clovis I.png": {
+      "sha256": "dbe74e301f4d74bd3cef0a8ef07fc5cd01495108f0595ebb3e3e93cf070d58a5",
+      "url": "catalog/art/Clovis%20I.png"
+    },
     "art/Cnut the Great.png": {
-      "sha256": "9f137ec14e23ed52796c37a524daa66a123e3adf7d284aa2726414e8c4783a90",
+      "sha256": "551ef00955f57f7cf6f4e6326461ad54f1a435c5385fc4ae6cdc0ca8937b1268",
       "url": "catalog/art/Cnut%20the%20Great.png"
     },
+    "art/Constance I.png": {
+      "sha256": "2f6c20fcbba6c07487d0cfc7d2ccdf034d9e1329fb47064bd1baa44cb996405c",
+      "url": "catalog/art/Constance%20I.png"
+    },
     "art/Constantine the Great.png": {
-      "sha256": "dc9d8b63a5778020aa524aa1e699de7bfc2c15f4a7227714be41e929901ab119",
+      "sha256": "b19803461347e634ae2c5cf073cb086af4d9f1f79089b72ee07867442bdd0844",
       "url": "catalog/art/Constantine%20the%20Great.png"
     },
+    "art/Coyolxauhqui.png": {
+      "sha256": "693bb1b6f3d7301a901b02cced0b2d590cf52aee229d0227c138dfb66a4eba70",
+      "url": "catalog/art/Coyolxauhqui.png"
+    },
+    "art/Cyrus the Great.png": {
+      "sha256": "357aa1d10456a382bd87370e9c5fa4b4d99ee697c3581ddbe3fbc1e62e257d9b",
+      "url": "catalog/art/Cyrus%20the%20Great.png"
+    },
+    "art/Daniel Morgan.png": {
+      "sha256": "5cf7d0b30d260d4243178e7462b66000cd4b7d3c91e1d802c6ac7e1b6e24a17d",
+      "url": "catalog/art/Daniel%20Morgan.png"
+    },
+    "art/Darius I.png": {
+      "sha256": "5b8dd25246434841844c5470f0d28cdae6c2ccc05cb63cbf62a649e22fc1d935",
+      "url": "catalog/art/Darius%20I.png"
+    },
+    "art/David Farragut.png": {
+      "sha256": "32a0b7f2d1af591d91d3f8d9db7ccaa53d8c8403a4a40fc515f2fdb0d8440a70",
+      "url": "catalog/art/David%20Farragut.png"
+    },
+    "art/Demetrius I.png": {
+      "sha256": "b83846f5e54988eff8d33d615418d87385cf31a805d4c829c278e9c832f595ad",
+      "url": "catalog/art/Demetrius%20I.png"
+    },
+    "art/Dmitry.png": {
+      "sha256": "a250edf2c6cc0cb7b5c5b02c939f32cfa019fb07ead69c80ef51a7cec577d6d1",
+      "url": "catalog/art/Dmitry.png"
+    },
+    "art/Douglas.png": {
+      "sha256": "e50408c799a1618d4a9ee57e03eb820687e4218663c59ad7ea739a0c76a72553",
+      "url": "catalog/art/Douglas.png"
+    },
+    "art/Edward III.png": {
+      "sha256": "a80befa12f4121ee0dfc2942f6b67f62ce58c7b47e890b1aec3483cb0b0ba9a9",
+      "url": "catalog/art/Edward%20III.png"
+    },
+    "art/Edward Teach.png": {
+      "sha256": "30f789242eb02865e00ae2dde6cc3fc0892c61638da53e90635ba6869927b09c",
+      "url": "catalog/art/Edward%20Teach.png"
+    },
     "art/Edward the Black Prince.png": {
-      "sha256": "aef00d86db3c01a966de46f234164b8dda628002e3a61aa6a95aac8131dca884",
+      "sha256": "132110d7ec92f2245845a1ce6fb83fd0f6def32f480e32529b1693640bd978cd",
       "url": "catalog/art/Edward%20the%20Black%20Prince.png"
     },
+    "art/El Cid.png": {
+      "sha256": "2d845a520be10a1e67af57063ba2044699353e4f6c4feb23271320460ad4a237",
+      "url": "catalog/art/El%20Cid.png"
+    },
+    "art/Eleanor.png": {
+      "sha256": "f0bd1f91df2f13fbf1c05b4d9495d5b03fafb277e0ba1e23ccc153303658db61",
+      "url": "catalog/art/Eleanor.png"
+    },
+    "art/Elektra.png": {
+      "sha256": "e3c07f456fc7f359554a8bf14df87944dbc29843f4d6199fdc36b0bdd0d0aa5b",
+      "url": "catalog/art/Elektra.png"
+    },
+    "art/Elise.png": {
+      "sha256": "752a5663bc28cde38a7ea6af32aedb58a8c577b7666610587fe121d92cbeace8",
+      "url": "catalog/art/Elise.png"
+    },
+    "art/Elizabeth I.png": {
+      "sha256": "c8a3dea5ad2db6f928be13dde8a0fa1ac162ce41f92eb179b8644601c9d13791",
+      "url": "catalog/art/Elizabeth%20I.png"
+    },
+    "art/Emperor Qin Shihuang.png": {
+      "sha256": "32a8f066f2a12ad5dfb3f5f25c0156a9cb9bc15942a5d40619f6081b695d287e",
+      "url": "catalog/art/Emperor%20Qin%20Shihuang.png"
+    },
+    "art/Empress Dowager Cixi.png": {
+      "sha256": "9b8861c72751082bb8fe12fa286695a44eba988dd6f0ae42f7129c841eb2e622",
+      "url": "catalog/art/Empress%20Dowager%20Cixi.png"
+    },
+    "art/Empress Wu.png": {
+      "sha256": "341c871397cf7e42ded5951af07e34d55dfffc7f699964b06e92cea6860c86e9",
+      "url": "catalog/art/Empress%20Wu.png"
+    },
+    "art/Epaminondas.png": {
+      "sha256": "b8a5161e3baf0048f9a2eb51a8becc38f24569d7322055b1bc95db550abdb38c",
+      "url": "catalog/art/Epaminondas.png"
+    },
+    "art/Eulji Mundeok.png": {
+      "sha256": "103376ca78c59225f4a6d67cf77bd45fc857db3cb34359fb9f811d42e9529d45",
+      "url": "catalog/art/Eulji%20Mundeok.png"
+    },
     "art/Flavius Aetius.png": {
-      "sha256": "fb0e373277befe2fe0de20d301a77e61f513f5de6516436bbfd93d9cfaf2911c",
+      "sha256": "2c633562823a5912f9251d9d30f07d5f444e336f91c43458f66ac9f513b558e1",
       "url": "catalog/art/Flavius%20Aetius.png"
     },
+    "art/Francis Drake.png": {
+      "sha256": "643bd4d2ffa94ea8f47cbcebbbd8204ca00e68782c0dce558628b959f96fb73a",
+      "url": "catalog/art/Francis%20Drake.png"
+    },
+    "art/Francis I of France.png": {
+      "sha256": "19bda0243f25838de904c1511d8155a680975a1225d859579f9dd77e143142d7",
+      "url": "catalog/art/Francis%20I%20of%20France.png"
+    },
+    "art/Franz Joseph I.png": {
+      "sha256": "5b9250d07755955a880f241c717434e2b2f2089606b77eb93a9731722adce2ae",
+      "url": "catalog/art/Franz%20Joseph%20I.png"
+    },
+    "art/Frederick the Great.png": {
+      "sha256": "af7906db29506d2a06f08433d9829210b0cc1a0076fbdd7ed2f955dd8fd2149e",
+      "url": "catalog/art/Frederick%20the%20Great.png"
+    },
+    "art/Freyja.png": {
+      "sha256": "bbaaa49abacdabef869261a35692570b8609caedaef9619df4cecd7085265017",
+      "url": "catalog/art/Freyja.png"
+    },
+    "art/Frigg.png": {
+      "sha256": "b556cb5a23a2872e4dccb7f980bccf9ef3a6b4542c14237e385acec34a2c3d8c",
+      "url": "catalog/art/Frigg.png"
+    },
+    "art/Gaius Marius.png": {
+      "sha256": "431fe57ae7e88c9f93ca09e5fe2400adfda82eb99ae2b3b9cfa1e0d6f61e1f99",
+      "url": "catalog/art/Gaius%20Marius.png"
+    },
+    "art/Gaius Octavius.png": {
+      "sha256": "863e8dec9da83b26ccaf0f204d3b689ddf85b7304a557bc91617afc84f81466f",
+      "url": "catalog/art/Gaius%20Octavius.png"
+    },
+    "art/Gao Changgong.png": {
+      "sha256": "45c4e7816dde258ff07165da99efd478c0387524e4e2b74a462e7efce9d5a3b8",
+      "url": "catalog/art/Gao%20Changgong.png"
+    },
+    "art/Genghis Khan.png": {
+      "sha256": "e58acd03ee03f03470c87dd17a8bbd9b87d982523271d34d61751b9e75c3a5cb",
+      "url": "catalog/art/Genghis%20Khan.png"
+    },
+    "art/George A. Custer.png": {
+      "sha256": "b5905889541690fce1015464b0ea6cfefd3f6a5693fda700cd8023379ad50ef2",
+      "url": "catalog/art/George%20A.%20Custer.png"
+    },
+    "art/George Dewey.png": {
+      "sha256": "7bf42fc6f85f0fc3862fef48cadee738877cd7812e2a09f2d2b1e0ae727edd57",
+      "url": "catalog/art/George%20Dewey.png"
+    },
+    "art/George Monck.png": {
+      "sha256": "ea4b1078be372a27c12720423fe0d6f6f2f3a2a340d3bd3da6a11a845ef05864",
+      "url": "catalog/art/George%20Monck.png"
+    },
+    "art/Gilgamesh.png": {
+      "sha256": "bb990c23cd2b94b619efb1c2ab207b4fcba6e0c8a85a1f6f89ac122a450c2c6d",
+      "url": "catalog/art/Gilgamesh.png"
+    },
+    "art/Gnarr.png": {
+      "sha256": "813d962813180fe2f2c0f70f0d4ce0e1a1102b6e4a1bb0f97c6738a7fcf1d202",
+      "url": "catalog/art/Gnarr.png"
+    },
+    "art/Godfrey of Bouillon.png": {
+      "sha256": "9f9be0e45e856eaa978e67a6064b800f51bd0526e28e8d70c7dae2bd758045d8",
+      "url": "catalog/art/Godfrey%20of%20Bouillon.png"
+    },
+    "art/Gonzalo.png": {
+      "sha256": "90f946d109e98395040ad1738f91641e08dc022300b29f5097cd37687c690a4b",
+      "url": "catalog/art/Gonzalo.png"
+    },
+    "art/Guan Yu.png": {
+      "sha256": "c9c1cb535562a1c8f2dbbcc95df0777e60f15eb007ddc65ad3b6eac88798699a",
+      "url": "catalog/art/Guan%20Yu.png"
+    },
+    "art/Guinevere.png": {
+      "sha256": "bd05ea8c13eaa57b8428d0450b6a2cae51c24671908cb0338e1fe7c4cb941d8e",
+      "url": "catalog/art/Guinevere.png"
+    },
+    "art/Gunther.png": {
+      "sha256": "a8526f9f16211383890a5c75a630194d6137b8e7cc397a29cab03dad3a1057b2",
+      "url": "catalog/art/Gunther.png"
+    },
     "art/Gustavus Adolphus.png": {
-      "sha256": "69f3f8eb651885737da045469c2c0779eef177d06d686520b00071157b8c7877",
+      "sha256": "07e2e5092a1fbbd6e4c73917e1c836341c657cc4ec359c1a4f26c68736600111",
       "url": "catalog/art/Gustavus%20Adolphus.png"
     },
+    "art/Gwanggaeto the Great.png": {
+      "sha256": "ff7ceb84b95e0845eaf7e37ba505cdab0d01cec3670fa2f3497519cad4c59799",
+      "url": "catalog/art/Gwanggaeto%20the%20Great.png"
+    },
+    "art/Gwon Ryul.png": {
+      "sha256": "232bfde407f3a88e44cf9dfb1aeceb7e7d8d3c3a1efa19667a3ebe00ee0ec071",
+      "url": "catalog/art/Gwon%20Ryul.png"
+    },
+    "art/Haakon Haraldsson.png": {
+      "sha256": "37bde21f7e0628ce884521745f7a5393813430617a9d11c8b20df35828da7944",
+      "url": "catalog/art/Haakon%20Haraldsson.png"
+    },
+    "art/Hamilcar Barca.png": {
+      "sha256": "ae55d1652b1b3670ff136ecf45c9da263d1178dbb140b2f540885ec093250ca1",
+      "url": "catalog/art/Hamilcar%20Barca.png"
+    },
+    "art/Hammurabi.png": {
+      "sha256": "240936885cd01fec0a884b06c59474a41c2488b2344edac11fbe1014f47056ff",
+      "url": "catalog/art/Hammurabi.png"
+    },
+    "art/Hannibal.png": {
+      "sha256": "cebc9753d13e326344f727e385758f6c3d8103e28a80bb73523a2f4056fc1dcd",
+      "url": "catalog/art/Hannibal.png"
+    },
+    "art/Harald III.png": {
+      "sha256": "cd7c5f5c7b50ff32c8bd84752c693c8eef8f0917e0c9a9f1c685d55f23a10b1f",
+      "url": "catalog/art/Harald%20III.png"
+    },
+    "art/Harald.png": {
+      "sha256": "d7c4f32566a2e93fae2b36e293b77822b199922a8c6b9f0417dfea3ce942b2c4",
+      "url": "catalog/art/Harald.png"
+    },
+    "art/Harun al-Rashid.png": {
+      "sha256": "469cfb3f1dcb54eff7300fc7dac49c46d5c19460b4225d66d2490ab12b9a4d7b",
+      "url": "catalog/art/Harun%20al-Rashid.png"
+    },
+    "art/Hatshepsut.png": {
+      "sha256": "03d47ab8cb41aff4bb1759fe4bef68607a20b1c309dbb3b8dec6602a771531c9",
+      "url": "catalog/art/Hatshepsut.png"
+    },
+    "art/Helena.png": {
+      "sha256": "ab4362cf532420f206b0146f8b79d975b78b2106a35d2876e4b71f22905f280c",
+      "url": "catalog/art/Helena.png"
+    },
+    "art/Henry IV.png": {
+      "sha256": "e8f4087b83b86c68cce56aed5b583783267afb5b473bda65f8e340a4ef8878b8",
+      "url": "catalog/art/Henry%20IV.png"
+    },
+    "art/Henry V.png": {
+      "sha256": "e7a4313e0b49bd3ac25f76282aa48981fbed2d9d046d0d0742620c07f5b953c3",
+      "url": "catalog/art/Henry%20V.png"
+    },
+    "art/Hera.png": {
+      "sha256": "25b7a91bfe4807749463ebc4c1f2b030689c0e5806e8008ef7609dc0eb3ce501",
+      "url": "catalog/art/Hera.png"
+    },
+    "art/Heraclius.png": {
+      "sha256": "f96c655be27ca0e3ed7c3d60a1d433e575f37fddaec24a3823109af7b5b76a5a",
+      "url": "catalog/art/Heraclius.png"
+    },
+    "art/Hermes.png": {
+      "sha256": "83bba440a5a9982849108ecd391cf18f77f420d149d97c0377126ad6bc3f2b48",
+      "url": "catalog/art/Hermes.png"
+    },
+    "art/Hernando Cortes.png": {
+      "sha256": "710936e47ab384017782f45eacdf7e3e995e15bc04d37f42347ce09c925ae62a",
+      "url": "catalog/art/Hernando%20Cortes.png"
+    },
+    "art/Hersilia.png": {
+      "sha256": "e6644a1c6309f4e6cd1e7b2eb1bc956945c5db81a298f23ae5909ffd82b11963",
+      "url": "catalog/art/Hersilia.png"
+    },
+    "art/Hestia.png": {
+      "sha256": "a77e6b51f7a5526535df7de8435b4f33a901a452a516558e4ecbb25397c21790",
+      "url": "catalog/art/Hestia.png"
+    },
+    "art/Himiko.png": {
+      "sha256": "d7c2dde2f3d4f2d285c19d589b2601cdb65f4c6d7b0c2c531b626daf22a9fb26",
+      "url": "catalog/art/Himiko.png"
+    },
+    "art/Hojo Ujiyasu.png": {
+      "sha256": "c79926fbf95022e0ac3132fc3de4a066d04d0ec6848996563e360d778c917aae",
+      "url": "catalog/art/Hojo%20Ujiyasu.png"
+    },
+    "art/Honda Tadakatsu.png": {
+      "sha256": "fd1b0e092bd5763eee8383c391d78982d9418c4ef0d0dc4e0e392da6c6ef343d",
+      "url": "catalog/art/Honda%20Tadakatsu.png"
+    },
+    "art/Hua Mulan.png": {
+      "sha256": "9c193723f439d21ce41d09844362ff566503ace57c1a82c68f35d552ae41c751",
+      "url": "catalog/art/Hua%20Mulan.png"
+    },
+    "art/Hugh O'Donnell.png": {
+      "sha256": "c33a05d505837f435f3bacc15a6a1bafb43ebb388e7ffdf221527f86f3d93bc5",
+      "url": "catalog/art/Hugh%20O%27Donnell.png"
+    },
+    "art/Huitzilopochtli.png": {
+      "sha256": "e7014bd221f808b2e211bbeede371fc2ec1a09de3be1767b48a39df93d9c895f",
+      "url": "catalog/art/Huitzilopochtli.png"
+    },
+    "art/Huo Qubing.png": {
+      "sha256": "3d88362555f781df8f9deded42bed2bcbca061afc47eb53127282941d9b20e06",
+      "url": "catalog/art/Huo%20Qubing.png"
+    },
+    "art/Idunn.png": {
+      "sha256": "761529f65e52d765412c7fbfbbc76e5c8d5892a1c4a5f79d12c6850a99aeb63b",
+      "url": "catalog/art/Idunn.png"
+    },
+    "art/Ii Naomasa.png": {
+      "sha256": "3145465b8ba71f733d2e311632deee7d8d78038345dbd9924e06ddd7de7a9990",
+      "url": "catalog/art/Ii%20Naomasa.png"
+    },
+    "art/Irene d'Arneau.png": {
+      "sha256": "3a684f0d2cc6ce44a8c552f9e7b4d1ca4acc8ebf9b2c800054f3af4eeecb3340",
+      "url": "catalog/art/Irene%20d%27Arneau.png"
+    },
+    "art/Isaac Brock.png": {
+      "sha256": "b38d7c1f255b4ab2e2b752ac23aca93db1d5c22ea47403ae6a577656cb066ea1",
+      "url": "catalog/art/Isaac%20Brock.png"
+    },
     "art/Isabella.png": {
-      "sha256": "968f1398b6f7db1c28495c3d3eed4237378fda82c53522b7f6832f93efc876e9",
+      "sha256": "a348bdc8be06da113b4a67503ad56221d61f7e47184967698cb4f4ae433f8a4f",
       "url": "catalog/art/Isabella.png"
     },
     "art/Jadwiga.png": {
-      "sha256": "328055469ce6364fb5e0b7b81dbb1c3a7c9e47a96ee4baaeae0c1d5612f4c14d",
+      "sha256": "99347f49be7e6dc7fb8cfe217ae16cbe112ea7fd4f59d1d3c0be253ac3bc934e",
       "url": "catalog/art/Jadwiga.png"
     },
+    "art/James Bowie.png": {
+      "sha256": "3a26e8fec3fdf7693efbf03de221173d7d45bde2a26be18d6b941827430ebe91",
+      "url": "catalog/art/James%20Bowie.png"
+    },
+    "art/James Conrad.png": {
+      "sha256": "166484276da3de3474d2a359b8ed924efa7ed19f75ab2576e122b01dbceb974e",
+      "url": "catalog/art/James%20Conrad.png"
+    },
+    "art/James Cook.png": {
+      "sha256": "8b94fcebb309b0e2de3a1a1d4cf3a74223add5e77792dc57d94f03df86d40daf",
+      "url": "catalog/art/James%20Cook.png"
+    },
+    "art/Jan Karol Chodkiewicz.png": {
+      "sha256": "642411f813ce4e9cc36e35d17354026b150428fcf7bd22180b45c1b26e96a2ec",
+      "url": "catalog/art/Jan%20Karol%20Chodkiewicz.png"
+    },
+    "art/Jayavarman II.png": {
+      "sha256": "b8435874ba18016ce090826ab8ffe3bf3077e17311385c123bbfff58d2c39a0e",
+      "url": "catalog/art/Jayavarman%20II.png"
+    },
+    "art/Jefferson.png": {
+      "sha256": "56f9f635524669d313dc40adcc7058d6500be5b4390dcf9fc59a9d0a20dcc45f",
+      "url": "catalog/art/Jefferson.png"
+    },
+    "art/Jester.png": {
+      "sha256": "0f19f9703c331e51da67ff856fa2e775ceaba93604a18bc19225f1952f377efd",
+      "url": "catalog/art/Jester.png"
+    },
+    "art/Jiang Ziya.png": {
+      "sha256": "0fc2553af5e26f23edd15300b2cc41680b2fc074d3078ebbd5224e1dd23fa24a",
+      "url": "catalog/art/Jiang%20Ziya.png"
+    },
+    "art/Joan of Arc.png": {
+      "sha256": "9a1601e7bf9ab1b9116fed35f0f2eb1a2213b70ba1e2e2a5970ddff8cc2475b2",
+      "url": "catalog/art/Joan%20of%20Arc.png"
+    },
+    "art/John Adams.png": {
+      "sha256": "0db597ff769b64960ad88b6dda9391565a83c1140391651b7effaa4597f63587",
+      "url": "catalog/art/John%20Adams.png"
+    },
+    "art/John Buford.png": {
+      "sha256": "5eb71e9611297827ed0e17a2f1c51e36d6d3c794d99957c98d54fe0f7411ede6",
+      "url": "catalog/art/John%20Buford.png"
+    },
+    "art/John Churchill.png": {
+      "sha256": "56e979c7bd328635f14f88ecb139d422472f7d66f1c7c4e44ba5d98af7053bb4",
+      "url": "catalog/art/John%20Churchill.png"
+    },
+    "art/John Hawkwood.png": {
+      "sha256": "11922e41346e77bad127f17b58fde7daf30b7308ebdbfdb8e947608de8d76052",
+      "url": "catalog/art/John%20Hawkwood.png"
+    },
+    "art/John Hunyadi.png": {
+      "sha256": "6b30914e2c5728c15bd0cb59e2090e269f1568ad69f3fb9b172716f4026a210d",
+      "url": "catalog/art/John%20Hunyadi.png"
+    },
     "art/John I of Portugal.png": {
-      "sha256": "3e5a8e87f91a93665d43ae36c6e01b1b196a4845ae70a8c288f9ba243c7b0805",
+      "sha256": "91a064f30d53a3f9a7db2cda8e1214967e00560949f84d97cca22adbda51cdb8",
       "url": "catalog/art/John%20I%20of%20Portugal.png"
     },
+    "art/Jumong.png": {
+      "sha256": "991781fb49727530336bfa83243e2bf60920e19ba66fe058427643b268123ad0",
+      "url": "catalog/art/Jumong.png"
+    },
+    "art/Justinian I.png": {
+      "sha256": "a0e07089cc3d4bd07617ceb6c2f02bdb6b3fab92f8ba33e9971b0ec585e1757d",
+      "url": "catalog/art/Justinian%20I.png"
+    },
+    "art/Khalid.png": {
+      "sha256": "00ed0ecbb8e9b8993314578198b46877077ae267cb6ae4c42f403148ec53643e",
+      "url": "catalog/art/Khalid.png"
+    },
+    "art/Kim Si-min.png": {
+      "sha256": "668e7b93c13d76665c00120e534f4c6d215c3f62efdb68b9e4d7927b49a6c022",
+      "url": "catalog/art/Kim%20Si-min.png"
+    },
     "art/King Arthur.png": {
-      "sha256": "e0c959bc58e79ec39d255f293caf90fc51f397d11a6b7393e62e55e8d54aafcf",
+      "sha256": "82c79544ddd23727119b0319f5e75537f0817b2ab56a961abdb8d3b25c414d0a",
       "url": "catalog/art/King%20Arthur.png"
     },
+    "art/King Sejong.png": {
+      "sha256": "acf13da6d107fbfae4b4a6c7cb5da15157e7878b3cc81d99c7f082ca16d97dc6",
+      "url": "catalog/art/King%20Sejong.png"
+    },
+    "art/Kiso Yoshinaka.png": {
+      "sha256": "6c10d64063067c8a5d2c8bf010480bde755c71799cfbf9c85265d64857f38d04",
+      "url": "catalog/art/Kiso%20Yoshinaka.png"
+    },
+    "art/Kleos.png": {
+      "sha256": "36fd7cf9fa7cb6a7e4cb36b0dfe9438a43452867f600760480f1f6ffffd9434a",
+      "url": "catalog/art/Kleos.png"
+    },
+    "art/Kusunoki Masashige.png": {
+      "sha256": "d0e89b2eb7e6f313e118df189a50b5a1245693401942119c8c4d16ab3181df7a",
+      "url": "catalog/art/Kusunoki%20Masashige.png"
+    },
+    "art/Lafayette.png": {
+      "sha256": "bd3f738496055c4e2ed7f960fa294859021170c3e8a4a49cf806aba45b4876f0",
+      "url": "catalog/art/Lafayette.png"
+    },
+    "art/Laudon.png": {
+      "sha256": "88cf546c9a2c5baf63f00589bd2f930aeeedd6ddd308a0d4136b4d764a73511c",
+      "url": "catalog/art/Laudon.png"
+    },
+    "art/Lautaro.png": {
+      "sha256": "c6c7c8c2f54b50424d7fa37f6b196ec5827e24d245ef2bb849a8f5497f6fb152",
+      "url": "catalog/art/Lautaro.png"
+    },
+    "art/Leo III.png": {
+      "sha256": "55266e5e446e7eb6691c8748c773d2f5eba9328cc95dc6a6bf8163886bbf7d36",
+      "url": "catalog/art/Leo%20III.png"
+    },
+    "art/Leonidas I.png": {
+      "sha256": "a962dcf5f8415a07bc2595c6135bc56fe23e69a422684ac16783f13278f71cbb",
+      "url": "catalog/art/Leonidas%20I.png"
+    },
+    "art/Li Jing.png": {
+      "sha256": "98cf68049b136c2ae1cbf591ef12aacf00f02554a960ddd1899dc62d7f9c0d2e",
+      "url": "catalog/art/Li%20Jing.png"
+    },
+    "art/Li Shimin.png": {
+      "sha256": "17abaa5b17ed181ae1fcc118a1f58a9d1b55b0684a852c6d03b2b6f4c9767cf5",
+      "url": "catalog/art/Li%20Shimin.png"
+    },
+    "art/Lincoln.png": {
+      "sha256": "4499101e3a8c3eddc6f8668742037816dea054cc3836400a0e174e661e25780a",
+      "url": "catalog/art/Lincoln.png"
+    },
+    "art/Liu Bei.png": {
+      "sha256": "04eebf62817449d712138f245bcb3d75d788a4e6a6ccff76714d307672f2a85c",
+      "url": "catalog/art/Liu%20Bei.png"
+    },
+    "art/Lorenzo de' Medici.png": {
+      "sha256": "aebc662ce9be0642e3692a68ba8940707af751ccd7541e11059268aec739c908",
+      "url": "catalog/art/Lorenzo%20de%27%20Medici.png"
+    },
+    "art/Louis II.png": {
+      "sha256": "edf3a3fea034e816d2d2d838ed22450bfd557316a08d5201f3ff416d8395bf99",
+      "url": "catalog/art/Louis%20II.png"
+    },
+    "art/Louis IX.png": {
+      "sha256": "a6a62d2fbecb623c0328903d730f06e0a4ca8ab113426cc82f720d9fca78784d",
+      "url": "catalog/art/Louis%20IX.png"
+    },
+    "art/Louis XIV.png": {
+      "sha256": "84ce2c0fbd557b2faf90c8a91b32ac94fb8592881dd04638f4aa5ee75d4ff43d",
+      "url": "catalog/art/Louis%20XIV.png"
+    },
+    "art/Lu Ban.png": {
+      "sha256": "b90026d82b683cf24a5847261c28c0e1e52e804b56b2f53580bb5ccfe0254c1e",
+      "url": "catalog/art/Lu%20Ban.png"
+    },
+    "art/Lu Xun.png": {
+      "sha256": "5f9ce8dbefc4729fec4c81b042d586633fc166e4b78ab2853923ece008fc0fd3",
+      "url": "catalog/art/Lu%20Xun.png"
+    },
+    "art/Lucilla.png": {
+      "sha256": "c2bc8ee1359456ea9f5bb5594751c040188dc4ee46c75e1ac66a5f86d8673556",
+      "url": "catalog/art/Lucilla.png"
+    },
+    "art/Ludwig.png": {
+      "sha256": "6a5cb247ef2ac41ddc4362b461bc0a30fcd09dce30e2e4f07b289aa99ad4a8c0",
+      "url": "catalog/art/Ludwig.png"
+    },
+    "art/Ly Thuong Kiet.png": {
+      "sha256": "c1c0f2c9420e416fdca26c729bacb1f153f8c467678bad90f50beb0ba4aa1531",
+      "url": "catalog/art/Ly%20Thuong%20Kiet.png"
+    },
+    "art/Lysander.png": {
+      "sha256": "585fe5dcc1dede3a3e31fcad966f9d10f7874c67dbbd397af6a3b0a2af09dce2",
+      "url": "catalog/art/Lysander.png"
+    },
+    "art/Maarten Tromp.png": {
+      "sha256": "d71ac8a63cd39a0e298609826b4955af9791345fcebd79dcf265cc68effdb95b",
+      "url": "catalog/art/Maarten%20Tromp.png"
+    },
+    "art/Maeda Toshiie.png": {
+      "sha256": "be3efbb717d67bcda2e0b355d482aeb022eb4dde3811af7fe24022b6dadf2f35",
+      "url": "catalog/art/Maeda%20Toshiie.png"
+    },
+    "art/Mansa Musa.png": {
+      "sha256": "b02c9c9685f71e9ff9ddb714c2c7009cdfb8da41cdc279e3cec4ac9e25a549a2",
+      "url": "catalog/art/Mansa%20Musa.png"
+    },
+    "art/Marcian.png": {
+      "sha256": "71524244df6235df9d7ac8e61ddec3aa5196080cf21baaeadd22488b84ee96b2",
+      "url": "catalog/art/Marcian.png"
+    },
+    "art/Marco Polo.png": {
+      "sha256": "127733dd7cf67523f5efd2c0f524647d6f74564560e523d324f82a13a367cae7",
+      "url": "catalog/art/Marco%20Polo.png"
+    },
+    "art/Marcus Agrippa.png": {
+      "sha256": "0884a81b531406c8503b356d7e9790af54606b1057c7b199f2bb9facbef7696c",
+      "url": "catalog/art/Marcus%20Agrippa.png"
+    },
+    "art/Margaret I.png": {
+      "sha256": "a20f6ff7c92e75356d4defad1ab1b4491a63ea1459b36f2176e33abb59b95218",
+      "url": "catalog/art/Margaret%20I.png"
+    },
+    "art/Margaret.png": {
+      "sha256": "bbd214d0ed20f89268c5adbe948580f3528bacf470340a3ab205c11e27cdce16",
+      "url": "catalog/art/Margaret.png"
+    },
+    "art/Maria Carolina.png": {
+      "sha256": "aa9345baf8294c0e22857d60dee5dc3a1aa919203f45f3e4f9ce5704f0c9da6e",
+      "url": "catalog/art/Maria%20Carolina.png"
+    },
+    "art/Maria Theresa.png": {
+      "sha256": "2a3ca4f66dac293d96fa18cff69bf21e92ecd7c67542d8cdf7c75e93efda6aa1",
+      "url": "catalog/art/Maria%20Theresa.png"
+    },
+    "art/Mark Antony.png": {
+      "sha256": "88c395475f6c628349d6612189ed87a945eac09ca998bbeca8a38828f3173eaf",
+      "url": "catalog/art/Mark%20Antony.png"
+    },
+    "art/Martinus.png": {
+      "sha256": "55b6b783f49ffada882508d795efdd25c7d30a1a84c34b3aec45d8b052720c26",
+      "url": "catalog/art/Martinus.png"
+    },
+    "art/Mason Weaver.png": {
+      "sha256": "a93a06a4cc7be06ca12d1c6f252ea17bcfc78eb195bf84176a0deaba2b2fce1c",
+      "url": "catalog/art/Mason%20Weaver.png"
+    },
+    "art/Matsunaga Hisahide.png": {
+      "sha256": "bd4cbded1d6321445696a5f20239ae132ce20b0157f1e991728d2c5d148e5cff",
+      "url": "catalog/art/Matsunaga%20Hisahide.png"
+    },
+    "art/Matthias I.png": {
+      "sha256": "2d532ab967c88e6c518d3d29467c54329bbcf424d6e06d18a2c53308c5a3ea3a",
+      "url": "catalog/art/Matthias%20I.png"
+    },
+    "art/Maurice de Saxe.png": {
+      "sha256": "25eed3e606da741bc6fca1a58796c6d921c4be30eb4b6641b2c9cf5592b0de06",
+      "url": "catalog/art/Maurice%20de%20Saxe.png"
+    },
+    "art/Maurice of Nassau.png": {
+      "sha256": "a39702840bb6237c7b580396a643d8ecd0545fc57211d6e1d78ddecf0a2df874",
+      "url": "catalog/art/Maurice%20of%20Nassau.png"
+    },
+    "art/Maximilian I.png": {
+      "sha256": "3cb2a0f46a9ef0c2567aada5c39e5efd794ad77f1186bcee4e9b39715a4b86c8",
+      "url": "catalog/art/Maximilian%20I.png"
+    },
+    "art/Mehmed II.png": {
+      "sha256": "3c02444aa466f14ccb62b7d5fc72036ee47de738f79f9c45015536d86d1d7284",
+      "url": "catalog/art/Mehmed%20II.png"
+    },
+    "art/Melisande.png": {
+      "sha256": "38249f23a7ec6e22c70c217ba96ffac2093c042e521d26c984d5fba7ffea2f4d",
+      "url": "catalog/art/Melisande.png"
+    },
+    "art/Menshikov.png": {
+      "sha256": "34b5fb62c54f8aa8b4a55f53b06094bd77b997a69135ea2c7d7f91b09c456cf2",
+      "url": "catalog/art/Menshikov.png"
+    },
+    "art/Merlin.png": {
+      "sha256": "1c4a4b80ba8fd62257ebf819d4e9f17bc9f17c619481fb766959f2aff0ee3003",
+      "url": "catalog/art/Merlin.png"
+    },
+    "art/Michael VIII.png": {
+      "sha256": "1ee7fc6a9fee61eb14ec06bc570fb208b8777f8400bad7d74bad836ef78cbd72",
+      "url": "catalog/art/Michael%20VIII.png"
+    },
+    "art/Mihai.png": {
+      "sha256": "b2105db1434452b91fdf72ce444d0b6897f109da80781df3e7ece3a0c27018fd",
+      "url": "catalog/art/Mihai.png"
+    },
+    "art/Mikhail Kutuzov.png": {
+      "sha256": "0a32f46c2f7c2dd41d48f5ea1c0e5caaae0e44786e36cf3adc75e1ab44697402",
+      "url": "catalog/art/Mikhail%20Kutuzov.png"
+    },
+    "art/Miltiades.png": {
+      "sha256": "116ac14e4e12e2b1d24cb34625861b6cb04862163f05277b3edf3fcd453d40a4",
+      "url": "catalog/art/Miltiades.png"
+    },
+    "art/Minamoto no Yoshitsune.png": {
+      "sha256": "ff1949dee7c4487611ce509a156901357d8e0b689a8cee88f67624087292bd77",
+      "url": "catalog/art/Minamoto%20no%20Yoshitsune.png"
+    },
+    "art/Miyamoto Musashi.png": {
+      "sha256": "80ae12eb5116091df916c9f5e53001f6f14a1b9b16d5f4811732e4b7272e2820",
+      "url": "catalog/art/Miyamoto%20Musashi.png"
+    },
+    "art/Montezuma I.png": {
+      "sha256": "75d68f6d5dd9074feae9440c8d4fc4ad430ab7a6af0878bbd008094ccf5ce34e",
+      "url": "catalog/art/Montezuma%20I.png"
+    },
+    "art/Mordred.png": {
+      "sha256": "5c57c1ce2f9119bb9810c8f5a28120504429612468cffd0ce0c52d0dad8ac25e",
+      "url": "catalog/art/Mordred.png"
+    },
+    "art/Mouri Motonari.png": {
+      "sha256": "a93976793755246b71f6fe4e3f44eb386c2298a27f89855afd2634043b24c57e",
+      "url": "catalog/art/Mouri%20Motonari.png"
+    },
+    "art/Mu Guiying.png": {
+      "sha256": "5b053bd9ff40162ca9d1e6d6a6a01ced95f747bcbe2c9c632f4057898efa7f3d",
+      "url": "catalog/art/Mu%20Guiying.png"
+    },
+    "art/Napoleon (Prime).png": {
+      "sha256": "1b897244a1e95f210b77b44b05d867ddd3f720db20241084e1ee92e1422672fe",
+      "url": "catalog/art/Napoleon%20%28Prime%29.png"
+    },
     "art/Napoleon.png": {
-      "sha256": "013533accc626d8467b8b8da40721f043cac231f67e90ac8c654f292397f9f5d",
+      "sha256": "d4e8935a57a626487af7127faba0e8f82d0827d3b7b5e0e2353a05f3cc6ba59f",
       "url": "catalog/art/Napoleon.png"
+    },
+    "art/Narcissus.png": {
+      "sha256": "01c41ce7f76c7ce1827eff9e0264c4a222ee68d9696b8bc973f506289aa60211",
+      "url": "catalog/art/Narcissus.png"
+    },
+    "art/Narses.png": {
+      "sha256": "7f20645559ef3ffb45d22364bcd5842975be621903796c8f12ae5a2acdf71c9c",
+      "url": "catalog/art/Narses.png"
     },
     "art/Nathanael Greene.png": {
       "sha256": "8075a249420c506f62bf96e44961cae207198b3427aa53df4f059312e784c6c3",
       "url": "catalog/art/Nathanael%20Greene.png"
     },
+    "art/Nero.png": {
+      "sha256": "f9da8c6a118bf581cfb8a624314d53a3f8c32d28ebc7771bcdc80838d7ef013d",
+      "url": "catalog/art/Nero.png"
+    },
+    "art/Niccolo Piccinino.png": {
+      "sha256": "be2bd5a3dab90288c19c71f805edc67689ecf41da01796aab1c7ba490dc7498f",
+      "url": "catalog/art/Niccolo%20Piccinino.png"
+    },
+    "art/Niwa Nagahide.png": {
+      "sha256": "f940a57d6f0159204bb6896c876c7f655597fbf57c396fefb0deb7137d76abe9",
+      "url": "catalog/art/Niwa%20Nagahide.png"
+    },
+    "art/Nordic Barbarian King.png": {
+      "sha256": "7b9467d619543524f3edc02dc511f9416ea911e0fbdf9646119ce4fe25594575",
+      "url": "catalog/art/Nordic%20Barbarian%20King.png"
+    },
+    "art/Oda Nobunaga.png": {
+      "sha256": "29a80410e6de2b54088b6846ff82e33221e73fc6c395ea2e54afe36dd770a29a",
+      "url": "catalog/art/Oda%20Nobunaga.png"
+    },
+    "art/Oda Oichi.png": {
+      "sha256": "7cef7a083f1bbe4301f47b71adf64784f301acd56de6d7ea54f1b53bde919f60",
+      "url": "catalog/art/Oda%20Oichi.png"
+    },
+    "art/Olaf Skotkonung.png": {
+      "sha256": "42cfbde344789fd7f071fe1e586608b719d298166a1436846edff657a0a9cf3d",
+      "url": "catalog/art/Olaf%20Skotkonung.png"
+    },
+    "art/Olav II.png": {
+      "sha256": "3e25c252b4aa923c7c1e7e1bff64f52b86723e366418876918da48f2bbb29dc3",
+      "url": "catalog/art/Olav%20II.png"
+    },
+    "art/Oleg of Novgorod.png": {
+      "sha256": "c71d58ce95f3b2bc180d3d03635b5740e06c0d3a58be84fb0e3745e61a195e97",
+      "url": "catalog/art/Oleg%20of%20Novgorod.png"
+    },
+    "art/Ono no Imoko.png": {
+      "sha256": "d5c457dce707112e58f350fe83a99aa812d0151f766dd0a7e07e3977540842dd",
+      "url": "catalog/art/Ono%20no%20Imoko.png"
+    },
+    "art/Otto the Great.png": {
+      "sha256": "9d55fdb5d8bbfb402163469c38dc3df3beea63b748d93d5f52c47335950a3f1b",
+      "url": "catalog/art/Otto%20the%20Great.png"
+    },
+    "art/Pachacuti.png": {
+      "sha256": "a3d0cf52b5dcd2b3b0b7f6e85393930dd158a823ef0d3e88576813023a1a2b2b",
+      "url": "catalog/art/Pachacuti.png"
+    },
+    "art/Pallas.png": {
+      "sha256": "d4bd5495596d7cce773af836bac68b8aa4dc9fa10f64be7503f6196051325780",
+      "url": "catalog/art/Pallas.png"
+    },
+    "art/Pericles.png": {
+      "sha256": "671a37f7ff68c302fa147b247efb8996314f9fe04e851dd2c933b9859d78cbe4",
+      "url": "catalog/art/Pericles.png"
+    },
+    "art/Peter the Great.png": {
+      "sha256": "9615d26ce6041361e5e79ddec0cb7bcfed2baef65ca1c217e454e4d2ad07739f",
+      "url": "catalog/art/Peter%20the%20Great.png"
+    },
+    "art/Petronas.png": {
+      "sha256": "1733fba186468436ef689725f5c5d0379069c73eac212532be9b979f17203fb6",
+      "url": "catalog/art/Petronas.png"
+    },
+    "art/Philip II.png": {
+      "sha256": "c6b4e9c74c9f634dc6bb4d4bbc3b46a36b7f7ecdbdf98013011d45c4d7bcc24d",
+      "url": "catalog/art/Philip%20II.png"
+    },
+    "art/Philip Sheridan.png": {
+      "sha256": "3d5b203ed883635b25ae06acc1a2cd1002d4f70e1f4e23d43fe6c901b71f2b63",
+      "url": "catalog/art/Philip%20Sheridan.png"
+    },
+    "art/Philippa.png": {
+      "sha256": "67af4c7c2c6aac4215a0c9a221b24f460aa1362c59b41f4fd62557aada299422",
+      "url": "catalog/art/Philippa.png"
+    },
+    "art/Poligenus.png": {
+      "sha256": "820812b9dd87f75b197c8a6561855f1c345e06f96345b12cb090d837e4cca80e",
+      "url": "catalog/art/Poligenus.png"
+    },
+    "art/Pompey.png": {
+      "sha256": "179e7791ecdabc336b48e306e634296763ad2e961046fd70da2564b76a7fdbfb",
+      "url": "catalog/art/Pompey.png"
+    },
+    "art/Presley O'Bannon.png": {
+      "sha256": "5d7a61f8e2387a55007b3da24fb8eb4b0b4da802c9349391e44e06e6eae463b4",
+      "url": "catalog/art/Presley%20O%27Bannon.png"
+    },
+    "art/Prince Eugene.png": {
+      "sha256": "c5cad0170dc939b293be4d3d0411243f8e9fcccc8e86bc1b65ee4a6a4e4039cf",
+      "url": "catalog/art/Prince%20Eugene.png"
+    },
+    "art/Prince Rhaegar.png": {
+      "sha256": "d07ce4b62b9c7843863f7996c7aa064a1de584bcfa5ae25f1ae02cf58d2d2679",
+      "url": "catalog/art/Prince%20Rhaegar.png"
+    },
+    "art/Princess Kaguya.png": {
+      "sha256": "724a81ad455436ace1609e8f8650c0ecc3e15b91b3601768af4ada6886717352",
+      "url": "catalog/art/Princess%20Kaguya.png"
+    },
+    "art/Princess Lucy.png": {
+      "sha256": "5ea9259be93fe2f348897a99b06d879d1a52e099aea34e884ad5aeab07eaf798",
+      "url": "catalog/art/Princess%20Lucy.png"
+    },
+    "art/Probus.png": {
+      "sha256": "6de14399229464a1096d2fd9a4e2ce636f0b009ab1b4ea9492bc455a5237da4f",
+      "url": "catalog/art/Probus.png"
+    },
+    "art/Pyrrhus.png": {
+      "sha256": "18a4b788a59e91461f589c2638861e53d536c97be2203e04eef3f338c2cca186",
+      "url": "catalog/art/Pyrrhus.png"
+    },
+    "art/Pythia.png": {
+      "sha256": "658af0e959620880bf6fa2d7abeb2a5da51afca320d867531bd7fd25063b188f",
+      "url": "catalog/art/Pythia.png"
+    },
+    "art/Qin Qiong.png": {
+      "sha256": "2b5d7049295ea78ac8c898523cb3d9e9326120243a6eab65e16e668d4c28b8c3",
+      "url": "catalog/art/Qin%20Qiong.png"
+    },
+    "art/Queen Anne.png": {
+      "sha256": "06bc969089093b414ab953c27c5e38521e787469d1773c1ec3027baa454f408e",
+      "url": "catalog/art/Queen%20Anne.png"
+    },
     "art/Queen Boudica.png": {
-      "sha256": "c39ef41f288d22e421476c0479e78baa0ffae0a52638005d7ccee043bf743a2c",
+      "sha256": "92affc78ede8f7acd64e4f2298b097637918d67190066cc349ea07d771c89dd9",
       "url": "catalog/art/Queen%20Boudica.png"
     },
+    "art/Queen Jindeok.png": {
+      "sha256": "70fea1c3cce01fd319b5d15bcf8ceee014670e78e7153e2f6daac5498a0fc0a1",
+      "url": "catalog/art/Queen%20Jindeok.png"
+    },
+    "art/Queen Tamar.png": {
+      "sha256": "ce7317396fbf73cd2cd043d17d60dffb4c308f06242d31e3359ebb2885f1982d",
+      "url": "catalog/art/Queen%20Tamar.png"
+    },
+    "art/Queen Victoria.png": {
+      "sha256": "085f8de9d87344e7b8cc6acf7b5e08b2dbfcf15afa44071a8fd0b0bfd7d3ba72",
+      "url": "catalog/art/Queen%20Victoria.png"
+    },
+    "art/Raged King.png": {
+      "sha256": "d49b77570858b553bd226a5a95a958d197b52e38afde15026ed18a0b794ab9a0",
+      "url": "catalog/art/Raged%20King.png"
+    },
+    "art/Ragnar.png": {
+      "sha256": "620f21de5d46c3c96772b8ed971a7f705229bc95707c07cfab31eec287bf34f9",
+      "url": "catalog/art/Ragnar.png"
+    },
+    "art/Raimondo.png": {
+      "sha256": "b40d267772385e8cd15948ad766e06da1d13b20a71566638f2b9dc82b94eec5a",
+      "url": "catalog/art/Raimondo.png"
+    },
+    "art/Ramesses II.png": {
+      "sha256": "ace5c34ab8be2ab088ebe747e36ef98dda9983dbfe445cd4e6a4987fb4f24014",
+      "url": "catalog/art/Ramesses%20II.png"
+    },
     "art/Richard the Lionheart.png": {
-      "sha256": "d6eea902173a0f51c3e966b573008731e36f712a5998809305a83f2515c69596",
+      "sha256": "9d8968a503fffcbd1152cde113b052f907185180b83cce402ab1e15e85b53fb9",
       "url": "catalog/art/Richard%20the%20Lionheart.png"
     },
+    "art/Robert Guiscard.png": {
+      "sha256": "af3d544e2ae7645c2f7f643dc745269ce9f40f25423c570fde53133d260f8893",
+      "url": "catalog/art/Robert%20Guiscard.png"
+    },
+    "art/Robert the Bruce.png": {
+      "sha256": "fed25f3e2636b58a56e65ad08ea2134a31e69a6e1afb04c9ae9ed61c49975384",
+      "url": "catalog/art/Robert%20the%20Bruce.png"
+    },
+    "art/Roger II.png": {
+      "sha256": "4fd9cb0837122e0c5ca2fcde1006ef0752587fd73d71a70caae50b1cf7324bdf",
+      "url": "catalog/art/Roger%20II.png"
+    },
     "art/Roland.png": {
-      "sha256": "046a34e3115e0b74237e0ae8b1ec5fed62ec58a39ce1bcd97b7da5bc532be702",
+      "sha256": "5a9d04d8934f1d585c330c84307574d6f4d7bfb52adae7e6a568fda8e14fdc79",
       "url": "catalog/art/Roland.png"
+    },
+    "art/Romulus.png": {
+      "sha256": "894cb3eb0dd7d2552a4f6b934348943259b6644bbadf8a887e94abd00985b860",
+      "url": "catalog/art/Romulus.png"
+    },
+    "art/Rostam.png": {
+      "sha256": "3f2d217b93c4f6fcfd79103f2115a6433a636f2dff7c1f2e0bedb8ad1886ba38",
+      "url": "catalog/art/Rostam.png"
+    },
+    "art/Rumyantsev.png": {
+      "sha256": "2b04d0aef0523c7563b58e18f4f88a3d4bbe39551619a54b821517712e8d24ad",
+      "url": "catalog/art/Rumyantsev.png"
+    },
+    "art/Saladin.png": {
+      "sha256": "510258b605d151d5e6d72082b26e9910696e4e31c0bce3aeaffd3a514b2f74d8",
+      "url": "catalog/art/Saladin.png"
     },
     "art/Sanada.png": {
       "sha256": "f1777eca1e9c84d24571efc499b03aed49d758699b81b02c484072514a5dfc48",
       "url": "catalog/art/Sanada.png"
     },
+    "art/Sappho.png": {
+      "sha256": "ef92d3b38fb878e632d969af698a073df3ae2b40646da66d9f0611ef16e4038e",
+      "url": "catalog/art/Sappho.png"
+    },
+    "art/Sargon I.png": {
+      "sha256": "718dc0e7b0b35084fd9b57496370b0a910cf106e42d7cd1873d2d5e7f7973d30",
+      "url": "catalog/art/Sargon%20I.png"
+    },
+    "art/Scipio Africanus.png": {
+      "sha256": "0d5509edb5b5ef95037cdf900dfc664ec993f0e49cd935328701dbf8a868a528",
+      "url": "catalog/art/Scipio%20Africanus.png"
+    },
+    "art/Sei Shonagon.png": {
+      "sha256": "534461758c0f95eb22d4474bd0da0608e0c783dcf17af253f27864aa0ea5f9ce",
+      "url": "catalog/art/Sei%20Shonagon.png"
+    },
+    "art/Seleucus I.png": {
+      "sha256": "bae8eb2b5f15622e563ed0cdff28fe14af30fd54eabdc60418ef679981460a97",
+      "url": "catalog/art/Seleucus%20I.png"
+    },
+    "art/Septimius Severus.png": {
+      "sha256": "8aff2bf05cda0cf24140afba092623d58cacbb8de91fa8f81c6d57c3b3bc09b7",
+      "url": "catalog/art/Septimius%20Severus.png"
+    },
+    "art/Shajar al-Durr.png": {
+      "sha256": "51a776a16c8e6fc8d7c54eb0d300f4a77ed8d6c0169d910aae0a3f39b0f76c1e",
+      "url": "catalog/art/Shajar%20al-Durr.png"
+    },
+    "art/Shapur I.png": {
+      "sha256": "654e9398a0d4e5e402cbb120eaecfe37840cd7afe552c2d95f9084b7f25794dd",
+      "url": "catalog/art/Shapur%20I.png"
+    },
+    "art/Shaybani.png": {
+      "sha256": "e3f760c7f1f63e11a15ea8c5790fb0c56de07539b6b257dd4197076ad68532f3",
+      "url": "catalog/art/Shaybani.png"
+    },
+    "art/Sherman.png": {
+      "sha256": "ecdb3b30c69734564f13573d72884638e601658eee838b3417b77aca37992f4b",
+      "url": "catalog/art/Sherman.png"
+    },
+    "art/Shimazu Yoshihiro.png": {
+      "sha256": "0d687bc3be3d954a3ac0131a9e8f3e39f0a391ed50b8c144b2173930ef9c3c58",
+      "url": "catalog/art/Shimazu%20Yoshihiro.png"
+    },
+    "art/Sigurd.png": {
+      "sha256": "db1f09d290134830648ad2f2d74363057b4033e1425d4d2bfeaa9726f4d1d23e",
+      "url": "catalog/art/Sigurd.png"
+    },
+    "art/Simeon the Great.png": {
+      "sha256": "9b012ce31ac022f49878ea7a7d1ead95536e77739228cd6d75c6c604bcde35a3",
+      "url": "catalog/art/Simeon%20the%20Great.png"
+    },
+    "art/Skanderbeg.png": {
+      "sha256": "f5ebc87f06aeabccba44c45255c285f8f78645e45fe96bc59ff01b4a8bbef17b",
+      "url": "catalog/art/Skanderbeg.png"
+    },
+    "art/Soult.png": {
+      "sha256": "0721760a3bb775fbdae4b87719060a8e4d5539463827a7ae19a5aca1523132ea",
+      "url": "catalog/art/Soult.png"
+    },
     "art/Spartacus.png": {
       "sha256": "0dfeae22ceecea2cdf46a60960a50d3a939343f33560770a804215a65bac4425",
       "url": "catalog/art/Spartacus.png"
     },
+    "art/Stephen I of Hungary.png": {
+      "sha256": "69a2864d7abd09c0652d50cbe438e97d00b21fa9a06c8fad884dd553623d5285",
+      "url": "catalog/art/Stephen%20I%20of%20Hungary.png"
+    },
+    "art/Stephen II.png": {
+      "sha256": "290d2349ea58bb720b0de7723807335a3e48e2a29b61d8bda3c1e083eaff95a6",
+      "url": "catalog/art/Stephen%20II.png"
+    },
+    "art/Stephen the Great.png": {
+      "sha256": "4c8a0b1996febc58a91bef0874f6db68c950232aeeeee542557fe9f5aab50c7c",
+      "url": "catalog/art/Stephen%20the%20Great.png"
+    },
+    "art/Stilicho.png": {
+      "sha256": "eb7a89871ff9985801bb47834c25fcb230ac4a4e7f4872e046e59436adf37b78",
+      "url": "catalog/art/Stilicho.png"
+    },
+    "art/Subutai.png": {
+      "sha256": "2d462930d04c5fd477529b34afdc2dd7151e164212779e3fb1b4e7a66d0aeb23",
+      "url": "catalog/art/Subutai.png"
+    },
+    "art/Suchet.png": {
+      "sha256": "e2e4e23a0e06101e16c6cd3d9765c41a748bb995cdfde9c018ba648eb8faebfb",
+      "url": "catalog/art/Suchet.png"
+    },
+    "art/Suleiman the Magnificent.png": {
+      "sha256": "3585236d94be0b8a311132ba72ec432d6072dea351aa7be308af854a81c9f690",
+      "url": "catalog/art/Suleiman%20the%20Magnificent.png"
+    },
+    "art/Sulla.png": {
+      "sha256": "92e64f3302c713a4b003fc91d401e692470b4bfbd237d740a5d1713334ab6934",
+      "url": "catalog/art/Sulla.png"
+    },
+    "art/Sun Ce.png": {
+      "sha256": "42630be6686ad402ab939edc17bd77dac0f0e6fd083fe68fec1380572306d61c",
+      "url": "catalog/art/Sun%20Ce.png"
+    },
+    "art/Sun Wu.png": {
+      "sha256": "a4e4bacf9ccd7b45e4121234e142d2a071eeced9eb9e198429d913e90843652e",
+      "url": "catalog/art/Sun%20Wu.png"
+    },
+    "art/Surena.png": {
+      "sha256": "a9985003e43cc115fca5ed9879e7ae14f031ea76ac7a30e7e072d4fb37a369ea",
+      "url": "catalog/art/Surena.png"
+    },
+    "art/Sweyn Forkbeard.png": {
+      "sha256": "8f252702243a64aed08eaceb52ba41ac3619ccda71d15f2369d83097ee25197e",
+      "url": "catalog/art/Sweyn%20Forkbeard.png"
+    },
+    "art/Tachibana Dosetsu.png": {
+      "sha256": "d5179ffe73e185fee119eec711bd30918353f8d96fa69bc1fafca12e9601c6eb",
+      "url": "catalog/art/Tachibana%20Dosetsu.png"
+    },
+    "art/Tachibana Ginchiyo.png": {
+      "sha256": "fef5839586ae23d21088ac4b3ebae46fae3c83a32cf167f9a7b953137ab43246",
+      "url": "catalog/art/Tachibana%20Ginchiyo.png"
+    },
+    "art/Takeda Shingen.png": {
+      "sha256": "67603e24f880b118c620c7b4bb044b96960d60227457ca09250f280bc75d8849",
+      "url": "catalog/art/Takeda%20Shingen.png"
+    },
+    "art/Takenaka Shigeharu.png": {
+      "sha256": "83528a0bcfa3020cb2197bfb0cd18d668c0dba0ab43d432b4c711854ee8fcc6c",
+      "url": "catalog/art/Takenaka%20Shigeharu.png"
+    },
+    "art/Themistocles.png": {
+      "sha256": "a729ebab97ac79874860c8c373a3dd69fb0974cfd5f0c4c301e95a57a6c027d1",
+      "url": "catalog/art/Themistocles.png"
+    },
+    "art/Theobald I.png": {
+      "sha256": "6a739c17c845f98df51703839afc41d6c46dedf7bc706aa0011af3c8f0ed96d8",
+      "url": "catalog/art/Theobald%20I.png"
+    },
+    "art/Theodora.png": {
+      "sha256": "8736a2a436f894b7af67672706ee75bdfde366e417143beb9285973544c59b83",
+      "url": "catalog/art/Theodora.png"
+    },
+    "art/Theodosius I.png": {
+      "sha256": "77f0ff3f6958a76a2b7965d87d0d552e90d9a63d494a2bfafe10733967da8e93",
+      "url": "catalog/art/Theodosius%20I.png"
+    },
+    "art/Thutmose III.png": {
+      "sha256": "41c4839810a13be41fbdd0996e260810e4d58a828b53eef2b5225878a78da00c",
+      "url": "catalog/art/Thutmose%20III.png"
+    },
+    "art/Tishtrya.png": {
+      "sha256": "28aa3a414d1ec3c0210ce1615933b92ec43f3359caf5145d69c439e1ef6ac845",
+      "url": "catalog/art/Tishtrya.png"
+    },
+    "art/Tokugawa Ieyasu.png": {
+      "sha256": "2f5ac7cac361bf3f3f700e980c15d80473d652bebe95c5b9b32a381de5435613",
+      "url": "catalog/art/Tokugawa%20Ieyasu.png"
+    },
+    "art/Tomyris.png": {
+      "sha256": "c93792f818c3c41e84b490f7d555ebb369228f0dcb80d5ba9e73c8e50a2a8b6d",
+      "url": "catalog/art/Tomyris.png"
+    },
+    "art/Totila.png": {
+      "sha256": "bc70c196f935a6055e32c7da23bc71edff0aacf1c028884a040b65cbf9425a27",
+      "url": "catalog/art/Totila.png"
+    },
+    "art/Toyotomi Hideyori.png": {
+      "sha256": "464c770956eea98bd471d48788e657a0954294c44cc6aca2edea4ebe2c718672",
+      "url": "catalog/art/Toyotomi%20Hideyori.png"
+    },
+    "art/Toyotomi Hideyoshi.png": {
+      "sha256": "48fc478a0e1d0d041ec17cd4ef019de61425f1ee93f86404aa9570947ab26cc8",
+      "url": "catalog/art/Toyotomi%20Hideyoshi.png"
+    },
+    "art/Trajan.png": {
+      "sha256": "2162432338a91b1628ce3ac83c1865e868a4f5fb4ea43dfa3e133027029533eb",
+      "url": "catalog/art/Trajan.png"
+    },
+    "art/Tran Hung Dao.png": {
+      "sha256": "85e229ab442db02899f0dab686c41ceeb5eccb00d7653fc688db3d23f313db7b",
+      "url": "catalog/art/Tran%20Hung%20Dao.png"
+    },
+    "art/Trivia Hecate.png": {
+      "sha256": "8acf3ef2f95e3aaa7ce380d1c569d4bd1bd71c684f0e310d9ca79d4a199e3b57",
+      "url": "catalog/art/Trivia%20Hecate.png"
+    },
+    "art/Turenne.png": {
+      "sha256": "088143b69bf52f9c219c6025f97c10418235cb58790ccfc1d274e3b1625630f2",
+      "url": "catalog/art/Turenne.png"
+    },
+    "art/Uesugi Kenshin.png": {
+      "sha256": "4bd5a083e9fac45ee739e9619a853208575ec678822377f7eb18e9b92957bc31",
+      "url": "catalog/art/Uesugi%20Kenshin.png"
+    },
+    "art/Ulysses S. Grant.png": {
+      "sha256": "7d2d5c725ba83f69eb5de04d184134d60375f06f21d1f4864809ca51a7d0e28e",
+      "url": "catalog/art/Ulysses%20S.%20Grant.png"
+    },
+    "art/Vercingetorix.png": {
+      "sha256": "676e1c09884d6183fbeb5239de8d0372efffade0a1b0d07128004f065443238b",
+      "url": "catalog/art/Vercingetorix.png"
+    },
+    "art/Visconti.png": {
+      "sha256": "ec0d047b977b89e31f2c1c29771623421d728cd764fdb675e24bd59c087a587a",
+      "url": "catalog/art/Visconti.png"
+    },
+    "art/Vlad al III.png": {
+      "sha256": "591f46d0e505569eae449735a5a93defebd3f74f7fa759d056b01b691c0734e1",
+      "url": "catalog/art/Vlad%20al%20III.png"
+    },
+    "art/Vladimir the Great.png": {
+      "sha256": "baff832597173f94f6a16dec7849fc883d0683ffae1e9edb5f658f0f02a18aa7",
+      "url": "catalog/art/Vladimir%20the%20Great.png"
+    },
+    "art/Wallenstein.png": {
+      "sha256": "b13ad4a30073d9a68eca6d8d0eece900a20e91074b42d7db405e150901969a34",
+      "url": "catalog/art/Wallenstein.png"
+    },
+    "art/Washington (Prime).png": {
+      "sha256": "ebee6e299629aa69672150a75d44dbc19a606452f12a2fb5a2e47006e39e8c9a",
+      "url": "catalog/art/Washington%20%28Prime%29.png"
+    },
+    "art/Washington.png": {
+      "sha256": "95205b8f948d8b752667dedd6a921a8836ce7daa02481d81bff5c7538981dc7e",
+      "url": "catalog/art/Washington.png"
+    },
+    "art/Wei Qing.png": {
+      "sha256": "48d4d15f2953a07afe84ea1f36c00b9780b63e3fb60dced7fd4573ce78f05c78",
+      "url": "catalog/art/Wei%20Qing.png"
+    },
+    "art/William Marshal.png": {
+      "sha256": "a24068fef226015ed58f89ea144d6e4bf311178c912ce1c92dbab29cda9aca74",
+      "url": "catalog/art/William%20Marshal.png"
+    },
     "art/William Wallace.png": {
-      "sha256": "4d6fe717963ebac01bb870d70f76def00ed4f66a1420beb9828ae81ca39a5d13",
+      "sha256": "324fdfcfa41ce109b993bbc3eb9eaac35538796b1a43340759532dd40205d0cf",
       "url": "catalog/art/William%20Wallace.png"
+    },
+    "art/Winfield Scott.png": {
+      "sha256": "51a66d17567d7a689f78b07352aeef901954d47f5988ed24d90733c7d36ed167",
+      "url": "catalog/art/Winfield%20Scott.png"
+    },
+    "art/Xiang Yu.png": {
+      "sha256": "4b104c7787fe4eb3a55460ef4b2f89ffe906d5fcc26335d9fbd1278be4b5b7b8",
+      "url": "catalog/art/Xiang%20Yu.png"
+    },
+    "art/Yeon Gaesomun.png": {
+      "sha256": "4d7fb1f0cd586109bbe931db203f252c2916741931ea7e7920925e6fa063d30a",
+      "url": "catalog/art/Yeon%20Gaesomun.png"
+    },
+    "art/Yi Sun-sin.png": {
+      "sha256": "e4a3dc75f275e17253f9a9cf2f0c2e132ecffe57d5de274a6748dbf1cdc2ba9f",
+      "url": "catalog/art/Yi%20Sun-sin.png"
+    },
+    "art/Yodo-dono.png": {
+      "sha256": "b8fa9ebee843c349500c073fde1cda4fc02071c2b62cb6bdaef4e87403fecfcb",
+      "url": "catalog/art/Yodo-dono.png"
+    },
+    "art/Yolande of Aragon.png": {
+      "sha256": "75abf71f2ecf649f1aa3c8de39335d2aa17ab3854b972557df9ed00f61597642",
+      "url": "catalog/art/Yolande%20of%20Aragon.png"
+    },
+    "art/Yue Fei.png": {
+      "sha256": "2d5a4aee55fdccb6e72a7e9b84083207a6c400a9f5e771688fc208eda3501a93",
+      "url": "catalog/art/Yue%20Fei.png"
+    },
+    "art/Zachary Taylor.png": {
+      "sha256": "a11c474d2f6b4a80167af4c5f73392fa0819b33c0953f36ac51a1d3e6fd2d875",
+      "url": "catalog/art/Zachary%20Taylor.png"
+    },
+    "art/Zhang Fei.png": {
+      "sha256": "1eeb71256d5c3ee31af56d9cd639142e0039f2a38429b485f1dd8f593910e8d9",
+      "url": "catalog/art/Zhang%20Fei.png"
+    },
+    "art/Zhang Liang.png": {
+      "sha256": "9b27cd4ef1bb67693ad5ce2c06ecb14d4c9007cd3bbaa5e07a79b72c9cdf8d2d",
+      "url": "catalog/art/Zhang%20Liang.png"
+    },
+    "art/Zhao Yun.png": {
+      "sha256": "08b5ba751a0b8fbe1a3ce4adfc46d5feee71f2b9adf467937420156f8f04122d",
+      "url": "catalog/art/Zhao%20Yun.png"
+    },
+    "art/Zhou Yu.png": {
+      "sha256": "171fabaf5247dde4d8796d657a8fd2a710a04913b874fb54c7e0c4414fa9b00b",
+      "url": "catalog/art/Zhou%20Yu.png"
+    },
+    "art/Zhu Di.png": {
+      "sha256": "4c266781fd4cedb21e70317a7a58bf2f393571678ca4db467346a4b49160a238",
+      "url": "catalog/art/Zhu%20Di.png"
+    },
+    "art/Zhuge Liang.png": {
+      "sha256": "b3803940d7b2dabd014fa31a8491987dfc6df54c398a8c5ade741b46dd507164",
+      "url": "catalog/art/Zhuge%20Liang.png"
+    },
+    "art/Zizka.png": {
+      "sha256": "99429c9d19fca6fbd2199d42db6e6c7f37a71fbeabf525a799e1920917c36468",
+      "url": "catalog/art/Zizka.png"
+    },
+    "art/Zucca.png": {
+      "sha256": "40e948c511e031ebde2cafe2cd6d99f3aa14906b0e6ce32b82bda8561e858bac",
+      "url": "catalog/art/Zucca.png"
     }
   },
   "monsters": {
@@ -222,5 +1462,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "a47dd132fed60bb0577e1f39ca8216ce974e062ee8237562038fa716daa529b2"
+  "sig": "d08d026c96c665bd42ae28ba55990b65523f8c2eeac968e9511c88e24911b4b1"
 }
