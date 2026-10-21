@@ -8249,7 +8249,25 @@ def lock_shrine(dev, cfg, log, stop, nav_state):
     nav = CityNav(dev, stop, log)
     nav_state["snav"] = nav
     log("[*] Locking the camera on the Shrine")
-    shrine = locate_shrine(dev, stop, log, nav)
+    shrine = None
+    nav.cx = nav.cy = 0.0                                  # first look where the city view already is (it opens near the Keep): no corner drag needed
+    for i, (dx, dy) in enumerate([(0, 0), (0, 300), (300, 0), (0, -300), (0, -300), (-300, 0), (-300, 0), (0, 300), (0, 300)]):
+        if stop.is_set():
+            return None, None
+        if i:
+            nav.pan(dx, dy)
+        labels, _, _ = look_with_names(dev, stop, nav)
+        log(f"[i]   Shrine search {i + 1}/9: names read: {', '.join(n for n, _, _ in labels) or 'none'}")
+        for n, mx, my in labels:
+            off = FIXED_OFFSETS_FROM_SHRINE.get(BUILDING_ALIASES.get(n, n))
+            if off:
+                shrine = (mx - off[0], my - off[1])
+                break
+        if shrine:
+            break
+    if not shrine:
+        log("[i]   no fixed building near the start - searching from the city corner")
+        shrine = locate_shrine(dev, stop, log, nav)
     if not shrine:
         log("[!] The Shrine could not be found - no fixed building name was read")
         return None, None
