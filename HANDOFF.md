@@ -74,6 +74,7 @@ PUBLISHED 2.4.76 (T8 update-restart) on 21 Oct 12:20 IST; check_release OK. Not 
 | T9 | R1 core engine: duty scheduler with next-run per instance + Itinerary view, march-slot tracker, start-up health checks (RAM, game version) | feat/engine-itinerary | rally_bot.py duty scheduler/duty_status + one new UI view | T4 (ui), T5/T6 (duty entries) - add only | todo |
 | T10 | S1 Rally proof: missed-rally report (each rally not joined + reason), joins per hour per account, daily summary on dashboard + Telegram | feat/rally-proof | rally loop logging (add only) + one dashboard panel | T7 (rally loop), T9 (scheduler) - rebase often | todo |
 | T11 | S2 Phone control: mobile layout of dashboard, LAN access with PIN, Telegram alerts (kick, stuck, no stamina, lag streak) + commands status/pause/resume | feat/phone-control | web_app.py (server/auth/routes) + ui mobile CSS + telegram code | T4 (ui) | todo |
+| T12 | Popup fix: tap usual X spot after outside taps fail | feat/popup-x | rally_bot.py popup handlers | - | code done, not tested live |
 | R | Release chat: merge finished branches into main, version bump, changelog, publish (owner says publish) | main | everything | - | when owner asks |
 
 Safe to run together: T1 + T3 + T4 + T6, or T2 + T6 + T7. Avoid pairs listed in "Clash with".
