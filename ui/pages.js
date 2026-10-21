@@ -415,8 +415,8 @@ function instancePage(serial) {
   const rcMin = h("input", { type: "number", min: 0, class: "short", placeholder: "Universal " + eff("reclaim_grace_min", 10) + " \u2013 type to change" });
   rcMin.value = ov.reclaim_grace_min === undefined ? "" : String(ov.reclaim_grace_min);
   rcMin.addEventListener("input", () => { const t = rcMin.value.trim(); if (t === "") delete ov.reclaim_grace_min; else ov.reclaim_grace_min = Math.max(0, parseInt(t, 10) || 0); });
-  const phone = panel("When I play on my phone (game opened on another device)",
-    h("div", { class: "hint", style: { marginBottom: "10px" } }, "Opening the game on your phone kicks this instance off. With this ON the bot shows a countdown, leaves the game alone for the wait time, then taps Restart and carries on. Leave the minutes blank to use the universal value."),
+  const phone = panel("When I Play on Another Device",
+    h("div", { class: "hint", style: { marginBottom: "10px" } }, "Opening the game on another device kicks this instance off for your main device. With this option ON, the bot shows a countdown of the time remaining before it taps \u201cRestart\u201d inside the game (the Evony pop-up that says the account was opened elsewhere), then carries on. Choose the number of minutes to wait, or leave it blank to use the universal value (currently " + (S.cfg.reclaim_grace_min !== undefined ? S.cfg.reclaim_grace_min : 10) + " minutes)."),
     h("div", { class: "row", style: { gap: "22px", alignItems: "center" } },
       h("label", { class: "tgl" }, rcOn, h("span", { class: "sw" }), "Wait, then take the game back"),
       h("span", {}, "Wait "), rcMin, h("span", {}, " minutes"),
