@@ -802,16 +802,14 @@ setInterval(async () => {
   } finally { AUTO.busy = false; }
 }, 1000);
 
-// long help paragraphs fold to one line with a small "More" link (quiet screens, nothing lost)
+// long help paragraphs fold to two lines (hover shows the whole text, a click opens / closes it - no extra links)
 (function () {
   const fold = (n) => {
     if (n.dataset.fold || !n.isConnected) return;
     const t = (n.textContent || "").trim();
     if (t.length < 110 || n.closest(".warnbar,.modal,.toasts")) return;
-    n.dataset.fold = "1"; n.classList.add("clamp");
-    const b = document.createElement("button"); b.type = "button"; b.className = "morelnk"; b.textContent = "More";
-    b.onclick = () => { const o = n.classList.toggle("clamp"); b.textContent = o ? "More" : "Less"; };
-    n.insertAdjacentElement("afterend", b);
+    n.dataset.fold = "1"; n.classList.add("clamp", "foldable"); n.title = t;
+    n.onclick = () => n.classList.toggle("clamp");
   };
   const scan = (root) => (root || document).querySelectorAll(".pages .note").forEach(fold);
   const start = () => {
