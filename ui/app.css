@@ -1012,3 +1012,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .top .newbtn{margin-left:auto}
 :root .top .sidebtn{order:-2}
 :root .top .sum{order:-1}
+/* instance header Pause: ":root .instbar .btn" gave it a card background under .warnb's white text, so it looked blank (PC hotfix 21 Oct 23:20) */
+:root .instbar .btn.warnb{background:#f59e0b;color:#1d1400;border-color:transparent;font-weight:600}
+:root .instbar .btn.warnb:hover{background:#d97706}
