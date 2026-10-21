@@ -182,7 +182,7 @@ const INSTANCE_FIELDS = [
   ["click_delay_ms", "Click delay (ms)", "int"], ["adaptive_delay", "Slow down after failures", "bool"],
   ["frozen_seconds", "Restart Evony if screen frozen (s)", "int"], ["stuck_seconds", "Restart instance if stuck (s)", "int"],
   ["stop_cmd", "Command that closes this instance", "text"], ["close_emulator_on_stop", "Close the instance when stopped", "bool"],
-  ["schedule", "Schedule (blank = global one)", "text"], ["cpu_level", "Load level (1 fastest - 4 lightest)", "choice", ["1", "2", "3", "4"]],
+  ["schedule", "Schedule (blank = universal one)", "text"], ["cpu_level", "Load level (1 fastest - 4 lightest)", "choice", ["1", "2", "3", "4"]],
   ["screenshot_mode", "Screenshot method", "choice", ["auto", "png"]], ["rally_timer_source", "Rally countdown read from", "choice", ["progress_bar", "join_button"]],
   ["march_timer_source", "March time read from", "choice", ["join_button", "progress_bar", "none"]],
   ["poll_seconds", "Pause between scans (s, e.g. 1,2)", "range"], ["cooldown_after_join", "Pause after a join (s, e.g. 4,7)", "range"],
@@ -195,7 +195,7 @@ const INSTANCE_FIELDS = [
   ["evony_package", "Evony package name", "text"],
 ];
 const FIELD_HELP = {
-  presets: "Which game presets this instance uses, e.g. 1,2,3. Blank = the global list.",
+  presets: "Which game presets this instance uses, e.g. 1,2,3. Blank = the universal list.",
   preset_mode: "rotate = take presets in turn, random = any armed one, fixed = always the lowest.",
   safety_margin: "Join only if the rally has at least this many seconds to spare after the march.",
   max_rally_seconds: "Ignore rallies that still have more time than this (0 = no limit).",
@@ -229,7 +229,7 @@ const FIELD_HELP = {
   stuck_seconds: "Restart the whole instance if nothing worked for this long.",
   stop_cmd: "Optional command that closes this instance when the bot stops.",
   close_emulator_on_stop: "Yes = close the instance when the bot stops.",
-  schedule: "Optional run times for this instance, e.g. 08:00-23:00. Blank = the global schedule.",
+  schedule: "Optional run times for this instance, e.g. 08:00-23:00. Blank = the universal schedule.",
   cpu_level: "1 = fastest but heaviest on the PC, 4 = slowest and lightest.",
   screenshot_mode: "auto is fastest; png is a slower fallback if screenshots look wrong.",
   rally_timer_source: "Where the bot reads the rally countdown from.",
@@ -317,33 +317,33 @@ function instancePage(serial) {
     let control;
     const cur = ov[key];
     if (kind === "choice" || kind === "bool") {
-      const opts = kind === "bool" ? ["(global)", "yes", "no"] : ["(global)", ...choices];
-      control = h("select", {}, opts.map((o) => (o === "(global)" ? h("option", { value: "(global)" }, `(global: ${globalText(key, kind)})`) : h("option", {}, o))));
-      control.value = cur === undefined ? "(global)" : kind === "bool" ? (cur ? "yes" : "no") : key === "march_timer_source" && cur === "" ? "none" : String(cur);
+      const opts = kind === "bool" ? ["(universal)", "yes", "no"] : ["(universal)", ...choices];
+      control = h("select", {}, opts.map((o) => (o === "(universal)" ? h("option", { value: "(universal)" }, `(universal: ${globalText(key, kind)})`) : h("option", {}, o))));
+      control.value = cur === undefined ? "(universal)" : kind === "bool" ? (cur ? "yes" : "no") : key === "march_timer_source" && cur === "" ? "none" : String(cur);
       control.addEventListener("change", () => {
         const v = control.value;
-        if (v === "(global)") setOv(key);
+        if (v === "(universal)") setOv(key);
         else if (kind === "bool") setOv(key, v === "yes");
         else if (key === "march_timer_source" && v === "none") setOv(key, "");
         else if (key === "cpu_level") setOv(key, Number(v));
         else setOv(key, v);
       });
     } else if (kind === "tab") {
-      control = h("select", {}, ["(global)", ...TAB_CHOICES].map((o) => (o === "(global)" ? h("option", { value: "(global)" }, `(global: ${globalText(key, kind)})`) : h("option", {}, o))));
-      control.value = cur === undefined ? "(global)" : TAB_CHOICES[Number(cur)] || TAB_CHOICES[0];
-      control.addEventListener("change", () => { const v = control.value; if (v === "(global)") setOv(key); else setOv(key, TAB_CHOICES.indexOf(v)); });
+      control = h("select", {}, ["(universal)", ...TAB_CHOICES].map((o) => (o === "(universal)" ? h("option", { value: "(universal)" }, `(universal: ${globalText(key, kind)})`) : h("option", {}, o))));
+      control.value = cur === undefined ? "(universal)" : TAB_CHOICES[Number(cur)] || TAB_CHOICES[0];
+      control.addEventListener("change", () => { const v = control.value; if (v === "(universal)") setOv(key); else setOv(key, TAB_CHOICES.indexOf(v)); });
     } else if (kind === "generallist") {
-      const e = h("input", { type: "text", readOnly: true, placeholder: "Global: " + globalText(key, kind), value: cur === undefined ? "" : asList(cur).join(", ") || "(none)" });
+      const e = h("input", { type: "text", readOnly: true, placeholder: "Universal: " + globalText(key, kind), value: cur === undefined ? "" : asList(cur).join(", ") || "(none)" });
       control = h("div", { class: "row", style: { flexWrap: "nowrap" } }, e,
         btn("...", async () => { const r = await chooseGenerals(label, asList(ov[key])); if (r !== null) { setOv(key, r); e.value = r.join(", ") || "(none)"; } }, "sm"),
         btn("x", () => { setOv(key); e.value = ""; }, "sm"));
     } else {
       const toText = (v) => (v === undefined ? "" : kind === "presets" ? v.join(",") : kind === "names" ? v.join(", ") : kind === "range" ? v.map((x) => +x.toFixed(2)).join(",")
         : kind === "monpresets" ? Object.entries(v).map(([n, p]) => `${n}:${p.join(",")}`).join("; ") : String(v));
-      control = h("input", { type: kind === "int" ? "number" : "text", value: toText(cur), placeholder: "Using global (" + globalText(key, kind) + ") \u2013 type to change" });
+      control = h("input", { type: kind === "int" ? "number" : "text", value: toText(cur), placeholder: "Using universal (" + globalText(key, kind) + ") \u2013 type to change" });
       control.addEventListener("input", () => {
         const t = control.value.trim();
-        if (t === "" || t === "(global)") return setOv(key);
+        if (t === "" || t === "(universal)") return setOv(key);
         try {
           let v;
           if (kind === "int") { v = parseInt(t, 10); if (!(v >= 0)) throw new Error(); }
@@ -383,7 +383,7 @@ function instancePage(serial) {
     if (!others.length) return toast("There is no other instance.");
     menu(e.currentTarget, others.map((o) => ({ label: o.name || o.id, run: () => { S.cfg.per_device[serial] = clone(S.cfg.per_device[o.id] || {}); rerender(); } })));
   };
-  const panelEl = panel("Settings for this instance only  (blank or (global) = use the global setting)", fields,
+  const panelEl = panel("Settings for this instance only  (blank or (universal) = use the universal setting)", fields,
     h("details", { style: { marginTop: "14px" }, open: Object.keys(ov).some((k) => IF_KEYS.has(k) && !BASIC.has(k) && !PKEYS0.has(k)) },
       h("summary", { style: { cursor: "pointer", color: "var(--accent2)", fontWeight: "600" } }, "More settings (rarely needed)"),
       h("div", { style: { marginTop: "12px" } }, moreFields),
@@ -391,9 +391,9 @@ function instancePage(serial) {
         h("div", { class: "hint", style: { fontSize: "11.5px", opacity: ".65" } }, "Only for settings that have no field above, e.g. {\"threshold\": 0.8}. Leave empty if unsure."))),
     h("div", { class: "row", style: { marginTop: "14px" } }, btn("Copy settings from...", copyMenu, "sm"),
       btn("Use these on ALL instances", () => { for (const x of S.devices) if (x.id && x.id !== serial) S.cfg.per_device[x.id] = clone(S.cfg.per_device[serial] || {}); toast("Copied to all other instances.", "ok"); }, "sm"),
-      btn("Clear (use global)", () => { S.cfg.per_device[serial] = {}; rerender(); }, "sm"),
+      btn("Clear (use universal)", () => { S.cfg.per_device[serial] = {}; rerender(); }, "sm"),
       btn("Save", saveAll, "sm pri")));
-  // ---- own presets & generals (stored in this instance's overrides; blank = the global ones)
+  // ---- own presets & generals (stored in this instance's overrides; blank = the universal ones)
   const PKEYS = ["bot_presets", "preset_mode", "general_main", "general_assistant", "general_main_tab", "general_assistant_tab", "general_main_fav",
     "general_assistant_fav", "general_on_fail", "general_idle_only", "general_assistant_optional", "general_view", "max_troops"];
   const customP = "bot_presets" in ov;
@@ -406,33 +406,38 @@ function instancePage(serial) {
   });
   const ownP = [panel("Presets and generals for this instance",
     h("label", { class: "tgl" }, swp, h("span", { class: "sw" }), "Use its own presets and generals (otherwise it uses the ones on the Presets & generals tab)"),
-    customP ? null : note("Now using the global presets and generals. Switch this on to give this instance its own set; it starts as a copy of the global one."))];
+    customP ? null : note("Now using the universal presets and generals. Switch this on to give this instance its own set; it starts as a copy of the universal one."))];
   if (customP) ownP.push(...presetPanels(pview, true));
   // ---- phone / shared device (important, so it sits right under Activity)
   const eff = (k, dflt) => (ov[k] !== undefined ? ov[k] : S.cfg[k] !== undefined ? S.cfg[k] : dflt);
   const rcOn = h("input", { type: "checkbox", checked: !!eff("reclaim_elsewhere", true) });
   rcOn.addEventListener("change", () => { ov.reclaim_elsewhere = rcOn.checked; });
-  const rcMin = h("input", { type: "number", min: 0, class: "short", placeholder: "Global " + eff("reclaim_grace_min", 10) + " \u2013 type to change" });
+  const rcMin = h("input", { type: "number", min: 0, class: "short", placeholder: "Universal " + eff("reclaim_grace_min", 10) + " \u2013 type to change" });
   rcMin.value = ov.reclaim_grace_min === undefined ? "" : String(ov.reclaim_grace_min);
   rcMin.addEventListener("input", () => { const t = rcMin.value.trim(); if (t === "") delete ov.reclaim_grace_min; else ov.reclaim_grace_min = Math.max(0, parseInt(t, 10) || 0); });
-  const phone = panel("When I play on my phone (game opened on another device)",
-    h("div", { class: "hint", style: { marginBottom: "10px" } }, "Opening the game on your phone kicks this instance off. With this ON the bot shows a countdown, leaves the game alone for the wait time, then taps Restart and carries on. Leave the minutes blank to use the global value."),
+  const phone = panel("When I Play on Another Device",
+    h("div", { class: "hint", style: { marginBottom: "10px" } }, "Opening the game on another device kicks this instance off for your main device. With this option ON, the bot shows a countdown of the time remaining before it taps \u201cRestart\u201d inside the game (the Evony pop-up that says the account was opened elsewhere), then carries on. Choose the number of minutes to wait, or leave it blank to use the universal value (currently " + (S.cfg.reclaim_grace_min !== undefined ? S.cfg.reclaim_grace_min : 10) + " minutes)."),
     h("div", { class: "row", style: { gap: "22px", alignItems: "center" } },
       h("label", { class: "tgl" }, rcOn, h("span", { class: "sw" }), "Wait, then take the game back"),
       h("span", {}, "Wait "), rcMin, h("span", {}, " minutes"),
       btn("Take game back now", () => act(api("takeback", { serial })))));
   // ---- the game's own Auto-Join (needs the Rally Monthly Card): per instance, right under the "game kicked" box
-  const numOv = (key, dflt) => { const e = h("input", { type: "number", min: 0, class: "short", placeholder: "Global " + eff(key, dflt) + " \u2013 type to change" });
+  const numOv = (key, dflt) => { const e = h("input", { type: "number", min: 0, class: "short", placeholder: "Universal " + eff(key, dflt) + " \u2013 type to change" });
     e.value = ov[key] === undefined ? "" : String(ov[key]);
     e.addEventListener("input", () => { const t = e.value.trim(); if (t === "") delete ov[key]; else ov[key] = Math.max(0, parseInt(t, 10) || 0); }); return e; };
   const ajOn = h("input", { type: "checkbox", checked: !!eff("game_auto_join", false) });
   ajOn.addEventListener("change", () => { ov.game_auto_join = ajOn.checked; });
+  const ajLeft = h("div", { class: "hint", style: { marginTop: "10px" } }, "Time left on the game's Auto-Join: not read yet (it is read the next time this instance checks it).");
+  const ajRefresh = async () => { if (!ajLeft.isConnected && ajLeft.dataset.shown) return; ajLeft.dataset.shown = "1";
+    try { const r = await api("aj_status", { serial }); if (r && r.left_s !== undefined) { const t = r.left_s, m = Math.round(r.age_s / 60); ajLeft.textContent = "Time left on the game's Auto-Join: " + Math.floor(t / 3600) + ":" + String(Math.floor(t % 3600 / 60)).padStart(2, "0") + " (read " + (m < 1 ? "just now" : m + " min ago") + ")."; } } catch (e) {} };
+  ajRefresh(); const ajTimer = setInterval(() => { if (!ajLeft.isConnected) clearInterval(ajTimer); else ajRefresh(); }, 30000);
   const autoJoin = panel("Auto-Join (the game's own, needs the Rally Monthly Card)",
-    h("div", { class: "hint", style: { marginBottom: "10px" } }, "On: the bot stops joining rallies itself. It opens Alliance War > Auto-Join, reads the time left and presses Start again when it falls under your limit. Only turn it on for accounts that have the card. Leave the minutes blank to use the global value."),
+    h("div", { class: "hint", style: { marginBottom: "10px" } }, "On: the bot stops joining rallies itself. It opens Alliance War > Auto-Join, reads the time left and presses Start again when it falls under your limit. Only turn it on for accounts that have the card. Leave the minutes blank to use the universal value."),
     h("div", { class: "row", style: { gap: "22px", alignItems: "center", flexWrap: "wrap" } },
       h("label", { class: "tgl" }, ajOn, h("span", { class: "sw" }), "Use the game's Auto-Join"),
       h("span", {}, "Renew when less than "), numOv("auto_join_renew_min", 120), h("span", {}, " min are left"),
-      h("span", {}, "Check every "), numOv("auto_join_check_min", 10), h("span", {}, " min")));
+      h("span", {}, "Check every "), numOv("auto_join_check_min", 10), h("span", {}, " min")),
+    ajLeft);
   const asOn = h("input", { type: "checkbox", checked: !!eff("auto_start", false) });
   asOn.addEventListener("change", () => { ov.auto_start = asOn.checked; });
   const autoStart = panel("Start by itself",
@@ -613,9 +618,9 @@ function presetPanels(c, inst) {
       btn("1 - 6", () => { c.bot_presets.forEach((b) => (b.enabled = b.n <= 6)); rerender(); }, "sm"), btn("1 - 8", () => { c.bot_presets.forEach((b) => (b.enabled = true)); rerender(); }, "sm")),
     h("div", { class: "pgrid" }, c.bot_presets.map(card)),
     note("Tap an empty slot to arm that preset, \u2715 to switch it off. 'Start from first' always tries the lowest armed preset first; 'Rotate' takes them in turn. 'Game default' marches with the generals already saved in the game preset (nothing is searched). 'Listed' uses the generals you list on that card: if the preset already holds one of them the bot just marches, otherwise it searches for it and sets it. 'Skip if no general' skips a preset whose game preset has an empty slot and tries the next one.") ,
-    h("div", { class: "row" }, h("span", { class: "lab" }, "Global: skip a preset that already has more than this many troops (0 = off)"), inp(c, "max_troops", { type: "int", cls: "short" })));
+    h("div", { class: "row" }, h("span", { class: "lab" }, "Universal: skip a preset that already has more than this many troops (0 = off)"), inp(c, "max_troops", { type: "int", cls: "short" })));
   const favs = ["leave", "on", "off"];
-  const gen = panel("Generals and teaching the bot",
+  const gen = panel("Generals",
     grid2(fld("Main generals (best first)", genField(c, "general_main", "Main generals")), fld("Assistant generals (best first)", genField(c, "general_assistant", "Assistant generals")),
       fld("Main generals: look in this category", sel(c, "general_main_tab", tabOptions, { num: true })), fld("Main: favourites filter (heart)", sel(c, "general_main_fav", favs)),
       fld("Assistant generals: look in this category", sel(c, "general_assistant_tab", tabOptions, { num: true })), fld("Assistant: favourites filter (heart)", sel(c, "general_assistant_fav", favs)),
@@ -645,7 +650,7 @@ async function captureTemplate() {
 
 // ====================================================================== settings (+ low RAM)
 function staminaPanel(store, base) {
-  // base = where the value comes from when this instance has none of its own (the global settings)
+  // base = where the value comes from when this instance has none of its own (the universal settings)
   const g = (k, d) => (store[k] !== undefined ? store[k] : base[k] !== undefined ? base[k] : d);
   const S_ = (k, opts, d) => sel(store, k, opts, { get: () => g(k, d) });
   return panel("Stamina (when a march needs more than you have)",
@@ -666,11 +671,11 @@ function staminaPanel(store, base) {
     note("Full = slides the bar to the very end, so stamina fills up to the game's limit (9,999) - the default. The game's own Max button is not used (it stops at 100). Game default = the amount the game suggests (2 items). Exact number = the number of items you type."));
 }
 PAGES.settings = function () {
-  const r = PAGES.settings0(); const t = PAGES.themes(); const f = r.firstChild; while (t.firstChild) r.insertBefore(t.firstChild, f); return r;
+  const r = PAGES.settings0(); r.insertBefore(panel("Tour", note("A short walkthrough of where to click and how to set up your presets and start the bot."), h("div", { class: "row" }, btn("Take the tour", () => startTour()))), r.firstChild); const t = PAGES.themes(); const f = r.firstChild; while (t.firstChild) r.insertBefore(t.firstChild, f); return r;
 };
 PAGES.settings0 = function () {
   const c = S.cfg;
-  const g = panel("Global settings (every instance, unless it has its own)",
+  const g = panel("Universal settings (every instance, unless it has its own)",
     grid2(
       fld("ADB path (auto)", inp(c, "adb_path")), fld("Evony package name", inp(c, "evony_package")), fld("Pause lasts (minutes, 0 = until I press Pause again)", inp(c, "pause_minutes", { type: "int", cls: "short", get: (v) => (v === undefined ? 15 : v) })),
       fld("Presets if bot presets unused (1-8)", inp(c, "presets", { get: (v) => (v || []).join(","), set: (t) => parsePresets(t) || [1] })), fld("Preset mode", sel(c, "preset_mode", ["rotate", "random", "fixed"])),
@@ -714,14 +719,14 @@ function scopeBar(page, keys, what, fixed) {
   const items = fixed !== undefined ? [] : [h("span", { class: "lab" }, "Settings for"), pick];
   if (serial) {
     const toOwn = () => { keys.forEach((k) => { if (S.cfg[k] !== undefined) ov[k] = clone(S.cfg[k]); }); rerender(); };
-    const toGlobal = async () => { if (await confirmBox("Use the global " + what, "This instance's own " + what + " will be discarded and it will use the global one again. Continue?")) { keys.forEach((k) => delete ov[k]); rerender(); } };
+    const toGlobal = async () => { if (await confirmBox("Use the universal " + what, "This instance's own " + what + " will be discarded and it will use the universal one again. Continue?")) { keys.forEach((k) => delete ov[k]); rerender(); } };
     items.push(h("div", { class: "seg ownseg" },
-      h("button", { class: own ? "" : "on", onclick: () => { if (own) toGlobal(); } }, "Global " + what),
+      h("button", { class: own ? "" : "on", onclick: () => { if (own) toGlobal(); } }, "Universal " + what),
       h("button", { class: own ? "on" : "", onclick: () => { if (!own) toOwn(); } }, "Own " + what + " for this instance")));
   }
   const msg = !serial ? "These are the defaults for every instance that has no own " + what + "."
     : own ? "Changes here apply to this instance only."
-    : "This instance uses the global " + what + " (shown below, read-only). Press the button to give it its own.";
+    : "This instance uses the universal " + what + " (shown below, read-only). Press the button to give it its own.";
   const bar = fixed !== undefined ? h("div", {}, h("div", { class: "row", style: { marginBottom: "8px" } }, ...items), note(msg)) : panel("Which instance?", h("div", { class: "row" }, ...items), note(msg));
   return { c: own ? ov : S.cfg, bar, locked: !!serial && !own };
 }
@@ -729,6 +734,7 @@ function lockedWrap(el, locked) { if (locked) { el.style.opacity = "0.55"; el.st
 
 // ====================================================================== monsters
 PAGES.monsters = function (fixed) {
+  if (fixed === undefined) return h("div", {}, note("These are the default monster selections for all instances unless an instance has its own monster list selected."), monstersPanel(S.cfg));
   const sc = scopeBar("monsters", ["monster_skip", "monster_presets", "monster_unknown"], "monster list", fixed);
   return h("div", {}, sc.bar, lockedWrap(monstersPanel(sc.c), sc.locked));
 };
@@ -1085,7 +1091,7 @@ PAGES.themes = function () {
         const pre = h("div", { class: "row", style: { gap: "6px" } }, [100, 125, 150, 200].map((v) => h("button", { class: "btn sm", onclick: () => { setLook({ ui_text: v }); drawLook(); } }, v + "%")));
         return h("div", { class: "row", style: { gap: "14px", alignItems: "center", flexWrap: "wrap" } }, sl, lab, pre);
       })(), "Makes everything in the window bigger or smaller."),
-      row("Instance name", segOf("ui_name", [[20, "Small"], [24, "Medium"], [30, "Large"], [38, "Huge"]], 24), "Size of the name at the top of each instance page."),
+      row("Instance name", segOf("ui_name", [[20, "Small"], [24, "Medium"], [30, "Large"], [38, "Extra Large"]], 24), "Size of the name at the top of each instance page."),
       row("Corners", segOf("ui_round", [["sharp", "Sharp"], ["normal", "Soft"], ["round", "Round"]], "normal"), "How round the cards and buttons are."));
   };
   picker.oninput = () => { setLook({ ui_accent: picker.value }); hexIn.value = picker.value; };
@@ -1143,8 +1149,8 @@ PAGES.duties = function (fixed, only, compact) {
       note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes, retries 3 times a day if it fails, then waits for the next reset. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
       h("div", { class: "row" }, fixed !== undefined ? null : h("span", { class: "lab" }, "Settings for"), fixed !== undefined ? null : pick,
         serial && own.duties ? h("span", { class: "chip own" }, "own settings") : null,
-        serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the global setting") : null),
-      note(serial ? "Changes here apply to this instance only and replace the global list for it. Pick 'All instances' to change the default for every instance that has no own settings." : "These are the defaults for every instance. Pick one instance to give it different settings."),
+        serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the universal setting") : null),
+      note(serial ? "Changes here apply to this instance only and replace the universal list for it. Pick 'All instances' to change the default for every instance that has no own settings." : "These are the defaults for every instance. Pick one instance to give it different settings."),
     ));
     if (!only) root.appendChild(rn);
     for (const g of GROUPS) {
@@ -1190,7 +1196,7 @@ PAGES.duties = function (fixed, only, compact) {
     const set = async (o) => { const r = await act(api("crazy_eggs_set", { serial, ...o })); if (r) drawCe(r); };
     ce.appendChild(subset(serial ? "Crazy Eggs \u2013 this instance" : "Crazy Eggs \u2013 all instances",
       serial && j.own && j.own.crazy_eggs ? h("div", { class: "row" }, h("span", { class: "chip own" }, "own settings"),
-        h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "crazy_eggs" })); loadCe(); } }, "Use the global setting")) : null,
+        h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "crazy_eggs" })); loadCe(); } }, "Use the universal setting")) : null,
       note("Event Center > Activities > Crazy Eggs. The bot smashes every ready egg you switch on, closes the reward panel, and comes back when the next timer ends. The Lucky Hammer (1 a day) skips an egg's wait, so give it to the egg with the longest wait."),
       j.costs.map((k) => {
         const e = c.eggs[k] || { on: true, daily: 0 };
@@ -1236,7 +1242,7 @@ PAGES.duties = function (fixed, only, compact) {
     const set = async (o) => { const r = await act(api("wheel_set", { serial, ...o })); if (r) drawWh(r); };
     wh.appendChild(subset(serial ? "Wheel of Fortune \u2013 this instance" : "Wheel of Fortune \u2013 all instances",
       serial && j.own && j.own.wheel ? h("div", { class: "row" }, h("span", { class: "chip own" }, "own settings"),
-        h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "wheel" })); loadWh(); } }, "Use the global setting")) : null,
+        h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "wheel" })); loadWh(); } }, "Use the universal setting")) : null,
       note("Tavern > Wheel of Fortune. Each spin costs coins. The bot presses only the Spin buttons and closes the reward panel after every spin. With a big button it still finishes with smaller ones so the number of spins is exact."),
       h("div", { class: "row", style: { gap: "8px" } }, h("span", { class: "lab" }, "Spin button"),
         [1, 10, 100].map((b) => h("button", { class: "btn" + (c.button === b ? " primary" : ""), onclick: () => set({ button: b }) }, "Spin " + (b === 1 ? "once" : "\u00d7" + b)))),
@@ -1257,7 +1263,7 @@ PAGES.duties = function (fixed, only, compact) {
     const usedT = Object.values(j.taps || {}).reduce((a, v) => a + v, 0), usedG = Object.values(j.greets || {}).reduce((a, v) => a + v, 0);
     ch.appendChild(subset(serial ? "Champions – this instance" : "Champions – all instances",
       serial && j.own && j.own.champions ? h("div", { class: "row" }, h("span", { class: "chip own" }, "own settings"),
-        h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "champions" })); loadCh(); } }, "Use the global setting")) : null,
+        h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "champions" })); loadCh(); } }, "Use the universal setting")) : null,
       note("Keep > Champions. Every account has the same champions but only a few are active; the bot skips the ones that are not (grey button at the bottom). The daily limit is " + j.max_taps + " taps and " + j.max_greets + " greetings for all champions together - put them all on one champion or share them out. Switch a champion on to make it the main one: it gets all the taps and greetings of the day in one click (the numbers can still be edited). Leave everything empty to use the champion the page opens on. Turn the 'Champions' duty on above. Needs the city map (the Keep)."),
       h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } },
         h("span", { class: "chip " + (sumT > j.max_taps ? "pill-bad" : "") }, "taps planned " + sumT + " / " + j.max_taps),

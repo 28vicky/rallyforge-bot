@@ -1642,6 +1642,10 @@ class Api:
         self.c.toggle_pause(s) if s and s != "all" else self.c.pause_all()
         return {}
 
+    def aj_status(self, p):
+        v = rb.AJ_LEFT.get(p.get("serial"))
+        return {} if not v else {"left_s": int(v[0]), "age_s": int(time.time() - v[1])}
+
     def takeback(self, p):
         s = p.get("serial")
         evs = [rb.TAKEBACK[s]] if s in rb.TAKEBACK else ([] if s and s != "all" else list(rb.TAKEBACK.values()))

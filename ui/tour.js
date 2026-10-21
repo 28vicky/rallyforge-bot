@@ -1,6 +1,6 @@
 // First-run walkthrough: a dimmed screen with the current control lit up and a short note beside it.
 // It starts by itself only on a fresh install (no instances yet) and never again once it is finished or skipped.
-// "More > Take the tour" in the top bar starts it again by hand.
+// "Take the tour" under Setup > Settings starts it again by hand.
 const TOUR_STEPS = [
   { title: "Welcome to RallyForge", text: "A two-minute tour of where to click to get the bot joining rallies. You can skip it at any time and open it again later from More ▾ in the top bar." },
   { sel: "#instList", title: "1. Your instances", text: "Every emulator you run Evony in is an “instance” and shows up in this list. Click one to open its own page; its dot shows if it is running. Hover a name to get Start / Pause / Stop for just that one.", side: "right" },
@@ -10,7 +10,7 @@ const TOUR_STEPS = [
   { tab: "monsters", sel: "#pages", title: "5. Choose what to join", text: "Tick the monsters you want the bot to join and untick the ones to skip. Open a monster to choose single levels. Anything unticked is ignored, so start with the ones you want most.", side: "top" },
   { tab: "tasks", sel: "#pages", title: "6. Daily tasks (optional)", text: "Tasks and Duties are the extras: greeting champions, claiming gifts and so on. City tasks need the city mapped once: open an instance, then City › Map the city.", side: "top" },
   { sel: "#ribbon .grp:first-child", title: "7. Start it", text: "Select an instance on the left, then press Start. Open “Control settings” (bottom left) first and Start runs every instance at once. Pause holds the bot, Stop ends it. Watch the Activity and Log tabs to see what it is doing.", side: "bottom" },
-  { title: "You are ready", text: "That is all. Settings, Reliability and Telegram alerts are under Setup and App when you want them. This tour will not show again; More ▾ › Take the tour opens it whenever you need it." },
+  { title: "You are ready", text: "That is all. Settings, Reliability and Telegram alerts are under Setup and App when you want them. This tour will not show again; Setup › Settings › Take the tour opens it whenever you need it." },
 ];
 const TOUR = { i: 0, on: false };
 

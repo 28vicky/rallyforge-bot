@@ -28,7 +28,7 @@
   --bg:radial-gradient(ellipse at 50% -10%,#fffaf1 0,#efe6d8 65%);--bgc:#efe6d8;
   --side:linear-gradient(180deg,#f6eee1,#ebe1d0);--card:linear-gradient(160deg,#fffdf8,#f4ecdf);
   --btn:linear-gradient(180deg,#fffdf9,#efe6d7);--field:#e9dfcf;--line:#d9cdb9;--off:#ddd1bd;
-  --accent:linear-gradient(135deg,#d9a566,#c4825a);--accent1:#8f5430;--accent2:#8a5028;--bad:#9e3f4b;--good:#1f7048;--warn:#8a5a14;
+  --accent:linear-gradient(135deg,#d9a566,#c4825a);--accent1:#c4825a;--accent2:#8a5028;--bad:#9e3f4b;--good:#1f7048;--warn:#8a5a14;
   --sh:0 14px 26px rgba(90,70,40,.16),0 2px 4px rgba(90,70,40,.08),inset 0 1px 0 #fff;--sh2:0 4px 8px rgba(90,70,40,.16),inset 0 1px 0 #fff;
   --glow:inset 0 1px 0 rgba(255,255,255,.22);--inset:inset 0 2px 5px rgba(90,70,40,.22);--knob:#fff;
   --appsh:0 30px 70px rgba(60,45,25,.35);--overlay:rgba(60,45,25,.35);
@@ -69,11 +69,11 @@
 }
 /* ---------- midnight / dark: near-black, thin borders, one indigo accent */
 [data-pal="midnight"][data-mode="dark"]{
-  --fg:#e7e9ee;--mute:#8a90a0;--accfg:#ffffff;--bd:1px solid #23262e;
+  --fg:#e7e9ee;--mute:#8a90a0;--accfg:#0b0c0f;--bd:1px solid #23262e;
   --bg:#0b0c0f;--bgc:#0b0c0f;
   --side:#0f1115;--card:#14161b;
   --btn:#1b1e25;--field:#0f1115;--line:#23262e;--off:#2a2e38;
-  --accent:#5b5fef;--accent1:#8f93ff;--accent2:#a5a9ff;--bad:#ff8a93;--good:#5fd08f;--warn:#e0b066;
+  --accent:#8f93ff;--accent1:#8f93ff;--accent2:#a5a9ff;--bad:#ff8a93;--good:#5fd08f;--warn:#e0b066;
   --sh:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px rgba(0,0,0,.35);--sh2:0 1px 2px rgba(0,0,0,.5);
   --glow:none;--inset:inset 0 1px 3px rgba(0,0,0,.6);--knob:#f4f5f9;
   --appsh:0 40px 90px #000;--overlay:rgba(3,4,8,.66);
@@ -757,3 +757,24 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .tour-ask .tour-t{font-size:15px}
 :root .tour-ask .btn.pri,:root .tour-box .btn.pri{background:var(--accent);color:var(--accfg);border-color:transparent}
 .tour-ask .tour-b{gap:8px;justify-content:flex-start}
+
+/* Paused / Stopped button: text and icon must always show (light mode forced white text on the light accent) */
+[data-mode] .btn.cur-pause,[data-mode] .btn.cur-stop,[data-mode] .ribbon .btn.cur-pause,[data-mode] .ribbon .btn.cur-stop{color:var(--accfg)!important}
+[data-mode] .btn.cur-pause .ico,[data-mode] .btn.cur-stop .ico,[data-mode] .ribbon .btn.cur-pause .ico,[data-mode] .ribbon .btn.cur-stop .ico{color:var(--accfg)!important}
+[data-mode] .btn.cur-pause .ico svg,[data-mode] .btn.cur-stop .ico svg{stroke:currentColor}
+
+/* the "Paused / countdown" line on an instance card: same colour as the card text, so it can never blend into the background */
+.inst small,.inst small .ptimer,.inst.sel small,.inst.sel small .ptimer{color:inherit;opacity:1}
+.inst:not(.sel) small .ptimer{color:var(--mute)}
+
+/* pause / stop quick buttons on an instance card: bigger icons, buttons closer together */
+.inst .qact{gap:0;top:5px;right:6px}
+.inst .qact button{width:30px;height:30px;font-size:16px;border-radius:8px}
+
+/* Paused / Stopped top buttons: solid amber / red with the skin's own "text on colour" shade, in every skin */
+[data-mode] .btn.cur-pause,[data-mode] .ribbon .btn.cur-pause{background:var(--warn)!important;color:var(--accfg)!important;border-color:transparent!important}
+[data-mode] .btn.cur-stop,[data-mode] .ribbon .btn.cur-stop{background:var(--bad)!important;color:var(--accfg)!important;border-color:transparent!important}
+
+/* primary / selected buttons keep their solid colour (":root .btn" had reset every button to the plain colour, leaving white text on white) */
+:root .btn.pri,:root .btn.on{background:var(--accent);color:var(--accfg);border-color:transparent}
+:root .ribbon .btn.pri{background:var(--accent);color:var(--accfg)}
