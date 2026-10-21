@@ -6719,6 +6719,9 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "alliance_science":
         run_alliance_science(dev, cfg, log, stop)
         return
+    if cmd == "view_reset_test":
+        run_view_reset_test(dev, cfg, log, stop)
+        return
     if cmd == "text":
         dev.text(arg)
         _nap(stop, 0.8, 1.2)
@@ -7750,6 +7753,56 @@ def run_champions(dev, cfg, log, stop):
     log(f"[+]  Champions done: {total_taps} tap(s), {total_greets} greet(s) this run" + (f"; taps today {used}/{CH_TAPS}" if used is not None else ""))
 
 
+# ------------------------------------------------------------ test: does world map -> city reset the camera?
+def _wait_view(dev, cfg, stop, want, secs=60):
+    """Wait until the game shows `want` ('city' / 'landscape') and the picture is steady. -> last screenshot or None."""
+    t0, prev = time.time(), None
+    while time.time() - t0 < secs and not stop.is_set():
+        _nap(stop, 1.5, 1.8)
+        shot = dev.screenshot()
+        if view_of(shot, cfg) == want:
+            if prev is not None and float(np.mean(cv2.absdiff(prev[100:860:6, ::6], shot[100:860:6, ::6]))) < 2.0:
+                return shot
+            prev = shot
+        else:
+            prev = None
+    return None
+
+
+def run_view_reset_test(dev, cfg, log, stop):
+    """From the city: 3 rounds of (move the camera) -> globe -> world map -> globe -> city, saving the city picture each
+    time (debug/view_reset/). If the 3 city pictures match, the city always opens at the same camera place."""
+    out = USER / "debug" / "view_reset"
+    out.mkdir(parents=True, exist_ok=True)
+    moves = [(0, 0), (240, -300), (-260, 260)]
+    pics = []
+    for i, (dx, dy) in enumerate(moves):
+        if stop.is_set():
+            return
+        if dx or dy:
+            pan_content(dev, stop, dx, dy)
+            _nap(stop, 1.5, 2.0)
+            moved = dev.screenshot()
+            cv2.imwrite(str(out / f"{i}_moved.png"), moved)
+        dev.tap(*VIEW_TOGGLE)
+        if _wait_view(dev, cfg, stop, "landscape") is None:
+            raise RuntimeError(f"round {i + 1}: the world map did not come up")
+        dev.tap(*VIEW_TOGGLE)
+        shot = _wait_view(dev, cfg, stop, "city", 90)
+        if shot is None:
+            raise RuntimeError(f"round {i + 1}: the city did not come back")
+        cv2.imwrite(str(out / f"{i}_city.png"), shot)
+        pics.append(shot)
+        if dx or dy:
+            d_moved = float(np.mean(cv2.absdiff(moved[100:860:4, ::4], shot[100:860:4, ::4])))
+            log(f"[i]   reset test round {i + 1}: camera moved by {dx},{dy} before; difference moved -> after reset {d_moved:.1f}")
+    for i in (1, 2):
+        d = float(np.mean(cv2.absdiff(pics[0][100:860:4, ::4], pics[i][100:860:4, ::4])))
+        sx, sy, conf = city_shift(pics[0], pics[i])
+        log(f"[+]  reset test: city after round 1 vs round {i + 1}: difference {d:.1f} (0-5 = same place), shift {sx:.0f},{sy:.0f} (confidence {conf:.2f})")
+    log("[i]   reset test pictures saved in debug/view_reset")
+
+
 # ------------------------------------------------------------ alliance science
 def as_remaining(img):
     """'Remaining Donations: 13/13' on the Alliance Science page -> (left, max) or None."""
@@ -7926,6 +7979,9 @@ DUTY_LIBRARY = [
     {"id": "black_market", "group": "Daily activities", "title": "Black Market", "every_min": 0, "verified": False,
      "note": "Market > Black Market: buys the goods on the Market tab, refreshes as set there, keeps the gem and gold floors. Finds the Market by trying the building plots once, then remembers it.",
      "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market", "market"]},
+    {"id": "view_reset_test", "group": "Common tasks", "title": "Test: city camera reset (globe)", "every_min": 1440, "verified": False,
+     "note": "Moves the camera, goes to the world map and back three times and saves the city picture each time - checks the city always opens at the same place. Nothing is pressed in the city.",
+     "target": "self:", "steps": ["view_reset_test"]},
     {"id": "reach_embassy", "group": "Common tasks", "title": "Test: go to Embassy", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Embassy and opens its menu (nothing is pressed).",
      "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Embassy"]},
