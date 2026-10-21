@@ -5574,6 +5574,153 @@ def zoom_out_city(dev, stop, log, max_tries=3):
     return ok_any
 
 
+class FlowRecorder:
+    """Developer tool: records the owner playing a flow by hand (taps, long presses, swipes read from the emulator's
+    touch events) with a small screenshot before and after each step, so a duty can be written from it later.
+    Saved in USER/flows/<name>/: steps.json + NN_before.jpg (tap marked) + NN_after.jpg."""
+
+    def __init__(self, serial, adb, name, log=print):
+        self.serial, self.adb, self.log = serial, adb, log
+        safe = re.sub(r"[^A-Za-z0-9 _-]", "", name).strip().replace(" ", "_") or "flow"
+        self.dir = USER / "flows" / f"{time.strftime('%Y%m%d-%H%M%S')}_{safe}"
+        self.name, self.steps, self.error = name, [], ""
+        self.stop_ev = threading.Event()
+        self.proc = None
+        self.frames = []                     # (time, small image) - the last few seconds, for "before" pictures
+        self.lock = threading.Lock()
+        self.dev = None
+        self.maxx = self.maxy = 0
+        self.t0 = time.time()
+
+    def _touch_device(self):
+        out = subprocess.run([self.adb, "-s", self.serial, "shell", "getevent", "-pl"], capture_output=True,
+                             text=True, timeout=15, creationflags=NOWIN).stdout
+        best = None
+        for block in re.split(r"\nadd device \d+: ", "\n" + out):
+            m = re.match(r"\s*(\S+)", block)
+            mx = re.search(r"ABS_MT_POSITION_X\s*:.*?max (\d+)", block)
+            my = re.search(r"ABS_MT_POSITION_Y\s*:.*?max (\d+)", block)
+            if m and mx and my:
+                best = (m.group(1), int(mx.group(1)), int(my.group(1)))
+                break
+        if not best:
+            raise RuntimeError("No touch screen found on this emulator (getevent shows no ABS_MT_POSITION).")
+        return best
+
+    def start(self):
+        self.dev = Device(self.serial, self.adb)
+        self.dev.connect()
+        self.dev._lag_busy = True            # record the screen as it is: no lag waiting, no pop-up closing
+        node, self.maxx, self.maxy = self._touch_device()
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.proc = subprocess.Popen([self.adb, "-s", self.serial, "shell", "getevent", "-lt", node],
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                                     creationflags=NOWIN, bufsize=1)
+        threading.Thread(target=self._frames_loop, daemon=True).start()
+        threading.Thread(target=self._events_loop, daemon=True).start()
+        self.log(f"[*] Recording flow '{self.name}' on {self.serial} - play it in the game now")
+
+    def _frames_loop(self):
+        while not self.stop_ev.is_set():
+            try:
+                img = cv2.resize(self.dev.screenshot(), (270, 480), interpolation=cv2.INTER_AREA)
+                with self.lock:
+                    self.frames.append((time.time(), img))
+                    self.frames = self.frames[-8:]
+            except Exception as e:
+                self.error = f"screenshot: {e}"
+            self.stop_ev.wait(0.6)
+
+    def _to_screen(self, rx, ry):
+        w, h = EXPECTED_SIZE
+        if self.maxx > self.maxy:            # touch panel reported in landscape: swap to the portrait screen
+            rx, ry, mx, my = ry, rx, self.maxy, self.maxx
+        else:
+            mx, my = self.maxx, self.maxy
+        return round(rx * w / max(mx, 1)), round(ry * h / max(my, 1))
+
+    def _events_loop(self):
+        x = y = None                         # latest raw finger position
+        touching, start, ended = False, None, False
+        for line in self.proc.stdout:
+            if self.stop_ev.is_set():
+                break
+            parts = line.replace("[", " ").replace("]", " ").split()
+            if len(parts) < 3:
+                continue
+            code, val = parts[-2], parts[-1]
+            try:
+                if code == "ABS_MT_POSITION_X":
+                    x = int(val, 16)
+                elif code == "ABS_MT_POSITION_Y":
+                    y = int(val, 16)
+                elif code in ("BTN_TOUCH", "ABS_MT_TRACKING_ID"):
+                    up = val == "UP" or val.lower() == "ffffffff"
+                    if up and touching:
+                        ended = True
+                    elif not up:
+                        touching = True
+                elif code == "SYN_REPORT":
+                    if touching and start is None and x is not None and y is not None:
+                        start = (time.time(), x, y)
+                    if ended:
+                        if start is not None:
+                            self._step(start, (time.time(), x, y))
+                        touching, start, ended = False, None, False
+            except ValueError:
+                continue
+
+    def _step(self, down, up):
+        t1, rx1, ry1 = down
+        t2, rx2, ry2 = up
+        x1, y1 = self._to_screen(rx1, ry1)
+        x2, y2 = self._to_screen(rx2, ry2)
+        dist, held = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5, t2 - t1
+        kind = "swipe" if dist > 25 else ("long_press" if held > 0.8 else "tap")
+        n = len(self.steps) + 1
+        with self.lock:
+            before = [f for f in self.frames if f[0] <= t1 - 0.1]
+            img = (before[-1] if before else (self.frames[0] if self.frames else (0, None)))[1]
+        step = {"n": n, "kind": kind, "x": x1, "y": y1, "at_s": round(t1 - self.t0, 1), "held_s": round(held, 2)}
+        if kind == "swipe":
+            step.update(x2=x2, y2=y2)
+        if img is not None:
+            pic = img.copy()
+            cv2.circle(pic, (x1 // 2, y1 // 2), 9, (0, 0, 255), 2)
+            if kind == "swipe":
+                cv2.arrowedLine(pic, (x1 // 2, y1 // 2), (x2 // 2, y2 // 2), (0, 0, 255), 2)
+            cv2.imwrite(str(self.dir / f"{n:02d}_before.jpg"), pic, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        self.steps.append(step)
+
+        def after():
+            time.sleep(1.5)
+            try:
+                a = cv2.resize(self.dev.screenshot(), (270, 480), interpolation=cv2.INTER_AREA)
+                cv2.imwrite(str(self.dir / f"{n:02d}_after.jpg"), a, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            except Exception:
+                pass
+        threading.Thread(target=after, daemon=True).start()
+        self.log(f"[*] Flow step {n}: {kind} at {x1},{y1}" + (f" -> {x2},{y2}" if kind == "swipe" else ""))
+        self._save()
+
+    def _save(self):
+        data = {"name": self.name, "serial": self.serial, "screen": list(EXPECTED_SIZE), "touch_max": [self.maxx, self.maxy],
+                "recorded": time.strftime("%Y-%m-%d %H:%M"), "version": VERSION, "steps": self.steps}
+        (self.dir / "steps.json").write_text(json.dumps(data, indent=1), encoding="utf-8")
+
+    def stop(self):
+        self.stop_ev.set()
+        try:
+            if self.proc:
+                self.proc.kill()
+        except Exception:
+            pass
+        time.sleep(1.6)                      # let the last "after" picture land
+        self._save()
+        self.log(f"[+] Flow '{self.name}' saved: {len(self.steps)} steps in {self.dir}")
+        return {"steps": len(self.steps), "path": str(self.dir)}
+
+
 class CityNav:
     """Moves around the city map and remembers where the camera is (relative to the top-left corner)."""
 

@@ -586,6 +586,28 @@ async function cityCaptureFlow() {
 }
 
 
+// ------------------------------------------------------------------ developer tool: record a flow played by hand
+async function flowRecordFlow() {
+  const serial = await chooseDevice("Record a flow on which instance?");
+  if (!serial) return;
+  const nameBox = h("input", { type: "text", placeholder: "e.g. Alliance treasure", style: { width: "100%" } });
+  const ok = await confirmBox("Record a flow", h("div", {}, h("p", {}, "Name the flow, press Start, then play it in the game by hand. Every tap, long press and swipe is saved with a small picture before and after it. The instance must be stopped."), nameBox), "Start");
+  if (!ok) return;
+  if (!(await act(api("flow_start", { serial, name: nameBox.value || "flow" })))) return;
+  const info = h("div", { style: { minWidth: "360px" } }, "Recording... play the flow in the game now.");
+  const timer = setInterval(async () => {
+    const st = await api("flow_state", {}, { quiet: true });
+    if (!st || !st.ok) return;
+    const l = st.last;
+    info.textContent = `Recording... ${st.steps} step(s)` + (l ? `  -  last: ${l.kind} at ${l.x},${l.y}` : "") + (st.error ? `  (${st.error})` : "");
+  }, 1000);
+  modal({ title: "Recording a flow", focus: false, body: info, buttons: [{ label: "Stop and save", cls: "pri", onclick: async () => {
+    clearInterval(timer);
+    const d = await act(api("flow_stop", {}));
+    if (d) infoBox("Flow saved", `${d.steps} step(s) saved in:\n${d.path}\n\nUse 'Open flows folder' and send me the folder.`);
+  } }] });
+}
+
 // ---- What's new: shown once after an update, and from Updates > What's new
 function vtuple(v) { return String(v || "0").split(".").map((x) => parseInt(x, 10) || 0); }
 function vnewer(a, b) { const x = vtuple(a), y = vtuple(b); for (let i = 0; i < 4; i++) { const p = x[i] || 0, q = y[i] || 0; if (p !== q) return p > q; } return false; }

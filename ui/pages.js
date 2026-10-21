@@ -633,6 +633,7 @@ function presetPanels(c, inst) {
     inst ? null : h("div", { class: "row" }, btn("Manage generals...", openGeneralManager, "pri"), S.dev ? btn("Scan generals from the game...", scanGeneralsFlow) : null,
       S.dev ? btn("Build general catalogue (developer)...", catalogFlow) : null, S.dev ? btn("Open catalogue folder", () => act(api("catalog_open")), "sm") : null,
       S.dev ? btn("Record city frames (developer)...", cityCaptureFlow) : null, S.dev ? btn("Open city capture folder", () => act(api("city_capture_open")), "sm") : null,
+      S.dev ? btn("Record a flow (developer)...", flowRecordFlow) : null, S.dev ? btn("Open flows folder", () => act(api("flow_open")), "sm") : null,
       S.dev ? btn("Add general from screenshot...", () => addGeneralFlow()) : null, S.dev ? btn("Capture a button / pop-up from screenshot...", captureTemplate) : null));
   return [bp, gen];
 }
