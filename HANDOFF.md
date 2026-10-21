@@ -56,7 +56,7 @@ Starter prompt for any chat: "Read CLAUDE.md and HANDOFF.md (section PARALLEL WO
 6. Owner's PC is shared: only ONE chat deploys / reopens the app at a time, and only after asking the owner. Write "PC: <task id> testing" in the PC line below while testing, clear it after.
 7. Low effort by default. Ask the owner before anything costly (live tests, screenshots, long reads, subagents, high-effort debugging).
 
-PC: free
+PC: free (dev copy v2.4.77 has feat/science-market + PC-only flow recorder; an update to 2.4.78 is offered and would replace it)
 
 PUBLISHED 2.4.76 (T8 update-restart) on 21 Oct 12:20 IST; check_release OK. Not yet tested live. main = origin/main.
 
@@ -64,7 +64,7 @@ PUBLISHED 2.4.76 (T8 update-restart) on 21 Oct 12:20 IST; check_release OK. Not 
 | ID | Task | Branch | Area (may edit) | Clash with | Status |
 |---|---|---|---|---|---|
 | T1 | Champions (F4): greet check, greet timer non-blocking, live test on Rob | f4-champions | rally_bot.py "Champions" section | - | code done, not tested live |
-| T2 | Market / Black Market (F5) | feat/market | rally_bot.py "black market" section + its UI panel | T5 (city code) | todo |
+| T2 | Market / Black Market (F5) + Alliance Science | feat/science-market | rally_bot.py "black market", "alliance science" sections, duty entries, world-map recovery | T5 (city code) | Alliance Science WORKS (K). BM floors done, but the Market is not found on cities without a map. See project docs claude/science_market_shrine_21oct.md + claude/city_camera_facts_21oct.md |
 | T3 | Libraries (F6): generals catalogue + monster library | feat/libraries | "general catalogue", "monsters" sections, catalog/, monsters/ | T6 (monsters) | todo |
 | T4 | UI cleanup (F7): Advanced section, duplicate buttons, tap targets, labels, Clean up button | feat/ui-cleanup | ui/*, web_app.py (UI routes only) | any task adding UI panels - rebase often | todo |
 | T5 | Daily tasks (F8) part 1: Resource Tax, Gold Levy, Resource Collecting | feat/dailies-city | new run_* functions after the Champions section + DUTY_LIBRARY entries | T2 | todo |
@@ -83,3 +83,11 @@ Safe to run together: T1 + T3 + T4 + T6, or T2 + T6 + T7. Avoid pairs listed in 
 Study: project doc claude/ragebot_full_study.md. Plan: claude/ragebot_parity_milestones.md (R1-R9).
 Mapping: R1 = T9, R2 = T7 (scope extended with Ragebot rally extras), R3 = T4 (plus copy settings, profiles, filter box, Next Run), R4 = T6 (+ T5).
 Stand-out plan: project doc claude/compare_and_stand_out.md (S1-S5). S1 = T10, S2 = T11.
+
+---
+## Update 21 Oct 18:35 IST - T2 chat (Alliance Science + Black Market) ended
+- Branch feat/science-market (NOT merged, NOT published): Alliance Science duty (tested OK on K, 13/13), Black Market duty with gem/gold floors + 3 free refreshes default, world map recognised (recovery taps the globe; Back arrow only on red-title full pages - fixed a profile-page loop), "city zoomed in too far" warning + City page tip, test duty "city camera reset (globe)".
+- Proven on K: globe (world map -> city) does NOT reset the camera. Shrine-in-middle-at-game-start is unverified.
+- Shrine-first navigation experiments parked on branch exp/shrine-nav (not used).
+- Next: (1) save the first city picture after every game start to verify the start anchor; (2) proper city navigation per claude/city_camera_facts_21oct.md; (3) Black Market route via the Tavern (owner says there is one - record it).
+- Starter prompt: "Read CLAUDE.md, HANDOFF.md and project docs claude/city_camera_facts_21oct.md and claude/science_market_shrine_21oct.md. Work on branch feat/science-market. First task: add a capture that saves the first city picture after every game start."
