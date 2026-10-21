@@ -192,7 +192,7 @@ function layout() {
       h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }),
         h("div", { class: "bt" }, h("b", {}, "RallyForge"), h("small", {}, "Automation Hub")),
         h("button", { class: "vpill", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "v" + S.version)),
-      h("h4", {}, h("span", {}, "Instances"), h("span", { class: "cnt", id: "instCnt" }), burger()),
+      h("h4", {}, h("span", {}, "Instances"), h("span", { class: "cnt", id: "instCnt" })),
       h("div", { class: "inst-list", id: "instList" }),
       h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }),
         h("div", { class: "sflab" }, "All instances"),

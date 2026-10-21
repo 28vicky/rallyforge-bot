@@ -921,3 +921,8 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .inst .ichip.bad{background:#fef2f2;color:#b91c1c}
 .inst .ichip.off{background:transparent;border:1px dashed var(--off)}
 .inst:hover .ichip{visibility:hidden}
+
+/* sidebar show/hide: one button on the right (instance header, and the top bar on Control settings) - the sidebar itself has none */
+.top .burger,.app.nosb .top .burger{display:grid}
+:root .burger{background:var(--card);border:1px solid var(--line);box-shadow:none}
+:root .burger:hover{border-color:var(--accent1)}
