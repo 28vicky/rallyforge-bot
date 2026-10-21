@@ -1397,6 +1397,7 @@ function routinesCards(serial, ov, details) {
       oninput: (e) => { query = e.target.value; paint(); } });
     const grid = h("div", { class: "rtngrid" });
     root.append(h("div", { class: "rtnbar" }, pills, search), grid);
+    requestAnimationFrame(() => { const sh = document.querySelector(".stickyhead"); if (sh) root.style.setProperty("--shh", sh.offsetHeight + "px"); });
     const paint = () => {
       grid.innerHTML = "";
       const ncol = window.innerWidth < 1180 ? 2 : 3;          // cards stack in columns (no gaps under short cards), left-to-right order kept

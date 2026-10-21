@@ -947,7 +947,8 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .dbadge.bad{color:#b91c1c;background:#fef2f2;border-color:transparent}
 .ovduties .manageall{width:100%;justify-content:center;margin-top:14px;background:var(--bg);font-weight:600}
 /* ---- Routines tab: filter pills + search, one card per group ---- */
-.rtnbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:4px 0 18px}
+/* the filter bar stays pinned under the tabs; only the cards scroll under it */
+.rtnbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 -24px 18px;padding:10px 24px 12px;position:sticky;top:var(--shh,0px);z-index:15;background:var(--bgc);border-bottom:1px solid var(--line)}
 .rtnpills{display:flex;gap:8px}
 .rtnpill{padding:6px 12px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;background:var(--card);border:1px solid var(--line);color:var(--fg);cursor:pointer}
 .rtnpill.on{background:#111827;border-color:#111827;color:#fff}
