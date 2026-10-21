@@ -1399,13 +1399,16 @@ function routinesCards(serial, ov, details) {
     root.append(h("div", { class: "rtnbar" }, pills, search), grid);
     const paint = () => {
       grid.innerHTML = "";
+      const ncol = window.innerWidth < 1180 ? 2 : 3;          // cards stack in columns (no gaps under short cards), left-to-right order kept
+      const cols = Array.from({ length: ncol }, () => grid.appendChild(h("div", { class: "rtncol" })));
+      let ci = 0;
       const q = query.trim().toLowerCase(), all = rows();
       for (const [g, title, sub] of ROUTINE_GROUPS) {
         const mine = all.filter((r) => r.g === g);
         const shown = mine.filter((r) => (filter === "all" || (filter === "on" && r.on && !r.soon) || (filter === "off" && !r.on && !r.soon) || (filter === "soon" && r.soon))
           && (!q || (r.t + " " + (r.n || "")).toLowerCase().includes(q)));
         if (!shown.length) continue;
-        grid.appendChild(h("div", { class: "panel rtncard" },
+        cols[ci++ % ncol].appendChild(h("div", { class: "panel rtncard" },
           h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, title), h("small", { class: "sub" }, sub)), h("span", { class: "cnt" }, mine.filter((r) => r.on && !r.soon).length + " on")),
           shown.map((r) => h("div", { class: "rtnrow" + (r.soon ? " soon" : "") },
             h("div", { class: "dtx" }, h("div", { class: "dname" },
@@ -1413,7 +1416,7 @@ function routinesCards(serial, ov, details) {
               h("small", { title: r.n || "" }, r.n || "")),
             tog(r)))));
       }
-      if (!grid.children.length) grid.appendChild(note("No routine matches."));
+      if (!ci) { grid.innerHTML = ""; grid.appendChild(note("No routine matches.")); }
     };
     paint();
   };

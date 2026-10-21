@@ -952,8 +952,9 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .rtnpill{padding:6px 12px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;background:var(--card);border:1px solid var(--line);color:var(--fg);cursor:pointer}
 .rtnpill.on{background:#111827;border-color:#111827;color:#fff}
 .rtnsearch{width:256px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);font:inherit;font-size:13px}
-.rtngrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;align-items:start}
-@media (max-width:1180px){.rtngrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rtngrid{display:flex;gap:20px;align-items:flex-start}
+.rtncol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:20px}
+.rtncard{overflow:hidden;margin:0!important}
 .rtncard .cardhead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}
 .rtncard .cardhead h3{margin:0!important}
 .rtncard .sub{display:block;font-size:12.5px;color:var(--mute);margin:2px 0 0;padding:0}
