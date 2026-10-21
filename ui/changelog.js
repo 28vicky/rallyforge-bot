@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.71", date: "2026-10-21",
+    new: ["Auto-Join tab: shows the time left on the game's Auto-Join and when it was last read.", "Monsters tab is now the universal list (no instance picker). Take the tour moved to Setup > Settings.", "\u201cGlobal\u201d is now \u201cUniversal\u201d; instance name size \u201cHuge\u201d is now \u201cExtra Large\u201d; clearer text for what happens when you play on another device."],
+    fixed: ["Add, Stop all, Paused and other coloured buttons were white-on-white and unreadable in some skins; the paused line on an instance card was invisible; the Midnight dark and Amber light skins have better contrast; all buttons share one height; the page margins are now equal on both sides."] },
   { v: "2.4.70", date: "2026-10-21",
     new: ["Cleopatra, Huo Qubing, Theodora, Baibars, Seleucus I, Maria Theresa and Caesar now have the same small picture the 'Select a General' screen shows (like Spartacus, Sanada and Nathanael Greene), so the bot finds them there by picture as main or assistant general."],
     fixed: [] },
