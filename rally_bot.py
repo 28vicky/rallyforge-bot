@@ -7760,7 +7760,8 @@ def _wait_view(dev, cfg, stop, want, secs=60):
     while time.time() - t0 < secs and not stop.is_set():
         _nap(stop, 1.5, 1.8)
         shot = dev.screenshot()
-        if view_of(shot, cfg) == want:
+        v = view_of(shot, cfg)
+        if v == want or (want == "landscape" and v != "city"):  # the world map has no picture of its own: "not the city" is enough
             if prev is not None and float(np.mean(cv2.absdiff(prev[100:860:6, ::6], shot[100:860:6, ::6]))) < 2.0:
                 return shot
             prev = shot
