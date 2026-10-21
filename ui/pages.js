@@ -884,7 +884,7 @@ PAGES.tasks = function (fixed) {
 
 // ====================================================================== market
 const PAY = [["gems", "Gems only"], ["resources", "Resources only"], ["both", "Gems or resources"]];
-const REFRESH = [["none", "Do not refresh"], ["count", "Refresh this many times"], ["all", "All out (no limit - until refreshing is no longer possible)"]];
+const REFRESH = [["none", "Do not refresh"], ["count", "Refresh this many times"], ["all", "Until the gem floor (keeps refreshing and buying)"]];
 PAGES.market = function () {
   const c = S.cfg;
   c.market_items = c.market_items || [];
@@ -917,6 +917,8 @@ PAGES.market = function () {
   const opts = panel("Buying and refreshing",
     grid2(fld("Pay with (for new items)", sel(c, "market_pay", PAY)), fld("When the shop has none of them", sel(c, "market_refresh_mode", REFRESH)),
       fld("How many refreshes", inp(c, "market_refresh_n", { type: "int", cls: "short" })), fld("Most gems to spend per visit (0 = keep going until the gems run out)", inp(c, "market_max_gems", { type: "int", cls: "short" }))),
+    grid2(fld("Keep at least this many gems (0 = no floor)", inp(c, "market_min_gems", { type: "int", cls: "short" })),
+      fld("Keep at least this much gold (0 = no floor)", inp(c, "market_min_gold", { type: "int", cls: "short" }))),
     h("div", { style: { margin: "14px 0" } }, tog(c, "market_paid_refresh", "Also refresh with gems when the free refreshes are used up (costs gems!)")),
     btn("Add the 'Black Market' city task", () => {
       if (c.city_tasks && c.city_tasks.some((t) => t.name === "Black Market")) return toast("There is already a 'Black Market' task.");

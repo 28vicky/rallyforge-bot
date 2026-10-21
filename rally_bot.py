@@ -185,12 +185,14 @@ DEFAULTS = {
     "max_troops": 1,                        # skip a preset that already holds more than this many troops (0 = off)
     "market_items": [],                     # [{name, pay: gems|resources|both}], picture saved as template mk_<name>
     "market_pay": "gems",                   # default payment for items without their own: gems / resources / both
-    "market_refresh_mode": "none",          # none | count | all
-    "market_refresh_n": 5,
+    "market_refresh_mode": "count",         # none | count | all (all = until the gem floor / no more refreshing)
+    "market_refresh_n": 3,                  # 3 = the game's free refreshes
     "market_paid_refresh": False,           # refresh with gems when the free refreshes are used up
     "market_max_gems": 0,                   # most gems to spend in one visit (0 = no limit; required for paid refreshes)
     "market_refresh_cost": 50,              # gems a paid refresh costs if it cannot be read
     "market_match": 0.78,
+    "market_min_gems": 0,                   # never let a gem purchase / paid refresh take the gems below this (0 = no floor)
+    "market_min_gold": 0,                   # never let a gold purchase take the gold below this (gem-priced goods are still bought)
     "tg_api_id": "",                        # from https://my.telegram.org -> API development tools
     "tg_api_hash": "",
     "tg_phone": "",                         # your number with country code, e.g. +911234567890
@@ -6370,7 +6372,8 @@ def market_slots(img):
         right = hsv[:, int(w * 0.35):]
         red = (cv2.countNonZero(cv2.inRange(right, (0, 150, 150), (8, 255, 255)))
                + cv2.countNonZero(cv2.inRange(right, (172, 150, 150), (179, 255, 255))))
-        out.append({"btn": (x, y, w, h), "gem": gem, "afford": red < 40,
+        gold = (not gem) and cv2.countNonZero(cv2.inRange(left, (15, 120, 150), (35, 255, 255))) / left[:, :, 0].size > 0.03
+        out.append({"btn": (x, y, w, h), "gem": gem, "gold": gold, "afford": red < 40,
                     "icon": (max(0, x - 8), max(0, y - int(h * 2.9)), w + 16, int(h * 2.8))})
     return out
 
@@ -6438,6 +6441,23 @@ def refresh_cost(img, refresh, default=50):
             if d and 10 <= int(d) <= 1000:
                 return int(d)
     return int(default)
+
+
+def market_totals(img):
+    """The gold (left) and gem (right) totals in the row under the shop picture -> (gold, gems); None when unread."""
+    def num(x0, x1):
+        best = None
+        try:
+            for _t, ws in ocr_lines(img[282:330, x0:x1], 3.0):
+                for w in ws:
+                    d = re.sub(r"\D", "", w[0])
+                    if len(d) >= 3 and (best is None or len(d) > len(str(best))):
+                        best = int(d)
+        except Exception:
+            pass
+        return best
+    gold, gems = num(0, 275), num(265, 540)              # each half on its own: read together, one of them is often lost
+    return gold, gems
 
 
 def market_wanted(cfg):
@@ -6510,29 +6530,35 @@ def run_market(dev, cfg, log, stop):
         log("[!] Black Market: no wanted items with a picture - add some on the Market tab")
         return
     img = dev.screenshot()
-    if not market_on_screen(img):
-        p = find_text(img, ["Black Market"])
+    if not market_on_screen(img):                          # the Market's ring menu is open: tap the Black Market icon (above its caption)
+        p = find_text(img, ["Black Market", "Black"], region=(0, 150, 540, 600), cutoff=0.7)
         if p:
-            dev.tap(*p)
-            _nap(stop, 1.5, 2.0)
+            dev.tap(p[0], p[1] - 40)
+            _nap(stop, 2.2, 3.0)
             img = dev.screenshot()
     if not market_on_screen(img):
-        log("[!] Black Market: the shop is not open")
-        return
+        raise RuntimeError("the Black Market did not open")
     mode = cfg.get("market_refresh_mode", "none")
     limit = int(cfg.get("market_refresh_n", 0) or 0) if mode == "count" else (float("inf") if mode == "all" else 0)
     paid_ok = bool(cfg.get("market_paid_refresh"))
     budget = int(cfg.get("market_max_gems", 0) or 0)
     th = float(cfg.get("market_match", 0.78))
+    min_gems = int(cfg.get("market_min_gems", 0) or 0)
+    min_gold = int(cfg.get("market_min_gold", 0) or 0)
     spent = refreshes = 0
     no_change = 0
     bought, failed = {}, set()                              # failed: slot numbers that did not sell (until the next refresh)
-    log(f"[*] Black Market: looking for {', '.join(w[0] for w in wanted)}")
+    gold, gems = market_totals(img)
+    log(f"[*] Black Market: looking for {', '.join(w[0] for w in wanted)}; gold {gold if gold is not None else '?'}, "
+        f"gems {gems if gems is not None else '?'} (keep at least {min_gold:,} gold, {min_gems:,} gems)")
     while not stop.is_set():
         img = dev.screenshot()
         if not market_on_screen(img):
             log("[!] Black Market: the shop closed")
             break
+        g2, m2 = market_totals(img)
+        gold = g2 if g2 is not None else gold
+        gems = m2 if m2 is not None else gems
         again = False
         for si, slot in enumerate(market_slots(img)):
             if si in failed:
@@ -6548,6 +6574,14 @@ def run_market(dev, cfg, log, stop):
                     log(f"[i] {name} is for sale but you cannot afford it")
                 elif slot["gem"] and budget and price and spent + price > budget:
                     log(f"[i] {name} costs {price:,} gems - over the gem limit")
+                elif slot["gem"] and min_gems and (price is None or gems is None):
+                    log(f"[i] {name}: price or gem total not readable - not bought (gem floor {min_gems:,})")
+                elif slot["gem"] and min_gems and gems - price < min_gems:
+                    log(f"[i] {name} costs {price:,} gems - would leave {gems - price:,}, under the floor of {min_gems:,}")
+                elif slot.get("gold") and min_gold and (price is None or gold is None):
+                    log(f"[i] {name}: price or gold total not readable - not bought (gold floor {min_gold:,})")
+                elif slot.get("gold") and min_gold and gold - price < min_gold:
+                    log(f"[i] {name} costs {price:,} gold - would leave {gold - price:,}, under the floor of {min_gold:,}")
                 else:
                     bx, by, bw, bh = slot["btn"]
                     dev.tap(bx + bw / 2, by + bh / 2)
@@ -6583,6 +6617,9 @@ def run_market(dev, cfg, log, stop):
             cost = refresh_cost(img, refresh, cfg.get("market_refresh_cost", 50))
             if budget and spent + cost > budget:
                 log("[i] Black Market: the gem limit is reached")
+                break
+            if min_gems and (gems is None or gems - cost < min_gems):
+                log(f"[i] Black Market: a paid refresh ({cost} gems) would go under the gem floor of {min_gems:,} - stopping")
                 break
         before = _market_sig(img)
         dev.tap(refresh[0] + refresh[2] / 2, refresh[1] + refresh[3] / 2)
@@ -6673,6 +6710,9 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "wheel":
         run_wheel(dev, cfg, log, stop)
         return
+    if cmd == "alliance_science":
+        run_alliance_science(dev, cfg, log, stop)
+        return
     if cmd == "text":
         dev.text(arg)
         _nap(stop, 0.8, 1.2)
@@ -6724,6 +6764,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(*pos)
         return True
+    if kind == "self":                                     # the step finds its own way from the city (e.g. alliance_science)
+        return True
     if kind == "xy":
         x, y = [float(v) for v in name.split(",")[:2]]
         dev.tap(x, y)
@@ -6753,6 +6795,18 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(p[0], p[1] - 38)                           # the icon sits just above its caption
         return True
+    if kind == "building" and not nav_state.get("picture_bad") and not PICTURE_BAD.get(getattr(dev, "serial", "")) and picture_items(dev) is not None:
+        have = {k.split("#")[0].lower() for k in picture_items(dev)}
+        for nm in str(name).split("+"):
+            base = nm.split("#")[0].strip()
+            if base and base.lower() not in have and base.lower() not in RESOURCE_LOWER:
+                if not nav_state.get("anav"):
+                    nv = CityNav(dev, stop, log)
+                    nv.absolute = True
+                    nv.quiet = True
+                    nav_state["anav"] = nv
+                find_plot(dev, cfg, log, stop, nav_state["anav"], base)
+                leave_to_city(dev, cfg, stop, log)
     if kind == "building" and not nav_state.get("picture_bad") and not (PICTURE_BAD.get(getattr(dev, "serial", "")) and city_map_items(dev)) and picture_items(dev) is not None and str(name).lower().split("+")[0].split("#")[0] in {k.split("#")[0].lower() for k in picture_items(dev)}:
         pitems = picture_items(dev)                          # the camera is found by the whole-city picture; positions come from the mapper or the built-in default
         pkeys = []
@@ -7688,6 +7742,127 @@ def run_champions(dev, cfg, log, stop):
     log(f"[+]  Champions done: {total_taps} tap(s), {total_greets} greet(s) this run" + (f"; taps today {used}/{CH_TAPS}" if used is not None else ""))
 
 
+# ------------------------------------------------------------ alliance science
+def as_remaining(img):
+    """'Remaining Donations: 13/13' on the Alliance Science page -> (left, max) or None."""
+    try:
+        for t, _ws in ocr_lines(img[150:300, 0:360], 2.5):
+            m = re.search(r"(\d{1,2})\s*[/\\l|]\s*(\d{1,2})", t)
+            if m and ("onat" in t.lower() or "emain" in t.lower() or len(_ws) <= 3):
+                a, b = int(m.group(1)), int(m.group(2))
+                if 0 <= a <= b <= 50:
+                    return a, b
+        c = img[185:235, 0:240]
+        g = cv2.resize(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY), None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+        for b in (g, 255 - cv2.threshold(g, 130, 255, cv2.THRESH_BINARY)[1]):
+            t = pytesseract.image_to_string(b, config="--psm 6")
+            m = re.search(r"(\d{1,2})\s*[/\\l|]\s*(\d{1,2})", t)
+            if m and int(m.group(1)) <= int(m.group(2)) <= 50:
+                return int(m.group(1)), int(m.group(2))
+    except Exception:
+        pass
+    return None
+
+
+def as_donate_button(img):
+    """The green Donate button (top-most on the page, right side) -> (x, y) or None. Text first, colour as fallback."""
+    p = find_text(img, ["Donate"], region=(300, 300, 240, 560), cutoff=0.75)
+    if p:
+        return p
+    hsv = cv2.cvtColor(img[300:860, 300:540], cv2.COLOR_BGR2HSV)
+    m = cv2.morphologyEx(cv2.inRange(hsv, (40, 90, 50), (85, 255, 230)), cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    boxes = [cv2.boundingRect(c) for c in cs]
+    boxes = [b for b in boxes if 80 < b[2] < 170 and 30 < b[3] < 65]
+    if not boxes:
+        return None
+    x, y, w, h = min(boxes, key=lambda b: b[1])
+    return x + w // 2 + 300, y + h // 2 + 300
+
+
+def as_snap(img, tag):
+    try:
+        (USER / "debug").mkdir(exist_ok=True)
+        cv2.imwrite(str(USER / "debug" / f"alliance_science_{tag}.png"), img)
+    except Exception:
+        pass
+
+
+def run_alliance_science(dev, cfg, log, stop):
+    """From the city: Alliance button -> Alliance Science row -> tap Donate on the recommended science until the day's
+    donations are used up. Only the free daily donations; nothing that costs gems is pressed."""
+    shot = dev.screenshot()
+    h = find(shot, "rally_icon", 0.8) if has_template("rally_icon") else None
+    pos = (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
+    dev.tap(*pos)
+    _nap(stop, 1.8, 2.4)
+    row = None
+    for i in range(4):                                     # the Science row is below the fold: scroll the menu up
+        shot = dev.screenshot()
+        if i == 0:
+            as_snap(shot, "1_alliance")
+        row = find_text(shot, ["Alliance Science", "Science"], region=(60, 420, 360, 470), cutoff=0.75)
+        if row or stop.is_set():
+            break
+        dev.swipe(316, 778, 303, 548, 450)
+        _nap(stop, 1.0, 1.4)
+    if not row:
+        as_snap(dev.screenshot(), "2_failed")
+        raise RuntimeError("the Alliance Science row was not found on the Alliance page")
+    dev.tap(*row)
+    _nap(stop, 1.8, 2.4)
+    shot = dev.screenshot()
+    as_snap(shot, "3_science")
+    rem = as_remaining(shot)
+    btn = as_donate_button(shot)
+    if rem is None and not (btn and find_text(shot, ["Alliance Science", "Science"], region=(0, 0, 540, 340), cutoff=0.7)):
+        raise RuntimeError("the Alliance Science page did not open")
+    if rem is None:                                        # counter not readable: tap one at a time while the green button stays
+        log("[i]   Alliance Science: the donation counter is not readable - donating one at a time")
+        n = 0
+        while n < int(cfg.get("alliance_science_max", 13) or 13) and not stop.is_set():
+            b = as_donate_button(dev.screenshot())
+            if not b:
+                break
+            dev.tap(*b)
+            n += 1
+            _nap(stop, 0.7, 1.0)
+        as_snap(dev.screenshot(), "5_done")
+        log(f"[+]  Alliance Science: {n} donation tap(s)")
+        return
+    left, top = rem
+    log(f"[i]   Alliance Science: donations left {left}/{top}")
+    if left == 0:
+        log("[+]  Alliance Science: all donations already done today")
+        return
+    if not btn:
+        raise RuntimeError("no Donate button on the recommended science")
+    done = 0
+    while left > 0 and done < 60 and not stop.is_set():
+        for _ in range(min(left, 5)):                      # quick taps work; re-read the counter every 5
+            dev.tap(*btn)
+            _nap(stop, 0.3, 0.45)
+            done += 1
+        _nap(stop, 0.8, 1.1)
+        shot = dev.screenshot()
+        r = as_remaining(shot)
+        if r is None:                                      # something covered the page (a dialog?) - do not keep tapping
+            as_snap(shot, "4_unknown")
+            log("[!]  Alliance Science: the page changed while donating - stopping")
+            break
+        if r[0] >= left:                                   # nothing was used: the button moved or the science is maxed
+            nb = as_donate_button(shot)
+            if not nb or nb == btn:
+                log("[!]  Alliance Science: the donations did not go down - stopping")
+                break
+            btn = nb
+        left = r[0]
+    as_snap(dev.screenshot(), "5_done")
+    log(f"[+]  Alliance Science done: {top - left} of {top} donations used today" + ("" if left == 0 else f", {left} left"))
+    if left > 0:
+        raise RuntimeError(f"{left} donation(s) left")
+
+
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
 DUTY_FILE = USER / "duties_state.json"
 _DUTY_LOCK = threading.Lock()
@@ -7737,6 +7912,12 @@ DUTY_LIBRARY = [
     {"id": "reach_market", "group": "Common tasks", "title": "Test: go to Market", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Market and opens its menu (nothing is pressed).",
      "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market"]},
+    {"id": "alliance_science", "group": "Daily activities", "title": "Alliance Science", "verified": False,
+     "note": "Alliance > Alliance Science: uses the day's free donations on the recommended science. Never spends gems.",
+     "target": "self:", "every_min": 240, "steps": ["alliance_science"]},
+    {"id": "black_market", "group": "Daily activities", "title": "Black Market", "every_min": 0, "verified": False,
+     "note": "Market > Black Market: buys the goods on the Market tab, refreshes as set there, keeps the gem and gold floors. Finds the Market by trying the building plots once, then remembers it.",
+     "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market", "market"]},
     {"id": "reach_embassy", "group": "Common tasks", "title": "Test: go to Embassy", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Embassy and opens its menu (nothing is pressed).",
      "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Embassy"]},
@@ -7940,7 +8121,87 @@ def picture_items(dev):
         if base.lower() in have or base.lower() not in DEFAULT_PICTURE_BUILDINGS:
             continue
         items[f"{base}#1"] = [round(SHRINE_LABEL_IN_PICTURE[0] + ox), round(SHRINE_LABEL_IN_PICTURE[1] + oy)]
+    for nm, n in (ent.get("plots") or {}).items():         # changeable buildings found by trying the plots (find_plot)
+        if nm.lower() not in have and int(n) in CITY_SQUARES:
+            _nm, ox, oy = CITY_SQUARES[int(n)]
+            items[f"{nm}#1"] = [round(SHRINE_LABEL_IN_PICTURE[0] + ox), round(SHRINE_LABEL_IN_PICTURE[1] + oy)]
     return items
+
+
+CHANGEABLE_PLOTS = [n for n, (nm, _x, _y) in CITY_SQUARES.items()
+                    if n not in PARKED_SQUARES and re.sub(r"\s*\d+$", "", nm).lower() not in DEFAULT_PICTURE_BUILDINGS]
+
+
+def save_plot(dev, name, number):
+    serial = getattr(dev, "serial", "default")
+    with _CITY_LOCK:
+        data = load_city()
+        ent = data.setdefault(serial, {})
+        ent.setdefault("plots", {})[name] = int(number)
+        save_city(data)
+
+
+def forget_plot(dev, name):
+    serial = getattr(dev, "serial", "default")
+    with _CITY_LOCK:
+        data = load_city()
+        if (data.get(serial) or {}).get("plots", {}).pop(name, None) is not None:
+            save_city(data)
+
+
+def find_plot(dev, cfg, log, stop, nav, name):
+    """A changeable building (Market, Embassy ...) has no known place on this account: walk the changeable plots of the
+    numbered city map, tap each, read the name under the ring menu and save the plot that holds `name` (other changeable
+    buildings read on the way are saved too). Only on a city that matches the stored picture. -> plot number or None."""
+    x0, y0, w, h = SAFE_TAP_AREA
+    want = BUILDING_ALIASES.get(name, name).lower()
+    order = sorted(CHANGEABLE_PLOTS, key=lambda n: (re.sub(r"\s*\d+$", "", CITY_SQUARES[n][0]).lower() != want, n))
+    known = {k.lower() for k in ((load_city().get(getattr(dev, "serial", "default")) or {}).get("plots") or {})}
+    log(f"[*] {name} is not on this account's map yet - trying the building plots ({len(order)} plots)")
+    first = True
+    for n in order:
+        if stop.is_set():
+            return None
+        nm0, ox, oy = CITY_SQUARES[n]
+        tx, ty = SHRINE_LABEL_IN_PICTURE[0] + ox, SHRINE_LABEL_IN_PICTURE[1] + oy
+        nav.seen_city = False
+        leave_to_city(dev, cfg, stop)
+        nav.goto(tx, ty)
+        if first and not nav.seen_city:
+            log(f"[!] {name}: this city does not match the stored city picture - plots cannot be tried here")
+            return None
+        first = False
+        px, py = tx - nav.cx, ty - nav.cy
+        if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+            log(f"[i]   plot {n}: could not be brought into view")
+            continue
+        close_reward_panel(dev, stop, log)
+        dev.expect_city = False
+        dev.tap(int(px), int(py + int(cfg.get("city_tap_dy", 22) or 0)))
+        _nap(stop, 1.1, 1.5)
+        shot = dev.screenshot()
+        if not find_detail_icon(shot):
+            log(f"[i]   plot {n}: no building menu opened")
+            leave_to_city(dev, cfg, stop)
+            continue
+        got = ring_building_name(shot)
+        read = (got[0] if got else "") or ""
+        log(f"[i]   plot {n}: {read or 'name not read'}")
+        close_ring(dev, stop, (px, py + 35))
+        for b in [x.strip() for x in read.split(",") if x.strip()]:
+            bn = BUILDING_ALIASES.get(b, b)
+            if bn.lower() == want:
+                save_plot(dev, name, n)
+                log(f"[+] {name} found on plot {n} - saved for this account")
+                return n
+            if bn.lower() not in DEFAULT_PICTURE_BUILDINGS and bn.lower() not in known and bn in BUILDING_NAMES and bn.lower() not in RESOURCE_LOWER:
+                save_plot(dev, bn, n)                     # another changeable building: remember it too
+                known.add(bn.lower())
+    log(f"[!] {name} was not found on any plot")
+    return None
+
+
+RESOURCE_LOWER = {"quarry", "sawmill", "mine", "farm"}
 
 
 def city_map_items(dev):
