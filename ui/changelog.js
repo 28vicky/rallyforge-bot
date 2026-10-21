@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.80", date: "2026-10-21",
+    new: ["New dashboard: each instance now has five tabs - Overview, Routines, Rally setup, Itinerary & Logs and Settings. Pause all and Stop all sit at the bottom of the instance list. New warm colours: Start is orange, Pause amber, Stop red.", "Settings has a menu on the left (Advanced last) and a Save / Discard bar at the bottom.", "\u201cRun first\u201d is now called \u201cRun now\u201d."],
+    fixed: ["Black Market: the bot now confirms the purchase box and only counts an item as bought when your gems or gold go down. The purchase box is no longer mistaken for the game's exit box, and the pop-up guard stays out of the shop while buying.", "The \u201cWaiting\u201d list under Run a task now refreshes by itself."] },
   { v: "2.4.79", date: "2026-10-21",
     new: ["Bird of Hurricane is now in the Monsters list, so you can switch it off - the bot then stops joining its rallies."],
     fixed: [] },
