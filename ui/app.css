@@ -991,3 +991,24 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .app:not(.inst-mode) .main{padding-bottom:44px}
 @media (max-width:900px){.app:not(.nosb) .status{left:200px}}
 .ovgrid .actwrap:has(tbody:empty)::after{content:"No rallies yet - joins and skips show here as they happen.";display:block;padding:22px 12px;color:var(--mute);font-size:13px;text-align:center}
+/* ---- type + spacing scale (one pass for every page): body 14, small text 12.5-13.5, card titles 16, page title 24 ---- */
+:root body{font-size:14px}
+:root .btn{font-size:14px;min-height:34px;padding:0 14px}
+:root .btn.sm{font-size:13px;min-height:30px;padding:0 10px}
+:root .instbar .btn{font-size:13.5px;font-weight:600;padding:0 14px}
+:root .ribbon .btn{font-size:13.5px;min-height:32px}
+:root input:not([type=checkbox]):not([type=radio]),:root select,:root textarea{font-size:14px}
+:root .panel p.note,:root .note{font-size:13.5px;line-height:1.5}
+:root .hint{font-size:12.5px}
+:root .tabs .tab,:root .stickyhead .tab{font-size:14px}
+:root .subnav .sub{font-size:13px}
+:root .nowstrip{font-size:13.5px;padding-bottom:14px}
+:root .panel{padding:20px}
+:root .field label{font-size:13px}
+/* Control settings top bar: sidebar button left, summary next to it, What's new right */
+:root .top{justify-content:flex-start}
+:root .top .sidebtn{margin-right:0}
+:root .top .sum{margin-left:4px;font-size:13.5px;font-weight:600;color:var(--mute)}
+:root .top .newbtn{margin-left:auto}
+:root .top .sidebtn{order:-2}
+:root .top .sum{order:-1}
