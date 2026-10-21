@@ -1147,6 +1147,9 @@ def fmt_hms(sec):
     return "%d:%02d:%02d" % (sec // 3600, sec % 3600 // 60, sec % 60)
 
 
+AJ_LEFT = {}                                  # serial -> (seconds left on the game's Auto-Join, time it was read)
+
+
 def auto_join_renew(dev, cfg, log, stop, act):
     """On the Alliance War list: open the game's Auto-Join, read the time left and press Start when it is under the limit
     (or already stopped). Start works while it is running and resets it to 8 hours. -> seconds until the next check."""
@@ -1167,6 +1170,7 @@ def auto_join_renew(dev, cfg, log, stop, act):
         log("[!] Auto-Join: could not read the time left - closing it and trying again in 2 minutes")
         dev.back()
         return 120
+    AJ_LEFT[dev.serial] = (left, time.time())
     log(f"[*] Auto-Join: {fmt_hms(left)} left (renew under {limit // 60} min)")
     if left <= limit:
         act("step", text="Renewing the game's Auto-Join")
@@ -1174,6 +1178,7 @@ def auto_join_renew(dev, cfg, log, stop, act):
         time.sleep(2.0)
         now_left = read_auto_join_time(dev.screenshot())
         if now_left is not None and now_left > left + 600:
+            AJ_LEFT[dev.serial] = (now_left, time.time())
             log(f"[+] Auto-Join renewed - now {fmt_hms(now_left)}")
             act("renew", left=fmt_hms(now_left))
         else:
