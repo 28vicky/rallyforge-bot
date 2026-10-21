@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.74"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.75"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -1539,8 +1539,7 @@ def monster_allowed(name, cfg, level=None):
 
 def cerberus_allowed(screen, hit, cfg):
     """Cerberus rallies are skipped unless cfg['cerberus'] == 'join'. Reads the boss name above the Join button."""
-    if cfg.get("cerberus", "skip") == "join":
-        return True, ""
+    return True, ""                         # 2.4.74: the monster list decides (Cerberus is a normal monster there); the old hidden "Cerberus rallies" switch is retired
     cx, cy = int(hit[0] - 21), int(hit[1] - 113)
     x0, y0 = max(cx - 140, 0), max(cy - 24, 0)
     if cy - 24 < 0:

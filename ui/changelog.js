@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.75", date: "2026-10-21",
+    new: [],
+    fixed: ["Cerberus is now decided by the monster list like every other monster (the hidden \u201cCerberus rallies\u201d switch is gone). Tick or untick it on the Monsters tab."] },
   { v: "2.4.74", date: "2026-10-21",
     new: ["On start the bot checks the emulator screen (540x960, 240 dpi), sets it if it differs and warns in the log if it cannot. It never stops the bot."],
     fixed: ["Duties (Crazy Eggs and the others) now run by themselves when switched on, even if \u201cDo the tasks\u201d is off.", "Vikings and other monsters you unticked are no longer joined when their name is half hidden on screen.", "The log now shows every 15 minutes what each duty is waiting for.", "Pause all now also pauses instances that were still starting.", "Layout: Monsters cards are even and no longer cut off, the toolbar has no stray card edge, dashboard columns line up, button text is centred."] },
