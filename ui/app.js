@@ -373,7 +373,9 @@ function renderSide() {
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   const ic = $("#instCnt"); if (ic) ic.textContent = S.devStatus.length + " total";
   for (const d of S.devStatus) {
-    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
+    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", "Paused", "Problem", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
+    const chip = d.state === "run" ? (d.joins ? ["joins " + d.joins, "ok"] : ["idle", ""]) : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : ["offline", "off"];
+    L.lastChild.querySelector(".nm").after(h("span", { class: "ichip " + chip[1] }, chip[0]));      // status at a glance on the right (hidden on hover, where the quick buttons appear)
     sideDrag(L.lastChild, d.id);
     const qb = (t, ico, fn, dim) => h("button", { title: t, class: dim ? "dim" : "", onclick: (e) => { e.stopPropagation(); if (!dim) fn(); } }, ico);
     const nm = d.name || short(d.id);
