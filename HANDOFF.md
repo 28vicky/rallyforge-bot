@@ -71,6 +71,11 @@ PUBLISHED 2.4.76 (T8 update-restart) on 21 Oct 12:20 IST; check_release OK. Not 
 | T6 | Daily tasks (F8) part 2: Alliance help/donation/gift/treasure, Mail, Quests | feat/dailies-alliance | new run_* functions + DUTY_LIBRARY entries | - | todo |
 | T7 | Rally extras (F9): universal "wait after I play elsewhere", per-monster presets | feat/rally-extras | "presets", "one device" rally loop | T3 (monsters) | todo |
 | T8 | Update restart: countdown, waiting-for names, click = restart now, 30 s max wait | feat/update-restart | web_app.py update/restart code + ui/app.js status bar | T4 (ui/app.js) | code done, not tested live |
+| T9 | R1 core engine: duty scheduler with next-run per instance + Itinerary view, march-slot tracker, start-up health checks (RAM, game version) | feat/engine-itinerary | rally_bot.py duty scheduler/duty_status + one new UI view | T4 (ui), T5/T6 (duty entries) - add only | todo |
 | R | Release chat: merge finished branches into main, version bump, changelog, publish (owner says publish) | main | everything | - | when owner asks |
 
 Safe to run together: T1 + T3 + T4 + T6, or T2 + T6 + T7. Avoid pairs listed in "Clash with".
+
+### Ragebot parity (21 Oct 13:55 IST)
+Study: project doc claude/ragebot_full_study.md. Plan: claude/ragebot_parity_milestones.md (R1-R9).
+Mapping: R1 = T9, R2 = T7 (scope extended with Ragebot rally extras), R3 = T4 (plus copy settings, profiles, filter box, Next Run), R4 = T6 (+ T5).
