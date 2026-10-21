@@ -1,9 +1,9 @@
 {
-  "version": "2.4.77",
-  "notes": "Bot waits out the red wifi lag icon before tapping",
+  "version": "2.4.78",
+  "notes": "Offer pop-ups that ignore outside taps are closed with their X",
   "files": {
     "rally_bot.py": {
-      "sha256": "d8de0b3b254d9e6bc383134cf9de9f303229c58619c5ba3c3657d39dc99d9abb"
+      "sha256": "2e6904673dd641f9637329907ee497914d53e1b15f0f79d6dfd1c4353cc2aec3"
     },
     "web_app.py": {
       "sha256": "dd38308d99cd67dddbeeca3fc9c164c1813c6429654ab72c82ceee0b24485738"
@@ -18,7 +18,7 @@
       "sha256": "80fea900aa159afc279877792916141728ffe3fdb374180955ffe7b810ad2081"
     },
     "ui/changelog.js": {
-      "sha256": "e98f8be0b342c1cda149cdb9e29ace1c623d9d697bc447f9b3757b89e81e6a71"
+      "sha256": "5b26cb06ccfde9a3d90c16b2c0ee7eaf48c0ca5530d401e7e229d6ed3aac61e0"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -1486,5 +1486,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "34555fcb564854b547f77e6db4b354e42a7f487364cc46540d212538de9bdcd8"
+  "sig": "ea42faa9b6c6e699422498cf6c10596ec34d4da65a5dc0c5f05f99a4c1e52e35"
 }
