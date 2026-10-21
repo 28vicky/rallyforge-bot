@@ -61,6 +61,7 @@ const S = {
 };
 // ------------------------------------------------------------------ icon set (one outline style: 24 grid, 1.8 stroke, currentColor)
 const ICO = {
+  bolt: '<path d="M13 3 4 14h7l-1 7 9-11h-7l1-7z"/>',
   play: '<path d="M8 5v14l11-7z"/>', pause: '<path d="M9 5v14M15 5v14"/>', stop: '<rect x="6" y="6" width="12" height="12" rx="2.5"/>',
   chev: '<path d="m6.5 9.5 5.5 5.5 5.5-5.5"/>',
   users: '<circle cx="9" cy="8.5" r="3.4"/><path d="M2.8 20c0-3.5 2.8-5.8 6.2-5.8s6.2 2.3 6.2 5.8M16 5.3a3.4 3.4 0 0 1 0 6.4M18.3 14.6c1.8.8 2.9 2.6 2.9 5.4"/>',
@@ -568,11 +569,11 @@ S.acts = []; S.now = {};
 const esc = (t) => String(t == null ? "" : t);
 function actRow(v, l) {
   const a = l.a, k = a.k;
-  const chip = k === "join" ? ["JOINED", "g"] : k === "fail" ? ["FAILED", "e"] : k === "renew" ? ["RENEWED", "g"] : ["SKIPPED", "w"];
+  const chip = k === "join" ? ["Joined", "g"] : k === "fail" ? ["Failed", "e"] : k === "renew" ? ["Renewed", "g"] : ["Skipped", "w"];
   const took = a.took != null ? a.took + "s" : "";
   const cells = [a.t, v.serial === null ? l.n : null, k === "renew" ? "Auto-Join" : a.mon, a.rally != null ? a.rally + "s" : "", h("span", { class: "chip " + chip[1] }, chip[0]),
     k === "join" ? "Preset " + a.preset + (a.n ? "  (#" + a.n + ")" : "") : k === "renew" ? "Game Auto-Join restarted - now " + a.left + " left" : a.why, took];
-  const tr = h("tr", {}, ...cells.filter((c, i) => !(i === 1 && c === null)).map((c) => h("td", {}, c)));
+  const tr = h("tr", { title: typeof cells[5] === "string" ? cells[5] : "" }, ...cells.filter((c, i) => !(i === 1 && c === null)).map((c) => h("td", {}, c)));
   // one row per rally: same instance + monster + (almost) the same end time = the same rally
   if (a.rally != null && a.t && a.mon) {
     const [hh, mm, ss] = String(a.t).split(":").map(Number);

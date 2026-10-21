@@ -488,7 +488,14 @@ function instancePage(serial) {
     ["ov", "Overview", () => {
       const a = activityBox(serial, "Now executing");
       const L = a.querySelector(".actleft"), R = a.querySelector(".actright");
-      return [h("div", { class: "dutygrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
+      const st = (S.devStatus.find((x) => x.id === serial) || {}).state;
+      L.querySelector("h3").replaceWith(h("div", { class: "cardhead" },
+        h("h3", {}, h("span", { class: "livedot" + (st === "run" ? " on" : "") }), "Now executing"), h("span", { class: "livetag" }, "Live")));
+      const lab = L.querySelector(".actlab"); if (lab) lab.remove();
+      R.querySelector("h3").replaceWith(h("div", { class: "cardhead" },
+        h("div", {}, h("h3", {}, "Monster joins"), h("small", { class: "sub" }, "Live rally history log")),
+        h("a", { href: "#", class: "viewall", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("logs"); } }, "View all \u2192")));
+      return [h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
     }],
     ["routines", "Routines", () => sections("routines", [
       ["duties", "Daily duties", () => [PAGES.duties(serial)]],
@@ -1165,13 +1172,15 @@ PAGES.duties = function (fixed, only, compact) {
     if (compact) {
       root.appendChild(rn);
       const onRows = rows.filter((r) => r.on);
-      root.appendChild(panel("Daily duties", h("div", { class: "dlist" }, onRows.slice(0, 7).map((r) => h("div", { class: "drow" },
-        h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" })),
-        h("div", { class: "dtx" }, h("b", {}, r.title), h("small", {}, (r.note || "") + (r.schedule ? " \u00b7 " + r.schedule : ""))),
-        h("span", { class: "dst " + (r.status === "done" ? "ok" : r.status === "gaveup" ? "bad" : "") }, r.on ? r.status_text : "Off"))).concat(onRows.length ? [] : [note("No duty is switched on yet.")])),
-        h("div", { class: "row", style: { marginTop: "10px", justifyContent: "space-between" } },
-          h("span", { class: "hint" }, onRows.length > 7 ? "+" + (onRows.length - 7) + " more switched on" : onRows.length + " switched on"),
-          h("button", { class: "btn sm", onclick: () => { S.sec = S.sec || {}; S.sec.routines = "duties"; if (S.gotoInstTab) S.gotoInstTab("routines"); } }, "Manage all duties \u2192"))));
+      const badge = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad" };
+      root.appendChild(h("div", { class: "panel ovduties" },
+        h("div", { class: "cardhead" }, h("h3", {}, "Daily duties"), h("span", { class: "cnt" }, onRows.length + " active")),
+        h("div", { class: "dlist" }, onRows.slice(0, 7).map((r) => h("div", { class: "drow" },
+          h("div", { class: "dtx" }, h("div", { class: "dname" }, h("b", {}, r.title), h("span", { class: "dbadge " + (badge[r.status] || "") }, r.status_text)),
+            h("small", {}, (r.note || "") + (r.schedule ? " \u00b7 " + r.schedule : ""))),
+          h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" })))).concat(onRows.length ? [] : [note("No duty is switched on yet.")]),
+          onRows.length > 7 ? [h("small", { class: "hint" }, "+" + (onRows.length - 7) + " more switched on")] : []),
+        h("button", { class: "btn manageall", onclick: () => { S.sec = S.sec || {}; S.sec.routines = "duties"; if (S.gotoInstTab) S.gotoInstTab("routines"); } }, "Manage all duties \u2192")));
       return;
     }
     if (!only) root.appendChild(panel("Duties",
@@ -1254,10 +1263,11 @@ PAGES.duties = function (fixed, only, compact) {
     const set = async (name, o) => { const r = await act(api(name, { serial, ...o })); if (r) drawRn(r); };
     const sel = h("select", { onchange: (e) => { rnPick = e.target.value; } }, h("option", { value: "" }, "Pick a task\u2026"),
       j.tasks.map((t) => h("option", { value: t.id, selected: t.id === rnPick }, t.group + " \u2013 " + t.title)));
+    if (compact) rn.className = "ovrun";
     rn.appendChild(panel("Run a task now",
-      note("Pick any task and the bot does it next, before everything else (even before a waiting rally), once. It works even if the task is switched off or already done today, and also when 'Do the tasks' is off. It starts as soon as the instance is running" + (serial ? "." : ", on every instance.")),
-      h("div", { class: "row", style: { gap: "8px" } }, sel,
-        h("button", { class: "btn primary", onclick: () => { if (rnPick) set("run_now_add", { id: rnPick }); } }, "Run now")),
+      compact ? h("small", { class: "sub" }, "Runs once, before anything else, then the bot carries on.") : note("Pick any task and the bot does it next, before everything else (even before a waiting rally), once. It works even if the task is switched off or already done today, and also when 'Do the tasks' is off. It starts as soon as the instance is running" + (serial ? "." : ", on every instance.")),
+      h("div", { class: compact ? "runstack" : "row", style: { gap: "8px" } }, sel,
+        h("button", { class: "btn primary" + (compact ? " ib" : ""), onclick: () => { if (rnPick) set("run_now_add", { id: rnPick }); } }, "Run now", compact ? ico("bolt") : null)),
       j.queue.length ? h("div", { class: "row", style: { gap: "6px", flexWrap: "wrap", marginTop: "8px" } }, h("span", { class: "lab" }, "Waiting:"),
         j.queue.map((q, i) => h("span", { class: "chip" }, (i + 1) + ". " + q.title + " ",
           h("a", { href: "#", title: "Cancel", onclick: (e) => { e.preventDefault(); set("run_now_remove", { id: q.id }); } }, "\u00d7")))) : null));
