@@ -6995,6 +6995,9 @@ SWEEP = [(0, 280), (280, 0), (0, -280), (0, -280), (-280, 0), (-280, 0), (0, 280
          (280, 0), (280, 0), (280, 0), (0, -280), (0, -280), (0, -280), (0, -280)]   # content moves: a square spiral around the start
 
 
+ZOOM_HINT = "City is zoomed in too far - pinch the city fully out once (two fingers together), then the bot can read the building names"
+
+
 def aim_by_labels(dev, cfg, log, stop, name, tries=24):
     """Bring a building into the safe tap area by reading the names written under the buildings - works in every city
     style, no picture and no counting needed. Whatever names are in view tell where the wanted building should be
@@ -7005,7 +7008,7 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=24):
     if want not in pri:
         return None
     x0, y0, w, h = SAFE_TAP_AREA
-    lost = 0
+    lost = blank = 0
     for i in range(tries):
         if stop.is_set():
             return None
@@ -7021,6 +7024,10 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=24):
         ests = [(lx + pri[want][0] - pri[ln][0], ly + pri[want][1] - pri[ln][1]) for ln, lx, ly in labs if ln in pri]
         if not ests:
             lost += 1
+            blank = blank + 1 if not labs else 0
+            if blank >= 3:                                 # not one name read three times running: the city is zoomed in too far
+                log("[!] " + ZOOM_HINT)
+                raise RuntimeError(ZOOM_HINT)
             if lost == 3 and not ensure_view(dev, cfg, stop, log, "city", tries=4):
                 return None
             if lost > len(SWEEP):
