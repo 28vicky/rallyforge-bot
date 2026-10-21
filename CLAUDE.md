@@ -11,6 +11,10 @@ Owner: Vicky. Evony rally automation, Windows app. Repo 28vicky/rallyforge-bot. 
 - Do not read big files whole: grep, then read only the lines needed.
 - Do not restart the owner's app while instances run without asking.
 
+## Parallel chats
+- Several chats run at once. Follow HANDOFF.md section PARALLEL WORK: own branch, own area, no VERSION/changelog edits, one chat on the PC at a time.
+- Keep thinking short. Ask the owner before anything that costs a lot of usage (live tests, screenshots, long reads, subagents, high-effort debugging).
+
 ## Release rules
 - Never publish unless the owner says so. Never push changed files to main without a release (users get checksum errors); use a branch.
 - Release order: bump VERSION in rally_bot.py + changelog entry (ui/changelog.js) -> push files -> `git fetch` -> `python check_release.py origin/main` -> `make_update.py --notes "..." --templates . --monsters monsters --catalog catalog` with UPDATE_KEY (from the PC's %APPDATA%\RallyForgeBot\config.json; never print it) -> push version.json last -> check_release again.

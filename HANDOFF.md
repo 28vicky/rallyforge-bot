@@ -42,3 +42,32 @@ Branches: rel-2474 = main. Old branches fix-duties, fix-hidden-monster, screen-c
 Roadmap (one chat per feature): project doc claude/roadmap_21oct.md. F1-F3 done (see above); next F4 Champions, F5 Market, F6 libraries, F7 UI cleanup, F8 daily tasks, F9 rally extras.
 Starter prompt for a new chat: "Read CLAUDE.md and HANDOFF.md, then work on feature F4 only: Champions automation. Stop when done."
 Remember: CLAUDE.md rules - short replies, one micro-task then ask, no audits, never publish unless owner says.
+
+---
+## PARALLEL WORK (from 21 Oct 11:35 IST) - several chats at once
+Starter prompt for any chat: "Read CLAUDE.md and HANDOFF.md (section PARALLEL WORK), then work on task <ID> only. Stop when done."
+
+### Rules (every chat)
+1. One task = one branch `feat/<id>` made from the latest `origin/main`. Never commit to main (only the Release chat does).
+2. Stay inside your task's area (table below). Need to change code outside it? Stop and ask the owner.
+3. Shared spots - add only, never reorder or rewrite: `DEFAULT_CONFIG` keys (~line 220), `DUTY_LIBRARY` (add your entry at the end), `duty_status`/`duty_record` (add your id to a tuple, do not restructure), `step` commands (~line 6615, add one `if cmd ==` line).
+4. Do NOT bump VERSION or edit ui/changelog.js - the Release chat does that. Put a 1-line changelog suggestion in your branch's last commit message.
+5. Before finishing: `git fetch origin main && git rebase origin/main`, `python -m py_compile rally_bot.py web_app.py`, push the branch, then update your row below (status + 1 line) in a separate small commit on main (HANDOFF.md only).
+6. Owner's PC is shared: only ONE chat deploys / reopens the app at a time, and only after asking the owner. Write "PC: <task id> testing" in the PC line below while testing, clear it after.
+7. Low effort by default. Ask the owner before anything costly (live tests, screenshots, long reads, subagents, high-effort debugging).
+
+PC: free
+
+### Task board
+| ID | Task | Branch | Area (may edit) | Clash with | Status |
+|---|---|---|---|---|---|
+| T1 | Champions (F4): greet check, greet timer non-blocking, live test on Rob | f4-champions | rally_bot.py "Champions" section | - | code done, not tested live |
+| T2 | Market / Black Market (F5) | feat/market | rally_bot.py "black market" section + its UI panel | T5 (city code) | todo |
+| T3 | Libraries (F6): generals catalogue + monster library | feat/libraries | "general catalogue", "monsters" sections, catalog/, monsters/ | T6 (monsters) | todo |
+| T4 | UI cleanup (F7): Advanced section, duplicate buttons, tap targets, labels, Clean up button | feat/ui-cleanup | ui/*, web_app.py (UI routes only) | any task adding UI panels - rebase often | todo |
+| T5 | Daily tasks (F8) part 1: Resource Tax, Gold Levy, Resource Collecting | feat/dailies-city | new run_* functions after the Champions section + DUTY_LIBRARY entries | T2 | todo |
+| T6 | Daily tasks (F8) part 2: Alliance help/donation/gift/treasure, Mail, Quests | feat/dailies-alliance | new run_* functions + DUTY_LIBRARY entries | - | todo |
+| T7 | Rally extras (F9): universal "wait after I play elsewhere", per-monster presets | feat/rally-extras | "presets", "one device" rally loop | T3 (monsters) | todo |
+| R | Release chat: merge finished branches into main, version bump, changelog, publish (owner says publish) | main | everything | - | when owner asks |
+
+Safe to run together: T1 + T3 + T4 + T6, or T2 + T6 + T7. Avoid pairs listed in "Clash with".
