@@ -6526,9 +6526,6 @@ def run_market_capture(dev, cfg, log, stop):
 def run_market(dev, cfg, log, stop):
     """On the Black Market screen: buy the wanted items (gems / resources / both), refresh the shop as set."""
     wanted = market_wanted(cfg)
-    if not wanted:
-        log("[!] Black Market: no wanted items with a picture - add some on the Market tab")
-        return
     img = dev.screenshot()
     if not market_on_screen(img):                          # the Market's ring menu is open: tap the Black Market icon (above its caption)
         p = find_text(img, ["Black Market", "Black"], region=(0, 150, 540, 600), cutoff=0.7)
@@ -6538,6 +6535,11 @@ def run_market(dev, cfg, log, stop):
             img = dev.screenshot()
     if not market_on_screen(img):
         raise RuntimeError("the Black Market did not open")
+    if not wanted:                                         # the shop is open (proves the way there) but there is nothing to buy
+        gold, gems = market_totals(img)
+        log(f"[i] Black Market open: gold {gold if gold is not None else '?'}, gems {gems if gems is not None else '?'}; "
+            "no goods picked on the Market tab - nothing bought, no refresh")
+        return
     mode = cfg.get("market_refresh_mode", "none")
     limit = int(cfg.get("market_refresh_n", 0) or 0) if mode == "count" else (float("inf") if mode == "all" else 0)
     paid_ok = bool(cfg.get("market_paid_refresh"))
