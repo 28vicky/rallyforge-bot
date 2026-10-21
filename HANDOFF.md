@@ -91,3 +91,9 @@ Stand-out plan: project doc claude/compare_and_stand_out.md (S1-S5). S1 = T10, S
 - Shrine-first navigation experiments parked on branch exp/shrine-nav (not used).
 - Next: (1) save the first city picture after every game start to verify the start anchor; (2) proper city navigation per claude/city_camera_facts_21oct.md; (3) Black Market route via the Tavern (owner says there is one - record it).
 - Starter prompt: "Read CLAUDE.md, HANDOFF.md and project docs claude/city_camera_facts_21oct.md and claude/science_market_shrine_21oct.md. Work on branch feat/science-market. First task: add a capture that saves the first city picture after every game start."
+
+---
+## 21 Oct 18:55 IST - PUBLISHED 2.4.79 (Release)
+- Only change: "Bird of Hurricane" added to MONSTER_CATALOG (Limited-time event, level 1) so it has an on/off switch. Bot was joining it on all accounts (not in any skip list).
+- Owner still has to switch it off per account (or Claude writes config.json with the app closed; prepared copy adds "Bird of Hurricane": [1] to global + every per-device monster_skip).
+- Installing 2.4.79 on the PC replaces the dev copy v2.4.77 (feat/science-market + PC-only flow recorder).
