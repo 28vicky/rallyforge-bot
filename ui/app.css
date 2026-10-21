@@ -757,3 +757,8 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .tour-ask .tour-t{font-size:15px}
 :root .tour-ask .btn.pri,:root .tour-box .btn.pri{background:var(--accent);color:var(--accfg);border-color:transparent}
 .tour-ask .tour-b{gap:8px;justify-content:flex-start}
+
+/* Paused / Stopped button: text and icon must always show (light mode forced white text on the light accent) */
+[data-mode] .btn.cur-pause,[data-mode] .btn.cur-stop,[data-mode] .ribbon .btn.cur-pause,[data-mode] .ribbon .btn.cur-stop{color:var(--accfg)!important}
+[data-mode] .btn.cur-pause .ico,[data-mode] .btn.cur-stop .ico,[data-mode] .ribbon .btn.cur-pause .ico,[data-mode] .ribbon .btn.cur-stop .ico{color:var(--accfg)!important}
+[data-mode] .btn.cur-pause .ico svg,[data-mode] .btn.cur-stop .ico svg{stroke:currentColor}
