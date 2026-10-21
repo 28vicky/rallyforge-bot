@@ -11,6 +11,11 @@ Owner: Vicky. Evony rally automation, Windows app. Repo 28vicky/rallyforge-bot. 
 - Do not read big files whole: grep, then read only the lines needed.
 - Do not restart the owner's app while instances run without asking.
 
+## Clean-room rule (other bots)
+- Never copy code, text, pictures, icons, layouts or design from Ragebot, Evonex or any other bot. Feature ideas only; write our own code, wording and look.
+- Do not open, extract or decompile another bot's program files (DLLs, exe, encrypted data). Evonex's licence forbids reverse engineering and using it to build a competing product - do not use the installed Evonex at all for research; only its public website/guide, in our own words.
+- Our own game screenshots (from the owner's emulators) are fine to use for templates.
+
 ## Parallel chats
 - Several chats run at once. Follow HANDOFF.md section PARALLEL WORK: own branch, own area, no VERSION/changelog edits, one chat on the PC at a time.
 - Keep thinking short. Ask the owner before anything that costs a lot of usage (live tests, screenshots, long reads, subagents, high-effort debugging).
