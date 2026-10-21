@@ -5744,7 +5744,7 @@ def _locate_in(g, shot, min_score):
             parts.append((float(pv), pl[0] - x0, pl[1] - y0))
     best = []
     for a in parts:
-        near = [q for q in parts if abs(q[1] - a[1]) <= 6 and abs(q[2] - a[2]) <= 6]
+        near = [q for q in parts if abs(q[1] - a[1]) <= 45 and abs(q[2] - a[2]) <= 45]
         if len(near) > len(best):
             best = near
     if len(best) >= 3 or (len(best) == 2 and min(q[0] for q in best) >= 0.6):
