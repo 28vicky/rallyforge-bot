@@ -1,9 +1,9 @@
 {
-  "version": "2.4.69",
-  "notes": "Generals with only a Tavern portrait are found by name again.",
+  "version": "2.4.70",
+  "notes": "7 key generals get list-style pictures so they are found by picture.",
   "files": {
     "rally_bot.py": {
-      "sha256": "55614d6ff9fb0af70f83c4804d49f27f8c52d8e1fff79ca0b3ba457dd174678b"
+      "sha256": "a3208ef7475c366be574c7eac5869d389a4fc7aa32c386a00e0473878f6aa176"
     },
     "web_app.py": {
       "sha256": "ba00b9c6ccc6224af57391a6a94d071d20e14f2053848e4d4c5bcd7ba2a2f2be"
@@ -18,7 +18,7 @@
       "sha256": "fe6023bd746daf614a1813647817199d99f1014107fcd788fdccd0b4a2463028"
     },
     "ui/changelog.js": {
-      "sha256": "80f3b27be6e2fb4b86a3322b4189f87698ca4b1c1589942830a69d487a862171"
+      "sha256": "08461d63d4e951b2007977008d94316e797a5052e8d6ed5787208d8d4a6caf1a"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -135,8 +135,11 @@
       "url": "catalog/art/Babur.png"
     },
     "art/Baibars.png": {
-      "sha256": "04df418db9dbd4798fc76ac07549fed95399e1a3131dd69fd86b27f6c01f7dee",
-      "url": "catalog/art/Baibars.png"
+      "sha256": "d83d3a694db237458d6e6d89ac3bee32a217a5ac497f1a9d289f5f2bfe244430",
+      "url": "catalog/art/Baibars.png",
+      "replaces": [
+        "04df418db9dbd4798fc76ac07549fed95399e1a3131dd69fd86b27f6c01f7dee"
+      ]
     },
     "art/Baldwin IV.png": {
       "sha256": "ee819e370dc5c6a41fca9cb2ca53b9f2c78cd46ca585cf5384dccd676eafe129",
@@ -171,8 +174,11 @@
       "url": "catalog/art/Brian%20Boru.png"
     },
     "art/Caesar.png": {
-      "sha256": "63d7d56ad944745bb8bf598c76a4c18744ac718b05fc82c2e5c26a146da04ed6",
-      "url": "catalog/art/Caesar.png"
+      "sha256": "bc7bd7201589854583f4f533210ed746bc06fb042cead5fc21ba5dbb13208bc8",
+      "url": "catalog/art/Caesar.png",
+      "replaces": [
+        "63d7d56ad944745bb8bf598c76a4c18744ac718b05fc82c2e5c26a146da04ed6"
+      ]
     },
     "art/Carus.png": {
       "sha256": "009867df5c843eef444a6e5c04c2d768ec04d7e79049e260a7dc5fa0e57d8080",
@@ -227,8 +233,11 @@
       "url": "catalog/art/Cimon.png"
     },
     "art/Cleopatra.png": {
-      "sha256": "3b30f23e60d45037dd4ac39aaefe8ed890e3e1797606e7106a30dfd750ad899f",
-      "url": "catalog/art/Cleopatra.png"
+      "sha256": "cfb56114a3de5df3c5c2247acdcc3b491bf28ef63266c2079ff1f77a83b4d51e",
+      "url": "catalog/art/Cleopatra.png",
+      "replaces": [
+        "3b30f23e60d45037dd4ac39aaefe8ed890e3e1797606e7106a30dfd750ad899f"
+      ]
     },
     "art/Clovis I.png": {
       "sha256": "dbe74e301f4d74bd3cef0a8ef07fc5cd01495108f0595ebb3e3e93cf070d58a5",
@@ -519,8 +528,11 @@
       "url": "catalog/art/Huitzilopochtli.png"
     },
     "art/Huo Qubing.png": {
-      "sha256": "3d88362555f781df8f9deded42bed2bcbca061afc47eb53127282941d9b20e06",
-      "url": "catalog/art/Huo%20Qubing.png"
+      "sha256": "16930a25b5f619dc4409eafc907453e358201438a21d21278daee1b174223441",
+      "url": "catalog/art/Huo%20Qubing.png",
+      "replaces": [
+        "3d88362555f781df8f9deded42bed2bcbca061afc47eb53127282941d9b20e06"
+      ]
     },
     "art/Idunn.png": {
       "sha256": "761529f65e52d765412c7fbfbbc76e5c8d5892a1c4a5f79d12c6850a99aeb63b",
@@ -755,8 +767,11 @@
       "url": "catalog/art/Maria%20Carolina.png"
     },
     "art/Maria Theresa.png": {
-      "sha256": "2a3ca4f66dac293d96fa18cff69bf21e92ecd7c67542d8cdf7c75e93efda6aa1",
-      "url": "catalog/art/Maria%20Theresa.png"
+      "sha256": "cbbfdc8264475f5baa83e6a412b21ea869b9047e5dd75e95b7364ee00f9c0bd6",
+      "url": "catalog/art/Maria%20Theresa.png",
+      "replaces": [
+        "2a3ca4f66dac293d96fa18cff69bf21e92ecd7c67542d8cdf7c75e93efda6aa1"
+      ]
     },
     "art/Mark Antony.png": {
       "sha256": "88c395475f6c628349d6612189ed87a945eac09ca998bbeca8a38828f3173eaf",
@@ -1079,8 +1094,11 @@
       "url": "catalog/art/Sei%20Shonagon.png"
     },
     "art/Seleucus I.png": {
-      "sha256": "bae8eb2b5f15622e563ed0cdff28fe14af30fd54eabdc60418ef679981460a97",
-      "url": "catalog/art/Seleucus%20I.png"
+      "sha256": "24d3068225347438c814fc325a3af0f5ba28f97a332ad5a631e8c143f1790122",
+      "url": "catalog/art/Seleucus%20I.png",
+      "replaces": [
+        "bae8eb2b5f15622e563ed0cdff28fe14af30fd54eabdc60418ef679981460a97"
+      ]
     },
     "art/Septimius Severus.png": {
       "sha256": "8aff2bf05cda0cf24140afba092623d58cacbb8de91fa8f81c6d57c3b3bc09b7",
@@ -1199,8 +1217,11 @@
       "url": "catalog/art/Theobald%20I.png"
     },
     "art/Theodora.png": {
-      "sha256": "8736a2a436f894b7af67672706ee75bdfde366e417143beb9285973544c59b83",
-      "url": "catalog/art/Theodora.png"
+      "sha256": "8211067f9cd5d83bd768979047b503cf29cf9893591a3753a422103a6910e341",
+      "url": "catalog/art/Theodora.png",
+      "replaces": [
+        "8736a2a436f894b7af67672706ee75bdfde366e417143beb9285973544c59b83"
+      ]
     },
     "art/Theodosius I.png": {
       "sha256": "77f0ff3f6958a76a2b7965d87d0d552e90d9a63d494a2bfafe10733967da8e93",
@@ -1462,5 +1483,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "c606a5cf94f56e314bf81c427cd72819eab2019778e1a8bb53641d68b4fe81ba"
+  "sig": "07c9f7c6f5e5bc170c998dbf547f9aea5a009e1f7b4293454d7c0a52ce31be55"
 }
