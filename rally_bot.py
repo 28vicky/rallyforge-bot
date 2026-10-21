@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.65"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.66"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -3666,6 +3666,10 @@ def merge_catalog(found, log=print):
         if old:                                            # known: only add the region / troop types it was seen under
             old["region"] = sorted(set(old.get("region", [])) | set(g["region"]))
             old["troops"] = sorted(set(old.get("troops", [])) | set(g["troops"]))
+            if not (root / "art" / f"{safe}.png").exists():   # ... and its picture when the library had none
+                cv2.imwrite(str(root / "art" / f"{safe}.png"), g["image"])
+                old["art"] = f"{safe}.png"
+                added += 1
             continue
         cv2.imwrite(str(root / "art" / f"{safe}.png"), g["image"])
         if g.get("label") is not None:

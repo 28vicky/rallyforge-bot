@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.66", date: "2026-10-21",
+    new: ["General Manager: new \u201cScan Tavern portraits\u2026\u201d button. Open Tavern > Recruit General > Portraits in the game yourself (no city map needed) and the bot adds every general's picture and name to your general library. It only adds - nothing already in the library is removed - and it fills in pictures that were missing. One account is enough: the Portraits page shows every general of the game."],
+    fixed: [] },
   { v: "2.4.65", date: "2026-10-21",
     new: ["A short walkthrough: the first time you open the app it asks if you would like it (where to click, how to set up your presets and start the bot). Say yes or no once and it never asks again; More > Take the tour opens it whenever you want.",
           "Monsters: levels 1 and 2 added for Savage Tiger, Arachne, Carcinus, Serpopard, Dugger, Barbary Pirate, Nasu, Harpy and Temple Guard."],

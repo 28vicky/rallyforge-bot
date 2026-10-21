@@ -833,7 +833,7 @@ class Controller:
                 job["running"] = False
         threading.Thread(target=work, daemon=True).start()
 
-    def crawl_catalog(self, serial):
+    def crawl_catalog(self, serial, merge=False):
         """Developer tool: record every general of Tavern > Portraits (all regions x troop types)."""
         job = self.jobs["catalog"]
         if job["running"]:
@@ -852,11 +852,16 @@ class Controller:
                     rb.open_tavern_portraits(dev, cfg_now, lambda m: self.log(m), stop)
                 found = rb.crawl_portraits(dev, rb.load_config(), lambda m: self.log(m), stop,
                                            progress=lambda n: job.update(count=n))
-                root = rb.save_catalog(found, lambda m: self.log(m))
+                if merge:                                     # General Manager > Scan Tavern portraits: add to the library, never wipe it
+                    added = rb.merge_catalog({g["name"]: g for g in found} if isinstance(found, list) else found, lambda m: self.log(m))
+                    root = rb.USER / "catalog"
+                else:
+                    added = None
+                    root = rb.save_catalog(found, lambda m: self.log(m))
                 with rb._cache_lock:
                     rb._gen_cache.clear()
                 rb.list_generals(refresh=True)
-                self.event("catalog_done", {"n": len(found), "path": str(root)})
+                self.event("catalog_done", {"n": len(found), "path": str(root), "added": added})
             except Exception as e:
                 self.log(f"[!] Catalogue crawl: {e}")
                 self.event("catalog_done", {"error": str(e)})
@@ -1844,7 +1849,7 @@ class Api:
         return {}
 
     def catalog_crawl(self, p):
-        self.c.crawl_catalog(p["serial"])
+        self.c.crawl_catalog(p["serial"], bool(p.get("merge")))
         return {}
 
     def catalog_stop(self, p):

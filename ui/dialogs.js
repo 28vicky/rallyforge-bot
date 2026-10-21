@@ -273,6 +273,7 @@ function openGeneralManager() {
   const left = h("div", {}, h("div", { class: "row", style: { marginBottom: "8px" } },
     h("button", { class: "btn sm pri", onclick: async () => { await addGeneralFlow(); drawList(); } }, "+ Add from screenshot..."),
     h("button", { class: "btn sm", onclick: () => scanGeneralsFlow() }, "Scan from the game..."),
+    h("button", { class: "btn sm", onclick: () => tavernPortraitsFlow() }, "Scan Tavern portraits..."),
     h("button", { class: "btn sm", onclick: del }, "Delete"), genViewBar(() => drawList())), h("div", { class: "gbox", style: { height: "470px" } }, search, flt.el, list));
   const right = h("div", { class: "field", style: { gap: "9px" } }, h("label", {}, "General name"), name, h("label", {}, "Tab in the 'Select a General' list"), tab,
     h("label", {}, "Favourites filter (heart)"), fav, h("label", {}, "If you own several copies of it"), copy,
@@ -550,8 +551,23 @@ async function catalogFlow() {
   scanBox = modal({ title: "Recording the catalogue", focus: false, buttons: [{ label: "Stop and save what was found", cls: "pri", onclick: () => { act(api("catalog_stop")); return false; } }],
     body: h("div", { id: "catScanInfo", style: { minWidth: "380px" } }, "Starting...") });
 }
+// General Manager > Scan Tavern portraits: same crawl, but it only ADDS to the general library (nothing is wiped)
+async function tavernPortraitsFlow() {
+  const serial = await chooseDevice("Scan the Tavern portraits with which instance?");
+  if (!serial) return;
+  const ok = await confirmBox("Scan Tavern portraits", "1. Pause that instance (so it does not join rallies meanwhile).\n2. In its game open the Tavern > Recruit General > Portraits page and leave it there.\n\nThe bot then goes through every region tab and troop-type filter and adds every general's picture and name to your general library. Nothing is recruited and Refresh is never pressed. It takes several minutes; do not touch the instance.\n\nThe Portraits page shows every general of the game, the same on every account, so one account is enough.", "Start");
+  if (!ok) return;
+  if (!(await act(api("catalog_crawl", { serial, merge: true })))) return;
+  scanBox = modal({ title: "Scanning Tavern portraits", focus: false, buttons: [{ label: "Stop and save what was found", cls: "pri", onclick: () => { act(api("catalog_stop")); return false; } }],
+    body: h("div", { id: "catScanInfo", style: { minWidth: "380px" } }, "Starting...") });
+}
 async function catalogDone(d) {
   closeScanBox();
+  if (d.added !== undefined && d.added !== null && !d.error) {
+    const j = await act(api("state"));
+    if (j) { S.generals = j.generals; }
+    return infoBox("Tavern portraits", `Read ${d.n} generals - ${d.added} new picture(s) added to your general library.`);
+  }
   if (d.error) return infoBox("Catalogue", "The crawl stopped: " + d.error + "\n\nWhat was read before that is not saved. Send me the log if you need help.");
   const j = await act(api("state"));
   if (j) { S.generals = j.generals; }
