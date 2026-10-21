@@ -107,7 +107,9 @@ const TABS = [
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
 
 // ------------------------------------------------------------------ theme
+const DARK_ON = false;                            // dark mode hidden for now (owner 21 Oct); the saved choice (ui_mode) is kept, only the light look is shown
 function resolvedMode() {
+  if (!DARK_ON) return "light";
   const m = S.cfg.ui_mode || "light";
   return m === "auto" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : m;
 }

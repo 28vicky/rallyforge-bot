@@ -906,6 +906,8 @@ PAGES.tasks = function (fixed) {
 // ====================================================================== market
 const PAY = [["gems", "Gems only"], ["resources", "Resources only"], ["both", "Gems or resources"]];
 const REFRESH = [["none", "Do not refresh"], ["count", "Refresh this many times"], ["all", "Until the gem floor (keeps refreshing and buying)"]];
+// Black Market pictures that ship with the app (templates mk_BM_NN.png, cut from a real shop recording)
+const BM_READY = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 21, 22, 25, 27, 29, 30, 31, 32, 39, 41, 42, 44, 45, 48, 51].map((n) => "BM " + String(n).padStart(2, "0"));
 PAGES.market = function () {
   const c = S.cfg;
   c.market_items = c.market_items || [];
@@ -932,7 +934,11 @@ PAGES.market = function () {
       if (!j) return;
       c.market_items = c.market_items.filter((i) => i.name !== j.name);
       c.market_items.push({ name: j.name, pay: c.market_pay || "gems" }); draw();
-    }, "pri"), btn("Remove", () => { if (selIdx !== null) { c.market_items.splice(selIdx, 1); selIdx = null; draw(); } }),
+    }, "pri"), btn("Add the ready-made pictures (" + BM_READY.length + ")", () => {
+      let n = 0;
+      for (const nm of BM_READY) if (!c.market_items.some((i) => i.name === nm)) { c.market_items.push({ name: nm, pay: c.market_pay || "gems" }); n++; }
+      draw(); toast(n ? n + " Black Market pictures added (" + BM_READY[0] + " to " + BM_READY[BM_READY.length - 1] + "). Remove the ones you do not want before the bot visits the shop." : "They are all in the list already.", "ok");
+    }), btn("Remove", () => { if (selIdx !== null) { c.market_items.splice(selIdx, 1); selIdx = null; draw(); } }),
       h("span", { class: "lab", style: { marginLeft: "12px" } }, "Selected item pays with"), itemPay,
       btn("Set", () => { if (selIdx !== null) { c.market_items[selIdx].pay = itemPay.value; draw(); } }, "sm")));
   const opts = panel("Buying and refreshing",
@@ -1121,7 +1127,7 @@ PAGES.themes = function () {
   hexIn.onchange = () => { let v = hexIn.value.trim(); if (v && v[0] !== "#") v = "#" + v; if (/^#[0-9a-f]{6}$/i.test(v)) { setLook({ ui_accent: v.toLowerCase() }); drawLook(); } else toast("Type a colour like #d9a566.", "bad"); };
   drawLook();
   return h("div", {},
-    panel("Appearance", h("div", { class: "row", style: { gap: "16px" } }, h("span", { class: "lab" }, "Appearance"), segs, h("span", { class: "hint" }, "Light, dark, or follow Windows.")),
+    panel("Appearance", DARK_ON ? h("div", { class: "row", style: { gap: "16px" } }, h("span", { class: "lab" }, "Appearance"), segs, h("span", { class: "hint" }, "Light, dark, or follow Windows.")) : null,
       note("The sun / moon button at the top right flips between dark and light from any tab.")),
     panel("Accent colour", note("Pick a colour for the highlights: the active tab, switches, the selected instance and the focus outlines. The text colour on top of it is chosen automatically so it stays readable."),
       h("div", { class: "row", style: { gap: "12px" } }, sw, picker, hexIn)),

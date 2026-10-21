@@ -914,3 +914,4 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .actbar{background:transparent;border:0;padding:0}
 .actnow{font-size:17px;font-weight:700;color:var(--fg)}
 :root .insthead h2{font-family:var(--font)!important;font-weight:800}
+#modeBtn{display:none!important}

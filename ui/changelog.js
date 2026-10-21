@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.81", date: "2026-10-21",
+    new: ["Black Market: 33 ready-made item pictures now come with the app. On the Black Market page press \u201cAdd the ready-made pictures\u201d, remove the ones you do not want, then switch on Black Market."],
+    fixed: ["Dark mode is hidden for now while the new look is finished. Your saved choice is kept and comes back when dark mode returns."] },
   { v: "2.4.80", date: "2026-10-21",
     new: ["New dashboard: each instance now has five tabs - Overview, Routines, Rally setup, Itinerary & Logs and Settings. Pause all and Stop all sit at the bottom of the instance list. New warm colours: Start is orange, Pause amber, Stop red.", "Settings has a menu on the left (Advanced last) and a Save / Discard bar at the bottom.", "\u201cRun first\u201d is now called \u201cRun now\u201d."],
     fixed: ["Black Market: the bot now confirms the purchase box and only counts an item as bought when your gems or gold go down. The purchase box is no longer mistaken for the game's exit box, and the pop-up guard stays out of the shop while buying.", "The \u201cWaiting\u201d list under Run a task now refreshes by itself."] },
