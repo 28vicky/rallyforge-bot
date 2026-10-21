@@ -67,6 +67,12 @@ def main():
             cat["art/" + p.name] = {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "url": "catalog/art/" + quote(p.name)}
         manifest = {"version": m.group(1), "notes": a.notes, "files": files, "mode": "auto" if a.auto else "ask"}
     if cat:
+        try:                                               # catalog_replaces.json: {"art/X.png": [sha256 of the outdated published picture]}
+            for k, v in json.loads((HERE / "catalog_replaces.json").read_text(encoding="utf-8")).items():
+                if k in cat:
+                    cat[k]["replaces"] = list(v)
+        except FileNotFoundError:
+            pass
         manifest["catalog"] = cat
     if mons:
         manifest["monsters"] = mons
