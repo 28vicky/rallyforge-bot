@@ -7573,10 +7573,10 @@ def ch_do_greets(dev, stop, log, name, want, serial, day):
         if lab["n"] is not None and lab["n"] >= CH_GREETS:
             log("[i]   Champions: the 10 daily greetings are used up")
             break
-        if lab["wait"] > 0:
-            log(f"[i]   Champions: greet timer, waiting {lab['wait']} s")
-            if stop.wait(min(lab["wait"], 75) + 3):
-                break
+        if lab["wait"] > 0:                                 # greet timer: do not block rallies, come back when it ends
+            ch_save(serial, next_at=time.time() + lab["wait"] + 10)
+            log(f"[i]   Champions: greet timer {lab['wait']} s - coming back for the next greet")
+            return done
         dev.tap(*CH_GREET)
         _nap(stop, 1.6, 2.2)
         ch_dialogue(dev, stop)
@@ -7603,6 +7603,7 @@ def run_champions(dev, cfg, log, stop):
     (or, with nothing picked, on the champion the page opens on / the first active one)."""
     serial = getattr(dev, "serial", "default")
     day = _game_day()
+    ch_save(serial, next_at=0)
     if not ch_open_page(dev, stop, log):
         ch_snap(dev.screenshot(), "1_failed")
         raise RuntimeError("the Champion page did not open")
@@ -7643,7 +7644,11 @@ def run_champions(dev, cfg, log, stop):
             log(f"[+]  Champions: {name} - {n} of {need_g} greets")
     shot = dev.screenshot()
     used = ch_taps_used(shot)
-    log(f"[+]  Champions done: {total_taps} tap(s), {total_greets} greet(s) this run" + (f"; taps today {used}/{CH_TAPS}" if used is not None else ""))
+    later = ch_row(serial).get("next_at", 0) > time.time()  # a greet timer is running: the duty comes back for the rest
+    if not later and not stop.is_set():
+        ch_save(serial, all_done_day=day)
+    log(f"[+]  Champions {'paused for the greet timer' if later else 'done'}: {total_taps} tap(s), {total_greets} greet(s) this run"
+        + (f"; taps today {used}/{CH_TAPS}" if used is not None else ""))
 
 
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
@@ -7725,7 +7730,7 @@ def duty_record(serial, duty_id, ok, msg=""):
         row["msg"] = msg
         if ok:
             row["last_ok"], row["status"] = time.time(), "done"
-            if duty_id == "crazy_eggs":
+            if duty_id in ("crazy_eggs", "champions"):
                 row["tries"] = 0
         else:
             row["status"] = "retry" if row["tries"] < DUTY_MAX_TRIES else "gaveup"
@@ -7773,9 +7778,9 @@ def duty_status(serial, duty_id, cfg):
     row = (load_duty_state().get(serial or "default") or {}).get(duty_id) or {}
     day, now = _game_day(), time.time()
     tries = int(row.get("tries", 0)) if row.get("day") == day else 0
-    if duty_id == "crazy_eggs":                             # timer driven: comes back when the next egg is ready
+    if duty_id in ("crazy_eggs", "champions"):              # timer driven: comes back when the next egg / greet is ready
         if row.get("all_done_day") == day:
-            return "done", "All eggs done"
+            return "done", "All eggs done" if duty_id == "crazy_eggs" else "Done for today"
         if tries >= DUTY_MAX_TRIES:
             return "gaveup", "Gave up for today"
         if tries and now - row.get("last_try", 0) < DUTY_RETRY_MIN * 60:
