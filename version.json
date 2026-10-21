@@ -1,9 +1,9 @@
 {
-  "version": "2.4.80",
-  "notes": "New 5-tab dashboard (Overview, Routines, Rally setup, Itinerary & Logs, Settings) and Black Market buy fixes.",
+  "version": "2.4.81",
+  "notes": "33 ready-made Black Market pictures; dark mode hidden for now.",
   "files": {
     "rally_bot.py": {
-      "sha256": "8fc431cb46bd5ae98e6c6371339dba2e61f277ffa8f27486947c66d6335d70ed"
+      "sha256": "59e616733aff0b658c6bf77fe59a36cf74195d2705a77f2d240e611c8860833d"
     },
     "web_app.py": {
       "sha256": "2abd0b8d77b2e947f47fb1a9de046d2011ccd397200383693d8298b4cc0a0242"
@@ -12,13 +12,13 @@
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "4700cf89344179fa9e892901e3567b1988bddd383bcf01778fe27b0f35bde40d"
+      "sha256": "a30fb726034ae072d9968ebd41b7cba25dec00bebc0420da2346ba59971e3a00"
     },
     "ui/app.js": {
-      "sha256": "8ae79e3c502258b80ca3ea2df8a6dfa6c4051d2d72233a85644956fc2fdb82b0"
+      "sha256": "1be1e6cbf07c5c7ad1dc9f701eb5b7fbbd56e16721238e6af5af2177770a384f"
     },
     "ui/changelog.js": {
-      "sha256": "f7a1f89669508f5dd368337881630360629982d6443c109b184d0c78f1a15721"
+      "sha256": "b5ad92f19d299bad522fb68ca63b23a73cb6afc91c90565d97b02fc7bc6cf12f"
     },
     "ui/dialogs.js": {
       "sha256": "50a8e2aec4a5482b4923fc0096f44916c9cf29b37ca9f149b885b8ffb7410ebf"
@@ -27,10 +27,10 @@
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
     },
     "ui/index.html": {
-      "sha256": "a3f4da00c3578367f379516ccf7be16b4d594bb21091d14856f6a25983409dd9"
+      "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "7f26b85979c180a41ebee6e19277e2af3167f97ffb6ba4b1d4e72ac64e6a0179"
+      "sha256": "49127d3e6d7fd3a499d46e8e3c922ab88b3be0709b969a0ed71934a07b397a5e"
     },
     "ui/tour.js": {
       "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
@@ -1479,6 +1479,105 @@
     "lag_wifi.png": {
       "sha256": "87b27e637e0de7ceeb05d4e19baf1bc5ad3243d08332ff23173797455b33d438"
     },
+    "mk_BM_01.png": {
+      "sha256": "91463983e51625ee65f481ad93810174cc60b78a3d70298afcaa322df3713e00"
+    },
+    "mk_BM_02.png": {
+      "sha256": "b5d028a0019533aaabba50810df8e2fe70cae753cf67f4771ce523d62082700d"
+    },
+    "mk_BM_03.png": {
+      "sha256": "4899d6da1c8d05479b1cba97a08800e0dcdc232e0b882cf7fcf0395c66e455c5"
+    },
+    "mk_BM_04.png": {
+      "sha256": "7c1934cfb1cc69f2ec11340ead10401c05a7cc0e2790f93494d4d5c9166bd6fb"
+    },
+    "mk_BM_05.png": {
+      "sha256": "d9c561cbd585e483b428dbe682df208349d660b20378cfbdacaad13c21ff169f"
+    },
+    "mk_BM_06.png": {
+      "sha256": "ed8dea899da7bd46382e2eaa903ca842781e586ca70e16bc60111c0fdd0b94e6"
+    },
+    "mk_BM_07.png": {
+      "sha256": "8bad0673c876a08b6ef99d4e3dc6b90a9fa3439f7884bf58e9812b08b0ae4a09"
+    },
+    "mk_BM_08.png": {
+      "sha256": "8a24f96c39ec4d1b58d94877d28368a61e8acd20eb0f907ebd96011aa3504ab3"
+    },
+    "mk_BM_09.png": {
+      "sha256": "cd4067b2ea756a16a9c2f73aad07a6ede140361a7b137d5a06d0ebef4bc424fb"
+    },
+    "mk_BM_10.png": {
+      "sha256": "22d11b33bb2d4a4bb3e66c9affcfeaa494af878bd2e7e6f8a886a813b0540a24"
+    },
+    "mk_BM_11.png": {
+      "sha256": "6f34059545dc1bdbd57f6c6268eed72e1e2954be4cea563d41bfd41778e287f5"
+    },
+    "mk_BM_12.png": {
+      "sha256": "40f9c3210fae5f4b368737270a2577c26ec65935dbce4ebc49a16247e756436f"
+    },
+    "mk_BM_13.png": {
+      "sha256": "4f04f3210168e2f3c6039b3763834affad88d466549eb7597bc62492865ba171"
+    },
+    "mk_BM_14.png": {
+      "sha256": "26f66bd019c14e60bf44d0b955b84ad3f98ed06ea69e0ad65f20645532fd612b"
+    },
+    "mk_BM_15.png": {
+      "sha256": "4f4b7593bc423f1d026ed964d36f78b697f750d4dfb6f1b43fff1dc85089687e"
+    },
+    "mk_BM_16.png": {
+      "sha256": "071b3548d79bf71c98f0dc73678780ae1e284cffbbb510c4814b4b1e61e3537f"
+    },
+    "mk_BM_17.png": {
+      "sha256": "a8d7f461c4a6924af0077fd6cc60d0ecb12d50c6a9575b1a4d6e20d26ebe21c8"
+    },
+    "mk_BM_19.png": {
+      "sha256": "32dc2ba6f4dca2a50786a58647c95016c4215f4255f9c0bcc0c5e8259fa4ea24"
+    },
+    "mk_BM_21.png": {
+      "sha256": "81bcd6440189bff6a081491ca3fe25234f580992e9cc380b17834d0ef4449e84"
+    },
+    "mk_BM_22.png": {
+      "sha256": "71c8a65f2042b7d531638af5f8102ffbfd634b2a978714c88652399e0d98f4f0"
+    },
+    "mk_BM_25.png": {
+      "sha256": "4f3d1205de653975c6fa84402d46d0fc7e6f40493efd14f7b5b7a4d779b88f07"
+    },
+    "mk_BM_27.png": {
+      "sha256": "745bfa2a5c5cfe41e51596c0cb45a60c86a8bfffac9f8901b6146a47937a72fb"
+    },
+    "mk_BM_29.png": {
+      "sha256": "df034f1edb3f7f64ded84944d37d13debf2510bbf29ad55c8f422baf84245fc8"
+    },
+    "mk_BM_30.png": {
+      "sha256": "68df544b884a7592bbc68377cd78b3d8bd78ad8274f79a1d22e818e6aa37553d"
+    },
+    "mk_BM_31.png": {
+      "sha256": "c2a0ffaea535334391573e51897f9995fed459114eb45d347564f21092a26124"
+    },
+    "mk_BM_32.png": {
+      "sha256": "fa961b4e3e0b069db7819ab2cbd3dd1213bf668e8ff90df0c011a7bf52f77532"
+    },
+    "mk_BM_39.png": {
+      "sha256": "a919c3cdca183b2deba20fc0923a1873de2c590a9da478a4ff2ff45fe35e94af"
+    },
+    "mk_BM_41.png": {
+      "sha256": "7c8d0fdcb4c3af5f193f07605064d32d1260fc4cee7785a24de76ec6b8104a03"
+    },
+    "mk_BM_42.png": {
+      "sha256": "1de3e04bf6d48b3e633141372e11c4f4a287ef8539177b9a378a0d3ac0c013c7"
+    },
+    "mk_BM_44.png": {
+      "sha256": "7672d18f97025ac0cb47ac3c7ad093ccf3ec5f3fddb330d76507c8d8e967f331"
+    },
+    "mk_BM_45.png": {
+      "sha256": "85a62f27ec3704b8e0e4803a2a2eb013b175f74c4db3116a14dc14c40876fbaf"
+    },
+    "mk_BM_48.png": {
+      "sha256": "17d499e7364dbc6fb8a1c3031754dc80031da669bdb6c20316254b03caf6300c"
+    },
+    "mk_BM_51.png": {
+      "sha256": "88f2c2edd0f8d814369668bfefd25b84ba1843c39fda23238d3ce87f9c73e1bd"
+    },
     "rally_icon.png": {
       "sha256": "a8e83f9d54048e01c976346571b9df98cc8112da9d0c5054a1b7ec71f836686e"
     },
@@ -1486,5 +1585,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "1f7186388c9e3d03c1dfdb09b093dbc6682f1bfddf32f4313c517a9baea4b9a3"
+  "sig": "69d068d2b9bd6aa1e44814c46123ff632289f4d03d5951d12659c34f7dbba259"
 }
