@@ -29,3 +29,16 @@ See project doc `claude/city_mapper_parked_21oct.md`. Best Japan run read 11 of 
 - Automated contrast check of every theme for the release gate.
 - Check button padding across the app.
 - Library update (Tavern > Recruit > Portraits) in parallel across instances (except Rory); verify name reading first.
+
+---
+## Update 21 Oct 2026, 11:25 IST (end of long chat) - PUBLISHED 2.4.75, main = origin/main
+Released today: 2.4.71-2.4.75. Last two:
+- 2.4.74: duties (Crazy Eggs etc.) now run by themselves when switched on (before, only if "Do the tasks" city_enabled was on - it was off everywhere, so eggs were never picked up); duty status line in log every 15 min ("[i] Duties - ..."); Viking/hidden-monster skip (monster_allowed: name "hidden" + a skip list = skip); startup screen check 540x960/240dpi (warning only, Device.ensure_screen); Pause all second pass after 4 s; layout CSS (toolbar shadow, equal dashboard columns, even Monster cards, scrollbar-gutter); button text centring.
+- 2.4.75: Cerberus decided by the monster list (cerberus_allowed now always True; hidden "cerberus" setting removed from the UI).
+Release procedure used: bump VERSION + changelog -> push to main -> git fetch -> check_release (mismatch is expected) -> UPDATE_KEY from PC config.json (staged with device_stage_files, never printed) -> make_update.py -> push version.json -> check_release OK.
+Unverified (not run on live instances): duties fix, Pause all second pass, layout CSS on the dashboard, screen check. Owner's PC still ran 2.4.73 at 11:21; app updates itself within 30 min (reopen restarts all instances).
+Open questions for owner: "hidden" skip may be too strict (about 8 per 6 min on Skip/Rob) - option: skip only if the visible part looks like a Viking. Pause all root cause for "some keep running" not found (needs a log from a failing case).
+Branches: rel-2474 = main. Old branches fix-duties, fix-hidden-monster, screen-check, ui-padding are merged. keep-fixed = parked city mapper.
+Roadmap (one chat per feature): project doc claude/roadmap_21oct.md. F1-F3 done (see above); next F4 Champions, F5 Market, F6 libraries, F7 UI cleanup, F8 daily tasks, F9 rally extras.
+Starter prompt for a new chat: "Read CLAUDE.md and HANDOFF.md, then work on feature F4 only: Champions automation. Stop when done."
+Remember: CLAUDE.md rules - short replies, one micro-task then ask, no audits, never publish unless owner says.
