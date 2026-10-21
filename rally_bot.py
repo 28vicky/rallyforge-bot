@@ -1485,6 +1485,8 @@ def monster_allowed(name, cfg, level=None):
     if why:
         return False, why
     mode = cfg["monster_mode"]
+    if name == "hidden" and cfg.get("monster_skip"):          # name not readable yet: never join blind when some monsters/levels are switched off
+        return False, "monster picture not fully on screen"
     if mode == "off":
         return True, ""
     if name == "hidden":
