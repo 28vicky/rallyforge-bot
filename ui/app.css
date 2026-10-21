@@ -816,5 +816,24 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .tab.grp .chev{opacity:1}
 
 /* buttons whose icon is hidden (0 wide) must not keep the icon gap: text was 8px off-centre (left 20px vs right 12px) */
-:root .btn.ib{gap:0}
-:root .btn.ib .ico{margin:0}
+:root .ribbon .btn.ib{gap:0}
+:root .ribbon .btn.ib .ico{margin:0}
+
+/* layout tidy (2.4.74): no stray card shadow behind the toolbar, equal-height dashboard columns, even monster cards */
+:root .ribbon,:root .ribbon .grp{box-shadow:none;border:0;background:none}
+:root .ribbon{padding:0}
+.pages{scrollbar-gutter:stable}
+.dutygrid{align-items:stretch}
+.dutygrid .dcol{display:flex;flex-direction:column;min-width:0}
+.dutygrid .dcol>.panel:last-child{flex:1 1 auto;margin-bottom:14px}
+.actsplit{align-items:stretch;gap:24px}
+.actleft,.actright{min-width:0;display:flex;flex-direction:column}
+.actright .actwrap{flex:1 1 auto}
+.mon-list{grid-template-columns:repeat(auto-fill,minmax(320px,1fr));align-items:stretch;gap:8px}
+.mon-card{min-width:0}
+.mon-card .mon-row{flex-wrap:nowrap;min-height:50px;gap:10px}
+.mon-card .mon-name{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mon-card .mon-sum{min-width:0;white-space:nowrap;flex:0 0 auto}
+.mon-card .mon-row .btn{flex:0 0 auto}
+.mon-card input.short{flex:0 0 84px;width:84px}
+.inst .qact button,.px{min-width:30px;min-height:30px}

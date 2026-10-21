@@ -544,9 +544,14 @@ class Controller:
             self.log(f"[!] {type(e).__name__}: {e}")
 
     def pause_all(self):
-        for s in list(self.dev):
-            if self.running(s) and not self.dev[s]["ctl"].paused:
-                self.toggle_pause(s)
+        def sweep():
+            for s in list(self.dev):
+                if self.running(s) and not self.dev[s]["ctl"].paused:
+                    self.toggle_pause(s)
+        sweep()
+        t = threading.Timer(4, sweep)               # second pass: instances that were still starting when the button was pressed
+        t.daemon = True
+        t.start()
 
     def resume_all(self):
         for s in list(self.dev):
