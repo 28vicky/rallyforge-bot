@@ -379,13 +379,8 @@ function renderSide() {
   for (const d of S.devStatus) {
     L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", "Paused", "Problem", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
     const chip = d.state === "run" ? (d.joins ? ["joins " + d.joins, "ok"] : ["idle", ""]) : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : ["offline", "off"];
-    L.lastChild.querySelector(".nm").after(h("span", { class: "ichip " + chip[1] }, chip[0]));      // status at a glance on the right (hidden on hover, where the quick buttons appear)
+    L.lastChild.querySelector(".nm").after(h("span", { class: "ichip " + chip[1] }, chip[0]));      // status at a glance on the right; Start/Pause/Stop live in the page header
     sideDrag(L.lastChild, d.id);
-    const qb = (t, ico, fn, dim) => h("button", { title: t, class: dim ? "dim" : "", onclick: (e) => { e.stopPropagation(); if (!dim) fn(); } }, ico);
-    const nm = d.name || short(d.id);
-    L.lastChild.appendChild(h("div", { class: "qact" }, ...(d.state === "run" || d.state === "pause"
-      ? [qb(d.state === "pause" ? "Resume " + nm : "Pause " + nm, d.state === "pause" ? "\u25B6" : "\u275A\u275A", () => act(api("pause", { serial: d.id }))), qb("Stop " + nm, "\u25A0", () => act(api("stop", { serial: d.id })))]
-      : [qb("Start " + nm, "\u25B6", () => collectAndRun("start", { serial: d.id })), qb("Stop " + nm, "\u25A0", () => {}, true)])));
     if ((d.state === "pause" && d.resume_at) || (d.state === "run" && d.kicked_at)) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at || d.resume_at), "data-pre": d.kicked_at ? " back in " : "" })); }
   }
   tickPauseTimers();

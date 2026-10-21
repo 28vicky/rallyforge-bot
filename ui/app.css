@@ -501,13 +501,7 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 
 /* quick Start / Pause / Stop on an instance card (appear on hover) */
 .inst{position:relative}
-.inst .qact{position:absolute;right:8px;top:7px;display:flex;gap:2px;opacity:0;pointer-events:none;transition:opacity .12s}
-.inst:hover .qact{opacity:1;pointer-events:auto}
-.inst .qact button{width:24px;height:24px;border-radius:6px;border:0;background:transparent;color:var(--fg);font-size:12px;line-height:1;padding:0;display:grid;place-content:center;cursor:pointer;box-shadow:none}
-.inst .qact button:hover{background:rgba(255,255,255,.14);color:var(--accent2)}
 .greyed{opacity:.38;pointer-events:none;filter:grayscale(.6)}
-.inst.sel .qact button{background:transparent;color:var(--accfg)}
-.inst.sel .qact button:hover{background:rgba(0,0,0,.4)}
 
 /* itinerary + log history */
 .itgrp{margin:10px 0}.ithead{font-weight:600;color:var(--accent2);padding:6px 0;border-bottom:var(--bd)}
@@ -585,11 +579,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 :root .inst small{opacity:.65;font-size:12.5px;letter-spacing:0;text-transform:lowercase}
 :root .inst.sel{background:var(--card);color:var(--fg);border-color:var(--line)}
 :root .inst.sel .dot{box-shadow:none}
-:root .inst .qact{position:static;opacity:1;pointer-events:auto;margin-left:auto;display:flex;gap:4px}
-:root .inst .qact button{width:26px;height:24px;border-radius:7px;background:var(--btn);color:var(--fg);border:var(--bd);font-size:10px}
-:root .inst .qact button.dim{opacity:.35;cursor:default}
-:root .inst .qact button:not(.dim):hover{background:var(--accent1);color:var(--accfg)}
-:root .inst.sel .qact button{background:var(--btn);color:var(--fg);border:var(--bd)}
 :root .sidefoot{border-top:var(--bd);display:flex;flex-direction:column;gap:10px}
 :root .sidefoot .ctlbtn{border:var(--bd);background:var(--card);color:var(--fg);font-weight:500;padding:9px}
 :root .sidefoot .ctlbtn.on{background:var(--accent);color:var(--accfg);border-color:transparent}
@@ -658,9 +647,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 :root .inst{background:transparent!important;border:1px solid transparent!important;box-shadow:none!important}
 :root .inst:hover{background:transparent!important;border-color:transparent!important}
 :root .inst.sel{background:var(--card)!important;border-color:var(--line)!important}
-:root .inst .qact button{background:transparent!important;border:0!important;box-shadow:none;opacity:.75;font-size:11px;width:24px}
-:root .inst .qact button:not(.dim):hover{background:var(--line)!important;color:var(--fg)!important;opacity:1}
-:root .inst .qact button.dim{opacity:.3}
 /* quieter fields everywhere */
 :root input:not([type=checkbox]):not([type=color]),:root select{background:var(--card);border:var(--bd);box-shadow:none}
 .dutygrid .dcol .note{display:none}
@@ -735,12 +721,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .sub.on,:root .seg button.on,:root .segb.on,:root .ownseg button.on{background:var(--card);color:var(--fg);box-shadow:0 0 0 1px var(--line),0 1px 2px rgba(0,0,0,.10)}
 :root .seg.small .segb{padding:4px 10px;font-size:13px}
 
-/* instance card: play/pause/stop appear only on hover, over the right end of the name row; a long name is cut with "..." instead of running under them */
-:root .inst{position:relative}
-:root .inst .qact{position:absolute;right:8px;top:8px;margin-left:0;gap:2px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:2}
-:root .inst:hover .qact,:root .inst:focus-within .qact{opacity:1;pointer-events:auto}
-:root .inst .qact button{width:26px;height:22px}
-:root .inst:hover .nm,:root .inst:focus-within .nm{padding-right:62px}
 
 /* first-run tour */
 .tour-shade{position:fixed;inset:0;background:rgba(10,8,6,.55);z-index:9000}
@@ -767,8 +747,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .inst:not(.sel) small .ptimer{color:var(--mute)}
 
 /* pause / stop quick buttons on an instance card: bigger icons, buttons closer together */
-.inst .qact{gap:0;top:5px;right:6px}
-.inst .qact button{width:30px;height:30px;font-size:16px;border-radius:8px}
 
 /* Paused / Stopped top buttons: solid amber / red with the skin's own "text on colour" shade, in every skin */
 [data-mode] .btn.cur-pause,[data-mode] .ribbon .btn.cur-pause{background:var(--warn)!important;color:var(--accfg)!important;border-color:transparent!important}
@@ -835,7 +813,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .mon-card .mon-sum{min-width:0;white-space:nowrap;flex:0 0 auto}
 .mon-card .mon-row .btn{flex:0 0 auto}
 .mon-card input.short{flex:0 0 84px;width:84px}
-.inst .qact button,.px{min-width:30px;min-height:30px}
 
 /* ================= F7 dashboard (21 Oct mockup): warm off-white, rust primary, safety-red Stop, amber Pause ================= */
 .side{padding:0 0 40px;gap:0}
@@ -853,8 +830,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .inst:hover{background:rgba(255,255,255,.6);transform:none}
 .inst.sel{background:var(--card);color:var(--fg);border:1px solid var(--line);box-shadow:var(--sh);font-weight:700}
 .inst.sel small,.inst.sel small .ptimer{color:var(--mute)}
-.inst.sel .qact button{color:var(--fg)}
-.inst.sel .qact button:hover{background:var(--field)}
 .inst.st-stop,.inst.st-idle{color:#6b6458}
 .inst .dot.run{background:#10b981}.inst .dot.pause{background:#f59e0b}.inst .dot.error{background:var(--bad)}.inst .dot.stop,.inst .dot.idle{background:#9ca3af}
 .sidefoot{padding:12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
@@ -919,7 +894,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .inst .ichip.warn{background:#fffbeb;color:#b45309}
 .inst .ichip.bad{background:#fef2f2;color:#b91c1c}
 .inst .ichip.off{background:transparent;border:1px dashed var(--off)}
-.inst:hover .ichip{visibility:hidden}
 
 /* sidebar show/hide: a button at the top-left of the page header, before the instance name */
 .sidebtn{width:34px;height:34px;flex:none;border-radius:8px;border:1px solid transparent;background:transparent;cursor:pointer;display:grid;place-content:center;gap:4px;padding:0}
