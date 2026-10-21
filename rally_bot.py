@@ -5487,6 +5487,11 @@ class CityNav:
         if r:
             self.cx, self.cy = r[0], r[1]
             return r[2]
+        try:                                                 # a building's ring menu left open hides the city: close it, then look again
+            if find_detail_icon(shot):
+                close_ring(self.dev, self.stop, (270, 430))
+        except Exception:
+            pass
         return 0.0
 
     def goto_abs(self, mapx, mapy, tol=70):
@@ -5756,6 +5761,69 @@ def _locate_in(g, shot, min_score):
     return None
 
 
+def _frame_db(culture):
+    """The captured city frames of a culture (keypoints + descriptors + the place of each frame in the whole picture) or None."""
+    key = "fdb_" + culture
+    if key not in _CITY_PIC:
+        db = None
+        f = _city_find(f"frames_{culture}.npz")
+        if f:
+            try:
+                z = np.load(str(f))
+                db = {"pos": z["pos"], "off": z["off"], "kp": z["kp"], "desc": z["desc"]}
+            except Exception:
+                db = None
+        _CITY_PIC[key] = db
+    return _CITY_PIC[key]
+
+
+def _locate_frames(shot, culture):
+    """Find the camera by matching the screen's features against every captured frame (each frame is a real, undistorted
+    picture, so stitching seams do not matter). -> (x, y, score) in the whole-picture frame, or None."""
+    db = _frame_db(culture)
+    if db is None:
+        return None
+    X, Y, W, H = 80, 100, 360, 690
+    g = cv2.cvtColor(shot[Y:Y + H, X:X + W], cv2.COLOR_BGR2GRAY)
+    if float(g.std()) < 12:
+        return None
+    orb = _CITY_PIC.get("orb")
+    if orb is None:
+        orb = _CITY_PIC["orb"] = cv2.ORB_create(1500, fastThreshold=8)
+    kp, d = orb.detectAndCompute(g, None)
+    if d is None or len(kp) < 40:
+        return None
+    pts = np.array([p.pt for p in kp], np.float32)
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    best = None
+    order = range(len(db["pos"]))
+    last = _CITY_PIC.get("last_loc")
+    if last is not None:                                     # the camera has not jumped: try the frames near the last place first
+        order = sorted(order, key=lambda i: (db["pos"][i][0] - 80 - last[0]) ** 2 + (db["pos"][i][1] - 100 - last[1]) ** 2)
+    for i in order:
+        if best is not None and best[0] >= 110:               # a clear match: no need to look at the rest
+            break
+        a, b = int(db["off"][i]), int(db["off"][i + 1])
+        ms = bf.match(d, db["desc"][a:b])
+        if len(ms) < 20:
+            continue
+        dv = np.array([db["kp"][a + m.trainIdx] - pts[m.queryIdx] for m in ms])      # where the frame's point sits relative to the live point
+        top = None
+        for c in dv[:: max(1, len(dv) // 200)]:
+            k = int(np.sum(np.abs(dv - c).max(axis=1) <= 3))
+            if top is None or k > top[0]:
+                top = (k, c)
+        sel = dv[np.abs(dv - top[1]).max(axis=1) <= 3]
+        if len(sel) >= 20 and (best is None or len(sel) > best[0]):
+            mx, my = float(np.median(sel[:, 0])), float(np.median(sel[:, 1]))
+            # a point at live (x, y) is at frame (x + mx, y + my): live crop origin sits at frame position - (mx, my)... in picture coordinates:
+            best = (len(sel), db["pos"][i][0] + mx, db["pos"][i][1] + my)
+    if best is None:
+        return None
+    _CITY_PIC["last_loc"] = (best[1] - X, best[2] - Y)
+    return best[1] - X, best[2] - Y, min(1.0, best[0] / 80.0)
+
+
 def locate_in_city(shot, min_score=0.55):
     """Where is the camera? Match the middle of the screen against the whole-city picture of this account's city style
     (the first call that matches one of the shipped pictures decides the style).
@@ -5764,6 +5832,10 @@ def locate_in_city(shot, min_score=0.55):
     if not pics:
         return None
     cur = city_culture()
+    if _frame_db(cur) is not None:
+        r = _locate_frames(shot, cur)
+        if r is not None:
+            return r
     r = _locate_in(pics[cur], shot, min_score) if cur in pics else None
     if r is not None:
         return r
@@ -5773,7 +5845,7 @@ def locate_in_city(shot, min_score=0.55):
     for cu, g in pics.items():
         if cu == cur:
             continue
-        r = _locate_in(g, shot, min_score)
+        r = (_locate_frames(shot, cu) if _frame_db(cu) is not None else None) or _locate_in(g, shot, min_score)
         if r is not None and (best is None or r[2] > best[1][2]):
             best = (cu, r)
     if best:
@@ -8808,6 +8880,14 @@ def read_square(dev, cfg, log, stop, pos, expected="", levels=False):
 def open_square(dev, cfg, log, stop, nav, shrine, number):
     """Go to numbered square N of the default city map (by coordinates), tap it and read the building.
     -> (expected name, read name, level, map x, map y) or None."""
+    if nav.absolute and "locked" not in _CITY_PIC:           # which city style is this? the first screen that matches a shipped picture decides - before any target is worked out
+        for _try in range(6):
+            if stop.is_set() or nav.localize() or "locked" in _CITY_PIC:
+                break
+            _nap(stop, 0.8, 1.2)
+        log(f"[i] City style = {city_culture()}" + ("" if "locked" in _CITY_PIC else " (not matched yet)"))
+    if nav.absolute:
+        shrine = shrine_label_now()
     sq = squares_now().get(int(number))
     if not sq:
         log(f"[!] Square {number} does not exist (1-{len(squares_now())})")
@@ -8863,6 +8943,27 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
     dev.guard_city = True
     t0 = time.time()
     nav = CityNav(dev, stop, log)
+    try:
+        if not ensure_view(dev, cfg, stop, log, "city", tries=10):
+            log("[!] Squares: could not get to the city view - open the city screen and start again")
+        for _k in range(4):                                  # a full page (Alliance War list, gifts...) is still open: its round gold Back arrow leaves it
+            _sh = dev.screenshot()
+            _v = view_of(_sh, cfg)
+            log(f"[i] Squares: the screen is the '{_v}' view")
+            if _v == "city" or stop.is_set():
+                break
+            _hsv = cv2.cvtColor(_sh[8:80, 5:75], cv2.COLOR_BGR2HSV)
+            if cv2.countNonZero(cv2.inRange(_hsv, (12, 110, 150), (32, 255, 255))) > 250:
+                dev.tap(36, 38)
+                log("[*] Squares: a full page is open - tapped its round Back arrow")
+            else:
+                dev.back()
+            _nap(stop, 1.5, 2.0)
+        clear_popups(dev, cfg, log, stop, rounds=3)
+    except Exception as e:
+        log(f"[!] Squares: city view check failed: {e}")
+    _CITY_PIC.pop("locked", None)                            # every run decides again: the accounts have different city styles
+    _CITY_PIC["culture"] = "europe"
     if "locked" not in _CITY_PIC:                            # which city style is this account? the picture that matches the screen decides
         for _try in range(3):
             try:
