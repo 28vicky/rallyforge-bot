@@ -793,3 +793,11 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .ribbon .btn.bad .ico{color:var(--bad)!important}
 :root .ribbon .btn.bad:hover:not(:disabled),:root .ribbon .btn.bad:focus-visible{background:var(--bad);color:var(--accfg);border-color:var(--bad)}
 :root .ribbon .btn.bad:hover .ico,:root .ribbon .btn.bad:focus-visible .ico{color:var(--accfg)!important}
+
+/* ---- readable contrast in every skin (audit 21 Oct): text on coloured buttons >= 4.5:1 ---- */
+:root,[data-pal="amber"][data-mode="dark"]{--accfg:#1b1a18}
+[data-pal="amber"][data-mode="light"]{--accent:#b5532f;--accent1:#b5532f;--accent2:#9a4526}
+[data-pal="sage"][data-mode="dark"]{--accfg:#0f1e1b}
+:root .btn:disabled,:root .btn.greyed{opacity:1;color:var(--mute);background:var(--btn);border:var(--bd)}
+.status .l,.status .l *{opacity:1}
+.pcard.off{opacity:.88}
