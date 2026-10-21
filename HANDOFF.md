@@ -68,6 +68,7 @@ PC: free
 | T5 | Daily tasks (F8) part 1: Resource Tax, Gold Levy, Resource Collecting | feat/dailies-city | new run_* functions after the Champions section + DUTY_LIBRARY entries | T2 | todo |
 | T6 | Daily tasks (F8) part 2: Alliance help/donation/gift/treasure, Mail, Quests | feat/dailies-alliance | new run_* functions + DUTY_LIBRARY entries | - | todo |
 | T7 | Rally extras (F9): universal "wait after I play elsewhere", per-monster presets | feat/rally-extras | "presets", "one device" rally loop | T3 (monsters) | todo |
+| T8 | Update restart: countdown, waiting-for names, click = restart now, 30 s max wait | feat/update-restart | web_app.py update/restart code + ui/app.js status bar | T4 (ui/app.js) | code done, not tested live |
 | R | Release chat: merge finished branches into main, version bump, changelog, publish (owner says publish) | main | everything | - | when owner asks |
 
 Safe to run together: T1 + T3 + T4 + T6, or T2 + T6 + T7. Avoid pairs listed in "Clash with".
