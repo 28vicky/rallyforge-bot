@@ -546,12 +546,14 @@ async function catalogFlow() {
   if (!serial) return;
   const ok = await confirmBox("Build the general catalogue", "Open the Tavern (Recruit General) yourself and leave it there. If the instance is on the city screen instead, the bot opens Tavern > Portraits by itself, but only when this instance already has a city map.\n\nIt then goes through every region tab (Europe, America, Japan, Korea, ...) and every troop-type filter, scrolls each list and records each general's name and picture. It takes several minutes; do not touch the instance.\n\nWhen it is done, copy the 'catalog' folder (button 'Open catalogue folder') next to rally_bot.py and rebuild.", "Start");
   if (!ok) return;
-  const others = S.devices.filter((d) => d.id.trim() && d.id !== serial);
   let helpers = [];
-  if (others.length) {
-    const i = await choiceBox("Read the regions in parallel? A second instance (also left on the Tavern / city, not running) takes half of the regions, so it takes about half the time.", ["No, only this instance"].concat(others.map((d) => `Also use ${d.name || d.id}   (${d.id})`)));
+  for (let n = 0; n < 3; n++) {                              // up to 4 instances in all: one region each
+    const others = S.devices.filter((d) => d.id.trim() && d.id !== serial && !helpers.includes(d.id));
+    if (!others.length) break;
+    const i = await choiceBox(helpers.length ? "Add one more instance? (it takes a region too)" : "Read the regions in parallel? Each extra instance (also left on the city / Tavern and stopped) takes one region, so it takes about half the time with one, a quarter with three.", [helpers.length ? "No, start now" : "No, only this instance"].concat(others.map((d) => `Also use ${d.name || d.id}   (${d.id})`)));
     if (i === null) return;
-    if (i > 0) helpers = [others[i - 1].id];
+    if (i === 0) break;
+    helpers.push(others[i - 1].id);
   }
   if (!(await act(api("catalog_crawl", { serial, helpers })))) return;
   scanBox = modal({ title: "Recording the catalogue", focus: false, buttons: [{ label: "Stop and save what was found", cls: "pri", onclick: () => { act(api("catalog_stop")); return false; } }],

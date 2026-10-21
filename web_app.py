@@ -854,6 +854,8 @@ class Controller:
         lock = threading.Lock()
 
         def one(sr):
+            if not share[sr]:
+                return
             try:
                 cfg_now = rb.load_config()
                 dev = self.ready_device(sr, adb, stop, check_ready=False)     # the Portraits screen is not a screen the bot knows
