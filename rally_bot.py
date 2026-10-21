@@ -3002,9 +3002,13 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         st = screen_state(shot, cfg)
         if st != "unknown" or not has_template("city_screen"):
             break
-        if tap_alliance_war_row(dev, shot, log):          # the Alliance page is not a pop-up: go on into Alliance War
+        _wt = [t for t in getattr(dev, "_war_row_taps", []) if time.time() - t < 120]
+        if len(_wt) < 2 and tap_alliance_war_row(dev, shot, log):          # the Alliance page is not a pop-up: go on into Alliance War (twice at most per 2 min - else this is a loop and the round Back arrow below leaves the page)
+            _wt.append(time.time())
+            dev._war_row_taps = _wt
             _nap(stop, 1.5, 2.2)
             break
+        dev._war_row_taps = _wt
         try:                                               # a full page (Alliance Science, event, ...) has the gold Back arrow top left: it is not a pop-up
             _hsv = cv2.cvtColor(shot[8:80, 5:75], cv2.COLOR_BGR2HSV)
             _gold = cv2.countNonZero(cv2.inRange(_hsv, (12, 110, 150), (32, 255, 255)))
@@ -5501,6 +5505,11 @@ class CityNav:
                 if lost >= 7:
                     if not getattr(self, "quiet", False):
                         self.log("[!]   the screen is not recognised as the city (ad or window in the way?)")
+                    try:
+                        (USER / "debug").mkdir(exist_ok=True)
+                        cv2.imwrite(str(USER / "debug" / f"city_unrec_{str(getattr(self.dev, 'serial', 'x')).replace(':', '_').replace('.', '_')}.png"), self.dev.screenshot())
+                    except Exception:
+                        pass
                     return False
                 _nap(self.stop, 0.6, 0.9)
                 continue
@@ -5651,26 +5660,67 @@ SAFE_TAP_AREA = (95, 215, 335, 470)                        # x, y, w, h of the s
 SHRINE_LABEL_IN_PICTURE = (1372.2, 576.9)                    # the Shrine label in the whole-city picture (emulator px); the square offsets count from here
 
 
+CITY_CULTURES = {"europe": "city_whole.png", "japan": "city_whole_japan.png"}     # one whole-city picture per city style; the square offsets count from that picture's Shrine label
+
+
+def _city_find(fname):
+    for base in (RES / "city_map", Path(__file__).parent / "city_map", USER / "city_map", USER / "templates", RES / "templates", Path(__file__).parent):
+        f = base / fname
+        if f.exists():
+            return f
+    return None
+
+
+def city_pictures():
+    """Every shipped whole-city picture: {culture: grey array}."""
+    if "all" not in _CITY_PIC:
+        d = {}
+        for cu, fn in CITY_CULTURES.items():
+            f = _city_find(fn)
+            g = cv2.imread(str(f), cv2.IMREAD_GRAYSCALE) if f else None
+            if g is not None:
+                d[cu] = g
+        _CITY_PIC["all"] = d
+    return _CITY_PIC["all"]
+
+
+def city_squares_for(culture):
+    """-> (shrine label in that picture, {n: [name, ox, oy]}) for a culture."""
+    if culture == "europe" or culture not in CITY_CULTURES:
+        return SHRINE_LABEL_IN_PICTURE, CITY_SQUARES
+    key = "sq_" + culture
+    if key not in _CITY_PIC:
+        f = _city_find(f"city_squares_{culture}.json")
+        try:
+            j = json.loads(f.read_text("utf-8"))
+            _CITY_PIC[key] = (tuple(j["shrine_label"]), {int(k): v for k, v in j["squares"].items()})
+        except Exception:
+            _CITY_PIC[key] = (SHRINE_LABEL_IN_PICTURE, CITY_SQUARES)
+    return _CITY_PIC[key]
+
+
+def city_culture():
+    return _CITY_PIC.get("culture", "europe")
+
+
+def shrine_label_now():
+    return city_squares_for(city_culture())[0]
+
+
+def squares_now():
+    return city_squares_for(city_culture())[1]
+
+
 def city_picture():
-    """The whole-city picture (grey, emulator px) used to find the camera. -> array or None."""
-    if "g" not in _CITY_PIC:
-        g = None
-        for base in (RES / "city_map", Path(__file__).parent / "city_map", USER / "city_map", USER / "templates", RES / "templates", Path(__file__).parent):
-            f = base / "city_whole.png"
-            if f.exists():
-                g = cv2.imread(str(f), cv2.IMREAD_GRAYSCALE)
-                if g is not None:
-                    break
-        _CITY_PIC["g"] = g
-    return _CITY_PIC["g"]
+    """The whole-city picture (grey, emulator px) of the city style found so far (Europe until another one matches). -> array or None."""
+    d = city_pictures()
+    g = d.get(city_culture())
+    if g is None and d:
+        g = next(iter(d.values()))
+    return g
 
 
-def locate_in_city(shot, min_score=0.55):
-    """Where is the camera? Match the middle of the screen against the whole-city picture.
-    -> (x, y, score): the picture coordinates of screen point (0, 0), or None."""
-    g = city_picture()
-    if g is None:
-        return None
+def _locate_in(g, shot, min_score):
     t = cv2.cvtColor(shot[250:730, 60:440], cv2.COLOR_BGR2GRAY)     # the lower middle: the sky, clouds and top bubbles change, the buildings do not
     if float(t.std()) < 12:                                          # a black / blank screen (loading, window in the way): nothing to match
         return None
@@ -5684,6 +5734,37 @@ def locate_in_city(shot, min_score=0.55):
     if mv < 0.88 and mv - second < 0.04:
         return None
     return ml[0] - 60, ml[1] - 250, float(mv)
+
+
+def locate_in_city(shot, min_score=0.55):
+    """Where is the camera? Match the middle of the screen against the whole-city picture of this account's city style
+    (the first call that matches one of the shipped pictures decides the style).
+    -> (x, y, score): the picture coordinates of screen point (0, 0), or None."""
+    pics = city_pictures()
+    if not pics:
+        return None
+    cur = city_culture()
+    r = _locate_in(pics[cur], shot, min_score) if cur in pics else None
+    if r is not None:
+        return r
+    if _CITY_PIC.get("locked"):
+        return None
+    best = None
+    for cu, g in pics.items():
+        if cu == cur:
+            continue
+        r = _locate_in(g, shot, min_score)
+        if r is not None and (best is None or r[2] > best[1][2]):
+            best = (cu, r)
+    if best:
+        _CITY_PIC["culture"] = best[0]
+        _CITY_PIC["locked"] = True
+        try:
+            print(f"[i] City style detected: {best[0]}")
+        except Exception:
+            pass
+        return best[1]
+    return None
 
 
 def ring_label_free(shot, centre=(270, 450)):
@@ -6341,22 +6422,26 @@ def find_building_test(dev, cfg, log, stop, name, progress=None):
     return {}
 
 
-def capture_city_pictures(dev, cfg, log, stop, progress=None):
+def capture_city_pictures(dev, cfg, log, stop, progress=None, resume=False):
     """Picture capture for building a whole-city picture offline: go to the top-left corner, then sweep the city in a
     serpentine of plain finger pans (no name reading), saving a clean screenshot at every stop plus how far the map really
     moved (image matching). Frames: citycap/<serial>/pic_NNN.png, meta: pics.json. Stitching is done offline."""
     dev.arm_guard(cfg, log, stop)
-    dev.guard_city = True
+    dev.guard_city = False                                    # the picture sweep does its own recovery (the guard's Alliance War tap fights with it)
     serial = dev.serial if hasattr(dev, "serial") else "default"
     t0 = time.time()
     cap_dir = USER / "citycap" / re.sub(r"[^0-9A-Za-z]+", "_", serial) / "pics"
+    meta = []
     try:
         import shutil
-        shutil.rmtree(cap_dir, ignore_errors=True)
+        if resume and (cap_dir / "pics.json").exists():          # fill-the-gap run: keep the pictures of the first run and add to them
+            meta = json.loads((cap_dir / "pics.json").read_text(encoding="utf-8"))
+        else:
+            resume = False
+            shutil.rmtree(cap_dir, ignore_errors=True)
         cap_dir.mkdir(parents=True, exist_ok=True)
-    except OSError:
+    except (OSError, ValueError):
         pass
-    meta = []
 
     def rep(text, pct):
         if progress:
@@ -6439,41 +6524,59 @@ def capture_city_pictures(dev, cfg, log, stop, progress=None):
         mean_d = sum(t[0] for t in scores) / len(scores)
         return best[1] * 2.0, best[2] * 2.0, max(0.0, 1.0 - best[0] / max(mean_d, 1e-6))
 
+    def close_popups():
+        """A swipe that starts on a building can open its pop-up (a Bounty Cave advert, a building menu). Close it by its round X."""
+        shut = False
+        for _k in range(3):
+            cx = [c for c in (find_close_x(dev.screenshot()) or []) if c[1] < 450]      # lower right = the Alliance / Mail buttons, not a close X
+            if not cx:
+                break
+            log(f"[i] City pictures: closed a pop-up ({cx[0][0]},{cx[0][1]})")
+            dev.tap(cx[0][0], cx[0][1])
+            _nap(stop, 0.9, 1.3)
+            shut = True
+        return shut
+
     def pan_measure(dx, dy):
         """Pan, then measure. -> None when the map did not move (edge), else (real dx, real dy, score, picture)"""
-        try:                                                   # a building menu or pop-up from an earlier tap swallows the swipe: clear it first
-            ensure_view(dev, cfg, stop, lambda *_: None, "city", tries=3)
-            for _k in range(3):                                # a pop-up over the city (the globe still shows, so the city counts as "showing"): its round X closes it
-                cx = find_close_x(dev.screenshot())
-                if not cx:
-                    break
-                log(f"[i] City pictures: closed a pop-up ({cx[0][0]},{cx[0][1]})")
-                dev.tap(cx[0][0], cx[0][1])
-                _nap(stop, 0.9, 1.3)
-        except Exception:
-            pass
-        before = dev.screenshot()
         cdx, cdy = dx * 1.0, dy * 1.0
-        for attempt in range(2):
+        for attempt in range(3):
+            try:                                               # a building menu or pop-up from an earlier tap swallows the swipe: clear it first
+                ensure_view(dev, cfg, stop, log, "city", tries=4)
+                close_popups()
+            except Exception:
+                pass
+            before = dev.screenshot()
             pan_content(dev, stop, dx, dy)
             _nap(stop, 0.8, 1.0)
+            try:
+                close_popups()                                  # the swipe itself may have opened one: the map position is still valid after closing it
+            except Exception:
+                pass
             after = dev.screenshot()
             mx, my, sc = match_shift(before, after, cdx, cdy)
-            moved_px = max(abs(mx), abs(my))
-            if moved_px <= 3 and sc >= 0.5:
-                return None                                    # the same picture: the map is at its edge
+            if max(abs(mx), abs(my)) <= 3:
+                vx, vy, vw, vh = CITY_VIEW                       # a zero shift only counts as "edge" when the two pictures really look the same
+                same = float(cv2.absdiff(before[vy:vy + vh, vx:vx + vw], after[vy:vy + vh, vx:vx + vw]).mean())
+                if same >= 7.0:                                  # the picture did change: the zero came from static features (ring, buttons), measure along the pan instead
+                    mx, my, sc = match_shift_search(before, after, cdx, cdy)
+                else:
+                    if attempt == 0:
+                        continue                                # once more before believing it is the edge
+                    log(f"[i] City pictures: pan {dx:.0f},{dy:.0f} - map did not move (edge, diff {same:.1f})")
+                    return None
             if sc >= 0.35:
                 return mx, my, sc, after
             log(f"[i] City pictures: pan {dx:.0f},{dy:.0f} - unsure (score {sc:.2f}, shift {mx:.0f},{my:.0f}) try {attempt + 1}")
-            if attempt == 1:
-                return cdx * 1.0, cdy * 1.0, sc, after         # keep going with the commanded move (marked unsure by its low score)
-        return None
+        return cdx, cdy, 0.0, after                              # never matched: keep going with the commanded move, marked unsure by score 0
 
-    def snap(tag, mx, my, resp):
+    def snap(tag, mx, my, resp, parent=None):
         shot = dev.screenshot()
         i = len(meta)
         cv2.imwrite(str(cap_dir / f"pic_{i:03d}.png"), shot)
         meta.append({"i": i, "tag": tag, "shift": [round(float(mx), 1), round(float(my), 1)], "resp": round(float(resp), 3)})
+        if parent is not None:
+            meta[-1]["parent"] = f"{parent[0]},{parent[1]}"
         (cap_dir / "pics.json").write_text(json.dumps(meta), encoding="utf-8")
         log(f"[i] City picture {i}: {tag}, map moved {mx:.0f},{my:.0f}")
 
@@ -6481,38 +6584,98 @@ def capture_city_pictures(dev, cfg, log, stop, progress=None):
     if not ensure_view(dev, cfg, stop, log, "city", tries=14):
         dev.guard_city = False
         raise ValueError("Could not get the game to the city view - open the city by hand and try again.")
-    rep("Going to the top-left corner", 5)
-    for axis in (0, 1):
-        for _ in range(12):
+    if not resume:
+        rep("Going to the top-left corner", 5)
+        for axis in (0, 1):
+            for _ in range(12):
+                if stop.is_set():
+                    break
+                r = pan_measure(290 if axis == 0 else 0, 0 if axis == 0 else 430)
+                if r is None:
+                    break
+    close_popups()
+    if not resume:
+        snap("corner", 0, 0, 1)
+    # The scrollable area is a rhombus (the city is drawn diagonally), so a plain rows-and-columns sweep stops at its slanted edges.
+    # Instead explore like a maze: from each camera cell try the 4 neighbours, take a picture of every new cell, walk back afterwards.
+    CX, CY = 240, 360
+    seen = {(0, 0)}
+    shut = set()
+    dirs = ((1, 0), (0, 1), (0, -1), (-1, 0))
+    start = (0, 0)
+    if resume:                                                    # fill the gap: find where the camera is by matching the screen with the first run's pictures, walk to cell (6,0) along the maze, explore leftwards
+        dirs = ((-1, 0), (0, 1), (0, -1), (1, 0))
+        cells_ = []
+        for m_ in meta:
+            cells_.append(tuple(int(v) for v in m_["tag"].split()[1].split(",")) if m_["tag"].startswith("cell ") else (0, 0))
+            if m_["tag"].startswith("cell "):
+                seen.add(cells_[-1])
+        par_ = [None]                                             # maze parents (same walk as the first run: parent = last visited neighbour cell)
+        stk_ = [(0, 0)]
+        for k_ in range(1, len(meta)):
+            while stk_ and abs(stk_[-1][0] - cells_[k_][0]) + abs(stk_[-1][1] - cells_[k_][1]) != 1:
+                stk_.pop()
+            par_.append(cells_.index(stk_[-1]) if stk_ else 0)
+            stk_.append(cells_[k_])
+        here = dev.screenshot()
+        best_k, best_n = None, 0
+        for k_ in range(len(meta)):
+            img_ = cv2.imread(str(cap_dir / f"pic_{k_:03d}.png"))
+            if img_ is None:
+                continue
+            r_ = orb_shift(img_, here)
+            if r_ and r_[2] > best_n:
+                best_k, best_n = k_, r_[2]
+        if best_k is None or best_n < 25:
+            log("[!] City pictures: could not tell where the camera is (no picture of the first run matches)")
+            dev.guard_city = False
+            return {}
+        log(f"[i] City pictures: the camera is at picture {best_k} ({best_n} matching points)")
+        target = next((k_ for k_, m_ in enumerate(meta) if m_["tag"] == "cell 6,0"), None)
+        chain_a, k_ = [], best_k
+        while k_ is not None:
+            chain_a.append(k_)
+            k_ = par_[k_]
+        chain_b, k_ = [], target
+        while k_ is not None:
+            chain_b.append(k_)
+            k_ = par_[k_]
+        common = next(k_ for k_ in chain_a if k_ in chain_b)
+        steps_ = [(k_, -1) for k_ in chain_a[:chain_a.index(common)]] + [(k_, 1) for k_ in reversed(chain_b[:chain_b.index(common)])]
+        for si_, (k_, sg_) in enumerate(steps_):
             if stop.is_set():
                 break
-            r = pan_measure(290 if axis == 0 else 0, 0 if axis == 0 else 430)
+            sh_ = meta[k_]["shift"]
+            pan_measure(sg_ * sh_[0], sg_ * sh_[1])
+            rep(f"Walking to the gap ({si_ + 1}/{len(steps_)})", 6)
+        start = (6, 0)
+
+    limit_t = time.time() + 45 * 60
+
+    def explore(cell, depth):
+        for di, dj in dirs:
+            if stop.is_set() or time.time() > limit_t or len(meta) >= 90:
+                return
+            nc = (cell[0] + di, cell[1] + dj)
+            if nc in seen or nc in shut:
+                continue
+            r = pan_measure(-di * CX, -dj * CY)
             if r is None:
-                break
-    for _k in range(3):
-        cx = find_close_x(dev.screenshot())
-        if not cx:
-            break
-        dev.tap(cx[0][0], cx[0][1])
-        _nap(stop, 0.9, 1.3)
-    snap("corner", 0, 0, 1)
-    direction = 1
-    for col in range(12):
-        if stop.is_set():
-            break
-        for _ in range(6):
-            if stop.is_set():
-                break
-            r = pan_measure(0, -direction * 360)
-            if r is None:
-                break
-            snap(f"col{col} {'down' if direction == 1 else 'up'}", r[0], r[1], r[2])
-            rep(f"Taking pictures (column {col + 1})", min(95, 8 + col * 11))
-        r = pan_measure(-240, 0) or pan_measure(-240, 0)          # twice "no movement" = the right edge of the city
-        if r is None:
-            break
-        snap(f"col{col} right", r[0], r[1], r[2])
-        direction = -direction
+                shut.add(nc)
+                continue
+            mx, my = r[0], r[1]
+            if abs(mx) + abs(my) < 0.35 * (CX if di else CY):            # hardly moved: the map edge is right there
+                shut.add(nc)
+                pan_measure(-mx, -my)
+                continue
+            seen.add(nc)
+            snap(f"cell {nc[0]},{nc[1]}", mx, my, r[2], cell)
+            rep(f"Taking pictures ({len(meta)} so far)", min(95, 8 + len(meta) * 2))
+            if depth < 40:
+                explore(nc, depth + 1)
+            pan_measure(-mx, -my)                                       # walk back to where we came from
+
+    explore(start, 0)
     dev.guard_city = False
     rep("Done", 100)
     log(f"[+] City pictures: {len(meta)} frames in {int(time.time() - t0)} s - saved in citycap")
@@ -6526,8 +6689,10 @@ def scan_city(dev, cfg, log, stop, progress=None):
         want = (USER / "city_test.txt").read_text(encoding="utf-8").strip()
     except OSError:
         want = ""
-    if want.lower() == "capture":
-        return capture_city_pictures(dev, cfg, log, stop, progress)
+    if want.lower() in ("off", "none", "-"):
+        want = ""
+    if want.lower() in ("capture", "capture2"):
+        return capture_city_pictures(dev, cfg, log, stop, progress, resume=want.lower() == "capture2")
     if want:
         return find_building_test(dev, cfg, log, stop, want, progress)
     return scan_city_names(dev, cfg, log, stop, progress)
@@ -7226,7 +7391,7 @@ def building_priors():
     """Where each building sits relative to the others (the built-in default squares). City styles differ by some tens of
     pixels, which the closed loop in aim_by_labels corrects as the real names come into view."""
     pr = {}
-    for _n, (nm, x, y) in CITY_SQUARES.items():
+    for _n, (nm, x, y) in squares_now().items():
         pr.setdefault(re.sub(r"\s*\d+$", "", nm), (x, y))
     return pr
 
@@ -7459,6 +7624,16 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             dev.tap(*VIEW_TOGGLE)
             _nap(stop, 2.2, 3.0)
             continue
+        try:
+            _hsv = cv2.cvtColor(shot[8:80, 5:75], cv2.COLOR_BGR2HSV)
+            if cv2.countNonZero(cv2.inRange(_hsv, (12, 110, 150), (32, 255, 255))) > 250 and backs < 12:      # a full page (Alliance page, ...) has the gold Back arrow: Android Back does nothing there
+                backs += 1
+                dev.tap(36, 38)
+                say("[*] Recovery: a full page is open - tapped its round Back arrow")
+                _nap(stop, 1.2, 1.8)
+                continue
+        except Exception:
+            pass
         if close_reward_panel(dev, stop, None):
             continue
         hit = None
@@ -8378,13 +8553,13 @@ def picture_items(dev):
     if ent.get("frame") == "picture":
         items.update({k: list(v) for k, v in ent.get("items", {}).items()})
     have = {k.split("#")[0].lower() for k in items}
-    for n, (nm, ox, oy) in CITY_SQUARES.items():
+    for n, (nm, ox, oy) in squares_now().items():
         if n in PARKED_SQUARES:
             continue
         base = re.sub(r"\s*\d+$", "", nm)
         if base.lower() in have or base.lower() not in DEFAULT_PICTURE_BUILDINGS:
             continue
-        items[f"{base}#1"] = [round(SHRINE_LABEL_IN_PICTURE[0] + ox), round(SHRINE_LABEL_IN_PICTURE[1] + oy)]
+        items[f"{base}#1"] = [round(shrine_label_now()[0] + ox), round(shrine_label_now()[1] + oy)]
     return items
 
 
@@ -8613,9 +8788,9 @@ def read_square(dev, cfg, log, stop, pos, expected="", levels=False):
 def open_square(dev, cfg, log, stop, nav, shrine, number):
     """Go to numbered square N of the default city map (by coordinates), tap it and read the building.
     -> (expected name, read name, level, map x, map y) or None."""
-    sq = CITY_SQUARES.get(int(number))
+    sq = squares_now().get(int(number))
     if not sq:
-        log(f"[!] Square {number} does not exist (1-{len(CITY_SQUARES)})")
+        log(f"[!] Square {number} does not exist (1-{len(squares_now())})")
         return None
     name, ox, oy = sq
     tx, ty = shrine[0] + ox, shrine[1] + oy
@@ -8668,7 +8843,17 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
     dev.guard_city = True
     t0 = time.time()
     nav = CityNav(dev, stop, log)
-    order = list(numbers or [n for n in sorted(CITY_SQUARES) if n not in PARKED_SQUARES])
+    if "locked" not in _CITY_PIC:                            # which city style is this account? the picture that matches the screen decides
+        for _try in range(3):
+            try:
+                locate_in_city(dev.screenshot())
+            except Exception:
+                pass
+            if "locked" in _CITY_PIC or stop.is_set():
+                break
+            _nap(stop, 1.0, 1.5)
+        log(f"[i] Squares: city style = {city_culture()}")
+    order = list(numbers or [n for n in sorted(squares_now()) if n not in PARKED_SQUARES])
     got, bad, items, levels = {}, [], {}, {}
     prog_f = USER / "squares_progress.json"
     try:                                                     # an unfinished run (stopped, crashed, lost): carry on from where it stopped
@@ -8694,13 +8879,13 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
         if order:
             log(f"[*] Squares: carrying on from the last run - {len(done_before)} squares already read, {len(order)} to go")
         else:
-            order = [n for n in sorted(CITY_SQUARES) if n not in PARKED_SQUARES]
+            order = [n for n in sorted(squares_now()) if n not in PARKED_SQUARES]
             mine = {}
     done_list = list(mine.get("done", [])) if mine else []
     wipe = not done_list                                    # a fresh run starts from a blank map; a resumed run keeps what it already read
     if city_picture() is not None:                           # the camera place comes from the whole-city picture: no slow start, no drifting
         nav.absolute = True
-        shrine = SHRINE_LABEL_IN_PICTURE
+        shrine = shrine_label_now()
         log("[i] Squares: finding the camera place by the whole-city picture")
     else:
         shrine = locate_shrine(dev, stop, log, nav)
@@ -8721,7 +8906,7 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
                         shrine = locate_shrine(dev, stop, log, nav) or shrine
                     r = open_square(dev, cfg, log, stop, nav, shrine, n)
             got[n] = r
-            nm = CITY_SQUARES[n][0]
+            nm = squares_now()[n][0]
             if r and r[5] and r[1].lower() in UNIQUE_BUILDINGS and any(k.split("#")[0].lower() == r[1].lower() for k in items):
                 log(f"[!] Square {n}: read '{r[1]}' but that building is already mapped on another square - the camera was probably not where it thought. Left blank.")
                 r = None
@@ -8752,7 +8937,7 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
             if progress:
                 try:
                     progress({"phase": "sweeping", "pct": int(100 * (i + 1) / len(order)), "left": int((time.time() - t0) / (i + 1) * (len(order) - i - 1)),
-                              "text": f"Square {n} ({nm}) done", "mapped": [k.split("#")[0] for k in items], "expected": [CITY_SQUARES[x][0] for x in order],
+                              "text": f"Square {n} ({nm}) done", "mapped": [k.split("#")[0] for k in items], "expected": [squares_now()[x][0] for x in order],
                               "missing": bad, "seconds": int(time.time() - t0), "stops": i + 1, "total": len(order), "row": 0})
                 except Exception:
                     pass
@@ -8774,7 +8959,7 @@ def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
     log(f"[+] Squares: read {len(items)} of {len(order)} in {int(time.time() - t0)}s. Not read: {', '.join(bad) if bad else 'none'}")
     if progress:
         try:
-            progress({"phase": "done", "pct": 100, "left": 0, "text": "Done", "mapped": [k.split("#")[0] for k in items], "expected": [CITY_SQUARES[x][0] for x in order],
+            progress({"phase": "done", "pct": 100, "left": 0, "text": "Done", "mapped": [k.split("#")[0] for k in items], "expected": [squares_now()[x][0] for x in order],
                       "missing": bad, "seconds": int(time.time() - t0), "stops": len(order), "total": len(order), "row": 0})
         except Exception:
             pass
