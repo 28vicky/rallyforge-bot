@@ -5714,8 +5714,40 @@ def shrine_label_now():
     return city_squares_for(city_culture())[0]
 
 
+def _learned_file():
+    return USER / f"squares_learned_{city_culture()}.json"
+
+
+def learn_square_offset(name, ox, oy, log=None):
+    """A tap at this offset from the Shrine label really opened building `name`: remember it for this city style."""
+    try:
+        f = _learned_file()
+        d = json.loads(f.read_text("utf-8")) if f.exists() else {}
+        base = re.sub(r"\s*\d+$", "", name).strip()
+        if d.get(base) != [round(ox), round(oy)]:
+            d[base] = [round(ox), round(oy)]
+            f.write_text(json.dumps(d, indent=0), "utf-8")
+            _CITY_PIC.pop("learned_" + city_culture(), None)
+    except Exception:
+        pass
+
+
 def squares_now():
-    return city_squares_for(city_culture())[1]
+    base = city_squares_for(city_culture())[1]
+    key = "learned_" + city_culture()
+    if key not in _CITY_PIC:
+        try:
+            _CITY_PIC[key] = json.loads(_learned_file().read_text("utf-8"))
+        except Exception:
+            _CITY_PIC[key] = {}
+    ln = _CITY_PIC[key]
+    if not ln:
+        return base
+    out = {}
+    for n, (nm, ox, oy) in base.items():
+        b = re.sub(r"\s*\d+$", "", nm).strip()
+        out[n] = [nm, ln[b][0], ln[b][1]] if b in ln else [nm, ox, oy]
+    return out
 
 
 def city_picture():
@@ -8905,6 +8937,24 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     log(f"[*] Square {number} ({name}): tapping {round(px)},{round(py)}")
     levels = bool(cfg.get("squares_levels", False))
     res = read_square(dev, cfg, log, stop, (px, py), name, levels)
+    used = (0, 0)
+    if res is None and nav.absolute and not stop.is_set():   # nothing opened: the square sits a little off in this city style - feel around it (the spot that works is remembered)
+        for dx, dy in ((0, 40), (0, -40), (40, 0), (-40, 0)):
+            if stop.is_set():
+                break
+            qx, qy = px + dx, py + dy
+            if not (x0 <= qx <= x0 + w and y0 <= qy <= y0 + h):
+                continue
+            try:                                             # a ring left open by the last try must go first
+                if find_detail_icon(dev.screenshot()):
+                    close_ring(dev, stop, (270, 465))
+            except Exception:
+                pass
+            log(f"[*] Square {number} ({name}): feeling around - tapping {round(qx)},{round(qy)}")
+            res = read_square(dev, cfg, log, stop, (qx, qy), name, levels)
+            if res:
+                used = (dx, dy)
+                break
     if res and res[2] and nav.absolute:                      # the camera place is read from the picture each time: only close the ring
         if not close_ring(dev, stop, res[2]):
             log("[!]   the ring menu would not close - stopping so nothing is pressed by mistake")
@@ -8930,6 +8980,8 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
         log(f"[!] Square {number} ({name}): nothing could be read")
         return None
     got = BUILDING_ALIASES.get(res[0], res[0])
+    if nav.absolute:
+        learn_square_offset(got, tx + used[0] - shrine[0], ty + used[1] - shrine[1], log)
     like = got.lower().replace(" ", "") == BUILDING_ALIASES.get(name, name).lower().replace(" ", "") or name.lower().startswith(got.lower())
     log(f"[+] Square {number} -> '{res[0]}'" + (f" level {res[1]}" if res[1] else "") + ("" if like else f"  (the default map says {name})"))
     return name, res[0], res[1], tx, ty, True                # the map is filled with what the game says, not with what we expect
