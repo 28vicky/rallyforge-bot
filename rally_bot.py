@@ -4435,7 +4435,11 @@ def app_foreground(adb, serial, pkg):
     return pkg in out
 
 
+_FRESH_START = set()              # serials whose game was just (re)started: the first settled picture is saved once
+
+
 def start_app(adb, serial, pkg):
+    _FRESH_START.add(serial)
     _adb(adb, serial, "shell", "monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1")
 
 
@@ -4745,6 +4749,32 @@ def settle_game(dev, cfg, log, stop):
         log("[*] The game did not look fully calm - carrying on")
 
 
+def save_start_picture(dev, cfg, log, keep=30):
+    """Right after a game start has settled (nothing moved yet): save one picture in debug/game_start/<serial>/ and,
+    when it is the city, log how far it is from the previous start's city picture. Only looks - never taps."""
+    try:
+        shot = dev.screenshot()
+        view = view_of(shot, cfg) or "unknown"
+        out = USER / "debug" / "game_start" / re.sub(r"[^\w.-]", "_", dev.serial)
+        out.mkdir(parents=True, exist_ok=True)
+        prev = sorted(out.glob("*_city.png"))
+        name = f"{time.strftime('%Y%m%d-%H%M%S')}_{view}.png"
+        cv2.imwrite(str(out / name), shot)
+        if view == "city" and prev:
+            old = cv2.imread(str(prev[-1]))
+            if old is not None and old.shape == shot.shape:
+                d = float(np.mean(cv2.absdiff(old[100:860:4, ::4], shot[100:860:4, ::4])))
+                sx, sy, conf = city_shift(old, shot)
+                log(f"[i] Game start picture ({view}) vs last start: difference {d:.1f} (0-5 = same place), "
+                    f"shift {sx:.0f},{sy:.0f} (confidence {conf:.2f})")
+        else:
+            log(f"[i] Game start picture saved ({view})")
+        for p in sorted(out.glob("*.png"))[:-keep]:
+            p.unlink(missing_ok=True)
+    except Exception as e:
+        log(f"[!] Could not save the game start picture: {e}")
+
+
 
 KICKED = {}                       # serial -> time (epoch s) when the wait after being kicked ends (shown in the emulator list)
 TAKEBACK = {}                     # serial -> Event: set from the interface to end the wait after being kicked
@@ -4835,6 +4865,9 @@ def wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
             if good >= cfg["stable_checks"]:
                 log("[+] The game is loaded and stable")
                 settle_game(dev, cfg, log, stop)
+                if dev.serial in _FRESH_START and not stop.is_set():
+                    _FRESH_START.discard(dev.serial)
+                    save_start_picture(dev, cfg, log)
                 return not stop.is_set()
         else:
             good = 0
