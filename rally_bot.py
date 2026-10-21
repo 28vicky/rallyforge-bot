@@ -7053,10 +7053,26 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=24):
     return None
 
 
+_WM_NOTE = [0.0, ""]                                       # last time a 'not the world map' screen was saved, and what was read
+
+
 def world_map(shot):
     """The world map (after the globe button): its bottom-left buttons 'Bookmarks' / 'World Map' are not in the city."""
     try:
-        return find_text(shot, ["World Map", "Bookmarks"], region=(0, 600, 200, 330), cutoff=0.75) is not None
+        if find_text(shot, ["World Map", "Bookmarks"], region=(0, 600, 200, 330), cutoff=0.75) is not None:
+            return True
+        texts = [t for t, _ in ocr_lines(shot[600:930, 0:200], 2.5, bright=True)]
+        texts += [t for t, _ in ocr_lines(shot[800:930, 80:460], 2.5, bright=True)]   # the X:0634 Y:0591 box at the bottom
+        joined = " ".join(texts).lower()
+        hit = ("world" in joined and "map" in joined) or "bookmark" in joined or re.search(r"x\W{0,2}\d{3,4}\W+y\W{0,2}\d{3,4}", joined) is not None
+        if not hit and time.time() - _WM_NOTE[0] > 60:     # diagnostics: what was read when the world map was not recognised
+            _WM_NOTE[0] = time.time()
+            try:
+                cv2.imwrite(str(USER / "debug" / "not_world_map.png"), shot)
+            except Exception:
+                pass
+            _WM_NOTE[1] = joined[:120]
+        return hit
     except Exception:
         return False
 
@@ -7810,6 +7826,8 @@ def run_view_reset_test(dev, cfg, log, stop):
             cv2.imwrite(str(out / f"{i}_moved.png"), moved)
         dev.tap(*VIEW_TOGGLE)
         if _wait_view(dev, cfg, stop, "landscape") is None:
+            cv2.imwrite(str(out / f"{i}_no_world.png"), dev.screenshot())
+            log(f"[i]   reset test: bottom-left / coordinate text read: '{_WM_NOTE[1]}'")
             raise RuntimeError(f"round {i + 1}: the world map did not come up")
         dev.tap(*VIEW_TOGGLE)
         shot = _wait_view(dev, cfg, stop, "city", 90)
