@@ -1,9 +1,9 @@
 {
-  "version": "2.4.71",
-  "notes": "Readable buttons in every skin, Universal wording, Auto-Join time left, equal page margins, Monsters is the universal list.",
+  "version": "2.4.72",
+  "notes": "Readable buttons in dark skins, no extra scrollbar on the right.",
   "files": {
     "rally_bot.py": {
-      "sha256": "b0c923438f20e0bd2e09005378dfa0862c80359f294cb87c4b847f01ceca1075"
+      "sha256": "0deab6596ce45e42cf7e0b1a97a100df4dfd4d983b5ae5e085b8d5d155b55462"
     },
     "web_app.py": {
       "sha256": "e2ea8d660e002925f24cee25dee5e2b1f4c23f2f7ed1d25cacfec896529ca782"
@@ -12,13 +12,13 @@
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "db8f8e6f712c702056a0a44faab593b0f716b24c573bac82cce75ad94e9355e9"
+      "sha256": "0027b8941650aeab881bc13a4c5ba6a08621527bdd7bca625827a4cf8b583019"
     },
     "ui/app.js": {
       "sha256": "5ea38d08e0ced333fd50c5ada6e0f0df334a8086b92054e889ef460ef6916864"
     },
     "ui/changelog.js": {
-      "sha256": "88d21bc5250ebb5eacc8cd489eae679a40c7bef2b69edfcbb9fc5c7281fbfe3c"
+      "sha256": "230fb2c913a846ce1b62c7f51448ff18eda54d001b48d04be8a99793e7535343"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -1483,5 +1483,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "eaed0f40a8ac0fbf79ecdb5b43a9fe132d053156e42492cde52777a7b1f307eb"
+  "sig": "de094c686dfdf921ae4129886e789761dc62ac5c9e93785834f13145154feca7"
 }
