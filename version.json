@@ -1,27 +1,27 @@
 {
-  "version": "2.4.79",
-  "notes": "Bird of Hurricane is now in the Monsters list, so you can switch it off.",
+  "version": "2.4.80",
+  "notes": "New 5-tab dashboard (Overview, Routines, Rally setup, Itinerary & Logs, Settings) and Black Market buy fixes.",
   "files": {
     "rally_bot.py": {
-      "sha256": "e16154df1056b4b063039b7bc84876c8e9135e7244b35a5dd1db147d36539189"
+      "sha256": "8fc431cb46bd5ae98e6c6371339dba2e61f277ffa8f27486947c66d6335d70ed"
     },
     "web_app.py": {
-      "sha256": "dd38308d99cd67dddbeeca3fc9c164c1813c6429654ab72c82ceee0b24485738"
+      "sha256": "2abd0b8d77b2e947f47fb1a9de046d2011ccd397200383693d8298b4cc0a0242"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "614124079d3fc07c68f6d6b0f2b49acebcdcc0b378a39d3266bd1e901ed80a4a"
+      "sha256": "4700cf89344179fa9e892901e3567b1988bddd383bcf01778fe27b0f35bde40d"
     },
     "ui/app.js": {
-      "sha256": "80fea900aa159afc279877792916141728ffe3fdb374180955ffe7b810ad2081"
+      "sha256": "8ae79e3c502258b80ca3ea2df8a6dfa6c4051d2d72233a85644956fc2fdb82b0"
     },
     "ui/changelog.js": {
-      "sha256": "771114e0317360bee56e09f9643093581dd05264f7f1d0ff13b42edee1ea0857"
+      "sha256": "f7a1f89669508f5dd368337881630360629982d6443c109b184d0c78f1a15721"
     },
     "ui/dialogs.js": {
-      "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
+      "sha256": "50a8e2aec4a5482b4923fc0096f44916c9cf29b37ca9f149b885b8ffb7410ebf"
     },
     "ui/fonts.css": {
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
@@ -30,7 +30,7 @@
       "sha256": "a3f4da00c3578367f379516ccf7be16b4d594bb21091d14856f6a25983409dd9"
     },
     "ui/pages.js": {
-      "sha256": "8abe7f0f4ed8b62a32b7315e9a815f35a396935b2e4b1b2095a4454792765d02"
+      "sha256": "7f26b85979c180a41ebee6e19277e2af3167f97ffb6ba4b1d4e72ac64e6a0179"
     },
     "ui/tour.js": {
       "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
@@ -1486,5 +1486,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "c3c7e7cb28add6d8358e80f1421869eacd4d43d1a470f2a7a14f4b1a09dbbe5a"
+  "sig": "1f7186388c9e3d03c1dfdb09b093dbc6682f1bfddf32f4313c517a9baea4b9a3"
 }
