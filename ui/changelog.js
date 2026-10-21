@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.77", date: "2026-10-21",
+    new: [],
+    fixed: ["When the game lags (red wifi icon in the middle of the screen) the bot now waits for it to clear, then taps - no more Join taps lost to lag. The log shows how often each instance lags."] },
   { v: "2.4.76", date: "2026-10-21",
     new: [],
     fixed: ["Update restart no longer looks stuck: the status bar counts down to the restart and names the instance it waits for (at most 30 s). Click it to restart at once; the running instances start again by themselves."] },
