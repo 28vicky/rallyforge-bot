@@ -1,12 +1,12 @@
 {
-  "version": "2.4.75",
-  "notes": "Cerberus follows the monster list; duties run on their own; layout and Pause all fixes",
+  "version": "2.4.76",
+  "notes": "Update restart shows a countdown and the instance it waits for; click to restart at once",
   "files": {
     "rally_bot.py": {
-      "sha256": "a22fcc4c9d759ebd29bce1dd99a8b703a24277d6f3a999cf4edb222dbdf7c3e0"
+      "sha256": "519d1568bc705611f3424922a1c80de56d855b4a2b5238bb216faa5511d86471"
     },
     "web_app.py": {
-      "sha256": "a7bfea98520db0453d0f7e0cdb898d1b1591e571dae2981722c6ecb861090b81"
+      "sha256": "dd38308d99cd67dddbeeca3fc9c164c1813c6429654ab72c82ceee0b24485738"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -15,10 +15,10 @@
       "sha256": "614124079d3fc07c68f6d6b0f2b49acebcdcc0b378a39d3266bd1e901ed80a4a"
     },
     "ui/app.js": {
-      "sha256": "5ea38d08e0ced333fd50c5ada6e0f0df334a8086b92054e889ef460ef6916864"
+      "sha256": "80fea900aa159afc279877792916141728ffe3fdb374180955ffe7b810ad2081"
     },
     "ui/changelog.js": {
-      "sha256": "991c52c181f5d77738141130418f56daf42b8b949c036e7e70b303ff2f326e1f"
+      "sha256": "d30481354f8dffc42b8dd74be15d9908c49f8c9921c7ad153837e377b60ba247"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -1483,5 +1483,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "e800b08eab1e1b79733d10740a50fd52dfdf6ee1d220cdc3a3d81114f2ce7f84"
+  "sig": "f208323bc360d21bdbdbed7d9d38fcab1ed1112822ac96304ee02a0163e2e385"
 }
