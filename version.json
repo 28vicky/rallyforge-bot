@@ -1,9 +1,9 @@
 {
-  "version": "2.4.78",
-  "notes": "Offer pop-ups that ignore outside taps are closed with their X",
+  "version": "2.4.79",
+  "notes": "Bird of Hurricane is now in the Monsters list, so you can switch it off.",
   "files": {
     "rally_bot.py": {
-      "sha256": "2e6904673dd641f9637329907ee497914d53e1b15f0f79d6dfd1c4353cc2aec3"
+      "sha256": "e16154df1056b4b063039b7bc84876c8e9135e7244b35a5dd1db147d36539189"
     },
     "web_app.py": {
       "sha256": "dd38308d99cd67dddbeeca3fc9c164c1813c6429654ab72c82ceee0b24485738"
@@ -18,7 +18,7 @@
       "sha256": "80fea900aa159afc279877792916141728ffe3fdb374180955ffe7b810ad2081"
     },
     "ui/changelog.js": {
-      "sha256": "5b26cb06ccfde9a3d90c16b2c0ee7eaf48c0ca5530d401e7e229d6ed3aac61e0"
+      "sha256": "771114e0317360bee56e09f9643093581dd05264f7f1d0ff13b42edee1ea0857"
     },
     "ui/dialogs.js": {
       "sha256": "3aff8bf3c0ca6720cc0c18a186f4b269762ba8866a208bc41f328289729137be"
@@ -1486,5 +1486,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "ea42faa9b6c6e699422498cf6c10596ec34d4da65a5dc0c5f05f99a4c1e52e35"
+  "sig": "c3c7e7cb28add6d8358e80f1421869eacd4d43d1a470f2a7a14f4b1a09dbbe5a"
 }
