@@ -972,3 +972,22 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .rtnback{margin-bottom:14px}
 
 .note.foldable{cursor:pointer}
+
+/* ---- status bar (mockup): dot + running | memory | Telegram on the left, update badge + credit on the right ---- */
+.status{justify-content:space-between;gap:16px;height:34px;padding:0 24px;font-size:13px;color:var(--mute)}
+.status .sbl,.status .sbr{display:flex;align-items:center;gap:12px;min-width:0}
+.status .sbl>span:empty{display:none}
+.status .sbl>span+span::before{content:"|";color:var(--line);margin-right:12px}
+.status .sbrun{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--fg)}
+.status .sbdot{width:8px;height:8px;border-radius:50%;background:var(--mute);opacity:.5}
+.status .sbdot.on{background:#10b981;opacity:1}
+.status .l{margin:0;font-size:12px;opacity:.75}
+.status .sb-upd{font-weight:600;color:var(--accent1);background:#fff5f0;border:1px solid #fbd5c5;padding:3px 10px;border-radius:6px;text-decoration:none}
+.status .sb-upd:hover{background:#ffeee6}
+/* the status bar belongs to the main area (like the mockup): it starts where the sidebar ends */
+.app:not(.nosb) .status{left:240px}
+.side{padding-bottom:12px}
+.main{padding-bottom:34px}
+.app:not(.inst-mode) .main{padding-bottom:44px}
+@media (max-width:900px){.app:not(.nosb) .status{left:200px}}
+.ovgrid .actwrap:has(tbody:empty)::after{content:"No rallies yet - joins and skips show here as they happen.";display:block;padding:22px 12px;color:var(--mute);font-size:13px;text-align:center}

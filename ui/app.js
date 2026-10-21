@@ -208,9 +208,12 @@ function layout() {
       h("div", { class: "ribbon", id: "ribbon" }),
       h("div", { class: "tabs", id: "tabs" }),
       h("div", { class: "pages", id: "pages" })),
+    // status bar: live facts on the left (running, memory, Telegram, account), update + credit on the right
     h("div", { class: "status" },
-      h("span", { class: "l", title: S.copyright || "" }, "RallyForge Bot " + S.version + "  \u00b7  by " + (S.author || "Kiravik")), h("span", { id: "sbRun" }, "0 running"), h("span", { id: "sbLic" }),
-      h("span", { id: "sbRam" }), h("span", { id: "sbTg" }), h("span", { id: "sbUpd", class: "sb-upd", style: { display: "none" } }))));
+      h("div", { class: "sbl" }, h("span", { class: "sbrun" }, h("span", { class: "sbdot", id: "sbDot" }), h("span", { id: "sbRun" }, "0 running")),
+        h("span", { id: "sbRam" }), h("span", { id: "sbTg" }), h("span", { id: "sbLic" })),
+      h("div", { class: "sbr" }, h("span", { id: "sbUpd", class: "sb-upd", style: { display: "none" } }),
+        h("span", { class: "l", title: S.copyright || "" }, "v" + S.version + " \u00b7 by " + (S.author || "Kiravik"))))));
   buildRibbon();
   paintRunState();
   renderModeIcon();
@@ -688,6 +691,7 @@ function updateSummary() {
   if (c.error) parts.push(c.error + " with a problem");
   const s = $("#sum"); if (s) s.textContent = parts.join("  |  ");
   const r = $("#sbRun"); if (r) r.textContent = c.run + " running";
+  const dt = $("#sbDot"); if (dt) dt.classList.toggle("on", c.run > 0);
   const who = $("#whoami");
   if (who) {
     const L = S.license || {};
@@ -707,8 +711,8 @@ function updateSummary() {
     } else lc.textContent = "";
   }
   const m = $("#sbRam");
-  if (m && S.ram && S.ram.total_mb) m.textContent = `App: ${(S.ram.proc_mb || 0).toFixed(0)} MB  |  PC free: ${S.ram.free_mb.toFixed(0)} MB`;
-  const t = $("#sbTg"); if (t) t.textContent = "Telegram: " + (S.tg.ready ? "connected" : "not connected");
+  if (m && S.ram && S.ram.total_mb) { m.textContent = `${(S.ram.proc_mb || 0).toFixed(0)} MB`; m.title = `The app uses ${(S.ram.proc_mb || 0).toFixed(0)} MB \u00b7 ${S.ram.free_mb.toFixed(0)} MB free on this PC`; }
+  const t = $("#sbTg"); if (t) t.textContent = "Telegram: " + (S.tg.ready ? "Connected" : "Not connected");
   const u = $("#sbUpd");
   if (u) {
     const U = S.update;
