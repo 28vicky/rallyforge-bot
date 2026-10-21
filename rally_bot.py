@@ -6797,6 +6797,21 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(p[0], p[1] - 38)                           # the icon sits just above its caption
         return True
+    bases = [nm.split("#")[0].strip() for nm in str(name).split("+") if nm.strip()]
+    if kind == "building" and bases and all(b.lower() in SQUARE_BASES for b in bases) and str(cfg.get("city_nav", "auto")).lower() != "picture":
+        done = found_shrine = False                          # every building visit starts from the Shrine, in every city style
+        for b in bases:
+            if stop.is_set():
+                break
+            leave_to_city(dev, cfg, stop, log)
+            r = shrine_plot_task(dev, cfg, log, stop, task, nav_state, b)
+            if r == "noshrine":
+                break
+            found_shrine = True
+            done = done or r is None
+        if found_shrine:
+            return None if done else False
+        log("[i] Falling back to the stored city picture")
     if kind == "building" and not nav_state.get("picture_bad") and not PICTURE_BAD.get(getattr(dev, "serial", "")) and picture_items(dev) is not None:
         have = {k.split("#")[0].lower() for k in picture_items(dev)}
         for nm in str(name).split("+"):
@@ -8221,27 +8236,51 @@ def find_plot(dev, cfg, log, stop, nav, name):
     return None
 
 
+SQUARE_BASES = {}
+for _n, (_nm, _x, _y) in CITY_SQUARES.items():
+    SQUARE_BASES.setdefault(re.sub(r"\s*\d+$", "", _nm).lower(), _n)
+
+
+def lock_shrine(dev, cfg, log, stop, nav_state):
+    """THE first step of every building visit, in every city style: find the Shrine (from the name of any fixed building),
+    go there and lock the camera on it by reading the fixed names around it. -> (nav, (shrine map x, y)) or (None, None)."""
+    if nav_state.get("shrine") and nav_state.get("snav"):
+        return nav_state["snav"], nav_state["shrine"]
+    nav = CityNav(dev, stop, log)
+    nav_state["snav"] = nav
+    log("[*] Locking the camera on the Shrine")
+    shrine = locate_shrine(dev, stop, log, nav)
+    if not shrine:
+        log("[!] The Shrine could not be found - no fixed building name was read")
+        return None, None
+    nav.goto(*shrine)
+    labels, _, _ = look_with_names(dev, stop, nav)
+    est = [(mx - off[0], my - off[1]) for n, mx, my in labels
+           for off in [FIXED_OFFSETS_FROM_SHRINE.get(BUILDING_ALIASES.get(n, n))] if off]
+    if est:
+        shrine = (sum(e[0] for e in est) / len(est), sum(e[1] for e in est) / len(est))
+    log(f"[+] Camera locked on the Shrine ({len(est)} fixed name(s) in view: {', '.join(n for n, _, _ in labels) or 'none'})")
+    nav_state["shrine"] = shrine
+    return nav, shrine
+
+
 def shrine_plot_task(dev, cfg, log, stop, task, nav_state, base):
     """Another city style (the stored picture does not fit): find the Shrine by reading the name of any fixed building,
     then count from it to each changeable plot, tap it and read the name under the ring menu. The plot holding `base` is
     saved for this account and the task's steps run on its open menu. -> None when done, False when not found."""
-    nav = nav_state.get("snav")
-    if nav is None:
-        nav = CityNav(dev, stop, log)
-        nav_state["snav"] = nav
-    if not nav_state.get("shrine"):
-        log("[*] Finding the Shrine (fixed buildings) to count the plots from")
-        nav_state["shrine"] = locate_shrine(dev, stop, log, nav)
-    shrine = nav_state.get("shrine")
+    nav, shrine = lock_shrine(dev, cfg, log, stop, nav_state)
     if not shrine:
-        log("[!] The Shrine could not be found - no fixed building name was read")
-        return False
+        return "noshrine"
     want = BUILDING_ALIASES.get(base, base).lower()
     saved = ((load_city().get(getattr(dev, "serial", "default")) or {}).get("plots") or {}).get(base)
-    order = sorted(CHANGEABLE_PLOTS, key=lambda n: (re.sub(r"\s*\d+$", "", CITY_SQUARES[n][0]).lower() != want, n))
-    if saved in order:
-        order.remove(saved)
-        order.insert(0, saved)
+    if base.lower() in DEFAULT_PICTURE_BUILDINGS and base.lower() in SQUARE_BASES:
+        order = [SQUARE_BASES[base.lower()]]              # a fixed building: its plot is the same in every city
+    else:
+        order = sorted(CHANGEABLE_PLOTS, key=lambda n: (re.sub(r"\s*\d+$", "", CITY_SQUARES[n][0]).lower() != want, n))
+        if saved in order:
+            order.remove(saved)
+            order.insert(0, saved)
+    log(f"[*] Going to {base}" + ("" if len(order) == 1 else f" (trying {len(order)} plots)"))
     x0, y0, w, h = SAFE_TAP_AREA
     for n in order:
         if stop.is_set():
