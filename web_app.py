@@ -836,30 +836,63 @@ class Controller:
                 job["running"] = False
         threading.Thread(target=work, daemon=True).start()
 
-    def crawl_catalog(self, serial):
-        """Developer tool: record every general of Tavern > Portraits (all regions x troop types)."""
+    def crawl_catalog(self, serial, helpers=()):
+        """Developer tool: record every general of Tavern > Portraits (all regions x troop types). Extra instances in
+        `helpers` read other regions at the same time (the four regions are shared out between all the instances)."""
         job = self.jobs["catalog"]
         if job["running"]:
             raise ApiError("The catalogue crawl is already running.")
         adb = rb.find_adb(self.cfg.get("adb_path") or "auto")
         if not adb:
             raise ApiError("ADB not found. Set the ADB path in Settings.")
+        serials = [serial] + [h for h in helpers if h and h != serial]
+        all_regions = ["Europe", "America", "Japan", "Korea"]
+        share = {s: [r for i, r in enumerate(all_regions) if i % len(serials) == k] for k, s in enumerate(serials)}
         stop = threading.Event()
         job.update(running=True, stop=stop, count=0)
+        results, errors, counts = {}, [], {}
+        lock = threading.Lock()
+
+        def one(sr):
+            try:
+                cfg_now = rb.load_config()
+                dev = self.ready_device(sr, adb, stop, check_ready=False)     # the Portraits screen is not a screen the bot knows
+                if not (rb.find_text(dev.screenshot(), ["Portraits"], region=(120, rb.black_top(dev.screenshot()), 300, 100))):
+                    rb.open_tavern_portraits(dev, cfg_now, lambda m: self.log(m), stop)
+                def prog(n, sr=sr):
+                    with lock:
+                        counts[sr] = n
+                        job.update(count=sum(counts.values()))
+                found = rb.crawl_portraits(dev, rb.load_config(), lambda m: self.log(f"[{sr}] {m}" if len(serials) > 1 else m), stop,
+                                           progress=prog, regions=share[sr] if len(serials) > 1 else None)
+                with lock:
+                    for name, g in found.items():
+                        have = results.get(name)
+                        if have is None:
+                            results[name] = g
+                        else:                                        # the same general read on two instances: join the regions / troop types
+                            have["region"] = sorted(set(have["region"]) | set(g["region"]))
+                            have["troops"] = sorted(set(have["troops"]) | set(g["troops"]))
+            except Exception as e:
+                self.log(f"[!] Catalogue crawl ({sr}): {e}")
+                with lock:
+                    errors.append(str(e))
 
         def work():
             try:
-                cfg_now = rb.load_config()
-                dev = self.ready_device(serial, adb, stop, check_ready=False)     # the Portraits screen is not a screen the bot knows
-                if not (rb.find_text(dev.screenshot(), ["Portraits"], region=(120, rb.black_top(dev.screenshot()), 300, 100))):
-                    rb.open_tavern_portraits(dev, cfg_now, lambda m: self.log(m), stop)
-                found = rb.crawl_portraits(dev, rb.load_config(), lambda m: self.log(m), stop,
-                                           progress=lambda n: job.update(count=n))
-                root = rb.save_catalog(found, lambda m: self.log(m))
+                ts = [threading.Thread(target=one, args=(sr,), daemon=True) for sr in serials]
+                for t in ts:
+                    t.start()
+                for t in ts:
+                    t.join()
+                if not results:
+                    self.event("catalog_done", {"error": errors[0] if errors else "no generals were read"})
+                    return
+                root = rb.save_catalog(results, lambda m: self.log(m))
                 with rb._cache_lock:
                     rb._gen_cache.clear()
                 rb.list_generals(refresh=True)
-                self.event("catalog_done", {"n": len(found), "path": str(root)})
+                self.event("catalog_done", {"n": len(results), "path": str(root)})
             except Exception as e:
                 self.log(f"[!] Catalogue crawl: {e}")
                 self.event("catalog_done", {"error": str(e)})
@@ -1847,7 +1880,7 @@ class Api:
         return {}
 
     def catalog_crawl(self, p):
-        self.c.crawl_catalog(p["serial"])
+        self.c.crawl_catalog(p["serial"], p.get("helpers") or [])
         return {}
 
     def catalog_stop(self, p):

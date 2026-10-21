@@ -3530,7 +3530,7 @@ def _words_to_labels(lines, gap=22):
     return [(" ".join(o[0]), int(o[1])) for o in out]
 
 
-def crawl_portraits(dev, cfg, log, stop, progress=None):
+def crawl_portraits(dev, cfg, log, stop, progress=None, regions=None):
     """Walk the whole Tavern > Portraits screen: every region tab x every troop-type filter, scrolling through the grid,
     and record each general (name, picture, regions, troop types). Open 'Recruit General' (Tavern) or 'Portraits' first.
     -> {name: {'name', 'region': [..], 'troops': [..], 'image'}}"""
@@ -3640,6 +3640,8 @@ def crawl_portraits(dev, cfg, log, stop, progress=None):
     for label, x in (("Europe", 64), ("America", 192), ("Japan", 316), ("Korea", 444)):
         if stop.is_set():
             break
+        if regions is not None and label not in regions:      # another instance reads this region in parallel
+            continue
         log(f"[*] Region: {label}")
         dev.tap(x, ty)
         nap(1.2, 1.6)
