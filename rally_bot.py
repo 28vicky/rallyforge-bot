@@ -3111,6 +3111,10 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         try:                                               # a full page (Alliance Science, event, ...) has the gold Back arrow top left: it is not a pop-up
             _hsv = cv2.cvtColor(shot[8:80, 5:75], cv2.COLOR_BGR2HSV)
             _gold = cv2.countNonZero(cv2.inRange(_hsv, (12, 110, 150), (32, 255, 255)))
+            _bar = cv2.cvtColor(shot[8:58, 120:420], cv2.COLOR_BGR2HSV)   # a full page has a red title bar; the world map / city do not
+            _red = float((((_bar[:, :, 0] < 10) | (_bar[:, :, 0] > 170)) & (_bar[:, :, 1] > 80) & (_bar[:, :, 2] > 40)).mean())
+            if _red < 0.5:                                 # gold in the corner is the player's portrait (world map): use the globe switch instead
+                _gold = 0
         except Exception:
             _gold = 0
         if _gold > 250 and back_arrow_taps < 6:
