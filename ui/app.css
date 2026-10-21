@@ -784,3 +784,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:0 16px;line-height:1.2}
 :root .btn.sm{min-height:30px;padding:0 12px}
 :root .btn.ib{min-height:36px}
+
+/* the page scrollbar sits in the side margin, so cards line up with the button bar and tabs on both sides */
+.pages{margin-right:-10px;padding:4px 0 20px 2px}
