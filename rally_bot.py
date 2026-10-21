@@ -7580,6 +7580,13 @@ def ch_do_greets(dev, stop, log, name, want, serial, day):
         dev.tap(*CH_GREET)
         _nap(stop, 1.6, 2.2)
         ch_dialogue(dev, stop)
+        after = ch_greet_label(dev.screenshot())
+        # count the greet only when the game shows it: the n/10 number went up, a greet timer started, or the pack press
+        counted = lab["pack"] or (after["n"] is not None and (lab["n"] is None or after["n"] > lab["n"])) or after["wait"] > 0
+        if not counted:
+            log("[i]   Champions: the greet did not show on the button - trying again")
+            _nap(stop, 1.0, 1.4)
+            continue
         done += 1
         used = {**(ch_row(serial).get("greets") or {})} if ch_row(serial).get("greets_day") == day else {}
         used[name] = used.get(name, 0) + (CH_GREETS if lab["pack"] else 1)
