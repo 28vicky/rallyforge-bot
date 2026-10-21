@@ -269,7 +269,6 @@ function buildRibbon() {
       btn("Save", saveAll, "", "save"),
       btn("More ▾", (e) => menu(e.currentTarget, [
         { label: "Close window (bots keep running)", icon: "eye", run: () => act(api("hide_window")) },
-        { label: "Take the tour", icon: "eye", run: () => startTour() },
         { label: "Restart app", icon: "refresh", run: restartFlow }, { label: "Quit and stop everything", icon: "power", run: quitFlow }]), "", "more")));
 }
 async function saveAll() {

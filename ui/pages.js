@@ -671,7 +671,7 @@ function staminaPanel(store, base) {
     note("Full = slides the bar to the very end, so stamina fills up to the game's limit (9,999) - the default. The game's own Max button is not used (it stops at 100). Game default = the amount the game suggests (2 items). Exact number = the number of items you type."));
 }
 PAGES.settings = function () {
-  const r = PAGES.settings0(); const t = PAGES.themes(); const f = r.firstChild; while (t.firstChild) r.insertBefore(t.firstChild, f); return r;
+  const r = PAGES.settings0(); r.insertBefore(panel("Tour", note("A short walkthrough of where to click and how to set up your presets and start the bot."), h("div", { class: "row" }, btn("Take the tour", () => startTour()))), r.firstChild); const t = PAGES.themes(); const f = r.firstChild; while (t.firstChild) r.insertBefore(t.firstChild, f); return r;
 };
 PAGES.settings0 = function () {
   const c = S.cfg;
@@ -734,6 +734,7 @@ function lockedWrap(el, locked) { if (locked) { el.style.opacity = "0.55"; el.st
 
 // ====================================================================== monsters
 PAGES.monsters = function (fixed) {
+  if (fixed === undefined) return h("div", {}, note("These are the default monster selections for all instances unless an instance has its own monster list selected."), monstersPanel(S.cfg));
   const sc = scopeBar("monsters", ["monster_skip", "monster_presets", "monster_unknown"], "monster list", fixed);
   return h("div", {}, sc.bar, lockedWrap(monstersPanel(sc.c), sc.locked));
 };
