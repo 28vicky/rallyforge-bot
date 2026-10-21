@@ -3108,6 +3108,12 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         if tap_alliance_war_row(dev, shot, log):          # the Alliance page is not a pop-up: go on into Alliance War
             _nap(stop, 1.5, 2.2)
             break
+        if world_map(shot):                                # the world map: the globe goes to the city (Back / the portrait would loop)
+            dev.tap(*VIEW_TOGGLE)
+            log("[*] On the world map - tapped the globe to go to the city")
+            closed += 1
+            _nap(stop, 3.0, 4.0)
+            continue
         try:                                               # a full page (Alliance Science, event, ...) has the gold Back arrow top left: it is not a pop-up
             _hsv = cv2.cvtColor(shot[8:80, 5:75], cv2.COLOR_BGR2HSV)
             _gold = cv2.countNonZero(cv2.inRange(_hsv, (12, 110, 150), (32, 255, 255)))
@@ -7047,10 +7053,22 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=24):
     return None
 
 
+def world_map(shot):
+    """The world map (after the globe button): its bottom-left buttons 'Bookmarks' / 'World Map' are not in the city."""
+    try:
+        return find_text(shot, ["World Map", "Bookmarks"], region=(0, 600, 200, 330), cutoff=0.75) is not None
+    except Exception:
+        return False
+
+
 def view_of(shot, cfg):
-    """Which view the game shows: 'city', 'landscape' (the rally-list / world view) or 'other' (a window, a page, a pop-up)."""
+    """Which view the game shows: 'city', 'landscape' (the rally-list view), 'world' (the world map) or 'other'."""
     st = screen_state(shot, cfg)
-    return "city" if st == "city" else "landscape" if st == "rally_list" else "other"
+    if st == "city":
+        return "city"
+    if st == "rally_list":
+        return "landscape"
+    return "world" if world_map(shot) else "other"
 
 
 def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
@@ -7077,6 +7095,11 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             return True
         if ring:
             close_ring(dev, stop, (270, 430))
+            continue
+        if v == "world" and want == "city":                 # the world map: the globe button goes back to the city (Back would ask to quit)
+            say("[*] Recovery: on the world map - tapped the globe to go to the city")
+            dev.tap(*VIEW_TOGGLE)
+            _nap(stop, 3.0, 4.0)
             continue
         if v in ("city", "landscape"):                      # the other main view: switch (twice at most)
             if toggled >= 2:
@@ -7761,7 +7784,7 @@ def _wait_view(dev, cfg, stop, want, secs=60):
         _nap(stop, 1.5, 1.8)
         shot = dev.screenshot()
         v = view_of(shot, cfg)
-        if v == want or (want == "landscape" and v != "city"):  # the world map has no picture of its own: "not the city" is enough
+        if v == want or (want == "landscape" and v == "world"):
             if prev is not None and float(np.mean(cv2.absdiff(prev[100:860:6, ::6], shot[100:860:6, ::6]))) < 2.0:
                 return shot
             prev = shot
