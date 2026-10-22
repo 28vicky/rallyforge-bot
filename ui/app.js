@@ -394,6 +394,7 @@ function renderSide() {
   for (const d of S.devStatus) {
     L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", "Paused", "Problem", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
     const chip = d.state === "run" && d.kicked_at ? ["kicked", "warn"] : d.state === "run" && d.no_stamina ? ["no stamina", "warn"]
+      : d.state === "run" && busyTask(d.id) ? [busyTask(d.id), "ok"]
       : d.state === "run" ? (d.joins ? ["joins " + d.joins, "ok"] : ["idle", ""]) : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : ["offline", "off"];
     L.lastChild.querySelector(".nm").after(h("span", { class: "ichip " + chip[1] }, chip[0]));      // status at a glance on the right; Start/Pause/Stop live in the page header
     sideDrag(L.lastChild, d.id);
@@ -609,6 +610,12 @@ function logBox(serial, tall) {
 // ---- Activity screen: what the bot is doing, and how each rally went
 S.acts = []; S.now = {};
 const esc = (t) => String(t == null ? "" : t);
+// the duty / city task an instance is doing right now (from its latest step), shortened for the instance list
+function busyTask(serial) {
+  const x = S.now && S.now[serial];
+  const m = x && /^(?:Duty|City task): (.+)$/.exec(x.text || "");
+  return m ? (m[1].length > 14 ? m[1].slice(0, 13) + "\u2026" : m[1]) : "";
+}
 function actRow(v, l) {
   const a = l.a, k = a.k;
   const chip = k === "join" ? ["Joined", "g"] : k === "fail" ? ["Failed", "e"] : k === "renew" ? ["Renewed", "g"] : ["Skipped", "w"];
@@ -719,6 +726,8 @@ async function poll() {
     const key = JSON.stringify(j.devs);
     if (key !== lastState) { lastState = key; S.devStatus = j.devs; renderSide(); refreshInstanceControls(); paintRunState(); }
     pushLogs(j.logs);
+    const bk = (S.devStatus || []).map((d) => busyTask(d.id)).join("|");
+    if (bk !== S.busyKey) { S.busyKey = bk; renderSide(); }             // a duty started or ended: update the instance list
     pushActs(j.acts);
     for (const ev of j.events) handleEvent(ev);
     updateSummary();
