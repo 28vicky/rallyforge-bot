@@ -1428,7 +1428,10 @@ PAGES.duties = function (fixed, only, compact) {
         h("span", { class: "hint" }, "e.g. 100, 1000 or 999999. Empty / 0 = spin until the coins are used up.")),
       h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Coins to keep"),
         h("input", { type: "number", class: "short", min: 0, value: c.reserve || "", placeholder: "0", onchange: (ev) => set({ reserve: ev.target.value }) }),
-        h("span", { class: "hint" }, "never spin if it would leave fewer coins than this"))));
+        h("span", { class: "hint" }, "never spin if it would leave fewer coins than this")),
+      h("div", { class: "row", style: { gap: "8px", marginTop: "8px" } }, h("span", { class: "lab" }, "Add chips first"),
+        [["off", "Off"], ["needed", "Only what's needed"], ["all", "All owned"]].map(([v, t]) => h("button", { class: "btn" + ((c.chips || "off") === v ? " primary" : ""), onclick: () => set({ chips: v }) }, t))),
+      note("Uses chip items you already own (100 / 500 / 1K Chips) before spinning. Items sold for gems are never bought.")));
   };
   const loadWh = async () => { const j = await act(api("wheel", { serial })); if (j) drawWh(j); };
   // Champions: how many of the daily 15 taps and 10 greetings each champion gets (this instance or all)

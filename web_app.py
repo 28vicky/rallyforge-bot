@@ -1679,7 +1679,7 @@ class Api:
     def wheel_set(self, p):
         scope = self._scope(p)
         c = rb.wheel_conf(self._eff(scope))
-        for k in ("button", "spins", "reserve"):
+        for k in ("button", "spins", "reserve", "chips"):
             if k in p:
                 c[k] = p[k]
         self._save_scoped(scope, "wheel", rb.wheel_conf({"wheel": c}))
