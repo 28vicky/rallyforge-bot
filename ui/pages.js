@@ -155,7 +155,7 @@ PAGES.dashboard = function () {
   const joins = panel(null, activityBox(null, null, true));
   joins.classList.add("joinscard");
   const jh = joins.querySelector(".joinsonly > h3");
-  if (jh) { const ch = h("div", { class: "cardhead" }); jh.replaceWith(ch); ch.append(jh, cardMax(joins)); }   // move jh after the swap (it cannot go inside its own replacement)
+  if (jh) { const ch = h("div", { class: "cardhead" }); jh.replaceWith(ch); ch.append(jh, h("div", { class: "row tdhr" }, h("span", { class: "tdreset", id: "joinsToday" }), cardMax(joins))); }   // move jh after the swap (it cannot go inside its own replacement)
   return h("div", {}, hint, renderTodayAll(), joins);
 };
 // ====================================================================== instances (list, detect, found, profiles)
@@ -1236,7 +1236,7 @@ function renderTodayCard(serial) {
     h("div", { class: "cardhead" }, h("h3", {}, "Today"), head),
     h("div", { class: "tdgrid" },
       h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Duty queue"), list, sum),
-      h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Today's results"), res, week)));
+      h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Today's results"), res, week)), dailiesBox(serial));
   let m = todayModel({}, serial), last = "";
   const tick = () => {
     if (!m.resetAt) { head.textContent = "Daily reset -"; return; }
@@ -1294,6 +1294,40 @@ function evSample(j, now) {                                       // sample even
     duty: [["Crazy Eggs", "on"], ["Ranger Knight Order", "on"], ["Dwarf's Lucky Apple", "off"], ["Viking Challenge", "claim"]],
   };
 }
+
+const DAILIES = ["Troop Training", "Labor", "Resource Gathering", "Resource Collecting", "Material Composing", "General Enhancing", "Relic Exploration", "Construction",
+  "Research", "Gold Levy", "Offering", "Resource Tax", "Greet Champions", "Patrol", "Trap Building", "Alliance Help", "Alliance Donation", "Black Market",
+  "Wheel of Fortune", "Trade Carriage", "Troop Healing", "Ranger Knight Order", "Monster Killing", "Stamina"];    // the 24 the bot works on (PvP Battle, Troop Killing: not the bot's)
+function evActivity(r, j) {                                       // PREVIEW sample: Tavern > Activity points + dailies not at 100%
+  const i = (j.rows || []).indexOf(r), pts = [145, 118, 96, 72, 20][i % 5];
+  const left = [[], ["Relic Exploration", "Construction"], ["Research", "Construction", "Patrol"], ["Construction", "Research", "Relic Exploration", "Material Composing", "General Enhancing"], DAILIES.slice(2, 14)][i % 5];
+  return { pts, left };
+}
+function actCell(a) {
+  const tier = [20, 50, 80, 110, 145].filter((t) => a.pts >= t).length;
+  const lvl = a.pts >= 145 ? "full" : a.pts >= 80 ? "mid" : a.pts >= 50 ? "low" : "bad";
+  return h("td", { title: `Chests opened: ${tier} of 5` + (a.left.length ? `\nNot done: ${a.left.join(", ")}` : "") },
+    h("div", { class: "ptsbar " + lvl }, h("div", { class: "ptsbar-in", style: { width: Math.min(100, a.pts / 1.45) + "%" } }), h("span", {}, `${a.pts}/145` + (a.pts >= 145 ? " \u2713" : ""))));
+}
+const DAILY_PTS = { "Troop Training": 3, "Labor": 3, "Resource Gathering": 1, "Resource Collecting": 1, "Material Composing": 1, "General Enhancing": 3, "Relic Exploration": 5,
+  "Construction": 8, "Research": 8, "Gold Levy": 1, "Offering": 3, "Resource Tax": 1, "Greet Champions": 2, "Patrol": 1, "Trap Building": 2, "Alliance Help": 1,
+  "Alliance Donation": 1, "Black Market": 4, "Wheel of Fortune": 3, "Trade Carriage": 3, "Troop Healing": 2, "Ranger Knight Order": 3, "Monster Killing": 3, "Stamina": 3 };
+function dailiesBox(serial) {                                     // PREVIEW sample: read from Tavern > Activity when the bot claims the chests
+  const i = Math.max(0, S.devices.findIndex((d) => d.id === serial));
+  const smp = [[145, []], [118, ["Relic Exploration", "Construction"]], [96, ["Research", "Construction", "Patrol"]],
+    [72, ["Construction", "Research", "Relic Exploration", "Material Composing", "General Enhancing"]], [20, DAILIES.slice(2, 14)]][i % 5];
+  const pts = smp[0], left = smp[1];
+  const pct = (n) => (left.includes(n) ? (n === left[0] ? 50 : 0) : 100);
+  const chests = [20, 50, 80, 110, 145];
+  return h("div", { class: "dlybox" },
+    h("div", { class: "dlyhead" }, h("div", { class: "tdlab" }, "Dailies (Tavern › Activity)"),
+      h("div", { class: "dlypts" }, h("b", {}, `${pts} / 145 points`), " · chests ",
+        ...chests.map((c) => h("span", { class: "dlychest" + (pts >= c ? " on" : ""), title: c + " points" }, String(c))))),
+    h("div", { class: "ptsbar wide " + (pts >= 145 ? "full" : pts >= 80 ? "mid" : pts >= 50 ? "low" : "bad") }, h("div", { class: "ptsbar-in", style: { width: Math.min(100, pts / 1.45) + "%" } })),
+    h("div", { class: "dlygrid" }, ...DAILIES.map((n) => { const p = pct(n); return h("div", { class: "dly" + (p >= 100 ? " done" : p ? " part" : "") },
+      h("span", { class: "dlyp" }, p + "%"), h("span", { class: "dlyn" }, n), h("span", { class: "dlyv" }, "+" + DAILY_PTS[n])); })),
+    h("small", { class: "tdweek" }, "PvP Battle and Troop Killing are not done by the bot."));
+}
 function evLeft(t, now) { const s = Math.max(0, t - now); const dd = Math.floor(s / 86400); return dd ? `${dd}d ${fmtHM(s - dd * 86400)}` : fmtHM(s); }
 function evCards(el, j, skew) {
   if (!j) return;
@@ -1313,6 +1347,17 @@ function evCards(el, j, skew) {
     },
     ending: () => card("ending", "Ending at reset", `${ev.ending.length} events end in ${evLeft(j.reset_at, now)}`,
       ev.ending.slice(0, 2).join(", "), ev.ending.length > 2 ? `+ ${ev.ending.slice(2).join(", ")}` : ""),
+    dailies: () => {
+      const acts = (j.rows || []).map((r) => Object.assign({ name: r.name }, evActivity(r, j)));
+      const full = acts.filter((a) => !a.left.length).length, cnt = {};
+      acts.forEach((a) => a.left.forEach((n) => (cnt[n] = (cnt[n] || 0) + 1)));
+      const top = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n, c]) => `${n} (${c})`);
+      const low = acts.filter((a) => a.pts < 50).map((a) => a.name);
+      return h("div", { class: "evcard ev-dailies" + (low.length ? " warn" : "") }, h("div", { class: "evtag" }, "Dailies"),
+        h("div", { class: "evtitle" }, `${full} of ${acts.length} instances done`),
+        h("div", { class: "evl", title: Object.keys(cnt).join(", ") }, top.length ? "Left: " + top.join(", ") : "All 24 dailies done"),
+        h("div", { class: "evl " + (low.length ? "bad" : "mute") }, low.length ? `⚠ Under 50 points: ${low.join(", ")}` : "Every instance past 50 points"));
+    },
     boss: () => card("boss", "Boss Monster Event", "On now", ev.boss.text, "Ends in 1d 16:20"),
     duty: () => card("duty", "Event duties", ev.duty.filter((x) => x[1] !== "off").length + " of " + ev.duty.length + " on",
       ev.duty.map((x) => x[0]).slice(0, 2).join(", "), "⚠ Dwarf's Lucky Apple is off", true),
@@ -1330,7 +1375,7 @@ function renderTodayAll() {
   const card = h("div", { class: "panel today" },
     h("div", { class: "cardhead" }, h("h3", {}, "Today \u00b7 all instances"), h("div", { class: "row tdhr" }, head, evPicker(() => paintCards()))), ce, stats,
     h("div", { class: "tdscroll" }, h("table", { class: "tdall" },
-      h("thead", {}, h("tr", {}, ...["Instance", "Doing now", "Duties", "Joins", "Skipped (late)", "Failed", "Shield", "Buff"].map((c) => h("th", {}, c)))), body, foot)));
+      h("thead", {}, h("tr", {}, ...["Instance", "Doing now", "Activity", "Shield", "Buff"].map((c) => h("th", {}, c)))), body, foot)));
   const fails = (serial) => S.acts.filter((l) => l.s === serial && l.a.k === "fail").length;
   const paintNow = () => {
     for (const [s, td] of Object.entries(nowCells)) { const x = S.now[s]; const t = x ? x.text : "-"; if (td.textContent !== t) { td.textContent = t; td.title = t; } }
@@ -1367,13 +1412,12 @@ function renderTodayAll() {
     const sum = (f) => j.rows.reduce((t, r) => t + f(r), 0);
     const dt = sum((r) => r.duties_total), dd = sum((r) => r.duties_done), ft = sum((r) => fails(r.serial));
     foot.innerHTML = "";
-    if (j.rows.length > 1) foot.appendChild(h("tr", { class: "tdtotal" }, h("td", {}, "Total"), h("td", {}, ""),
-      h("td", {}, dt ? `${dd}/${dt}` : "-"), h("td", {}, String(sum((r) => r.joins))), h("td", {}, String(sum((r) => r.late))),
-      h("td", { class: ft ? "bad" : "" }, String(ft)), h("td", {}, ""), h("td", {}, "")));
+    const rl = document.getElementById("joinsToday");
+    if (rl) rl.textContent = `Today: ${sum((r) => r.joins)} joined \u00b7 ${sum((r) => r.late)} skipped late \u00b7 ${ft} failed`;
     paintCards();
     body.innerHTML = "";
     for (const k in nowCells) delete nowCells[k];
-    if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: "8", class: "mute" }, "No instances in your list yet.")));
+    if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: "5", class: "mute" }, "No instances in your list yet.")));
     j.rows.forEach((r) => {
       const off = !["run", "pause"].includes(st[r.serial]);
       const all = r.duties_total && r.duties_done >= r.duties_total;
@@ -1382,8 +1426,7 @@ function renderTodayAll() {
       const f = fails(r.serial);
       body.appendChild(h("tr", { class: off ? "off" : "", title: "Open " + r.name, onclick: () => open(r.serial) },
         h("td", {}, h("b", {}, r.name), off ? h("small", {}, " offline") : null), nowTd,
-        h("td", { class: all ? "ok" : "" }, r.duties_total ? `${r.duties_done}/${r.duties_total}` + (all ? " \u2713" : "") : "-"),
-        h("td", {}, String(r.joins)), h("td", {}, String(r.late)), h("td", { class: f ? "bad" : "" }, String(f)),
+        actCell(evActivity(r, j)),
         h("td", { title: "Not read from the game yet" }, "-"), h("td", { title: "Not read from the game yet" }, "-")));
     });
   };
