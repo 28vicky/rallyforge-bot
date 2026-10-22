@@ -655,7 +655,6 @@ function presetPanels(c, inst) {
     inst ? null : h("div", { class: "row" }, btn("Manage generals...", openGeneralManager, "pri"), S.dev ? btn("Scan generals from the game...", scanGeneralsFlow) : null,
       S.dev ? btn("Build general catalogue (developer)...", catalogFlow) : null, S.dev ? btn("Open catalogue folder", () => act(api("catalog_open")), "sm") : null,
       S.dev ? btn("Record city frames (developer)...", cityCaptureFlow) : null, S.dev ? btn("Open city capture folder", () => act(api("city_capture_open")), "sm") : null,
-      S.dev ? btn("Record a flow (developer)...", flowRecordFlow) : null, S.dev ? btn("Open flows folder", () => act(api("flow_open")), "sm") : null,
       S.dev ? btn("Add general from screenshot...", () => addGeneralFlow()) : null, S.dev ? btn("Capture a button / pop-up from screenshot...", captureTemplate) : null));
   return [bp, gen];
 }
@@ -720,13 +719,19 @@ PAGES.settings0 = function () {
       fld("Wait for this much free RAM before starting an instance (MB, 0 = off)", inp(c, "min_free_ram_mb", { type: "int", cls: "short" }))),
     h("div", { style: { marginTop: "12px" } }, tog(c, "close_emulator_on_stop", "Close an instance when its instance is stopped (frees its RAM; needs MuMu / LDPlayer or a stop command)")),
     note("The bot itself needs roughly 100 MB; the instances are what fill the RAM (about 1.5-4 GB each). Extra instances beyond the limit wait in a queue and start when another one stops. Set the instances to 540x960, 2 GB or less of memory and 1-2 CPU cores in their own settings. Closing this window frees even more memory: the bots keep running."));
+  // Beta: every user can record a task (taps, swipes + pictures) and send it, so new duties can be built from it
+  const rec = panel("Record a task (beta)", h("div", { class: "hint", style: { marginBottom: "10px" } },
+      "Play a task by hand in the game while this records your taps and swipes with a small picture of each step. Give it a clear title (for example \u201cGold Levy\u201d or \u201cAlliance treasure\u201d), then send the zip to the developer."),
+    h("div", { class: "row" }, btn("Record a task...", flowRecordFlow, "sm pri"),
+      btn("Save recordings as zip", async () => { const j = await act(api("flow_zip")); if (j) toast(`Saved ${j.flows} recording(s) in Downloads: ${j.path}`, "ok"); }, "sm"),
+      btn("Open recordings folder", () => act(api("flow_open")), "sm")));
   const lg = panel("Log (for support)", h("div", { class: "hint", style: { marginBottom: "10px" } }, "The full technical log. Use Save or Copy to share it when something goes wrong."),
     h("div", { class: "row", style: { marginBottom: "10px" } },
       btn("Save log", saveLog, "sm pri"), btn("Copy log", copyLog, "sm"), btn("Save report for support...", saveReportFlow, "sm"),
       btn("Open logs folder", () => act(api("open_logs")), "sm"),
       btn("Clear", async () => { await act(api("clear_log")); S.logs = []; logViews.forEach((v) => (v.el.innerHTML = "")); }, "sm")), logBox(null, true));
   setTimeout(updateSummary, 0);
-  return h("div", {}, g, staminaPanel(c, c), lr, lg);
+  return h("div", {}, g, staminaPanel(c, c), lr, rec, lg);
 };
 
 

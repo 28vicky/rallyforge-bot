@@ -604,7 +604,7 @@ async function flowRecordFlow() {
   modal({ title: "Recording a flow", focus: false, body: info, buttons: [{ label: "Stop and save", cls: "pri", onclick: async () => {
     clearInterval(timer);
     const d = await act(api("flow_stop", {}));
-    if (d) infoBox("Flow saved", `${d.steps} step(s) saved in:\n${d.path}\n\nUse 'Open flows folder' and send me the folder.`);
+    if (d) infoBox("Recording saved", `${d.steps} step(s) saved in:\n${d.path}\n\nRecord the next task, or press 'Save recordings as zip' (Control settings > Setup > Settings) and send the zip to the developer.`);
   } }] });
 }
 
