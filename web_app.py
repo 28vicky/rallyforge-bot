@@ -1872,8 +1872,7 @@ class Api:
         span = f"{hours // 24}d" if hours >= 24 and hours % 24 == 0 else f"{hours}h"
         path = downloads_dir() / f"rallyforge-log-{who}-{span}-{time.strftime('%Y%m%d-%H%M')}.zip"
         n = rb.export_log(str(path), hours, name)
-        open_path(path.parent)
-        return {"path": str(path), "lines": n}
+        return {"path": str(path), "lines": n}            # the folder opens only when the person clicks "Open folder"
 
     def save_report(self, p):
         d = Path.home() / "Desktop" / "RallyForge reports"

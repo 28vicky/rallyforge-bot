@@ -304,7 +304,9 @@ function saveLogRow(fixedName) {
   const who = h("select", { "aria-label": "Instance" }, h("option", { value: "" }, "All instances"));
   if (fixedName) { who.innerHTML = ""; who.appendChild(h("option", { value: fixedName }, fixedName)); who.disabled = true; }
   else api("log_names", {}, { quiet: true }).then((r) => { for (const n of (r && r.names) || []) who.appendChild(h("option", { value: n }, n)); }).catch(() => {});
-  const save = async () => { const j = await act(api("save_log", { hours: +span.value, name: who.value })); if (j) toast(`Saved ${j.lines} lines as a zip in Downloads: ${j.path}`, "ok"); };
+  const save = async () => { const j = await act(api("save_log", { hours: +span.value, name: who.value })); if (j) modal({ title: "Log saved", buttons: [
+    { label: "Open folder", cls: "pri", onclick: () => { act(api("reveal_file", { path: j.path })); } }, { label: "Close" }],
+    body: h("div", { class: "field" }, h("p", {}, `Saved ${j.lines} lines as a zip in Downloads:`), h("p", { style: { wordBreak: "break-all", fontFamily: "var(--mono)" } }, j.path)) }); };
   return h("div", { class: "logsave" }, h("div", { class: "field" }, h("label", {}, "Time"), span), h("div", { class: "field" }, h("label", {}, "Instance"), who),
     h("button", { class: "btn pri", type: "button", onclick: save }, "Save as zip"));
 }
