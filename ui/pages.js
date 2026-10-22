@@ -1267,14 +1267,70 @@ function renderTodayCard(serial) {
   return card;
 }
 
+
+// ====================================================================== Event cards (Dashboard). PREVIEW: sample data until the Event Center scan exists
+const EV_CARDS = [["monarch", "Monarch"], ["svs", "SvS / KE"], ["bubble", "Bubble"], ["ending", "Ending at reset"], ["boss", "Boss Monster Event"], ["duty", "Event duties"]];
+const EV_DEFAULT = ["monarch", "svs", "bubble", "ending"];
+function evChosen() { try { const v = JSON.parse(localStorage.getItem("rf_ev_cards") || "null"); if (Array.isArray(v)) return v; } catch (e) {} return EV_DEFAULT.slice(); }
+function evPicker(onChange) {                                     // which cards show: a display choice only, kept in this browser
+  return h("button", { class: "iconbtn evpick", type: "button", title: "Choose cards", "aria-label": "Choose cards", onclick: (e) => {
+    const on = evChosen();
+    menu(e.currentTarget, EV_CARDS.map(([k, l]) => ({ label: (on.includes(k) ? "✓  " : "  ") + l, run: () => {
+      const v = on.includes(k) ? on.filter((x) => x !== k) : EV_CARDS.map((c) => c[0]).filter((x) => x === k || on.includes(x));
+      try { localStorage.setItem("rf_ev_cards", JSON.stringify(v)); } catch (er) {}
+      onChange();
+    } })));
+  } }, ico("grid"));
+}
+function evSample(j, now) {                                       // sample events, timed from the real daily reset
+  const r = j.reset_at, d = 86400, rows = j.rows || [];
+  const shield = rows.map((x, i) => ({ name: x.name, ends: [now + 5 * 3600 + 720, now + 26 * 3600, 0, now + 47 * 60, 0][i % 5] }));
+  return {
+    monarch: { title: "Server Monarch Competition", stage: "Stage 4/6 · Power Increase", ends: r },
+    svs: { title: "SvS week", next: [["Server War", "begins", r + d - 6 * 3600 - 2400], ["City of Throne War", "begins", r + 2 * d - 6 * 3600 - 2400]] },
+    shield,
+    ending: ["Server Monarch Competition", "Daedalus' Labyrinth", "Quest for Treasure", "Eagle of Freedom", "Legion Hunting", "Taotie's Challenge"],
+    boss: { title: "Boss Monster Event", text: "Double boss spawn · more rallies to join" },
+    duty: [["Crazy Eggs", "on"], ["Ranger Knight Order", "on"], ["Dwarf's Lucky Apple", "off"], ["Viking Challenge", "claim"]],
+  };
+}
+function evLeft(t, now) { const s = Math.max(0, t - now); const dd = Math.floor(s / 86400); return dd ? `${dd}d ${fmtHM(s - dd * 86400)}` : fmtHM(s); }
+function evCards(el, j, skew) {
+  if (!j) return;
+  const now = Date.now() / 1000 + skew, ev = evSample(j, now), on = evChosen();
+  const card = (k, tag, title, l2, l3, warn) => h("div", { class: "evcard ev-" + k + (warn ? " warn" : "") },
+    h("div", { class: "evtag" }, tag), h("div", { class: "evtitle" }, title), h("div", { class: "evl" }, l2), h("div", { class: "evl " + (warn ? "bad" : "mute") }, l3));
+  const make = {
+    monarch: () => card("monarch", "Monarch", ev.monarch.title, ev.monarch.stage, `Ends in ${evLeft(ev.monarch.ends, now)} · at reset`),
+    svs: () => card("svs", "SvS / KE", ev.svs.title, `${ev.svs.next[0][0]} ${ev.svs.next[0][1]} in ${evLeft(ev.svs.next[0][2], now)}`,
+      `${ev.svs.next[1][0]} in ${evLeft(ev.svs.next[1][2], now)}`),
+    bubble: () => {
+      const up = ev.shield.filter((s) => s.ends > now).sort((a, b) => a.ends - b.ends), none = ev.shield.filter((s) => !(s.ends > now));
+      const t = h("div", { class: "evl" }, up.length ? `${up[0].name} runs out in ${evLeft(up[0].ends, now)}` : "No shields up");
+      return h("div", { class: "evcard ev-bubble" + (none.length ? " warn" : "") }, h("div", { class: "evtag" }, "Bubble"),
+        h("div", { class: "evtitle" }, `${up.length} of ${ev.shield.length} shielded`), t,
+        h("div", { class: "evl " + (none.length ? "bad" : "mute"), title: none.map((s) => s.name).join(", ") }, none.length ? `⚠ No shield: ${none.map((s) => s.name).join(", ")}` : "All instances shielded"));
+    },
+    ending: () => card("ending", "Ending at reset", `${ev.ending.length} events end in ${evLeft(j.reset_at, now)}`,
+      ev.ending.slice(0, 2).join(", "), ev.ending.length > 2 ? `+ ${ev.ending.slice(2).join(", ")}` : ""),
+    boss: () => card("boss", "Boss Monster Event", "On now", ev.boss.text, "Ends in 1d 16:20"),
+    duty: () => card("duty", "Event duties", ev.duty.filter((x) => x[1] !== "off").length + " of " + ev.duty.length + " on",
+      ev.duty.map((x) => x[0]).slice(0, 2).join(", "), "⚠ Dwarf's Lucky Apple is off", true),
+  };
+  const keys = EV_CARDS.map((c) => c[0]).filter((k) => on.includes(k));
+  el.innerHTML = "";
+  el.style.display = keys.length ? "" : "none";
+  keys.forEach((k) => el.appendChild(make[k]()));
+}
+
 // ====================================================================== Today - all instances (Dashboard, nothing selected)
 function renderTodayAll() {
-  const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {}), stats = h("div", { class: "tdtiles" });
+  const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {}), stats = h("div", { class: "evcards" }), foot = h("tfoot", {});
   const nowCells = {};                                                    // serial -> "Doing now" cell, refreshed every second
   const card = h("div", { class: "panel today" },
-    h("div", { class: "cardhead" }, h("h3", {}, "Today \u00b7 all instances"), h("div", { class: "row tdhr" }, head, null)), ce, stats,
+    h("div", { class: "cardhead" }, h("h3", {}, "Today \u00b7 all instances"), h("div", { class: "row tdhr" }, head, evPicker(() => paintCards()))), ce, stats,
     h("div", { class: "tdscroll" }, h("table", { class: "tdall" },
-      h("thead", {}, h("tr", {}, ...["Instance", "Doing now", "Duties", "Joins", "Skipped (late)", "Failed", "Shield", "Buff"].map((c) => h("th", {}, c)))), body)));
+      h("thead", {}, h("tr", {}, ...["Instance", "Doing now", "Duties", "Joins", "Skipped (late)", "Failed", "Shield", "Buff"].map((c) => h("th", {}, c)))), body, foot)));
   const fails = (serial) => S.acts.filter((l) => l.s === serial && l.a.k === "fail").length;
   const paintNow = () => {
     for (const [s, td] of Object.entries(nowCells)) { const x = S.now[s]; const t = x ? x.text : "-"; if (td.textContent !== t) { td.textContent = t; td.title = t; } }
@@ -1285,7 +1341,7 @@ function renderTodayAll() {
   const tick = () => {
     if (!j) { head.textContent = "Daily reset -"; return; }
     head.textContent = `Daily reset in ${fmtHM(j.reset_at - (Date.now() / 1000 + skew()))} \u00b7 ${hhmm(j.reset_at)} your time`;
-    paintNow();
+    paintNow(); paintCards();
   };
   const open = (serial) => { S.sel = serial; S.instTab = "ov"; renderSide(); renderTabs(); renderPage(); };
   const turnOn = async (e) => {
@@ -1293,6 +1349,7 @@ function renderTodayAll() {
     const r = await act(api("crazy_eggs_on_all"));
     if (r) { j = r; last = ""; paint(); toast("Crazy Eggs switched on for every instance.", "ok"); }
   };
+  const paintCards = () => evCards(stats, j, skew());
   const paint = () => {
     if (!j) return;
     const st = {}; (S.devStatus || []).forEach((d) => (st[d.id] = d.state));
@@ -1309,9 +1366,11 @@ function renderTodayAll() {
       h("a", { href: "#", title: "Switch the Crazy Eggs duty on for every instance", onclick: turnOn }, "turn on"));
     const sum = (f) => j.rows.reduce((t, r) => t + f(r), 0);
     const dt = sum((r) => r.duties_total), dd = sum((r) => r.duties_done), ft = sum((r) => fails(r.serial));
-    stats.innerHTML = "";
-    [["Duties", dt ? `${dd}/${dt}` : "-"], ["Joins", sum((r) => r.joins)], ["Skipped (late)", sum((r) => r.late)], ["Failed", ft]].forEach(([l, v]) =>
-      stats.appendChild(h("div", { class: "stile" + (l === "Failed" && ft ? " bad" : "") }, h("b", {}, String(v)), h("span", {}, l))));
+    foot.innerHTML = "";
+    if (j.rows.length > 1) foot.appendChild(h("tr", { class: "tdtotal" }, h("td", {}, "Total"), h("td", {}, ""),
+      h("td", {}, dt ? `${dd}/${dt}` : "-"), h("td", {}, String(sum((r) => r.joins))), h("td", {}, String(sum((r) => r.late))),
+      h("td", { class: ft ? "bad" : "" }, String(ft)), h("td", {}, ""), h("td", {}, "")));
+    paintCards();
     body.innerHTML = "";
     for (const k in nowCells) delete nowCells[k];
     if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: "8", class: "mute" }, "No instances in your list yet.")));

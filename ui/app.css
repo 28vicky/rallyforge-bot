@@ -1172,3 +1172,19 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .cardhead .tdhr{gap:16px}
 .iconbtn.cardmax{margin:4px 0 0 4px}
 :root .sidefoot{padding:14px 16px 16px}
+
+/* ===== Event cards on the Dashboard Today card (preview, sample data) ===== */
+.evcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:12px 0 6px}
+.evcard{display:flex;flex-direction:column;gap:3px;min-width:0;padding:12px 14px;border-radius:8px;background:var(--bg);border:1px solid var(--line);border-left:3px solid var(--accent1)}
+.evcard.warn{border-left-color:var(--bad)}
+.evcard .evtag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.evcard .evtitle{font-size:15px;font-weight:700;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.evcard .evl{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.evcard .evl.bad{color:var(--bad);font-weight:600}
+.evcard .evl:empty::before{content:"\00a0"}
+.ev-svs{border-left-color:#7aa7e0}.ev-bubble{border-left-color:var(--good)}.ev-ending{border-left-color:var(--warn)}
+.ev-bubble.warn{border-left-color:var(--bad)}
+.iconbtn.evpick{width:34px;height:34px;flex:none;margin:4px 0 0}
+.iconbtn.evpick svg{width:16px;height:16px}
+.tdall tfoot td{font-weight:700;border-top:2px solid var(--line);color:var(--fg)}
+.tdall tfoot td.bad{color:var(--bad)}
