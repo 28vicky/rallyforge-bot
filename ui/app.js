@@ -193,8 +193,7 @@ function layout() {
   root.appendChild(h("div", { class: "app" + (S.cfg.sidebar_open === false ? " nosb" : ""), id: "app" },
     h("div", { class: "side" },
       h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }),
-        h("div", { class: "bt" }, h("b", {}, "RallyForge"), h("small", {}, "Automation Hub")),
-        h("button", { class: "vpill", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "v" + S.version)),
+        h("div", { class: "bt" }, h("b", {}, "RallyForge"), h("small", {}, "Automation Hub"))),
       h("h4", {}, h("span", {}, "Instances"), h("span", { class: "cnt", id: "instCnt" })),
       h("div", { class: "inst-list", id: "instList" }),
       h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }),
@@ -217,7 +216,7 @@ function layout() {
       h("div", { class: "sbl" }, h("span", { class: "sbrun" }, h("span", { class: "sbdot", id: "sbDot" }), h("span", { id: "sbRun" }, "0 running")),
         h("span", { id: "sbRam" }), h("span", { id: "sbTg" }), h("span", { id: "sbLic" })),
       h("div", { class: "sbr" }, h("span", { id: "sbUpd", class: "sb-upd", style: { display: "none" } }),
-        h("span", { class: "l", title: S.copyright || "" }, "v" + S.version + " \u00b7 by " + (S.author || "Kiravik"))))));
+        h("span", { class: "l vlink", role: "button", tabindex: "0", title: "What changed in this version" + (S.copyright ? "\n" + S.copyright : ""), onclick: () => openWhatsNew(), onkeydown: (e) => { if (e.key === "Enter") openWhatsNew(); } }, "v" + S.version + " \u00b7 by " + (S.author || "Kiravik"))))));
   buildRibbon();
   paintRunState();
   renderModeIcon();
