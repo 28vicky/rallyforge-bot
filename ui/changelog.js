@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.91", date: "2026-10-22",
+    new: [],
+    fixed: ["After an update restart, instances that wait for their turn show the \u201cstart 0:12\u201d countdown instead of \u201coffline\u201d."] },
   { v: "2.4.90", date: "2026-10-22",
     new: ["Ymir picture now comes with the app, so Ymir rallies are recognised right away."],
     fixed: [] },

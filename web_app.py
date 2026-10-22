@@ -2486,10 +2486,17 @@ def main():
     resume = ctl.take_resume()
     if resume:
         def _resume():                                  # restarted for an update: carry on where we were
+            t0 = time.time()
+            for i, s in enumerate(resume):              # instance list shows "start 0:12" while each one waits
+                ctl.start_eta[s] = t0 + 4.5 + i * 5
             time.sleep(4)
             ctl.log(f"[+] Updated to version {rb.VERSION} - starting the {len(resume)} emulator(s) that were running")
+
+            def _go(s):
+                if ctl.start_eta.pop(s, None) is not None:      # not stopped meanwhile
+                    ctl._safe(ctl.start_instance, s)
             for i, s in enumerate(resume):
-                threading.Timer(i * 5 + 0.5, lambda s=s: ctl._safe(ctl.start_instance, s)).start()
+                threading.Timer(i * 5 + 0.5, _go, args=(s,)).start()
         threading.Thread(target=_resume, daemon=True).start()
     elif ctl.cfg.get("auto_start") or any(v.get("auto_start") for v in (ctl.cfg.get("per_device") or {}).values()):
         def _auto():                                    # 'start by itself when the app opens' (global switch + per-emulator switches)
