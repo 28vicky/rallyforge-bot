@@ -1041,3 +1041,9 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .sidefoot .ctlbtn.on{background:var(--card);color:var(--accent1);border:1px solid var(--accent1)}
 :root .sidefoot .ctlbtn.on .ico{color:var(--accent1)}
 :root .app .side{padding-bottom:0}
+/* Control settings = a navigation row like the instances (left icon + text; selected = white card like a selected instance); footer slightly grounded */
+:root .sidefoot{background:rgba(0,0,0,.015)}
+:root .sidefoot .ctlbtn{justify-content:flex-start;gap:10px;background:transparent;border:1px solid transparent;box-shadow:none;color:var(--fg);font-weight:500;font-size:13.5px;min-height:36px;padding:0 12px;border-radius:9px}
+:root .sidefoot .ctlbtn:hover{background:rgba(255,255,255,.6)}
+:root .sidefoot .ctlbtn.on{background:var(--card);color:var(--fg);border:1px solid var(--line);font-weight:600}
+:root .sidefoot .ctlbtn .ico,:root .sidefoot .ctlbtn.on .ico{color:var(--mute)}
