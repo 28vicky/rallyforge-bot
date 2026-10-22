@@ -969,7 +969,7 @@ PAGES.market = function () {
     note("Tap the pictures you want; a ticked card is bought, everything else is ignored. Then add the 'Black Market' city task so it visits the shop (Tasks tab)."),
     sum,
     h("div", { class: "row", style: { margin: "10px 0" } },
-      btn("Stamina only", () => { c.market_items = c.market_items.filter((i) => bmInfo(i.name).cat === "stamina");
+      btn("Stamina only", () => { c.market_items = c.market_items.filter((i) => bmInfo(i.name).cat === "stamina").map((i) => ({ ...i, pay: "gems" }));
         for (const n of names) if (bmInfo(n).cat === "stamina" && !chosen(n)) c.market_items.push({ name: n, pay: "gems" }); cat = "stamina"; draw(); }, "sm"),
       btn("Clear all", () => { c.market_items = []; draw(); }, "sm"),
       btn("Add item from screenshot...", async () => {
