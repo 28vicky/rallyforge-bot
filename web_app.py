@@ -523,6 +523,8 @@ class Controller:
         self.log("[*] Stopping...", serial)
 
     def start_all(self, auto=False):
+        if not auto:
+            self.resume_all()                           # Start all also carries on with paused instances
         todo = [d["id"] for d in self.devices if d["id"] and not self.running(d["id"])]
         if auto:      # app just opened: each emulator follows its own 'start by itself' switch (falls back to the global one)
             todo = [s for s in todo if rb.merge_device_cfg(self.cfg, s).get("auto_start")]

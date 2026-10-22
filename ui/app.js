@@ -200,7 +200,7 @@ function layout() {
       h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }),
         h("div", { class: "sflab" }, "All instances"),
         h("div", { class: "allbtns" },
-          h("button", { class: "btn olpause", type: "button", title: "Pause every running instance", onclick: () => act(api("pause", { serial: "all" })) }, "Pause all"),
+          h("button", { class: "btn olpause", id: "sidePause", type: "button", title: "Pause every running instance", onclick: pauseOrResumeAll }, "Pause all"),
           h("button", { class: "btn olstop", type: "button", title: "Stop every instance", onclick: () => act(api("stop", { serial: "all" })) }, "Stop all")),
         h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
     h("div", { class: "main" },
@@ -272,7 +272,7 @@ function buildRibbon() {
   r.append(
     grp("Run",
       btn("Start", () => { if (S.sel === "control") { S.startingAt = Date.now(); paintRunState(); } collectAndRun("start", { serial: target() }); }, "pri", "play"),
-      btn("Pause", () => act(api("pause", { serial: target() })), "", "pause"),
+      btn("Pause", () => (S.sel === "control" ? pauseOrResumeAll() : act(api("pause", { serial: target() }))), "", "pause"),
       btn("Stop", () => { S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop"), h("span", { class: "ribcount", id: "ribCount" })),
     grp("Scan",
       btn("Generals", () => openGeneralManager(), "", "users"),
@@ -481,6 +481,20 @@ function paintRibbonRun() {
   if (c) { c.textContent = run && run < total ? run + "/" + total + " running" : ""; }
 }
 setInterval(() => { if (S.startingAt) paintRibbonRun(); }, 3000);
+// every running instance paused -> the Pause buttons turn into Resume (otherwise there is no way to carry on)
+function allPaused() { const sts = S.devStatus.map((d) => d.state); return sts.includes("pause") && !sts.includes("run"); }
+function pauseOrResumeAll() { return act(allPaused() ? api("resume") : api("pause", { serial: "all" })); }
+function paintPauseLabels() {
+  const ap = allPaused();
+  const sp = document.getElementById("sidePause");
+  if (sp) { sp.textContent = ap ? "Resume all" : "Pause all"; sp.title = ap ? "Carry on with every paused instance" : "Pause every running instance"; }
+  document.querySelectorAll('[data-act="pause"]').forEach((b) => {
+    const mine = S.sel === "control" ? ap : (S.devStatus.find((x) => x.id === S.sel) || {}).state === "pause";
+    const lbl = b.querySelector(".runlbl");
+    if (lbl) lbl.textContent = mine ? (S.sel === "control" ? "Resume all" : "Resume") : lbl.dataset.base + (S.sel === "control" ? " all" : "");
+    else if (!b.querySelector("svg")) b.textContent = mine ? "Resume" : "Pause";
+  });
+}
 function paintRunState() {
   let st = null;
   if (S.sel !== "control") { const d = S.devStatus.find((x) => x.id === S.sel); st = d ? d.state : null; }
@@ -494,6 +508,7 @@ function paintRunState() {
     b.classList.toggle("greyed", !!off);
   });
   paintRibbonRun();
+  paintPauseLabels();
 }
 function ribbonLabels() {
   const all = S.sel === "control";

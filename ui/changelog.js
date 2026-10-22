@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.94", date: "2026-10-22",
+    new: [],
+    fixed: ["When every instance is paused, the Pause all buttons turn into Resume all (and an instance's Pause button into Resume), so you can carry on with one click. Start all also carries on with paused instances."] },
   { v: "2.4.93", date: "2026-10-22",
     new: [],
     fixed: ["Black Market stops within about a second when you press Stop - no extra refresh after Stop."] },
