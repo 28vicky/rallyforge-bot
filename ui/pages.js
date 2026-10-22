@@ -1210,7 +1210,7 @@ function renderTodayCard(serial) {
   let m = todayModel({}, serial), last = "";
   const tick = () => {
     if (!m.resetAt) { head.textContent = "Daily reset -"; return; }
-    head.textContent = `Daily reset in ${fmtLeft(m.resetAt - (Date.now() / 1000 + m.skew))} · ${m.resetLocal} your time`;
+    head.textContent = `Daily reset in ${fmtHM(m.resetAt - (Date.now() / 1000 + m.skew))} · ${m.resetLocal} your time`;
   };
   const paint = () => {
     const key = JSON.stringify([m.items, m.summary, m.results, m.week]);
@@ -1248,7 +1248,7 @@ function renderTodayAll() {
   const skew = () => (j ? j.now - Date.now() / 1000 : 0);
   const tick = () => {
     if (!j) { head.textContent = "Daily reset -"; return; }
-    head.textContent = `Daily reset in ${fmtLeft(j.reset_at - (Date.now() / 1000 + skew()))} \u00b7 ${hhmm(j.reset_at)} your time`;
+    head.textContent = `Daily reset in ${fmtHM(j.reset_at - (Date.now() / 1000 + skew()))} \u00b7 ${hhmm(j.reset_at)} your time`;
   };
   const open = (serial) => { S.sel = serial; S.instTab = "ov"; renderSide(); renderTabs(); renderPage(); };
   const turnOn = async (e) => {

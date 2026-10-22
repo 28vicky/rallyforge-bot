@@ -648,7 +648,7 @@ function busyTask(serial) {
   return cut(t.split(/[:\-(]/)[0].trim());
 }
 // ---- Today card: turn the "today" API answer into what the card shows (safe defaults when an instance just started)
-function fmtLeft(sec) {
+function fmtHM(sec) {
   sec = Math.max(0, Math.floor(sec || 0));
   const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60);
   return hh ? `${hh}h ${mm}m` : mm ? `${mm}m` : `${sec % 60}s`;
@@ -677,7 +677,7 @@ function todayModel(j, serial) {
   else if (!left) summary = `All ${total} duties done for today`;
   else {
     const need = left * 180;                                                // about 3 minutes per duty
-    summary = `${left} of ${total} duties left · ` + (need < resetIn ? `should all finish ${fmtLeft(resetIn - need)} before reset` : "may not all finish before reset");
+    summary = `${left} of ${total} duties left · ` + (need < resetIn ? `should all finish ${fmtHM(resetIn - need)} before reset` : "may not all finish before reset");
   }
   const r = j.results || {}, mons = r.monsters || {}, w = j.week || {};
   const monList = Object.entries(mons).sort((a, b) => b[1] - a[1]);
