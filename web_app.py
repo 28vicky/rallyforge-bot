@@ -1882,6 +1882,14 @@ class Api:
         rb.save_template("mk_" + re.sub(r"[^\w\-]", "_", name), img[y:y + h, x:x + w])
         return {"name": name}
 
+    def market_pictures(self, p):
+        """Every Black Market picture the bot can look for (shipped + captured), as item names for the picture picker."""
+        seen = {}
+        for base in (rb.USER / "templates", rb.RES / "templates", rb.RES):
+            for f in sorted(base.glob("mk_*.png")) if base.exists() else []:
+                seen.setdefault(f.stem, f.stem[3:].replace("_", " "))
+        return {"names": sorted(seen.values())}
+
     def general_add(self, p):
         img = self.c.shot(p["token"])
         name = (p.get("name") or "").strip()
@@ -2258,6 +2266,13 @@ class Handler(BaseHTTPRequestHandler):
             if img is None:
                 return self._send(404, "no picture", "text/plain")
             return self._send(200, png_bytes(img), "image/png", {"Cache-Control": "max-age=30"})
+        if path == "/api/market_img":
+            stem = "mk_" + re.sub(r"[^\w\-]", "_", q["name"][0])
+            for base in (rb.USER / "templates", rb.RES / "templates", rb.RES):
+                f = base / (stem + ".png")
+                if f.exists():
+                    return self._send(200, f.read_bytes(), "image/png", {"Cache-Control": "max-age=30"})
+            return self._send(404, "no picture", "text/plain")
         if path == "/api/scan_img":
             return self._send(200, png_bytes(c.scan_found[int(q["i"][0])]["image"]), "image/png")
         if path == "/api/manual_shot":

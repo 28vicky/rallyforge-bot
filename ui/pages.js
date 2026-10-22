@@ -914,41 +914,83 @@ PAGES.tasks = function (fixed) {
 // ====================================================================== market
 const PAY = [["gems", "Gems only"], ["resources", "Resources only"], ["both", "Gems or resources"]];
 const REFRESH = [["none", "Do not refresh"], ["count", "Refresh this many times"], ["all", "Until the gem floor (keeps refreshing and buying)"]];
-// Black Market pictures that ship with the app (templates mk_BM_NN.png, cut from a real shop recording)
-const BM_READY = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 21, 22, 25, 27, 29, 30, 31, 32, 39, 41, 42, 44, 45, 48, 51].map((n) => "BM " + String(n).padStart(2, "0"));
+// Black Market pictures that ship with the app (templates mk_BM_NN.png, cut from a real shop recording): plain name + category.
+// The item keeps its "BM NN" name in the settings (that is the picture the bot looks for); only the label shown changes.
+const BM_CATS = [["all", "All"], ["stamina", "Stamina"], ["res", "Resources"], ["speed", "Speed-ups"], ["chest", "Chests"], ["gear", "Gear & materials"], ["other", "Other"]];
+const BM_INFO = {
+  "BM 44": ["Stamina 50 x10", "stamina"],
+  "BM 04": ["Gold 100K", "res"], "BM 08": ["Food 200M", "res"], "BM 21": ["Food 500M", "res"], "BM 19": ["Lumber 200M", "res"], "BM 17": ["Resource 50M", "res"],
+  "BM 13": ["Stone 200M", "res"], "BM 42": ["Stone 200M (2)", "res"], "BM 22": ["Ore 500M", "res"],
+  "BM 01": ["Chest VI x5", "chest"], "BM 25": ["Chest V x5", "chest"], "BM 03": ["Chest IV x5", "chest"], "BM 07": ["Red chest x20", "chest"], "BM 10": ["Red chest x1", "chest"],
+  "BM 27": ["Gold chest x1", "chest"], "BM 29": ["Jewel chest x50", "chest"],
+  "BM 06": ["Green jewel Lv.4", "gear"], "BM 11": ["Gear: axe", "gear"], "BM 15": ["Gear: boots", "gear"], "BM 30": ["Gear: horn Lv.4", "gear"], "BM 32": ["Gear: spear", "gear"],
+  "BM 39": ["Gear: legs", "gear"], "BM 12": ["Blue crystal x25", "gear"], "BM 41": ["Blue crystal x50", "gear"], "BM 14": ["Orange shard x50", "gear"],
+  "BM 45": ["Rainbow crystal x20", "gear"], "BM 48": ["Purple crystal x20", "gear"],
+  "BM 05": ["EXP 5000 x10", "other"], "BM 09": ["EXP 20000", "other"], "BM 16": ["EXP 10000", "other"], "BM 02": ["Medals x500", "other"],
+  "BM 31": ["Scroll x10", "other"], "BM 51": ["Scroll x20", "other"],
+};
+// captured items: category from the name (the owner can rename an item by capturing it again)
+const bmGuess = (n) => /stam|vit/i.test(n) ? "stamina" : /speed/i.test(n) ? "speed" : /chest|box/i.test(n) ? "chest" : /food|lumber|wood|stone|ore|iron|gold|silver|res/i.test(n) ? "res" : "other";
+const bmInfo = (n) => BM_INFO[n] ? { label: BM_INFO[n][0], cat: BM_INFO[n][1] } : { label: n, cat: bmGuess(n) };
 PAGES.market = function () {
   const c = S.cfg;
   c.market_items = c.market_items || [];
-  let selIdx = null;
+  let cat = "all", q = "", names = [];
   const holder = h("div", {});
-  const payLabel = (p) => (PAY.find((x) => x[0] === p) || PAY[0])[1];
-  const draw = () => {
-    const t = listTable(["Item", "Pay with"], c.market_items.map((i) => ({ cells: [i.name, payLabel(i.pay || "gems")] })), (i) => (selIdx = i), selIdx);
-    holder.innerHTML = ""; holder.appendChild(t.el);
+  const sum = h("div", { class: "bmsum" });
+  const chosen = (n) => c.market_items.find((i) => i.name === n);
+  const pick = (n) => {
+    if (chosen(n)) c.market_items = c.market_items.filter((i) => i.name !== n);
+    else c.market_items.push({ name: n, pay: c.market_pay || "gems" });
+    draw();
   };
+  const pills = h("div", { class: "rtnpills" });
+  const search = h("input", { type: "search", placeholder: "Search, e.g. stamina, food, chest", oninput: (e) => { q = e.target.value.trim().toLowerCase(); draw(); } });
+  const draw = () => {
+    const all = [...new Set([...names, ...c.market_items.map((i) => i.name)])];
+    pills.innerHTML = "";
+    for (const [k, l] of BM_CATS) {
+      const n = k === "all" ? all.length : all.filter((x) => bmInfo(x).cat === k).length;
+      pills.appendChild(h("button", { type: "button", class: "rtnpill" + (cat === k ? " on" : ""), onclick: () => { cat = k; draw(); } }, l + " " + n));
+    }
+    const list = all.filter((n) => { const f = bmInfo(n); return (cat === "all" || f.cat === cat) && (!q || (f.label + " " + n + " " + f.cat).toLowerCase().includes(q)); })
+      .sort((a, b) => (!!chosen(b) - !!chosen(a)) || bmInfo(a).label.localeCompare(bmInfo(b).label));
+    holder.innerHTML = "";
+    holder.appendChild(list.length ? h("div", { class: "bmgrid" }, ...list.map((n) => {
+      const it = chosen(n), f = bmInfo(n);
+      const pay = it ? h("select", { "aria-label": "Pay with", onclick: (e) => e.stopPropagation(), onchange: (e) => { it.pay = e.target.value; } },
+        ...PAY.map(([v, l]) => h("option", { value: v, selected: (it.pay || "gems") === v }, l))) : null;
+      return h("div", { class: "bmcard" + (it ? " on" : ""), title: n, onclick: () => pick(n) },
+        h("img", { src: `/api/market_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, alt: "", onerror: (e) => (e.target.style.visibility = "hidden") }),
+        h("div", { class: "bmname" }, f.label), it ? pay : h("div", { class: "bmsub" }, "Tap to buy"));
+    })) : note("Nothing matches."));
+    const k = c.market_items.length;
+    sum.textContent = k ? "Buying " + k + ": " + c.market_items.map((i) => bmInfo(i.name).label).join(", ") : "Nothing chosen yet - the bot buys nothing in the Black Market.";
+  };
+  api("market_pictures", {}, { quiet: true }).then((j) => { names = (j && j.names) || []; draw(); }).catch(() => draw());
   draw();
-  const itemPay = h("select", {}, PAY.map(([v, l]) => h("option", { value: v }, l)));
-  const items = panel("Black Market: items to buy",
-    note("Add the items you want from a screenshot of the Black Market. The bot buys only those items and nothing else. Then add the 'Black Market' city task so it visits the shop (Tasks tab)."),
-    holder,
-    h("div", { class: "row", style: { marginTop: "12px" } }, btn("Add item from screenshot...", async () => {
-      const shot = await pickScreenshot("Screenshot of the Black Market");
-      if (!shot) return;
-      const rect = await pickOnShot(shot, "Drag a box around just the item's PICTURE (the icon in the middle, without the number in the corner), then release.", "region");
-      if (!rect) return;
-      const name = await promptBox("Black Market item", "Name of this item (e.g. Stamina):", "");
-      if (!name) return;
-      const j = await act(api("market_item_add", { token: shot.token, rect, name }));
-      if (!j) return;
-      c.market_items = c.market_items.filter((i) => i.name !== j.name);
-      c.market_items.push({ name: j.name, pay: c.market_pay || "gems" }); draw();
-    }, "pri"), btn("Add the ready-made pictures (" + BM_READY.length + ")", () => {
-      let n = 0;
-      for (const nm of BM_READY) if (!c.market_items.some((i) => i.name === nm)) { c.market_items.push({ name: nm, pay: c.market_pay || "gems" }); n++; }
-      draw(); toast(n ? n + " Black Market pictures added (" + BM_READY[0] + " to " + BM_READY[BM_READY.length - 1] + "). Remove the ones you do not want before the bot visits the shop." : "They are all in the list already.", "ok");
-    }), btn("Remove", () => { if (selIdx !== null) { c.market_items.splice(selIdx, 1); selIdx = null; draw(); } }),
-      h("span", { class: "lab", style: { marginLeft: "12px" } }, "Selected item pays with"), itemPay,
-      btn("Set", () => { if (selIdx !== null) { c.market_items[selIdx].pay = itemPay.value; draw(); } }, "sm")));
+  const items = panel("Black Market: what to buy",
+    note("Tap the pictures you want; a ticked card is bought, everything else is ignored. Then add the 'Black Market' city task so it visits the shop (Tasks tab)."),
+    sum,
+    h("div", { class: "row", style: { margin: "10px 0" } },
+      btn("Stamina only", () => { c.market_items = c.market_items.filter((i) => bmInfo(i.name).cat === "stamina");
+        for (const n of names) if (bmInfo(n).cat === "stamina" && !chosen(n)) c.market_items.push({ name: n, pay: "gems" }); cat = "stamina"; draw(); }, "sm"),
+      btn("Clear all", () => { c.market_items = []; draw(); }, "sm"),
+      btn("Add item from screenshot...", async () => {
+        const shot = await pickScreenshot("Screenshot of the Black Market");
+        if (!shot) return;
+        const rect = await pickOnShot(shot, "Drag a box around just the item's PICTURE (the icon in the middle, without the number in the corner), then release.", "region");
+        if (!rect) return;
+        const name = await promptBox("Black Market item", "Name of this item (e.g. Stamina 50):", "");
+        if (!name) return;
+        const j = await act(api("market_item_add", { token: shot.token, rect, name }));
+        if (!j) return;
+        if (!names.includes(j.name)) names.push(j.name);
+        if (!chosen(j.name)) c.market_items.push({ name: j.name, pay: c.market_pay || "gems" });
+        draw();
+      })),
+    h("div", { class: "bmbar" }, pills, search),
+    holder);
   const opts = panel("Buying and refreshing",
     grid2(fld("Pay with (for new items)", sel(c, "market_pay", PAY)), fld("When the shop has none of them", sel(c, "market_refresh_mode", REFRESH)),
       fld("How many refreshes", inp(c, "market_refresh_n", { type: "int", cls: "short" })), fld("Most gems to spend per visit (0 = keep going until the gems run out)", inp(c, "market_max_gems", { type: "int", cls: "short" }))),

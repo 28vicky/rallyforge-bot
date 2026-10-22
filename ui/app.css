@@ -1047,3 +1047,18 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .sidefoot .ctlbtn:hover{background:rgba(255,255,255,.6)}
 :root .sidefoot .ctlbtn.on{background:var(--card);color:var(--fg);border:1px solid var(--line);font-weight:600}
 :root .sidefoot .ctlbtn .ico,:root .sidefoot .ctlbtn.on .ico{color:var(--mute)}
+
+/* Black Market picture picker: tap a card to buy it */
+.bmsum{font-size:14px;color:var(--fg);padding:10px 12px;border-radius:var(--r2);background:var(--bgc);border:1px solid var(--line)}
+.bmbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.bmbar .rtnpills{flex-wrap:wrap}
+.bmbar input{flex:1;min-width:220px;margin:0}
+.bmgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px}
+.bmcard{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 8px;border-radius:var(--r2);border:1px solid var(--line);background:var(--card);cursor:pointer;text-align:center}
+.bmcard:hover{border-color:var(--accent)}
+.bmcard img{width:72px;height:72px;object-fit:contain;border-radius:8px}
+.bmcard .bmname{font-size:13px;font-weight:600;line-height:1.25}
+.bmcard .bmsub{font-size:12px;color:var(--mute)}
+.bmcard select{font-size:12px;padding:4px 26px 4px 8px;width:100%;margin:0}
+.bmcard.on{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--card))}
+.bmcard.on::after{content:"\2713";position:absolute;top:6px;right:8px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--accfg);font-size:12px;line-height:20px;font-weight:700}
