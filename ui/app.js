@@ -274,16 +274,18 @@ function buildRibbon() {
       btn("Start", () => { if (S.sel === "control" && allPaused()) return act(api("resume")); if (S.sel === "control") { S.startingAt = Date.now(); paintRunState(); } collectAndRun("start", { serial: target() }); }, "pri", "play"),
       btn("Pause", () => act(api("pause", { serial: target() })), "", "pause"),
       btn("Stop", () => { S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop"), h("span", { class: "ribcount", id: "ribCount" })),
-    grp("Scan",
-      btn("Generals", () => openGeneralManager(), "", "users"),
-      ...(S.dev ? [btn("Scan generals", () => scanGeneralsFlow(), "", "scan")] : []),
-      btn("Scan city", () => scanCityFlow(S.sel === "control" ? undefined : S.sel), "", "city"), btn("Map by hand", () => manualMapFlow(S.sel === "control" ? undefined : S.sel), "", "pin")),
-    grp("Data",
+    grp("Tools",
+      S.dev ? btn("Generals ▾", (e) => menu(e.currentTarget, [
+        { label: "Manage generals", icon: "users", run: () => openGeneralManager() },
+        { label: "Scan generals", icon: "scan", run: () => scanGeneralsFlow() }]), "", "users")
+        : btn("Generals", () => openGeneralManager(), "", "users"),
+      btn("City ▾", (e) => menu(e.currentTarget, [
+        { label: "Scan city", icon: "city", run: () => scanCityFlow(S.sel === "control" ? undefined : S.sel) },
+        { label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) }]), "", "city"),
       btn("Profiles ▾", (e) => menu(e.currentTarget, [
-        { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user")),
-    grp("App",
-      btn("Updates", () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); }, "", "refresh"),
+        { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user"),
       btn("More ▾", (e) => menu(e.currentTarget, [
+        { label: "Updates", icon: "refresh", run: () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); } },
         { label: "Close window (bots keep running)", icon: "eye", run: () => act(api("hide_window")) },
         { label: "Restart app", icon: "refresh", run: restartFlow }, { label: "Quit and stop everything", icon: "power", run: quitFlow }]), "", "more")));
 }
