@@ -6963,8 +6963,13 @@ def run_market(dev, cfg, log, stop):
     gold, gems = market_totals(img)
     log(f"[*] Black Market: looking for {', '.join(w[0] for w in wanted)}; gold {gold if gold is not None else '?'}, "
         f"gems {gems if gems is not None else '?'} (keep at least {min_gold:,} gold, {min_gems:,} gems)")
+    need_totals = bool(min_gems or min_gold or budget)   # totals are only read every round when a floor / limit needs them
+    free_left = None                                     # once the free refreshes are used up they stay at 0: no more reading them
+    cost_seen = None                                     # the paid refresh cost, read once and re-checked every 10 refreshes
+    next_img = None                                      # the picture taken right after a refresh is reused (one screenshot less)
     while not stop.is_set():
-        img = dev.screenshot()
+        img = next_img if next_img is not None else dev.screenshot()
+        next_img = None
         for _w in range(4):                                  # a confirm dialog / reward pop-up can sit over the shop for a moment
             if market_on_screen(img) or stop.is_set():
                 break
@@ -6981,7 +6986,7 @@ def run_market(dev, cfg, log, stop):
             cv2.imwrite(str(USER / "debug" / "black_market_closed.png"), img)
             log("[!] Black Market: the shop is no longer on screen (picture saved: debug/black_market_closed.png)")
             break
-        g2, m2 = market_totals(img)
+        g2, m2 = market_totals(img) if need_totals else (None, None)
         gold = g2 if g2 is not None else gold
         gems = m2 if m2 is not None else gems
         again = False
@@ -7043,12 +7048,15 @@ def run_market(dev, cfg, log, stop):
         if mode == "none" or refreshes >= limit:
             break
         _, refresh = _market_buttons(img)
-        free = free_refreshes(img, refresh)
+        free = free_refreshes(img, refresh) if free_left != 0 else 0
+        free_left = free
         if not free:
             if not paid_ok:
                 log("[i] Black Market: no free refreshes left")
                 break
-            cost = refresh_cost(img, refresh, cfg.get("market_refresh_cost", 50))
+            if cost_seen is None or refreshes % 10 == 0:
+                cost_seen = refresh_cost(img, refresh, cfg.get("market_refresh_cost", 50))
+            cost = cost_seen
             if budget and spent + cost > budget:
                 log("[i] Black Market: the gem limit is reached")
                 break
@@ -7057,15 +7065,32 @@ def run_market(dev, cfg, log, stop):
                 break
         before = _market_sig(img)
         dev.tap(refresh[0] + refresh[2] / 2, refresh[1] + refresh[3] / 2)
-        _nap(stop, 0.9, 1.3)
-        shot = dev.screenshot()
+        shot = None
+        for _p in range(8):                                  # look every ~0.4 s until the shop shows new goods (was a fixed ~4 s wait)
+            stop.wait(0.4)
+            shot = dev.screenshot()
+            if not market_on_screen(shot):
+                break
+            sg = _market_sig(shot)
+            if sg is not None and before is not None and abs(sg - before).mean() >= 2.0:
+                for _s in range(4):                          # new goods: wait until two pictures in a row agree (icons done drawing)
+                    stop.wait(0.3)
+                    s2 = dev.screenshot()
+                    g2s = _market_sig(s2) if market_on_screen(s2) else None
+                    if g2s is not None and abs(g2s - sg).mean() < 2.0:
+                        shot = s2
+                        break
+                    shot, sg = s2, g2s
+                    if sg is None:
+                        break
+                break
         if not market_on_screen(shot):                       # a dialog (confirm / not enough gems)
             p = find_text(shot, ["Confirm", "OK"])
             if p and not find_text(shot, ["enough", "insufficient", "Not enough"]):
                 dev.tap(*p)
                 _nap(stop, 1.0, 1.5)
-        _nap(stop, 0.8, 1.2)
-        shot = dev.screenshot()
+            _nap(stop, 0.8, 1.2)
+            shot = dev.screenshot()
         if not market_on_screen(shot):
             log("[!] Black Market: a dialog opened instead of refreshing (out of gems?) - stopping")
             dev.back()
@@ -7078,6 +7103,7 @@ def run_market(dev, cfg, log, stop):
                 break
             continue
         no_change = 0
+        next_img = shot
         if not free:
             spent += cost
         refreshes += 1
