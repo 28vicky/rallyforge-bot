@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.98", date: "2026-10-22",
+    new: [],
+    fixed: ["Black Market only runs on instances where you switch on the Black Market duty - the old city task no longer starts it by itself."] },
   { v: "2.4.97", date: "2026-10-22",
     new: [],
     fixed: ["March time if not read now defaults to 10 s, so more rallies close to the end are still joined."] },
