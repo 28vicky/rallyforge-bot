@@ -4946,6 +4946,7 @@ def wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
     """Wait until the game shows a known screen several times in a row (loading screens do not count)."""
     good, last_note, last_fg = 0, 0.0, time.time()
     not_ready_since, last_clear, last_kick = None, 0.0, 0.0
+    loading_since, app_restarted = None, False                 # stuck on the loading / "Connecting" screen -> close and reopen Evony once
     end = time.time() + cfg["game_load_timeout"]
     while time.time() < end and not stop.is_set():
         if pause_gate():                                       # paused meanwhile: no clicks, no timeout, start counting again after the resume
@@ -4988,6 +4989,21 @@ def wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
             good = 0
             now = time.time()
             not_ready_since = not_ready_since or now
+            loading_since = loading_since or now
+            if not app_restarted and now - loading_since > max(90, cfg["game_load_timeout"] / 2):
+                app_restarted = True                           # half the wait gone and still loading: Evony hangs (often on "Connecting")
+                try:
+                    pkg = pkg or evony_package(dev.adb, dev.serial, cfg)
+                    log("[!] The game is stuck on the loading screen - closing and opening Evony again")
+                    _adb(dev.adb, dev.serial, "shell", "am", "force-stop", pkg)
+                    _nap(stop, 3, 4)
+                    start_app(dev.adb, dev.serial, pkg)
+                    _nap(stop, 8)
+                except Exception as e:
+                    log(f"[!] Could not reopen Evony: {e}")
+                good, not_ready_since, loading_since = 0, None, None
+                end = time.time() + cfg["game_load_timeout"]
+                continue
             if now - last_note > 30:
                 last_note = now
                 log("[*] Waiting for the game to finish loading...")
@@ -4998,7 +5014,7 @@ def wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
                     _nap(stop, 1.5)
                     continue
         if ready_screen(screen, cfg):
-            not_ready_since = None
+            not_ready_since = loading_since = None
         if pkg and time.time() - last_fg > 15:
             last_fg = time.time()
             if app_foreground(dev.adb, dev.serial, pkg) is False:
@@ -5141,12 +5157,13 @@ def note_rally(serial, mon, left):
             _ALLIES[frozenset((serial, other))] = now
 
 
-def others_see_rallies(serial, within=150):
+def others_see_rallies(serial, within=150, allies_only=True):
     """True when an instance known to be in the same alliance saw rallies on its list in the last `within` seconds.
-    Instances in another alliance (or not matched yet) do not count: their list can be busy while this one is truly quiet."""
+    Instances in another alliance (or not matched yet) do not count: their list can be busy while this one is truly quiet.
+    allies_only=False: any other instance counts (an instance whose list never loaded cannot be matched to its alliance)."""
     now = time.time()
     allies = {s for pair in list(_ALLIES) if serial in pair for s in pair if s != serial}
-    return any(s in allies and now - t < within for s, t in list(_RALLY_SEEN.items()))
+    return any((s in allies if allies_only else s != serial) and now - t < within for s, t in list(_RALLY_SEEN.items()))
 
 
 def force_restart_game(dev, cfg, log, stop):
@@ -9526,6 +9543,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     last_ok = [time.time()]               # last time ADB gave us a screenshot
     still = {"sig": None, "since": None}  # screen that should be moving but is not
     stale_hits = [0]                      # empty-list checks in a row while other instances saw rallies
+    empty_list = {"checks": 0, "reopens": 0, "last": 0.0}   # rally list with no rally on it: looks in a row / reopens / last reopen
     lost_since = [None]                   # since when we have been off the rally list (kept across game restarts)
     restarts = []                         # when the emulator was restarted (to stop restart loops)
     lost_restarts = []                    # when "lost for too long" restarted Evony (2 in 30 min -> restart the emulator)
@@ -10346,6 +10364,38 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         city_block[0] = time.time() + 600
                     recover()
                     continue
+            if not target and st == "rally_list":
+                # the game sometimes shows Alliance War with an EMPTY list that never refreshes, while rallies are running.
+                # Scrolling an empty list does nothing: reopen the page (allies busy -> fast, otherwise every 5 min).
+                try:
+                    _g = cv2.inRange(cv2.cvtColor(screen[150:800:3, ::3], cv2.COLOR_BGR2HSV), (40, 140, 90), (85, 255, 255))
+                    is_empty = cv2.countNonZero(_g) <= 150
+                except Exception:
+                    is_empty = False
+                if not is_empty:
+                    empty_list["checks"] = empty_list["reopens"] = 0
+                else:
+                    empty_list["checks"] += 1
+                    t_now = time.time()
+                    allies_busy = others_see_rallies(serial)
+                    others_busy = others_see_rallies(serial, allies_only=False) and empty_list["reopens"] < 2
+                    gap = 45 if (allies_busy or others_busy) else 300
+                    if empty_list["checks"] >= 3 and t_now - empty_list["last"] >= gap:
+                        empty_list["checks"] = 0
+                        empty_list["last"] = t_now
+                        empty_list["reopens"] += 1
+                        at_bottom[0], scrolls = False, 0
+                        if allies_busy and empty_list["reopens"] >= 3:
+                            empty_list["reopens"] = 0
+                            log("[!] The rally list stays empty after reopening it while the alliance has rallies - restarting Evony")
+                            force_restart_game(dev, cfg, log, stop)
+                        else:
+                            log("[!] The rally list is empty" + (" while other instances see rallies" if (allies_busy or others_busy) else "")
+                                + " - reopening Alliance War to refresh it")
+                            dev.back()
+                            nap(1.5, 2.0)
+                            recover()
+                        continue
             if not target:
                 # the list is read from the BOTTOM up: the lowest rallies close first, the top ones were just started.
                 # One sweep = jump to the bottom, then one page up at a time until the top.
