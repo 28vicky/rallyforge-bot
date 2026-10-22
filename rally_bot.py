@@ -7939,6 +7939,26 @@ def ce_close_panel(dev, stop):
         _nap(stop, 0.9, 1.3)
 
 
+def ce_find_in_list(dev, stop, img):
+    """Find the Crazy Eggs row on the Activities tab: the list order differs per account, so look
+    down the whole list (until it stops moving), then back up to the top. -> (x, y) or None."""
+    names = ["Crazy Eggs", "Crazy Egg"]
+    p = find_text(img, names, cutoff=0.72)
+    for sx, sy, ex, ey in ((270, 760, 270, 330), (270, 330, 270, 760)):     # down, then up
+        last = img
+        for _ in range(8):
+            if p or stop.is_set():
+                return p
+            dev.swipe(sx, sy, ex, ey, 450)
+            _nap(stop, 1.1, 1.5)
+            img = dev.screenshot()
+            p = find_text(img, names, cutoff=0.72)
+            if not p and cv2.absdiff(img[140:900], last[140:900]).mean() < 2:   # end of the list
+                break
+            last = img
+    return p
+
+
 def run_crazy_eggs(dev, cfg, log, stop):
     """On the Crazy Eggs screen: smash the ready eggs, use the Lucky Hammer, then note when to come back."""
     if ce_lucky_confirm(dev, stop):
@@ -7963,19 +7983,14 @@ def run_crazy_eggs(dev, cfg, log, stop):
             _nap(stop, 1.6, 2.2)
             img = dev.screenshot()
             ce_snap(img, "1_activities")
-            p = find_text(img, ["Crazy Eggs"], cutoff=0.72)
-            if not p:                                      # the list may be longer than the screen
-                dev.swipe(270, 700, 270, 350, 400)
-                _nap(stop, 1.0, 1.4)
-                img = dev.screenshot()
-                p = find_text(img, ["Crazy Eggs"], cutoff=0.72)
+            p = ce_find_in_list(dev, stop, img)
             if p:
                 dev.tap(*p)
                 _nap(stop, 2.5, 3.2)
                 if ce_on_screen(dev.screenshot()):
                     break
         else:
-            ce_snap(dev.screenshot(), "2_failed")
+            ce_snap(dev.screenshot(), "2_failed_" + re.sub(r"\W", "_", str(serial)))   # one picture per instance
             raise RuntimeError("the Crazy Eggs screen did not open")
     row = ce_row(serial)
     smashes = dict(row.get("smashes") or {}) if row.get("smash_day") == day else {}
