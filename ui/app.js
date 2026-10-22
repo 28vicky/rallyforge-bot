@@ -280,11 +280,9 @@ function buildRibbon() {
       btn("Scan city", () => scanCityFlow(S.sel === "control" ? undefined : S.sel), "", "city"), btn("Map by hand", () => manualMapFlow(S.sel === "control" ? undefined : S.sel), "", "pin"), btn("Map by squares", () => scanCityTapsFlow(), "", "city")),
     grp("Data",
       btn("Profiles ▾", (e) => menu(e.currentTarget, [
-        { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user"),
-      btn("Logs", () => { S.sel = "control"; pickTab("logs"); renderSide(); }, "", "file")),
+        { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user")),
     grp("App",
       btn("Updates", () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); }, "", "refresh"),
-      btn("Save", saveAll, "", "save"),
       btn("More ▾", (e) => menu(e.currentTarget, [
         { label: "Close window (bots keep running)", icon: "eye", run: () => act(api("hide_window")) },
         { label: "Restart app", icon: "refresh", run: restartFlow }, { label: "Quit and stop everything", icon: "power", run: quitFlow }]), "", "more")));
