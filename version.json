@@ -1,9 +1,9 @@
 {
-  "version": "2.4.91",
-  "notes": "Start countdown also after an update restart",
+  "version": "2.4.92",
+  "notes": "Out-of-date rally list spotted and refreshed",
   "files": {
     "rally_bot.py": {
-      "sha256": "12c0ed480fdc11937c91da4d4fd849d33a176d697f5c5d83f061f059797a4bdb"
+      "sha256": "6c8995e148e5d22a5ca20dc133a2a40ba27d8c7d47c85c96dabfc6cbee8f5a97"
     },
     "web_app.py": {
       "sha256": "da2a5875ae84d309f7465d373a6303f7b37b3a49aa77b0b3b65e3c8cf69cce4c"
@@ -18,7 +18,7 @@
       "sha256": "82b2f236e098aad69c38d612bd7a982f3cd8f93e55071fa1ab54fcd1610ca434"
     },
     "ui/changelog.js": {
-      "sha256": "a1b883dc8247ba85ddd1ff7b7a96c2656b326eb1d240f7ba2e1aee8c5ad26f7f"
+      "sha256": "7afc28ef6df2aa69948d4e4d10971f6fab01df4d6832d8870806f6a869a05661"
     },
     "ui/dialogs.js": {
       "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
@@ -1621,5 +1621,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "b7e38980441ada4384ac50d89603d218ec3a2d95dcf8e68d57d7ff583988fcc1"
+  "sig": "8749143277f1535d450f89819b8e1855cee32735657d557679d453419a95bbc6"
 }
