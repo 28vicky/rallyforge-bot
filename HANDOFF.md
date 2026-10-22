@@ -6,6 +6,10 @@ Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony ra
 - 2.4.89-2.4.95 released today: empty / out-of-date rally list reopen + Evony restart (max 1 per 30 min), loading-hang reopen, fast Start all, chip timers, Ymir picture, start countdown after update restart, Black Market fast Stop (T28), Resume all when everything is paused.
 - Full notes: project doc claude/handoff_22oct_1400.md (open items: update restart ends a manual pause; watch Dida/Princess for the new "does not show N rally(s)" log line).
 
+## READY (22 Oct 14:15) - fix/march-guess
+- Rally join counts a 20 s walk when the march time is not read (was 0 -> joined rallies with seconds left and wasted stamina). New setting march_guess (default 20, Settings next to Spare time); also used for the latest-March deadline. Not yet tested live. Changelog line: "Rallies with too little time left for your troops to arrive are skipped, so no stamina is wasted."
+- Update restart starting paused instances again is WANTED by the owner (14:04) - not a bug.
+
 ## Branches
 - `origin/main` = published. Latest release 2.4.70. Do NOT publish unless the owner says so.
 - `ui-polish` = main + UI polish (Universal wording, Extra Large, readable Pause/Stop/primary buttons, Monsters = universal list, tour in Setup, Auto-Join time-left line, card/button sizes, contrast fixes). Pending the owner's OK to merge/publish.

@@ -131,6 +131,7 @@ DEFAULTS = {
     "rally_timer_source": "progress_bar",   # where the rally countdown is read
     "march_timer_source": "",               # the game shows no march time on the rally list or the march screen: not read ("Spare time" covers it)
     "safety_margin": 4,                     # join only if rally_left - march_time >= this many seconds
+    "march_guess": 20,                      # march time used when it is not read (the walk to a rally is usually 10-20 s)
     "max_rally_seconds": 0,                 # skip rallies with MORE than this left (0 = no limit)
     "log_timers": True,                     # log what was read for every Join button
     # monster filter: "off" = join any | "skip" = skip monsters in monster_list | "only" = join only those
@@ -1722,7 +1723,7 @@ def judge(screen, hit, cfg, extra=0.0):
     """Read the rally countdown and the march time. -> (rally_left, march_time, would_join, reason).
     'extra' = seconds the bot itself needs between reading the screen and pressing March."""
     rally = read_seconds(screen, hit, cfg["rally_timer_source"])
-    march = read_seconds(screen, hit, cfg["march_timer_source"]) if cfg["march_timer_source"] else 0
+    march = read_seconds(screen, hit, cfg["march_timer_source"]) if cfg["march_timer_source"] else None
     if march is not None and march >= 300 and cfg["march_timer_source"]:
         # a long march time is often a misread digit: read again two other ways and take the majority
         votes = [march] + [v for v in (read_seconds(screen, hit, cfg["march_timer_source"], 1),
@@ -1733,8 +1734,10 @@ def judge(screen, hit, cfg, extra=0.0):
         return rally, march, False, "rally timer unreadable"
     if cfg["max_rally_seconds"] and rally > cfg["max_rally_seconds"]:
         return rally, march, False, "more time left than max_rally_seconds"
-    spare = rally - (march or 0) - int(extra)
-    note = "" if march is not None else ", march time unreadable (treated as 0)"
+    guess = int(cfg.get("march_guess", 20) or 0)
+    walk = march if march is not None else guess          # walk time not read: count the usual walk so stamina is not wasted
+    spare = rally - walk - int(extra)
+    note = "" if march is not None else f", march counted as {guess}s"
     if spare < cfg["safety_margin"]:
         return rally, march, False, f"not enough time: {spare}s spare{note}"
     return rally, march, True, f"{spare}s spare{note}"
@@ -10165,7 +10168,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         limit = cfg.get("lost_seconds", 0)
         return bool(cfg["auto_launch_game"] and limit and time.time() - off_list[0] > limit)
 
-    log(f"[+] Running: join when rally time left minus march time is at least {cfg['safety_margin']}s, "
+    log(f"[+] Running: join when rally time left minus march time ({cfg.get('march_guess', 20)}s unless read) "
+        f"and the bot's own time is at least {cfg['safety_margin']}s, "
         f"presets {rot.presets} ({cfg['preset_mode']}).")
     if cfg["monster_mode"] != "off":
         log(f"[+] Monster filter: {cfg['monster_mode']} {cfg['monster_list']} "
@@ -10542,7 +10546,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             log(f"[*] Rally{vs} with {left}s left -> joining")
             t_join = time.time()
             t_march = None
-            t_deadline = t_join + left - (last_march[0] or 0) - 2     # latest moment to press March and still arrive in time
+            walk = last_march[0] if last_march[0] is not None else int(cfg.get("march_guess", 20) or 0)
+            t_deadline = t_join + left - walk - 2                     # latest moment to press March and still arrive in time
             mon_name = last_dn[0] or (mon if mon and mon != "hidden" else "?")
             base_name = last_base[0] or "?"
 

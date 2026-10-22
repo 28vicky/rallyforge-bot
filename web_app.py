@@ -278,6 +278,7 @@ class Controller:
                 raise ApiError(f"{label} must be between {lo} and {hi if hi is not None else 'any'}.")
             return v
         num("safety_margin", "Spare time")
+        num("march_guess", "March time if not read", 0, 300)
         num("max_rally_seconds", "Skip rally longer than")
         num("max_joins", "Max joins")
         num("start_gap_seconds", "Gap between emulator starts", 0, 600)
