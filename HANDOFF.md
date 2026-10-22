@@ -48,6 +48,7 @@ Remember: CLAUDE.md rules - short replies, one micro-task then ask, no audits, n
 Starter prompt for any chat: "Read CLAUDE.md and HANDOFF.md (section PARALLEL WORK), then work on task <ID> only. Stop when done."
 
 ### Rules (every chat)
+0. (Owner, 22 Oct 09:03) NO chat publishes on its own any more. Finish on your feat/<id> branch, push it, mark the row 'ready'. The owner says when; then ONE Release chat merges all ready branches and publishes them together.
 1. One task = one branch `feat/<id>` made from the latest `origin/main`. Never commit to main (only the Release chat does).
 2. Stay inside your task's area (table below). Need to change code outside it? Stop and ask the owner.
 3. Shared spots - add only, never reorder or rewrite: `DEFAULT_CONFIG` keys (~line 220), `DUTY_LIBRARY` (add your entry at the end), `duty_status`/`duty_record` (add your id to a tuple, do not restructure), `step` commands (~line 6615, add one `if cmd ==` line).
