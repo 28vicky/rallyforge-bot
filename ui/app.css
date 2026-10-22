@@ -1067,3 +1067,45 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .bmcard select{font-size:12px;padding:4px 26px 4px 8px;width:100%;margin:0}
 .bmcard.on{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--card))}
 .bmcard.on::after{content:"\2713";position:absolute;top:6px;right:8px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--accfg);font-size:12px;line-height:20px;font-weight:700}
+
+/* Today card (one instance): duty queue + today's results */
+.today .cardhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.tdreset{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
+.tdgrid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:22px;margin-top:10px}
+@media (max-width:900px){.tdgrid{grid-template-columns:1fr}}
+.tdlab{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--fg);opacity:.78;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.tdq{display:flex;flex-direction:column}
+.tdrow{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
+.tdrow:first-child{border-top:0}
+.tdrow .tdi{text-align:center;font-weight:700;color:var(--mute)}
+.tdrow .tdt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdrow small{color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tdrow.done .tdi{color:var(--accent2)}
+.tdrow.done .tdt{color:var(--mute)}
+.tdrow.run .tdi,.tdrow.run small{color:var(--accent)}
+.tdrow.gaveup .tdi,.tdrow.gaveup small{color:var(--bad)}
+.tdsum{margin-top:10px;font-size:13px;color:var(--mute)}
+.tdres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:1fr;gap:14px}
+.tdres .stile{box-sizing:border-box;height:100%;justify-content:space-between}
+.tdweek{display:block;margin-top:12px;color:var(--mute)}
+
+/* Today - all instances (Dashboard): Crazy Eggs alert line + one row per instance */
+.tdce{margin-top:8px;font-size:13px;color:var(--mute);line-height:20px}
+.tdce b{color:var(--fg);font-weight:600}
+.tdce.off span{color:var(--bad)}
+.tdce a{color:var(--bad);font-weight:600;text-decoration:underline}
+.tdall{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px;font-variant-numeric:tabular-nums}
+.tdall th{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-align:left;color:var(--fg);opacity:.78;padding:6px 8px;border-bottom:1px solid var(--line)}
+.tdall td{padding:7px 8px;border-top:1px solid var(--line)}
+.tdall tbody tr{cursor:pointer}
+.tdall tbody tr:hover td{background:color-mix(in srgb,var(--fg) 5%,transparent)}
+.tdall tr.off td{color:var(--mute);opacity:.6}
+.tdall td small{color:var(--mute)}
+.tdall td.ok{color:var(--good)}
+/* a routine opened from the Routines cards blinks once so the eye finds it */
+.flash{animation:rfflash 1.6s ease-out}
+@keyframes rfflash{0%,40%{box-shadow:0 0 0 3px var(--accent1)}100%{box-shadow:0 0 0 0 transparent}}
+
+/* instance header: one line under the tabs (the tab row and the header each drew one) */
+:root .stickyhead .tabs{border-bottom:0}
+:root .stickyhead.stuck{box-shadow:none}

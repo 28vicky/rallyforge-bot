@@ -647,6 +647,52 @@ function busyTask(serial) {
   if ((m = /^(Champions|Crazy Eggs)/.exec(t))) return m[1];
   return cut(t.split(/[:\-(]/)[0].trim());
 }
+// ---- Today card: turn the "today" API answer into what the card shows (safe defaults when an instance just started)
+function fmtHM(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60);
+  return hh ? `${hh}h ${mm}m` : mm ? `${mm}m` : `${sec % 60}s`;
+}
+function hhmm(t) { return t ? new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-"; }
+function todayModel(j, serial) {
+  j = j || {};
+  const nowText = ((S.now && S.now[serial]) || {}).text || "";
+  const skew = (j.now || Date.now() / 1000) - Date.now() / 1000;             // server clock vs this window
+  const why = (m) => /city map|City Mapper/i.test(m || "") ? "no city map" : (m || "failed 3 times").replace(/^the /, "");
+  const order = { run: 0, due: 1, waiting: 2, retry: 2, gaveup: 3, done: 4 };
+  const items = (j.queue || []).map((q) => {
+    let k = q.status, sub;
+    if (nowText === "Duty: " + q.title) k = "run";
+    if (k === "run") sub = "running now";
+    else if (k === "done") sub = "done " + hhmm(q.last_ok);
+    else if (k === "waiting" || k === "retry") sub = (k === "retry" ? "retry " : "next ~") + String(q.text || "").replace(/^(Next|Retrying)\s*/, "");
+    else if (k === "gaveup") sub = "skipped - " + why(q.msg);
+    else sub = q.msg ? "next - after a failed try" : "next - waiting its turn";
+    return { k, title: q.title, sub, icon: { run: "▶", done: "✓", gaveup: "!" }[k] || "○" };
+  }).sort((a, b) => (order[a.k] ?? 2) - (order[b.k] ?? 2));
+  const total = items.length, left = items.filter((x) => x.k !== "done").length;
+  const resetIn = (j.reset_at || 0) - (Date.now() / 1000 + skew);
+  let summary;
+  if (!total) summary = "No daily duty is switched on for this instance.";
+  else if (!left) summary = `All ${total} duties done for today`;
+  else {
+    const need = left * 180;                                                // about 3 minutes per duty
+    summary = `${left} of ${total} duties left · ` + (need < resetIn ? `should all finish ${fmtHM(resetIn - need)} before reset` : "may not all finish before reset");
+  }
+  const r = j.results || {}, mons = r.monsters || {}, w = j.week || {};
+  const monList = Object.entries(mons).sort((a, b) => b[1] - a[1]);
+  return {
+    resetAt: j.reset_at || 0, skew, resetLocal: hhmm(j.reset_at), items, summary,
+    results: [
+      ["Rallies joined", r.joins || 0, ""],
+      ["Skipped (late)", r.late || 0, "Rallies left alone because too little time was left for the march"],
+      ["Monsters hit", monList.length, monList.map(([m, n]) => `${m} ×${n}`).join(", ") || "none yet"],
+      ["Duties done", total ? `${r.duties_done || 0}/${total}` : String(r.duties_done || 0), ""],
+      ["Restarts", r.restarts || 0, "Evony or the emulator restarted by the bot"],
+    ],
+    week: w.days ? `Last ${w.days} day${w.days > 1 ? "s" : ""}: ${w.joins || 0} joins · ${((w.restarts || 0) / w.days).toFixed(1).replace(/\.0$/, "")} restarts/day avg` : "Last 7 days: no data yet",
+  };
+}
 function actRow(v, l) {
   const a = l.a, k = a.k;
   const chip = k === "join" ? ["Joined", "g"] : k === "fail" ? ["Failed", "e"] : k === "renew" ? ["Renewed", "g"] : ["Skipped", "w"];

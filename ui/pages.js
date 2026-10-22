@@ -160,7 +160,7 @@ PAGES.dashboard = function () {
     btn("Resume all", () => act(api("resume"))),                   // Start / Pause / Stop all live in the top bar and the sidebar
     btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
   const log = panel(null, activityBox(null, "Activity - all instances"));
-  return h("div", {}, found, dev, ctl, log);
+  return h("div", {}, renderTodayAll(), found, dev, ctl, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
@@ -495,7 +495,7 @@ function instancePage(serial) {
       R.querySelector("h3").replaceWith(h("div", { class: "cardhead" },
         h("div", {}, h("h3", {}, "Monster joins"), h("small", { class: "sub" }, "Live rally history log")),
         h("a", { href: "#", class: "viewall", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("logs"); } }, "View all \u2192")));
-      return [h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
+      return [renderTodayCard(serial), h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
     }],
     ["routines", "Routines", () => [routinesCards(serial, ov, {
       duties: () => [PAGES.duties(serial)], tasks: () => [PAGES.tasks(serial)], market: () => [PAGES.market()],
@@ -1192,6 +1192,103 @@ PAGES.license = function () {
 };
 
 
+// ====================================================================== Today card (one instance)
+function renderTodayCard(serial) {
+  const head = h("div", { class: "tdreset" }), list = h("div", { class: "tdq" }), sum = h("div", { class: "tdsum" });
+  const res = h("div", { class: "tdres" }), week = h("small", { class: "tdweek" });
+  const card = h("div", { class: "panel today" },
+    h("div", { class: "cardhead" }, h("h3", {}, "Today"), head),
+    h("div", { class: "tdgrid" },
+      h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Duty queue"), list, sum),
+      h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Today's results"), res, week)));
+  let m = todayModel({}, serial), last = "";
+  const tick = () => {
+    if (!m.resetAt) { head.textContent = "Daily reset -"; return; }
+    head.textContent = `Daily reset in ${fmtHM(m.resetAt - (Date.now() / 1000 + m.skew))} · ${m.resetLocal} your time`;
+  };
+  const paint = () => {
+    const key = JSON.stringify([m.items, m.summary, m.results, m.week]);
+    if (key === last) return;                                               // nothing changed: keep the DOM as it is (no flicker)
+    last = key;
+    list.innerHTML = "";
+    m.items.forEach((x) => list.appendChild(h("div", { class: "tdrow " + x.k },
+      h("span", { class: "tdi" }, x.icon), h("span", { class: "tdt" }, x.title), h("small", {}, x.sub))));
+    sum.textContent = m.summary;
+    res.innerHTML = "";
+    m.results.forEach(([l, v, tip]) => res.appendChild(h("div", { class: "stile", title: tip || "" }, h("b", {}, String(v)), h("span", {}, l))));
+    week.textContent = m.week;
+  };
+  const load = async () => {
+    if (!card.isConnected) return;
+    const j = await api("today", { serial }, { quiet: true }).catch(() => null);
+    if (j) m = todayModel(j, serial);
+    tick(); paint();
+  };
+  paint(); tick();
+  const t1 = setInterval(() => { if (!card.isConnected) { clearInterval(t1); return; } tick(); }, 1000);
+  const t2 = setInterval(() => { if (!card.isConnected) { clearInterval(t2); return; } load(); }, 5000);
+  setTimeout(load, 0);
+  return card;
+}
+
+// ====================================================================== Today - all instances (Dashboard, nothing selected)
+function renderTodayAll() {
+  const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {});
+  const card = h("div", { class: "panel today" },
+    h("div", { class: "cardhead" }, h("h3", {}, "Today \u00b7 all instances"), head), ce,
+    h("table", { class: "tdall" },
+      h("thead", {}, h("tr", {}, ...["Instance", "Shield", "Buff", "Duties", "Joins", "Skipped (late)"].map((c) => h("th", {}, c)))), body));
+  let j = null, last = "";
+  const skew = () => (j ? j.now - Date.now() / 1000 : 0);
+  const tick = () => {
+    if (!j) { head.textContent = "Daily reset -"; return; }
+    head.textContent = `Daily reset in ${fmtHM(j.reset_at - (Date.now() / 1000 + skew()))} \u00b7 ${hhmm(j.reset_at)} your time`;
+  };
+  const open = (serial) => { S.sel = serial; S.instTab = "ov"; renderSide(); renderTabs(); renderPage(); };
+  const turnOn = async (e) => {
+    e.preventDefault();
+    const r = await act(api("crazy_eggs_on_all"));
+    if (r) { j = r; last = ""; paint(); toast("Crazy Eggs switched on for every instance.", "ok"); }
+  };
+  const paint = () => {
+    if (!j) return;
+    const st = {}; (S.devStatus || []).forEach((d) => (st[d.id] = d.state));
+    const key = JSON.stringify([j.rows, j.crazy_eggs, st]);
+    if (key === last) return;                                               // nothing changed: no flicker
+    last = key;
+    const c = j.crazy_eggs || { total: 0, off: [] };
+    ce.innerHTML = "";
+    ce.className = "tdce" + (c.off.length ? " off" : "");
+    ce.append(h("b", {}, "Crazy Eggs"), " ");
+    if (!c.total) ce.append(h("span", {}, "no instances yet"));
+    else if (!c.off.length) ce.append(h("span", {}, `on for all ${c.total} instance${c.total > 1 ? "s" : ""}`));
+    else ce.append(h("span", { title: "Off on: " + c.off.join(", ") }, `\u26a0 off on ${c.off.length} of ${c.total}`), " \u00b7 ",
+      h("a", { href: "#", title: "Switch the Crazy Eggs duty on for every instance", onclick: turnOn }, "turn on"));
+    body.innerHTML = "";
+    if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: "6", class: "mute" }, "No instances in your list yet.")));
+    j.rows.forEach((r) => {
+      const off = !["run", "pause"].includes(st[r.serial]);
+      const all = r.duties_total && r.duties_done >= r.duties_total;
+      body.appendChild(h("tr", { class: off ? "off" : "", title: "Open " + r.name, onclick: () => open(r.serial) },
+        h("td", {}, h("b", {}, r.name), off ? h("small", {}, " offline") : null),
+        h("td", { title: "Not read from the game yet" }, "-"), h("td", { title: "Not read from the game yet" }, "-"),
+        h("td", { class: all ? "ok" : "" }, r.duties_total ? `${r.duties_done}/${r.duties_total}` + (all ? " \u2713" : "") : "-"),
+        h("td", {}, String(r.joins)), h("td", {}, String(r.late))));
+    });
+  };
+  const load = async () => {
+    if (!card.isConnected) return;
+    const r = await api("today_all", {}, { quiet: true }).catch(() => null);
+    if (r) j = r;
+    tick(); paint();
+  };
+  tick();
+  const t1 = setInterval(() => { if (!card.isConnected) { clearInterval(t1); return; } tick(); }, 1000);
+  const t2 = setInterval(() => { if (!card.isConnected) { clearInterval(t2); return; } load(); }, 5000);
+  setTimeout(load, 0);
+  return card;
+}
+
 // ====================================================================== duties
 PAGES.duties = function (fixed, only, compact) {
   const root = h("div", {});
@@ -1397,12 +1494,32 @@ function routinesCards(serial, ov, details) {
   let filter = "all", query = "", duties = [];
   const eff = (k) => (ov && ov[k] !== undefined ? ov[k] : S.cfg[k]);
   const setCfg = (k, v) => { ov[k] = v; draw(); };      // the page's autosave writes it within 2 s
-  const open = (key) => {
+  // opening a card shows its settings at the top of the page (and jumps to that routine inside a long page, e.g. Crazy Eggs
+  // in the Duties page); "All routines" comes back to the same place in the list
+  let backTop = 0;
+  const pg = () => $("#pages");
+  const below = (el) => { const p = pg(); if (!p || !el) return; const sh = p.querySelector(".stickyhead");
+    p.scrollTop += el.getBoundingClientRect().top - p.getBoundingClientRect().top - (sh ? sh.offsetHeight : 0) - 8; };
+  const find = (title) => {
+    const want = String(title || "").toLowerCase();
+    if (!want) return null;
+    const by = (sel) => [...root.querySelectorAll(sel)].find((x) => x.textContent.trim().toLowerCase() === want)
+      || [...root.querySelectorAll(sel)].find((x) => x.textContent.trim().toLowerCase().startsWith(want));
+    const hit = by(".subtitle,h3,h4,legend,summary") || by(".dname,b");      // its own settings first, else its row in the list
+    return hit ? (hit.closest(".drow,.row,.subset,details,.panel,.card") || hit) : null;
+  };
+  const open = (key, title) => {
     const els = details[key] && details[key]();
     if (!els) return;
+    backTop = pg() ? pg().scrollTop : 0;
     root.innerHTML = "";
-    root.appendChild(h("button", { class: "btn sm rtnback", onclick: draw }, "\u2190 All routines"));
+    root.appendChild(h("button", { class: "btn sm rtnback", onclick: () => { draw(); requestAnimationFrame(() => { if (pg()) pg().scrollTop = backTop; }); } }, "\u2190 All routines"));
     for (const e of els) if (e) root.appendChild(e);
+    below(root);
+    // the page may fill in after a server call: look for the routine a few times
+    let n = 0;
+    const jump = () => { const el = find(title); if (el) { below(el); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600); } else if (++n < 30) setTimeout(jump, 150); };
+    if (title && key === "duties") jump();
   };
   const badge = { done: ["ok", null], due: ["due", null], waiting: ["next", null], retry: ["next", null], gaveup: ["bad", null] };
   const rows = () => {
@@ -1450,7 +1567,7 @@ function routinesCards(serial, ov, details) {
           h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, title), h("small", { class: "sub" }, sub)), h("span", { class: "cnt" }, mine.filter((r) => r.on && !r.soon).length + " on")),
           shown.map((r) => h("div", { class: "rtnrow" + (r.soon ? " soon" : "") },
             h("div", { class: "dtx" }, h("div", { class: "dname" },
-              r.open ? h("a", { href: "#", title: "Open the settings", onclick: (e) => { e.preventDefault(); open(r.open); } }, r.t) : h("b", {}, r.t), tag(r)),
+              r.open ? h("a", { href: "#", title: "Open the settings", onclick: (e) => { e.preventDefault(); open(r.open, r.t); } }, r.t) : h("b", {}, r.t), tag(r)),
               h("small", { title: r.n || "" }, r.n || "")),
             tog(r)))));
       }
