@@ -7579,7 +7579,9 @@ def ce_snap(img, tag):
 
 
 def ce_on_screen(img):
-    return bool(find_text(img, ["Reset Countdown", "Scout Cost", "Activate all"], cutoff=0.72))
+    if find_text(img, ["Event Center"], region=(100, 0, 340, 70), cutoff=0.8):    # the Event Center list itself is never the eggs page
+        return False
+    return bool(find_text(img, ["Reset Countdown", "Scout Cost", "Activate all"], cutoff=0.8))
 
 
 CE_CONFIRM = (360, 720)          # the green Confirm button of the Lucky Hammer dialog (fallback tap point)
@@ -7666,6 +7668,9 @@ def run_crazy_eggs(dev, cfg, log, stop):
             _nap(stop, 1.0, 1.4)
             img = dev.screenshot()
             eggs = [ce_read_slot(img, i) for i in range(4)]
+        if all(e is None for e in eggs) and not ce_on_screen(img):   # not the eggs page (another event opened): stop instead of tapping around
+            ce_snap(img, "2_failed")
+            raise RuntimeError("the Crazy Eggs screen is not showing (another page opened)")
         ce_snap(img, "3_eggs")
         hammers = ce_read_count(img, CE_HAMMERS)
         lucky_n = ce_read_count(img, CE_LUCKY)
