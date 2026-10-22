@@ -1102,3 +1102,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .tdall tr.off td{color:var(--mute);opacity:.6}
 .tdall td small{color:var(--mute)}
 .tdall td.ok{color:var(--good)}
+/* a routine opened from the Routines cards blinks once so the eye finds it */
+.flash{animation:rfflash 1.6s ease-out}
+@keyframes rfflash{0%,40%{box-shadow:0 0 0 3px var(--accent1)}100%{box-shadow:0 0 0 0 transparent}}
