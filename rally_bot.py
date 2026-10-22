@@ -5019,10 +5019,31 @@ def _restart_emulator(dev, cfg, log, stop, why=""):
 _RALLY_SEEN = {}          # serial -> last time that instance saw rally cards (green countdown bars) on its list
 
 
+_RALLY_ENDS = {}          # serial -> [(monster, end time, seen at)] rallies read on its list (last hour)
+_ALLIES = {}              # frozenset({serial, serial}) -> last time both saw the same rally = same alliance
+
+
+def note_rally(serial, mon, left):
+    """Remember a rally this instance read; two instances that read the same rally (monster + end time) share an alliance."""
+    try:
+        now = time.time()
+        end = now + float(left)
+    except Exception:
+        return
+    mine = [r for r in _RALLY_ENDS.get(serial, []) if now - r[2] < 3600][-60:]
+    mine.append((mon, end, now))
+    _RALLY_ENDS[serial] = mine
+    for other, rows in list(_RALLY_ENDS.items()):
+        if other != serial and any(m == mon and abs(e - end) <= 12 and now - t < 3600 for m, e, t in rows):
+            _ALLIES[frozenset((serial, other))] = now
+
+
 def others_see_rallies(serial, within=150):
-    """True when another instance of this app saw rallies on its list in the last `within` seconds."""
+    """True when an instance known to be in the same alliance saw rallies on its list in the last `within` seconds.
+    Instances in another alliance (or not matched yet) do not count: their list can be busy while this one is truly quiet."""
     now = time.time()
-    return any(s != serial and now - t < within for s, t in list(_RALLY_SEEN.items()))
+    allies = {s for pair in list(_ALLIES) if serial in pair for s in pair if s != serial}
+    return any(s in allies and now - t < within for s, t in list(_RALLY_SEEN.items()))
 
 
 def force_restart_game(dev, cfg, log, stop):
@@ -9559,6 +9580,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 pass
             rally, march, ok, why = judge(screen, hit, cfg, need)
             last_march[0] = march
+            if mon and mon != "hidden" and rally:
+                note_rally(serial, mon, rally)
             if not label:
                 label = f"[{show_name(screen, hit, mon)}] "
             if ok and not rotator_for(mon).available():
@@ -9992,10 +10015,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     still["any"], still["since"], still["sig"] = None, None, None
                     if stale_hits[0] >= 2:
                         stale_hits[0] = 0
-                        log("[!] The rally list is still empty here while other instances see rallies - restarting Evony")
+                        log("[!] The rally list is still empty here while instances in the same alliance see rallies - restarting Evony")
                         force_restart_game(dev, cfg, log, stop)
                     else:
-                        log("[!] The rally list is empty here while other instances see rallies - reopening it")
+                        log("[!] The rally list is empty here while instances in the same alliance see rallies - reopening it")
                         dev.back()
                         nap(1.5, 2.0)
                         recover()
