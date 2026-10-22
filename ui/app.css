@@ -1067,3 +1067,9 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .bmcard select{font-size:12px;padding:4px 26px 4px 8px;width:100%;margin:0}
 .bmcard.on{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--card))}
 .bmcard.on::after{content:"\2713";position:absolute;top:6px;right:8px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--accfg);font-size:12px;line-height:20px;font-weight:700}
+
+/* Button sizes: two only. Normal = :root .btn (34px tall, 14px sides), small = .btn.sm (30px, 10px). Top bar used its own 7px/12px. */
+:root .ribbon .btn{min-height:34px;padding:0 14px}
+/* Sidebar title: keep "RallyForge" and "Automation Hub" on one line each; the version pill no longer squeezes them. */
+.side .brand .vpill{flex:none}
+.side .brand .bt b,.side .brand .bt small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
