@@ -1,9 +1,9 @@
 {
-  "version": "2.4.81",
-  "notes": "33 ready-made Black Market pictures; dark mode hidden for now.",
+  "version": "2.4.82",
+  "notes": "Rallies on screen joined before tasks; Crazy Eggs and stuck-loop fixes",
   "files": {
     "rally_bot.py": {
-      "sha256": "59e616733aff0b658c6bf77fe59a36cf74195d2705a77f2d240e611c8860833d"
+      "sha256": "d787de6e67a98bbb1fca3b3efaa89777e70c8db109308d394d0f7741e7e86741"
     },
     "web_app.py": {
       "sha256": "2abd0b8d77b2e947f47fb1a9de046d2011ccd397200383693d8298b4cc0a0242"
@@ -18,7 +18,7 @@
       "sha256": "1be1e6cbf07c5c7ad1dc9f701eb5b7fbbd56e16721238e6af5af2177770a384f"
     },
     "ui/changelog.js": {
-      "sha256": "b5ad92f19d299bad522fb68ca63b23a73cb6afc91c90565d97b02fc7bc6cf12f"
+      "sha256": "8cc9ef57035cace7b16fca41d0633b173447f6e12388f62bddd7f49798978211"
     },
     "ui/dialogs.js": {
       "sha256": "50a8e2aec4a5482b4923fc0096f44916c9cf29b37ca9f149b885b8ffb7410ebf"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "49127d3e6d7fd3a499d46e8e3c922ab88b3be0709b969a0ed71934a07b397a5e"
+      "sha256": "e413e2142ce9f74d1aedb4dc94e20b3b9cd9b2304729898a37f3505cec805054"
     },
     "ui/tour.js": {
       "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
@@ -1585,5 +1585,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "69d068d2b9bd6aa1e44814c46123ff632289f4d03d5951d12659c34f7dbba259"
+  "sig": "edb77afadae856734b25e393199f498f8e7fb522d95c3c1a56214d3e295c252c"
 }
