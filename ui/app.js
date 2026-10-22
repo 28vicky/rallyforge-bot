@@ -271,8 +271,8 @@ function buildRibbon() {
   const grp = (cap, ...kids) => h("div", { class: "grp" }, h("div", { class: "row" }, kids), h("div", { class: "cap" }, cap));
   r.append(
     grp("Run",
-      btn("Start", () => { if (S.sel === "control") { S.startingAt = Date.now(); paintRunState(); } collectAndRun("start", { serial: target() }); }, "pri", "play"),
-      btn("Pause", () => (S.sel === "control" ? pauseOrResumeAll() : act(api("pause", { serial: target() }))), "", "pause"),
+      btn("Start", () => { if (S.sel === "control" && allPaused()) return act(api("resume")); if (S.sel === "control") { S.startingAt = Date.now(); paintRunState(); } collectAndRun("start", { serial: target() }); }, "pri", "play"),
+      btn("Pause", () => act(api("pause", { serial: target() })), "", "pause"),
       btn("Stop", () => { S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop"), h("span", { class: "ribcount", id: "ribCount" })),
     grp("Scan",
       btn("Generals", () => openGeneralManager(), "", "users"),
@@ -472,10 +472,11 @@ function paintRibbonRun() {
     if (a === "start" && lbl) {
       if (starting) { b.classList.add("starting"); lbl.textContent = "Starting\u2026"; }
       else if (total && run === total) { b.classList.add("isrunning"); lbl.textContent = "Running"; }
+      else if (allPaused()) lbl.textContent = "Resume all";              // everything paused: the main button carries on
       else lbl.textContent = busy ? "Start the rest" : "Start all";
     }
     if ((a === "pause" || a === "stop") && busy === 0 && !starting) b.classList.add("greyed");
-    if (a === "pause" && total && S.devStatus.every((d) => d.state === "pause")) b.classList.add("cur-pause");
+    if (a === "pause" && allPaused()) b.classList.add("greyed");          // nothing left to pause: Resume all is on the Start button
   });
   const c = document.getElementById("ribCount");
   if (c) { c.textContent = run && run < total ? run + "/" + total + " running" : ""; }
@@ -488,11 +489,8 @@ function paintPauseLabels() {
   const ap = allPaused();
   const sp = document.getElementById("sidePause");
   if (sp) { sp.textContent = ap ? "Resume all" : "Pause all"; sp.title = ap ? "Carry on with every paused instance" : "Pause every running instance"; }
-  document.querySelectorAll('[data-act="pause"]').forEach((b) => {
-    const mine = S.sel === "control" ? ap : (S.devStatus.find((x) => x.id === S.sel) || {}).state === "pause";
-    const lbl = b.querySelector(".runlbl");
-    if (lbl) lbl.textContent = mine ? (S.sel === "control" ? "Resume all" : "Resume") : lbl.dataset.base + (S.sel === "control" ? " all" : "");
-    else if (!b.querySelector("svg")) b.textContent = mine ? "Resume" : "Pause";
+  if (S.sel !== "control") document.querySelectorAll('.instbar [data-act="pause"]').forEach((b) => {      // one instance: Pause <-> Resume
+    b.textContent = (S.devStatus.find((x) => x.id === S.sel) || {}).state === "pause" ? "Resume" : "Pause";
   });
 }
 function paintRunState() {
