@@ -4942,8 +4942,19 @@ def reclaim_if_kicked(dev, cfg, log, stop, screen):
 _LOAD_RESTARTS = {}
 
 
+LOADING = {}                      # serial -> (what, since epoch s) while the emulator boots / Evony loads (shown in the instance list)
+
+
 def wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
     """Wait until the game shows a known screen several times in a row (loading screens do not count)."""
+    LOADING.setdefault(dev.serial, ("loading", time.time()))
+    try:
+        return _wait_stable(dev, cfg, log, stop, pkg, allow_emu_restart)
+    finally:
+        LOADING.pop(dev.serial, None)
+
+
+def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
     good, last_note, last_fg = 0, 0.0, time.time()
     not_ready_since, last_clear, last_kick = None, 0.0, 0.0
     end = time.time() + cfg["game_load_timeout"]
@@ -5020,6 +5031,13 @@ def wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
 
 def bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
     """Make sure the emulator is running and Evony is open (and, if we had to start it, loaded)."""
+    try:
+        return _bring_online(dev, cfg, log, stop, wait, check_ready)
+    finally:
+        LOADING.pop(dev.serial, None)
+
+
+def _bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
     adb, serial = dev.adb, dev.serial
     restarted = False
     if serial not in _LAUNCH_SEEN and device_online(adb, serial):
@@ -5044,6 +5062,7 @@ def bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
             notify(cfg, serial, "Not enough free RAM to start the emulator.")
             raise RuntimeError("There was not enough free RAM to start the emulator in time.")
         log("[*] The emulator is off - starting it")
+        LOADING[serial] = ("starting", time.time())
         with _launch_lock:
             subprocess.Popen(cmd, shell=isinstance(cmd, str), creationflags=NOWIN,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -5066,6 +5085,7 @@ def bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
         pkg = evony_package(adb, serial, cfg)
         if restarted or app_foreground(adb, serial, pkg) is False:
             log("[*] Starting Evony")
+            LOADING.setdefault(serial, ("loading", time.time()))
             start_app(adb, serial, pkg)
             restarted = True
             _nap(stop, 8)
@@ -5153,6 +5173,7 @@ def force_restart_game(dev, cfg, log, stop):
     """Close Evony completely, open it again and wait until it is stable (used when the bot is lost)."""
     pkg = evony_package(dev.adb, dev.serial, cfg)
     log("[!] Lost for too long - restarting Evony")
+    LOADING[dev.serial] = ("restarting", time.time())
     _adb(dev.adb, dev.serial, "shell", "am", "force-stop", pkg)
     _nap(stop, 3, 4)
     while not _HEAVY_LOCK.acquire(timeout=2):             # loading Evony is heavy: one at a time

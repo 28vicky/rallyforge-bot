@@ -88,6 +88,7 @@ class Controller:
         self.removed = [str(x) for x in (self.cfg.get("removed_devices") or []) if x]   # emulators you removed: Detect never adds them again
         self.dev = {}                                   # serial -> runtime record
         self.start_queue = []
+        self.start_eta = {}                             # serial -> when Start all will start it (instance list countdown)
         self.logs = collections.deque(maxlen=2500)      # (id, serial, name, text)
         self.acts = collections.deque(maxlen=1500)      # (id, serial, name, dict) - the Activity screen
         self.seq = 0
@@ -259,6 +260,9 @@ class Controller:
             out.append({"id": s, "name": d["name"], "idx": d["idx"], "state": d["state"], "joins": d["joins"],
                         "queued": s in self.start_queue, "paused": d["ctl"].paused, "no_stamina": getattr(d["ctl"], "no_stamina", 0) >= 3,
                         "kicked_at": (int(rb.KICKED.get(s, 0)) if d["state"] == "run" and rb.KICKED.get(s, 0) > time.time() else 0),
+                        "loading": (rb.LOADING[s][0] if d["state"] == "run" and s in rb.LOADING else ""),
+                        "loading_since": (int(rb.LOADING[s][1]) if d["state"] == "run" and s in rb.LOADING else 0),
+                        "start_at": (int(self.start_eta[s]) if d["state"] != "run" and self.start_eta.get(s, 0) > time.time() - 5 else 0),
                         "resume_in": (max(1, int((d["resume_at"] - time.time()) / 60) + 1) if d.get("resume_at") and d["ctl"].paused else 0),
                         "resume_at": (int(d["resume_at"]) if d.get("resume_at") and d["ctl"].paused else 0)})
         return out
@@ -513,6 +517,7 @@ class Controller:
         d["pause_tok"], d["resume_at"] = None, None
         if serial in self.start_queue:
             self.start_queue.remove(serial)
+        self.start_eta.pop(serial, None)                   # still waiting in Start all: do not start it later
         d["ctl"].stop.set()
         d["ctl"].resume()
         self.log("[*] Stopping...", serial)
@@ -542,7 +547,12 @@ class Controller:
                 adb = rb.find_adb(cfg.get("adb_path") or "auto")
             except Exception:
                 adb = None
+            t0 = time.time()
+            for j, s in enumerate(todo):
+                self.start_eta[s] = t0 + 0.5 + j * gap         # worst case; refreshed after every start
             for i, s in enumerate(todo):
+                if s not in self.start_eta:                     # stopped while it was waiting for its turn
+                    continue
                 warm = False
                 if adb and gap:
                     try:
@@ -551,9 +561,15 @@ class Controller:
                             warm = rb.app_foreground(adb, s, pkg) is True
                     except Exception:
                         warm = False
+                self.start_eta.pop(s, None)
                 threading.Thread(target=self._safe, args=(self.start_instance, s, cfg), daemon=True).start()
                 if i < len(todo) - 1:
-                    time.sleep(2 if warm else gap)
+                    wait_s = 2 if warm else gap
+                    t1 = time.time()
+                    for j, s2 in enumerate(todo[i + 1:]):
+                        if s2 in self.start_eta:
+                            self.start_eta[s2] = t1 + wait_s + j * gap
+                    time.sleep(wait_s)
 
         threading.Thread(target=launcher, daemon=True).start()
 
