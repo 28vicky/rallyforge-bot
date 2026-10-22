@@ -1497,6 +1497,8 @@ class Api:
                          "on": bool(conf.get("on")), "every_min": int(conf.get("every_min", d["every_min"]) or 0),
                          "default_every": d["every_min"], "verified": bool(d.get("verified")),
                          "status": st, "status_text": txt,
+                         "opts": [dict(o, val=conf.get(o["k"], o.get("def"))) for o in (d.get("opts") or [])],
+                         "gems": bool(d.get("gems")),
                          "schedule": ("When the next egg is ready" if d["id"] == "crazy_eggs" else "Once per game day" if not d["every_min"] else f"Every {d['every_min']} min")})
         return rows
 
@@ -1583,6 +1585,20 @@ class Api:
             row["on"] = bool(p["on"])
         if "every_min" in p:
             row["every_min"] = max(0, min(int(float(p["every_min"])), 10080))
+        for o in rb.DUTY_BY_ID[did].get("opts") or []:      # the duty's own settings (resource, amount, ...)
+            if o["k"] not in (p.get("opt") or {}):
+                continue
+            v = p["opt"][o["k"]]
+            if o["type"] == "bool":
+                v = bool(v)
+            elif o["type"] == "number":
+                try:
+                    v = max(o.get("min", 0), min(int(float(v)), o.get("max", 10 ** 9)))
+                except (TypeError, ValueError):
+                    raise ApiError(f"{o['label']}: enter a number.")
+            elif o["type"] == "select" and v not in o["choices"]:
+                raise ApiError(f"{o['label']}: pick one of the list.")
+            row[o["k"]] = v
         self._save_scoped(scope, "duties", duties)
         return self.duties(p)
 
