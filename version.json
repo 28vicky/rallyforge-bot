@@ -1,12 +1,12 @@
 {
-  "version": "2.4.93",
-  "notes": "Black Market obeys Stop within a second",
+  "version": "2.4.94",
+  "notes": "Resume all button when everything is paused",
   "files": {
     "rally_bot.py": {
-      "sha256": "55133f24cdce5206d6e22fe4468f77d89dc356550161ce3073f527b89735f828"
+      "sha256": "050245fd9e70eb3bce176f9133ef07e8d2322326f781d11a335a243be15627f6"
     },
     "web_app.py": {
-      "sha256": "da2a5875ae84d309f7465d373a6303f7b37b3a49aa77b0b3b65e3c8cf69cce4c"
+      "sha256": "4041376cf3ada24e4bb227621b4dda17c181e55b49ef4af2e3b6268d52987ef9"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -15,10 +15,10 @@
       "sha256": "4ff7eedebf38944d42b4aa916cb5ac634171902803e9b8170c63217262c933e1"
     },
     "ui/app.js": {
-      "sha256": "82b2f236e098aad69c38d612bd7a982f3cd8f93e55071fa1ab54fcd1610ca434"
+      "sha256": "29ab8dec50bb47fa3b6b24f6a7b29419cd8e23e2a2482feba8a8164c096a6fdf"
     },
     "ui/changelog.js": {
-      "sha256": "c5cab7bff493625d034dd337ebd15ca5d045417845a30df6b880ea978e26c782"
+      "sha256": "8e8e2d84b58676eb5e7829eae8926a3099b317812aa2104b9699e2c23ae28291"
     },
     "ui/dialogs.js": {
       "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
@@ -1621,5 +1621,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "483f0d4d2c5774f86fee2112e281b62238923b96348ac6c3087071fa4397fb1d"
+  "sig": "01b5cdfe955b14cd028305f30e48889e4f76ee7229f46cdf79316927b9c7055c"
 }
