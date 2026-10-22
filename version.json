@@ -1,9 +1,9 @@
 {
-  "version": "2.4.86",
-  "notes": "Black Market: tap pictures to choose what to buy (plain names, categories, search, Stamina only). Logs button opens a Logs page: choose time and instance, save as zip. Dropdown arrows are back.",
+  "version": "2.4.87",
+  "notes": "Black Market keeps buying after a purchase (until your gem limit). Stamina only pays with gems. Faster, surer building search in the city. Now executing shows the current duty.",
   "files": {
     "rally_bot.py": {
-      "sha256": "01f7dd51ea153a476f69f7c11ddce208d849801efdd76a826333372a1aeb2b6b"
+      "sha256": "4a5d26b19bee5355178d44b2d2925e475cc16762e9c6afa0eb00d88db0181489"
     },
     "web_app.py": {
       "sha256": "ca465e6955903484a5f7930b3247fa76933fb8695a74b6b4f297a803679c5104"
@@ -18,7 +18,7 @@
       "sha256": "19834191317f9bc0a89b4273ca00a911ceb82ed502ade3a3fccbcfcb9a8bb111"
     },
     "ui/changelog.js": {
-      "sha256": "d7ebdf302427e3931ed70892f56b8f4c286fcd4dba4abc1c978da0e320ab4b10"
+      "sha256": "3f0189ab43b37951bf8a8c7a9f1ae64dd18a50f813648bb8c40bbacdf205fbb2"
     },
     "ui/dialogs.js": {
       "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "b35c518b10a0515eeb24868cf5fca00174f69fbb027eb7cff4d478e611f4b56f"
+      "sha256": "301a5338cddcff14318017e676e7b296a3f756095d7ee05fd35d0ca75b0b946b"
     },
     "ui/tour.js": {
       "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
@@ -1617,5 +1617,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "c4d05f237a500e5deeaf8be559f03009705f48d3b77888efd5bb988dcff725c3"
+  "sig": "c12a30198b4b04ce35f471d3c665af44ff5e5a41edb2f74d3261776b8d39c4f6"
 }
