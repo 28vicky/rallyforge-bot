@@ -1405,7 +1405,7 @@ const DUTY_GROUP = { champions: "daily", crazy_eggs: "daily", wheel: "daily", lo
   offering_tributes: "city", trade_carriage: "city", gate_visitors: "city",
   general_chest: "daily", vip_claim: "daily", recruit_citizens: "daily", civilization_card: "daily", empire_depot: "daily",
   lucky_raffle: "daily", refining_card: "daily", ranger_knight: "daily", activity_chests: "daily",
-  wisdom_dome_tokens: "shops", offering_gems: "shops" };
+  wisdom_dome_tokens: "shops" };
 const DUTY_OPEN = { black_market: "market", collect_resources: "map" };
 const ROUTINE_SOON = [
   ["rally", "Stamina limit + top-up", "Stop joining below a stamina floor"],
