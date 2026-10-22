@@ -8780,6 +8780,34 @@ def picture_items(dev):
     return items
 
 
+def fill_from_squares(ent):
+    """Map by hand: the buildings placed by hand pin where the numbered squares sit, so every other fixed building is
+    filled in from the squares. Hand-placed buildings always win; filled ones are redone on every pick."""
+    items, manual = ent.setdefault("items", {}), set(ent.get("manual", []))
+    for k in ent.get("auto", []):
+        if k not in manual:
+            items.pop(k, None)
+    sq = {}
+    for n, (nm, ox, oy) in CITY_SQUARES.items():
+        base = re.sub(r"\s*\d+$", "", nm)
+        if n not in PARKED_SQUARES and base.lower() in DEFAULT_PICTURE_BUILDINGS:
+            sq.setdefault(base.lower(), (base, ox, oy))
+    pins = [(items[k][0] - sq[k.split("#")[0].lower()][1], items[k][1] - sq[k.split("#")[0].lower()][2])
+            for k in manual if k in items and k.split("#")[0].lower() in sq]
+    if not pins:
+        ent["auto"] = []
+        return 0
+    ax, ay = sum(p[0] for p in pins) / len(pins), sum(p[1] for p in pins) / len(pins)
+    have = {k.split("#")[0].lower() for k in items}
+    auto = []
+    for low, (base, ox, oy) in sq.items():
+        if low not in have:
+            items[f"{base}#1"] = [round(ax + ox), round(ay + oy)]
+            auto.append(f"{base}#1")
+    ent["auto"] = auto
+    return len(auto)
+
+
 CHANGEABLE_PLOTS = [n for n, (nm, _x, _y) in CITY_SQUARES.items()
                     if n not in PARKED_SQUARES and re.sub(r"\s*\d+$", "", nm).lower() not in DEFAULT_PICTURE_BUILDINGS]
 

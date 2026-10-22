@@ -1048,10 +1048,13 @@ class Controller:
         items[key] = [round(nav.cx + float(x)), round(nav.cy + float(y))]
         ent["missing"] = rb.city_report(items)[1]
         ent["manual"] = sorted(set(ent.get("manual", [])) | {key})
+        filled = rb.fill_from_squares(ent)                    # the rest of the fixed buildings follow from the squares
+        ent["missing"] = rb.city_report(items)[1]
         rb.save_city(data)
         if shot is not None:
             rb.save_building_picture(serial, key, shot, float(x), float(y))
-        self.log(f"[+] City map by hand: {name} placed at {items[key][0]},{items[key][1]}")
+        self.log(f"[+] City map by hand: {name} placed at {items[key][0]},{items[key][1]}"
+                 + (f" - {filled} other building(s) filled in from the squares" if filled else ""))
 
     def slots_info(self, serial):
         """The numbered plots and which building of this emulator sits in which one."""
