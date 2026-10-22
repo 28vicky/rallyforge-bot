@@ -870,6 +870,7 @@ class Device:
         stop = self.guard[2] if self.guard else None
         self.lag_count = getattr(self, "lag_count", 0) + 1
         t0 = time.time()
+        self.lag_times = [t for t in getattr(self, "lag_times", []) if t0 - t < 600] + [t0]   # lag spells in the last 10 min
         try:
             if log:
                 log(f"[!] Game lagging (red wifi icon) - waiting for it to clear (#{self.lag_count} this run)")
@@ -9968,6 +9969,13 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         if getattr(dev, "lag_streak", 0) >= 4:       # the game has lagged through 4 waits in a row: restart it instead of carrying on
             log(f"[!] The game kept lagging ({dev.lag_streak} waits of 20 s in a row)")
             dev.lag_streak = 0
+            war_streak[0] = 0
+            force_restart_game(dev, cfg, log, stop)
+            return False
+        often = [t for t in getattr(dev, "lag_times", []) if time.time() - t < 600]
+        if len(often) >= 8 and time.time() - getattr(dev, "lag_restart_at", 0) > 1800:   # lags again and again (max 1 restart / 30 min)
+            log(f"[!] The game lagged {len(often)} times in 10 minutes - restarting Evony")
+            dev.lag_times, dev.lag_streak, dev.lag_restart_at = [], 0, time.time()
             war_streak[0] = 0
             force_restart_game(dev, cfg, log, stop)
             return False
