@@ -7145,18 +7145,22 @@ def run_market(dev, cfg, log, stop):
             if min_gems and (gems is None or gems - cost < min_gems):
                 log(f"[i] Black Market: a paid refresh ({cost} gems) would go under the gem floor of {min_gems:,} - stopping")
                 break
+        if stop.is_set():                                    # Stop pressed: no new refresh
+            break
         before = _market_sig(img)
         dev.tap(refresh[0] + refresh[2] / 2, refresh[1] + refresh[3] / 2)
         shot = None
         for _p in range(8):                                  # look every ~0.4 s until the shop shows new goods (was a fixed ~4 s wait)
-            stop.wait(0.4)
+            if stop.wait(0.4):
+                break
             shot = dev.screenshot()
             if not market_on_screen(shot):
                 break
             sg = _market_sig(shot)
             if (_sig_diff(sg, before) or 0) >= 2.0:
                 for _s in range(4):                          # new goods: wait until two pictures in a row agree (icons done drawing)
-                    stop.wait(0.3)
+                    if stop.wait(0.3):
+                        break
                     s2 = dev.screenshot()
                     g2s = _market_sig(s2) if market_on_screen(s2) else None
                     if g2s is not None and _sig_diff(g2s, sg) < 2.0:
@@ -7166,6 +7170,8 @@ def run_market(dev, cfg, log, stop):
                     if sg is None:
                         break
                 break
+        if stop.is_set():
+            break
         if not market_on_screen(shot):                       # a dialog (confirm / not enough gems)
             p = find_text(shot, ["Confirm", "OK"])
             if p and not find_text(shot, ["enough", "insufficient", "Not enough"]):
