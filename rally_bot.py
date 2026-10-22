@@ -824,11 +824,13 @@ class Device:
                 if not lag_icon(img):
                     time.sleep(1.0)                  # let the game catch up before the next tap
                     img = self.screenshot()
+                    self.lag_streak = 0
                     if log:
                         log(f"[+] Game settled after {time.time() - t0:.0f}s")
                     return img
+            self.lag_streak = getattr(self, "lag_streak", 0) + 1     # counted by the rally loop: 4 in a row -> restart Evony
             if log:
-                log("[!] Still lagging after 20 s - carrying on")
+                log(f"[!] Still lagging after 20 s - carrying on ({self.lag_streak} in a row)")
         finally:
             self._lag_busy = False
         return img
@@ -9643,8 +9645,16 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 return True
         return False
 
+    war_streak = [0]                          # 'Alliance War' taps since the rally list was last reached (across recover() calls)
+
     def recover():
         """Get back to the rally list: close pop-ups, follow the navigation steps, use Back where it is safe."""
+        if getattr(dev, "lag_streak", 0) >= 4:       # the game has lagged through 4 waits in a row: restart it instead of carrying on
+            log(f"[!] The game kept lagging ({dev.lag_streak} waits of 20 s in a row)")
+            dev.lag_streak = 0
+            war_streak[0] = 0
+            force_restart_game(dev, cfg, log, stop)
+            return False
         at_bottom[0] = False                  # the list reopens at the top: the next sweep jumps to the bottom first
         outside_taps = [0]
         back_taps = [0]
@@ -9657,6 +9667,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             screen = dev.screenshot()
             st = screen_state(screen, cfg)
             if st == "rally_list":
+                war_streak[0] = 0
                 return True
             if reclaim_if_kicked(dev, cfg, log, stop, screen):
                 return False
@@ -9672,18 +9683,23 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 continue
             if st == "unknown" and war_row_taps[0] < 3:       # the Alliance main page (list: Alliance War / Gift / Treasure ...): tap the 'Alliance War' row
                 _row = None
-                try:
-                    if has_template("war_button"):
+                try:                                           # the words first: the war_button picture can match the wrong spot when the page layout shifts
+                    _t = find_text(screen, ["Alliance War"], region=(60, 330, 420, 440), cutoff=0.8)
+                    if _t and find_text(screen, ["Alliance Gift", "Alliance Treasure", "Alliance Help"], region=(60, 330, 420, 440), cutoff=0.75):
+                        _row = _t
+                    if not _row and has_template("war_button"):
                         _row = find(screen, "war_button", 0.7)
                         if _row:
                             _row = (int(_row[0]), int(_row[1]))
-                    if not _row:
-                        _t = find_text(screen, ["Alliance War"], region=(60, 330, 420, 440), cutoff=0.8)
-                        if _t and find_text(screen, ["Alliance Gift", "Alliance Treasure", "Alliance Help"], region=(60, 330, 420, 440), cutoff=0.75):
-                            _row = _t
                 except Exception:
                     _row = None
+                if _row and war_streak[0] >= 6:                # tapping the row keeps landing back on the Alliance page: restart the game
+                    log(f"[!] Tapped 'Alliance War' {war_streak[0]} times without reaching the rally list")
+                    war_streak[0] = 0
+                    force_restart_game(dev, cfg, log, stop)
+                    return False
                 if _row:
+                    war_streak[0] += 1
                     war_row_taps[0] += 1
                     dev.tap(int(_row[0]), int(_row[1]))
                     log(f"[*] On the Alliance page - tapped the 'Alliance War' row ({int(_row[0])},{int(_row[1])})")
