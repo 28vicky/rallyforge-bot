@@ -385,7 +385,8 @@ function renderSide() {
   const ic = $("#instCnt"); if (ic) ic.textContent = S.devStatus.length + " total";
   for (const d of S.devStatus) {
     L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", "Paused", "Problem", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
-    const chip = d.state === "run" ? (d.joins ? ["joins " + d.joins, "ok"] : ["idle", ""]) : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : ["offline", "off"];
+    const chip = d.state === "run" && d.kicked_at ? ["kicked", "warn"] : d.state === "run" && d.no_stamina ? ["no stamina", "warn"]
+      : d.state === "run" ? (d.joins ? ["joins " + d.joins, "ok"] : ["idle", ""]) : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : ["offline", "off"];
     L.lastChild.querySelector(".nm").after(h("span", { class: "ichip " + chip[1] }, chip[0]));      // status at a glance on the right; Start/Pause/Stop live in the page header
     sideDrag(L.lastChild, d.id);
     if ((d.state === "pause" && d.resume_at) || (d.state === "run" && d.kicked_at)) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at || d.resume_at), "data-pre": d.kicked_at ? " back in " : "" })); }
