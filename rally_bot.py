@@ -4944,6 +4944,7 @@ def reclaim_if_kicked(dev, cfg, log, stop, screen):
 
 
 _LOAD_RESTARTS = {}
+_START_FAILS = {}            # serial -> emulator starts in a row that did not finish booting
 
 
 LOADING = {}                      # serial -> (what, since epoch s) while the emulator boots / Evony loads (shown in the instance list)
@@ -5081,6 +5082,22 @@ def _bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
                 return False
             notify(cfg, serial, "Not enough free RAM to start the emulator.")
             raise RuntimeError("There was not enough free RAM to start the emulator in time.")
+        fails = _START_FAILS.get(serial, 0)
+        if fails:                                          # last start hung: a half-open instance ignores "launch", so close it fully first
+            log(f"[*] The last start did not finish ({fails}x) - closing this emulator fully before starting it again")
+            LOADING[serial] = ("restart", time.time())
+            stop_cmd = emulator_stop_command(serial, adb, cfg)
+            if stop_cmd:
+                try:
+                    subprocess.run(stop_cmd, shell=isinstance(stop_cmd, str), creationflags=NOWIN,
+                                   capture_output=True, timeout=60)
+                except Exception as e:
+                    log(f"[!] Closing the emulator did not work: {e}")
+                _nap(stop, 10)
+            kill_listener(serial, log)                     # anything still holding the port (stuck VM)
+            _nap(stop, 10)
+            if stop.is_set():
+                return False
         log("[*] The emulator is off - starting it")
         LOADING[serial] = ("starting", time.time())
         with _launch_lock:
@@ -5097,7 +5114,12 @@ def _bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
         else:
             if stop.is_set():
                 return False
+            _START_FAILS[serial] = fails + 1
+            if fails + 1 >= 2:
+                notify(cfg, serial, f"The emulator failed to start {fails + 1} times in a row - "
+                                    "it may need a manual restart (or a PC restart).")
             raise RuntimeError("The emulator did not finish starting in time.")
+        _START_FAILS.pop(serial, None)
         log("[+] The emulator is up")
         _nap(stop, 5)
     pkg = None
