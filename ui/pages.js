@@ -1404,7 +1404,8 @@ const DUTY_GROUP = { champions: "daily", crazy_eggs: "daily", wheel: "daily", lo
   gold_levy: "city", resource_tax: "city", labor: "city", troop_healing: "city", train_troops: "city", build_traps: "city",
   offering_tributes: "city", trade_carriage: "city", gate_visitors: "city",
   general_chest: "daily", vip_claim: "daily", recruit_citizens: "daily", civilization_card: "daily", empire_depot: "daily",
-  lucky_raffle: "daily", refining_card: "daily", ranger_knight: "daily", activity_chests: "daily" };
+  lucky_raffle: "daily", refining_card: "daily", ranger_knight: "daily", activity_chests: "daily",
+  wisdom_dome_tokens: "shops", offering_gems: "shops" };
 const DUTY_OPEN = { black_market: "market", collect_resources: "map" };
 const ROUTINE_SOON = [
   ["rally", "Stamina limit + top-up", "Stop joining below a stamina floor"],
@@ -1436,7 +1437,7 @@ function routinesCards(serial, ov, details) {
     for (const r of duties) {
       const g = DUTY_GROUP[r.id];
       if (!g) continue;                                  // test / developer duties stay on the full duty list only
-      out.push({ g, t: r.title, n: r.note, on: r.on, st: r.on ? r.status_text : null, stc: (badge[r.status] || [""])[0], spend: r.id === "black_market",
+      out.push({ g, t: r.title, n: r.note, on: r.on, st: r.on ? r.status_text : null, stc: (badge[r.status] || [""])[0], spend: r.id === "black_market" || !!r.gems,
         set: async (v) => { const j = await act(api("duty_set", { serial, id: r.id, on: v })); if (j) { duties = j.duties; draw(); } }, open: DUTY_OPEN[r.id] || "duties" });
     }
     out.push({ g: "city", t: "City tasks", n: "Your own tap lists, run when no rally is waiting", on: eff("city_enabled") !== false, set: (v) => setCfg("city_enabled", v), open: "tasks" });

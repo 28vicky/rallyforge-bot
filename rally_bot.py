@@ -9233,13 +9233,79 @@ def run_offering_tributes(dev, cfg, log, stop):
     log(f"[+]  Offering: {done} tribute offer(s) made")
 
 
+# --- gem duties (owner 22 Oct: the user switches them on knowing they spend gems; no extra gem block) ----------------
+def run_wisdom_dome_tokens(dev, cfg, log, stop):
+    """Wisdom Dome's ring menu is open: Rare Books -> + under the Goddess Honor Token -> Purchase by Gems (500 gems)
+    and Buy in the confirm popup, as many times as set (game limit 5 a day). SPENDS GEMS."""
+    want = max(1, min(int(float(rd_opt(cfg, "wisdom_dome_tokens", "times", 5) or 5)), 5))
+    if not rd_ring(dev, stop, ["Rare Books"]):
+        raise RuntimeError("no Rare Books button in the Wisdom Dome menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "dome_1")
+    if not rd_seen(shot, ["Rare Books", "Honor"], region=(0, 0, 540, 300)):
+        raise RuntimeError("the Rare Books page did not open")
+    dev.tap(222, 819)                                       # + under the Goddess Honor Token
+    _nap(stop, 1.8, 2.3)
+    bought = 0
+    for _ in range(want):
+        if stop.is_set():
+            break
+        shot = dev.screenshot()
+        rd_snap(shot, "dome_2")
+        for t, _ in rd_lines(shot, (0, 80, 540, 300)):
+            if "daily chance" in t.lower():
+                n = rd_numbers(t)
+                if len(n) >= 2 and n[-2] >= n[-1]:
+                    log(f"[+]  Wisdom Dome: today's {n[-1]} gem purchases are used")
+                    want = bought
+                break
+        if bought >= want:
+            break
+        if not rd_tap(dev, stop, ["Purchase by Gems", "Purchase"], region=(300, 100, 240, 120), wait=(1.4, 1.8), shot=shot):
+            if bought == 0:
+                raise RuntimeError("no Purchase by Gems button on the Goddess Honor Token page")
+            break
+        if not rd_tap(dev, stop, ["Buy"], region=(240, 500, 280, 110), whole=True, wait=(1.8, 2.3)):
+            rd_snap(dev.screenshot(), "dome_3")
+            dev.back()
+            raise RuntimeError("no Buy button in the confirm popup")
+        bought += 1
+        rd_close_reward(dev, stop, spot=(270, 120))
+    log(f"[+]  Wisdom Dome: {bought} Goddess Honor Token(s) bought with gems")
+
+
+def run_offering_gems(dev, cfg, log, stop):
+    """Shrine's ring menu is open: Offer -> Offer Gems -> + to the amount set -> Offer. SPENDS GEMS (25 for the first,
+    more for each next one)."""
+    count = max(1, min(int(float(rd_opt(cfg, "offering_gems", "count", 1) or 1)), 50))
+    if not rd_ring(dev, stop, ["Offer"]):
+        raise RuntimeError("no Offer button in the Shrine menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "offergems_1")
+    if not rd_tap(dev, stop, ["Offer Gems"], region=(20, 860, 300, 110), wait=(1.6, 2.0), shot=shot):
+        raise RuntimeError("no Offer Gems button on the Offer page")
+    for _ in range(count - 1):                              # the slider starts at 1
+        if stop.is_set():
+            break
+        dev.tap(439, 468)
+        _nap(stop, 0.35, 0.5)
+    shot = dev.screenshot()
+    rd_snap(shot, "offergems_2")
+    if not rd_tap(dev, stop, ["Offer"], region=(170, 560, 230, 75), whole=True, wait=(2.2, 2.8), shot=shot):
+        dev.back()
+        raise RuntimeError("no Offer button in the popup")
+    rd_close_reward(dev, stop, spot=(270, 120))
+    log(f"[+]  Offering: {count} gem offer(s) made")
+
+
 RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
             "general_chest": run_general_chest, "vip_claim": run_vip_claim, "recruit_citizens": run_recruit_citizens,
             "civilization_card": run_civilization_card, "empire_depot": run_empire_depot, "lucky_raffle": run_lucky_raffle,
             "refining_card": run_refining_card, "alliance_gift": run_alliance_gift, "alliance_treasure": run_alliance_treasure,
             "ranger_knight": run_ranger_knight, "train_troops": run_train_troops, "build_traps": run_build_traps,
             "troop_healing": run_troop_healing, "activity_chests": run_activity_chests, "gate_visitors": run_gate_visitors,
-            "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes}
+            "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes,
+            "wisdom_dome_tokens": run_wisdom_dome_tokens, "offering_gems": run_offering_gems}
 
 
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
@@ -9365,6 +9431,14 @@ DUTY_LIBRARY = [
      "note": "Shrine > Offer > Offer Tribute at the most allowed (50). Uses Tribute items; Offer Gems is never pressed. Needs the city map (Shrine).",
      "target": "building:Shrine", "tap_dy": 0, "steps": ["wait 1.2", "offering_tributes"],
      "opts": [{"k": "times", "label": "Offers per day", "type": "number", "min": 1, "max": 20, "def": 1}]},
+    {"id": "wisdom_dome_tokens", "group": "Daily activities", "title": "Wisdom Dome tokens (gems)", "every_min": 0, "verified": False, "gems": True,
+     "note": "SPENDS GEMS: Wisdom Dome > Rare Books > buys Goddess Honor Tokens for 500 gems each, as many as you set (game limit 5 a day). Needs the city map (Wisdom Dome).",
+     "target": "building:Wisdom Dome", "tap_dy": 0, "steps": ["wait 1.2", "wisdom_dome_tokens"],
+     "opts": [{"k": "times", "label": "Tokens to buy per day (500 gems each)", "type": "number", "min": 1, "max": 5, "def": 5}]},
+    {"id": "offering_gems", "group": "Daily activities", "title": "Shrine offering (gems)", "every_min": 0, "verified": False, "gems": True,
+     "note": "SPENDS GEMS: Shrine > Offer > Offer Gems with the amount you set (25 gems for the first, each next one costs more). Needs the city map (Shrine).",
+     "target": "building:Shrine", "tap_dy": 0, "steps": ["wait 1.2", "offering_gems"],
+     "opts": [{"k": "count", "label": "Gem offers per day", "type": "number", "min": 1, "max": 50, "def": 1}]},
     {"id": "activity_chests", "group": "Reward claims", "title": "Activity chests", "every_min": 180, "verified": False,
      "note": "Tavern > Activity: opens every ready task chest and milestone chest. Runs every 3 hours so the later chests are caught too. Needs the city map (Tavern).",
      "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.2", "activity_chests"]},
