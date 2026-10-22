@@ -1,12 +1,12 @@
 {
-  "version": "2.4.84",
-  "notes": "New look, Daily Rewards check-in, 8 monster pictures, Save log by time and instance",
+  "version": "2.4.85",
+  "notes": "Record a task (beta), faster Black Market refresh",
   "files": {
     "rally_bot.py": {
-      "sha256": "a41b14b6dbef33b71797f15e60e0b2fa6820c31cd36bed361aaedca43aa5e8f3"
+      "sha256": "0ba747f7e743d1513fb89d5cf341d6beb37aa451930131cb5f4fbd06b97c5202"
     },
     "web_app.py": {
-      "sha256": "1052c20ce1f09a9dfac4a0973a00882610289a40409449d81c18fc88dd59486e"
+      "sha256": "c084f96880acbe1a1092d590cd9d738c8ef7104c4e66ed64e7e8f54e1e5db4d7"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,10 +18,10 @@
       "sha256": "1622e1b7ee2281cdcf84be8cf8a5483bd598563e63cae2a958996a12567d00b0"
     },
     "ui/changelog.js": {
-      "sha256": "0f33dee515065df4e414c94717e5dc5f084059aadaaf0c59183bb1cc82f7d049"
+      "sha256": "6580b23cb0c6c10fcb6a37094ce97c5b7e129702353ca13c0c1c24fc6d4a3e32"
     },
     "ui/dialogs.js": {
-      "sha256": "50a8e2aec4a5482b4923fc0096f44916c9cf29b37ca9f149b885b8ffb7410ebf"
+      "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
     },
     "ui/fonts.css": {
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "4acc48de26f1143d470d7417d809ad1fc0972a744c6de83e2342bc7fe45910a9"
+      "sha256": "077f392f34ced4da24766fee230206692dcce9e1232fdc058a62af2b0ace5b01"
     },
     "ui/tour.js": {
       "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
@@ -1617,5 +1617,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "f133838679fa7caa26f7c0bcf5dc0008fc1bc3ffb69e488bc7ed4fa8dab28065"
+  "sig": "7863d9b160a1ef60abaf606d4ef6bc6d950ce798c034928978b06fe04a353919"
 }
