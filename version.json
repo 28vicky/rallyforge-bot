@@ -1,12 +1,12 @@
 {
-  "version": "2.4.97",
-  "notes": "March time if not read now defaults to 10 s",
+  "version": "2.4.98",
+  "notes": "Black Market only runs where its duty is on",
   "files": {
     "rally_bot.py": {
-      "sha256": "79456b4d978fda02b6444b5b219d2d5a2fcb23025f067fc110d3985d529dfa03"
+      "sha256": "83da54d839e6dd1086a73de6653b864cf445a047cdf0df911decd89e8922b916"
     },
     "web_app.py": {
-      "sha256": "ff27674191f23e1106906c4b6d4fd473914c55d3e0a4038a368577824be30964"
+      "sha256": "8d6d6152b3856da5c609b2f8fee0cfa36dfb6c07089135307ce0c4a8ed92a74a"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "2dbf665f54478d933e1d9a135e7121510b647fa22b69fe5ed7801866e6212b70"
     },
     "ui/changelog.js": {
-      "sha256": "02fce150d75137107a6031ebc7afebc6b4e8e15351e36bb9b322c3899e6b16a2"
+      "sha256": "f2df6d0adc44cdf46c8ee2c772d290fe6b38c98007de5720ba6eecaf0bde8d71"
     },
     "ui/dialogs.js": {
       "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "b6a60f6a4f8eda0d04319b5c772513dc22a225d86e9c41f1414660166376eaec"
+      "sha256": "594bd60e57d159a5babd56fb01b33db75c16249b5e747e4dd73f3cce71ab5086"
     },
     "ui/tour.js": {
       "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
@@ -1621,5 +1621,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "e754e2b570ae171885adf8ca2c48820cfdce0f862955618e93520ee4f7009c8a"
+  "sig": "7bc36b3dc42bca77eedecb61f3deb77d1da830326373963a03cfe23c87d8ffaa"
 }
