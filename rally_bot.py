@@ -3074,6 +3074,52 @@ def cancel_quit_dialog(dev, shot, log):
         return False
 
 
+def _green_button_word(shot, word):
+    """A green game button (white text on green) in the lower half whose text contains `word` -> its centre or None.
+    Plain OCR often misses white-on-green text, so each wide green block is read on its own, inverted."""
+    h, w = shot.shape[:2]
+    y0 = int(h * 0.55)
+    hsv = cv2.cvtColor(shot[y0:int(h * 0.92)], cv2.COLOR_BGR2HSV)
+    m = cv2.inRange(hsv, (40, 90, 70), (85, 255, 255))
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((5, 9), np.uint8))
+    n, _, stats, _ = cv2.connectedComponentsWithStats(m)
+    for i in sorted(range(1, n), key=lambda k: -stats[k][4]):
+        x, y, bw, bh, area = stats[i]
+        if bw < 100 or bh < 25 or bw > w * 0.9 or bw < bh * 2.2:
+            continue
+        crop = cv2.cvtColor(shot[y0 + y:y0 + y + bh, x:x + bw], cv2.COLOR_BGR2GRAY)
+        crop = cv2.resize(crop, None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+        for t in (170, 140, 200):
+            b = 255 - cv2.threshold(crop, t, 255, cv2.THRESH_BINARY)[1]
+            try:
+                txt = pytesseract.image_to_string(b, config="--psm 7").lower()
+            except Exception:
+                return None
+            if word in txt.replace(" ", ""):
+                return (int(x + bw / 2), int(y0 + y + bh / 2))
+    return None
+
+
+_CHECKIN_TAPS = {}                                         # (serial, day) -> Check-in taps; at most 2 a day, so a misread never loops
+
+
+def daily_checkin(dev, shot, log, stop):
+    """The game's Daily Rewards window (Sign-in Rewards + Advanced Daily Rewards, green "Check-in" button): tap Check-in
+    to claim today's reward. Only when both the window title and the button are read. -> True when it tapped."""
+    key = (getattr(dev, "serial", ""), time.strftime("%Y-%m-%d"))
+    if _CHECKIN_TAPS.get(key, 0) >= 2:
+        return False
+    h, w = shot.shape[:2]
+    p = find_text(shot, ["Check-in", "Check in"], region=(0, int(h * 0.55), w, int(h * 0.35))) or _green_button_word(shot, "check")
+    if not p or not find_text(shot, ["Daily Rewards", "Sign-in Rewards", "Advanced Daily Rewards"], region=(0, int(h * 0.12), w, int(h * 0.50))):
+        return False
+    _CHECKIN_TAPS[key] = _CHECKIN_TAPS.get(key, 0) + 1
+    dev.tap(*p)
+    log("[+] Daily Rewards: tapped Check-in (today's sign-in reward)")
+    _nap(stop, 1.5, 2.2)
+    return True
+
+
 def clear_popups(dev, cfg, log, stop, rounds=5):
     """Close whatever covers the game (offers, event pop-ups, full-screen sales, dialogs) so the bot can carry on with
     what it was doing. Uses your popup_* pictures first; on a screen it does not know it presses Back, but only when it
@@ -3109,6 +3155,9 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         st = screen_state(shot, cfg)
         if st != "unknown" or not has_template("city_screen"):
             break
+        if daily_checkin(dev, shot, log, stop):            # the game's Daily Rewards window: claim today's sign-in reward first
+            closed += 1
+            continue
         if tap_alliance_war_row(dev, shot, log):          # the Alliance page is not a pop-up: go on into Alliance War
             _nap(stop, 1.5, 2.2)
             break
