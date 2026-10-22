@@ -1,9 +1,9 @@
 {
-  "version": "2.4.87",
-  "notes": "Black Market keeps buying after a purchase (until your gem limit). Stamina only pays with gems. Faster, surer building search in the city. Now executing shows the current duty.",
+  "version": "2.4.88",
+  "notes": "Champions ticks 'Don't show this again' so taps go faster. Black Market keeps buying after a purchase (until your gem limit). Faster, surer building search. Now executing shows the current duty.",
   "files": {
     "rally_bot.py": {
-      "sha256": "4a5d26b19bee5355178d44b2d2925e475cc16762e9c6afa0eb00d88db0181489"
+      "sha256": "e5e47d19cd37c70ba07e3693fbdadba51b4cb8784d0c400ce543f36ef2803f70"
     },
     "web_app.py": {
       "sha256": "ca465e6955903484a5f7930b3247fa76933fb8695a74b6b4f297a803679c5104"
@@ -18,7 +18,7 @@
       "sha256": "19834191317f9bc0a89b4273ca00a911ceb82ed502ade3a3fccbcfcb9a8bb111"
     },
     "ui/changelog.js": {
-      "sha256": "3f0189ab43b37951bf8a8c7a9f1ae64dd18a50f813648bb8c40bbacdf205fbb2"
+      "sha256": "70ed84fb79efd1481d1053d36dd6a70dfd8f1289f3cda3fb4fc0cddcb62ac4b9"
     },
     "ui/dialogs.js": {
       "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
@@ -1617,5 +1617,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "c12a30198b4b04ce35f471d3c665af44ff5e5a41edb2f74d3261776b8d39c4f6"
+  "sig": "f93a1dee2dd5dacaa935876e688cb84df75865a60645720829b56224b37f7323"
 }
