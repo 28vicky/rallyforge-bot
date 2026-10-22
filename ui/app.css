@@ -1028,3 +1028,16 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 #ribbon .btn.greyed{opacity:.45;pointer-events:none;box-shadow:none}
 .ribcount{align-self:center;margin-left:6px;font-size:12.5px;font-weight:600;color:#047857;background:#ecfdf5;padding:3px 8px;border-radius:6px}
 .ribcount:empty{display:none}
+/* ---- sidebar bottom: tighter (owner 22 Oct 08:28) - smaller account row, small buttons, calm selected Control settings ---- */
+:root .sidefoot{padding:10px 12px 12px;gap:6px}
+:root .whoami{gap:8px;padding:0 4px 4px}
+:root .whoami .wav{width:26px;height:26px;font-size:12.5px}
+:root .whoami .wtx b{font-size:13px}
+:root .whoami .wtx small{font-size:11.5px}
+:root .sidefoot .sflab{margin-top:2px;font-size:10.5px}
+:root .allbtns{gap:6px}
+:root .allbtns .btn{min-height:30px;padding:0;font-size:12.5px}
+:root .sidefoot .ctlbtn{min-height:32px;padding:0 10px;font-size:13px;font-weight:600}
+:root .sidefoot .ctlbtn.on{background:var(--card);color:var(--accent1);border:1px solid var(--accent1)}
+:root .sidefoot .ctlbtn.on .ico{color:var(--accent1)}
+:root .app .side{padding-bottom:0}
