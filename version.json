@@ -1,24 +1,24 @@
 {
-  "version": "2.4.83",
-  "notes": "Stale rally list: reopen, then restart the game",
+  "version": "2.4.84",
+  "notes": "New look, Daily Rewards check-in, 8 monster pictures, Save log by time and instance",
   "files": {
     "rally_bot.py": {
-      "sha256": "4be7fa738f6c42f7213500d2a01a55ae91cf681387b04c4fbbccc9d40757828c"
+      "sha256": "a41b14b6dbef33b71797f15e60e0b2fa6820c31cd36bed361aaedca43aa5e8f3"
     },
     "web_app.py": {
-      "sha256": "2abd0b8d77b2e947f47fb1a9de046d2011ccd397200383693d8298b4cc0a0242"
+      "sha256": "1052c20ce1f09a9dfac4a0973a00882610289a40409449d81c18fc88dd59486e"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "a30fb726034ae072d9968ebd41b7cba25dec00bebc0420da2346ba59971e3a00"
+      "sha256": "91688789818ec78f02e1e9d0dab9d00b9bc00a109f6c6a6944c7b32bb867c3ea"
     },
     "ui/app.js": {
-      "sha256": "1be1e6cbf07c5c7ad1dc9f701eb5b7fbbd56e16721238e6af5af2177770a384f"
+      "sha256": "1622e1b7ee2281cdcf84be8cf8a5483bd598563e63cae2a958996a12567d00b0"
     },
     "ui/changelog.js": {
-      "sha256": "b9ae64479fc3bf28e486f70283ba8ea3096540c834aebe7b1d86b6c1b87f55dd"
+      "sha256": "0f33dee515065df4e414c94717e5dc5f084059aadaaf0c59183bb1cc82f7d049"
     },
     "ui/dialogs.js": {
       "sha256": "50a8e2aec4a5482b4923fc0096f44916c9cf29b37ca9f149b885b8ffb7410ebf"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "e413e2142ce9f74d1aedb4dc94e20b3b9cd9b2304729898a37f3505cec805054"
+      "sha256": "4acc48de26f1143d470d7417d809ad1fc0972a744c6de83e2342bc7fe45910a9"
     },
     "ui/tour.js": {
       "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
@@ -1389,6 +1389,10 @@
       "sha256": "075ebc7204c3ae426b3d1cda862fe89dc85b723b10f78893b102f23e0db19c36",
       "url": "monsters/Ammit.png"
     },
+    "Arachne.png": {
+      "sha256": "daea9fb9cd9babb71fb97c1d578e2fd1d60ea2a51114e8574a167e52ffe7c55a",
+      "url": "monsters/Arachne.png"
+    },
     "Azazel.png": {
       "sha256": "d1616064cb0e029acf8329e6f923cfb05ea616869be886589f664c43646f64c4",
       "url": "monsters/Azazel.png"
@@ -1396,6 +1400,14 @@
     "Bayar Knight.png": {
       "sha256": "1ed3b797d5a274a5124c781a23d8eec5a4873031eaf9b52ab33ca0e016ab76d0",
       "url": "monsters/Bayar%20Knight.png"
+    },
+    "Behemoth.png": {
+      "sha256": "cd5391aa195f0d101b7d036b98cf92bf01650d6475db5ffabba8d48861cba8e2",
+      "url": "monsters/Behemoth.png"
+    },
+    "Bird of Hurricane.png": {
+      "sha256": "8608613b6abce2fa8b1c040ce10dc07db8f618ba07361c9cb536ac85f58eaf0c",
+      "url": "monsters/Bird%20of%20Hurricane.png"
     },
     "Cerberus.png": {
       "sha256": "170942996446f624f9d37cd19f7243c601d4beb46c8744e7d627a11b9c06d9c5",
@@ -1421,6 +1433,10 @@
       "sha256": "aeeaac12b1864c0d969457a13194d65fe1f91242868451b537c3153fe843dea5",
       "url": "monsters/Kraken.png"
     },
+    "Leviathan.png": {
+      "sha256": "10d3e6face039ab4db69577b405f27a8900819647e1d52f59881ff7afd33f341",
+      "url": "monsters/Leviathan.png"
+    },
     "Pan.png": {
       "sha256": "8094140c2b9f0fc6e924b4bea4683efe8fa25d1e4c4a4f47be2c7fbc9d27b97a",
       "url": "monsters/Pan.png"
@@ -1428,6 +1444,10 @@
     "Phoenix.png": {
       "sha256": "4ad9ff94e3889c26f99f0058bdff35ea4ba1a2d0f1930e6bdd8711e1af46013a",
       "url": "monsters/Phoenix.png"
+    },
+    "Serpopard.png": {
+      "sha256": "b8a060f0c5fbfd1f3621a212b2273274673e36fbea3165af7552db3bc7790903",
+      "url": "monsters/Serpopard.png"
     },
     "Silver Lionheart Knight #2.png": {
       "sha256": "2e97a2bd411fa671999b1a823793c8baf3d8a240bb499b06844ffcec91c63d06",
@@ -1445,6 +1465,14 @@
       "sha256": "cce472c4479f3b3d8e430c4e8a445816cdb85fdbb67a09c1dc6a2feda76c60ad",
       "url": "monsters/Stymphalian%20Bird.png"
     },
+    "Taotie.png": {
+      "sha256": "05b2daa86f8963c8069e10cb77e1cb69306262be8309b3028d84637739498e49",
+      "url": "monsters/Taotie.png"
+    },
+    "Temple Guard.png": {
+      "sha256": "7be16aa670d24e9f63167e7ffb576d6079c54600500906ebe6327a75ef74d947",
+      "url": "monsters/Temple%20Guard.png"
+    },
     "Thunder Scorpion.png": {
       "sha256": "b6aa5341e5ce557a0ff13100f5f1c1be640d291d1235d020fe6083851e817ce8",
       "url": "monsters/Thunder%20Scorpion.png"
@@ -1452,6 +1480,10 @@
     "Typhon.png": {
       "sha256": "12f12603caf3c9f69ecf269c25b461c9acfef5b0ce2be59a5817acda93342c72",
       "url": "monsters/Typhon.png"
+    },
+    "Viking #3.png": {
+      "sha256": "1776c7401c89c02f4933090b684571955307623ab2697204bfc84f717d74929b",
+      "url": "monsters/Viking%20%233.png"
     },
     "Viking.png": {
       "sha256": "c8c84446c2b8896b8d1c036bb9e2bb6383993d41308ed0bcd6f3375ed3cf7a41",
@@ -1585,5 +1617,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "f153d3583a85f3f528064c12c8ae15d66fc3991d73e8d4ff4425c63538d27a36"
+  "sig": "f133838679fa7caa26f7c0bcf5dc0008fc1bc3ffb69e488bc7ed4fa8dab28065"
 }
