@@ -1,9 +1,9 @@
 {
-  "version": "2.4.89",
-  "notes": "Instance list timers (start / loading / kicked), much faster Start all, empty rally list reopened, game stuck on loading reopened, Ymir picture learned by name",
+  "version": "2.4.90",
+  "notes": "Ymir picture comes with the app",
   "files": {
     "rally_bot.py": {
-      "sha256": "d0d18f69b011b93bd94a8081de8631bf8e9fa48246d0c7984610164b6e3b614d"
+      "sha256": "86f1f0a5e957ecd2a70c729e7770ab378363d2f9f543add72d6f74d6138187fe"
     },
     "web_app.py": {
       "sha256": "89f457287c14fd60b0080caa4374f0c89f676f0c8ce3dff5f57177acbc83a78d"
@@ -18,7 +18,7 @@
       "sha256": "82b2f236e098aad69c38d612bd7a982f3cd8f93e55071fa1ab54fcd1610ca434"
     },
     "ui/changelog.js": {
-      "sha256": "4d009083634d9ee6160bbe07360b8edeb6a41e902373f913c24a937903e68f95"
+      "sha256": "b977f651d6fe16ba2169e764a1ecee007b08d751258e68b7a90763b64e88faf5"
     },
     "ui/dialogs.js": {
       "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
@@ -1496,6 +1496,10 @@
     "Witch.png": {
       "sha256": "ac394b658002e4cc611f77c3be72d6df12f52ff81baab3885483593887192316",
       "url": "monsters/Witch.png"
+    },
+    "Ymir.png": {
+      "sha256": "e1137411ab93fbe618aa3a08e62d60c79bd033b38e496ba1ac52ab8f12bd9b48",
+      "url": "monsters/Ymir.png"
     }
   },
   "templates": {
@@ -1617,5 +1621,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "a08375558e3b1ebabd840c85d59a7ded40716fdab30eb233bf211a724bf8e0ce"
+  "sig": "9bf1a47db6c6ac2b508eff513bf582d2705c2696cf520790060bf1e2a2ceed0b"
 }
