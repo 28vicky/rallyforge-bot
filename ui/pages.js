@@ -1503,9 +1503,10 @@ function routinesCards(serial, ov, details) {
   const find = (title) => {
     const want = String(title || "").toLowerCase();
     if (!want) return null;
-    const by = (sel) => [...root.querySelectorAll(sel)].find((x) => x.textContent.trim().toLowerCase().startsWith(want));
+    const by = (sel) => [...root.querySelectorAll(sel)].find((x) => x.textContent.trim().toLowerCase() === want)
+      || [...root.querySelectorAll(sel)].find((x) => x.textContent.trim().toLowerCase().startsWith(want));
     const hit = by(".subtitle,h3,h4,legend,summary") || by(".dname,b");      // its own settings first, else its row in the list
-    return hit ? (hit.closest(".drow,.panel,.subset,details,.card") || hit) : null;
+    return hit ? (hit.closest(".drow,.row,.subset,details,.panel,.card") || hit) : null;
   };
   const open = (key, title) => {
     const els = details[key] && details[key]();
@@ -1517,7 +1518,7 @@ function routinesCards(serial, ov, details) {
     below(root);
     // the page may fill in after a server call: look for the routine a few times
     let n = 0;
-    const jump = () => { const el = find(title); if (el) { below(el); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600); } else if (++n < 8) setTimeout(jump, 150); };
+    const jump = () => { const el = find(title); if (el) { below(el); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600); } else if (++n < 30) setTimeout(jump, 150); };
     if (title && key === "duties") jump();
   };
   const badge = { done: ["ok", null], due: ["due", null], waiting: ["next", null], retry: ["next", null], gaveup: ["bad", null] };
