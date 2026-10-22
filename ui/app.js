@@ -172,9 +172,13 @@ function menu(anchor, items) {
   document.querySelectorAll(".pop").forEach((p) => p.remove());
   const r = anchor.getBoundingClientRect();
   const m = h("div", { class: "pop", style: { position: "fixed", left: r.left + "px", top: r.bottom + 6 + "px", zIndex: 70,
-    background: "var(--bgc)", border: "var(--bd)", borderRadius: "14px", boxShadow: "var(--appsh)", padding: "6px", minWidth: "210px" } },
+    background: "var(--card)", border: "1px solid var(--line)", borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,.12)", padding: "6px", minWidth: "210px" } },
     items.map((it) => h("div", { class: "li", onclick: () => { m.remove(); it.run(); } }, it.icon ? ico(it.icon) : null, it.label)));
   document.body.appendChild(m);
+  // keep the whole menu inside the window: a button near the right edge opens it leftwards, near the bottom upwards
+  const mr = m.getBoundingClientRect();
+  if (mr.right > innerWidth - 8) m.style.left = Math.max(8, Math.min(r.right, innerWidth - 8) - mr.width) + "px";
+  if (mr.bottom > innerHeight - 8) m.style.top = Math.max(8, r.top - 6 - mr.height) + "px";
   const off = (e) => { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("mousedown", off, true); } };
   setTimeout(() => document.addEventListener("mousedown", off, true), 0);
 }
