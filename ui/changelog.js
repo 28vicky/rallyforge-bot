@@ -1,5 +1,9 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.92", date: "2026-10-22",
+    new: [],
+    fixed: ["When the game stops updating an instance's rally list (old rallies keep counting down, new ones never show), the bot notices that other instances see rallies it does not, and reopens the list - and restarts Evony if that does not help.",
+      "An empty rally list that reopening does not fix now leads to an Evony restart (at most once per 30 minutes), also before the instance was matched to its alliance."] },
   { v: "2.4.91", date: "2026-10-22",
     new: [],
     fixed: ["After an update restart, instances that wait for their turn show the \u201cstart 0:12\u201d countdown instead of \u201coffline\u201d."] },
