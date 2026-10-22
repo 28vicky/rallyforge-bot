@@ -5016,6 +5016,15 @@ def _restart_emulator(dev, cfg, log, stop, why=""):
     return bring_online(dev, cfg, log, stop, check_ready=True)
 
 
+_RALLY_SEEN = {}          # serial -> last time that instance saw rally cards (green countdown bars) on its list
+
+
+def others_see_rallies(serial, within=150):
+    """True when another instance of this app saw rallies on its list in the last `within` seconds."""
+    now = time.time()
+    return any(s != serial and now - t < within for s, t in list(_RALLY_SEEN.items()))
+
+
 def force_restart_game(dev, cfg, log, stop):
     """Close Evony completely, open it again and wait until it is stable (used when the bot is lost)."""
     pkg = evony_package(dev.adb, dev.serial, cfg)
@@ -9319,6 +9328,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     latency = [None]                      # seconds the bot itself needs between reading a rally and pressing March
     last_ok = [time.time()]               # last time ADB gave us a screenshot
     still = {"sig": None, "since": None}  # screen that should be moving but is not
+    stale_hits = [0]                      # empty-list checks in a row while other instances saw rallies
     lost_since = [None]                   # since when we have been off the rally list (kept across game restarts)
     restarts = []                         # when the emulator was restarted (to stop restart loops)
     lost_restarts = []                    # when "lost for too long" restarted Evony (2 in 30 min -> restart the emulator)
@@ -9927,6 +9937,14 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             now = time.time()
             # --- is the screen frozen? (only where something should be moving: Join buttons / not on the list)
             moving = st in ("march", "city", "general") or need_recover or (st == "rally_list" and _TL.joins_seen)
+            if st == "rally_list":                                   # note when this list shows rallies, so a stale (empty) list on another instance can be spotted
+                try:
+                    _g = cv2.inRange(cv2.cvtColor(screen[150:800:3, ::3], cv2.COLOR_BGR2HSV), (40, 140, 90), (85, 255, 255))
+                    if cv2.countNonZero(_g) > 150:
+                        _RALLY_SEEN[serial] = now
+                        stale_hits[0] = 0
+                except Exception:
+                    pass
             if not moving and st in ("rally_list", "unknown"):      # rally countdown bars (green) on the list: their numbers tick every second
                 try:
                     hsv = cv2.cvtColor(screen[150:800:3, ::3], cv2.COLOR_BGR2HSV)
@@ -9969,6 +9987,19 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                                 recover()                                  # the game answered: go back to the rally list
                     except Exception:
                         alive = None
+                if alive and st == "rally_list" and others_see_rallies(serial):   # the game answers but its list stays empty while the other instances see rallies: the list is stale
+                    stale_hits[0] += 1
+                    still["any"], still["since"], still["sig"] = None, None, None
+                    if stale_hits[0] >= 2:
+                        stale_hits[0] = 0
+                        log("[!] The rally list is still empty here while other instances see rallies - restarting Evony")
+                        force_restart_game(dev, cfg, log, stop)
+                    else:
+                        log("[!] The rally list is empty here while other instances see rallies - reopening it")
+                        dev.back()
+                        nap(1.5, 2.0)
+                        recover()
+                    continue
                 if alive:
                     log(f"[i] The rally list has been quiet for {(now - still['any']) / 60:.0f} min - checked: the game is responding")
                     still["any"], still["since"], still["sig"] = None, None, None
