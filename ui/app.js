@@ -267,9 +267,9 @@ function buildRibbon() {
   const grp = (cap, ...kids) => h("div", { class: "grp" }, h("div", { class: "row" }, kids), h("div", { class: "cap" }, cap));
   r.append(
     grp("Run",
-      btn("Start", () => collectAndRun("start", { serial: target() }), "pri", "play"),
+      btn("Start", () => { if (S.sel === "control") { S.startingAt = Date.now(); paintRunState(); } collectAndRun("start", { serial: target() }); }, "pri", "play"),
       btn("Pause", () => act(api("pause", { serial: target() })), "", "pause"),
-      btn("Stop", () => act(api("stop", { serial: target() })), "bad", "stop")),
+      btn("Stop", () => { S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop"), h("span", { class: "ribcount", id: "ribCount" })),
     grp("Scan",
       btn("Generals", () => openGeneralManager(), "", "users"),
       ...(S.dev ? [btn("Scan generals", () => scanGeneralsFlow(), "", "scan")] : []),
@@ -431,6 +431,34 @@ function tickPauseTimers() {
 }
 setInterval(tickPauseTimers, 1000);
 // Start / Pause / Stop: the button that matches the current state lights up in its own colour (green / amber / red)
+// Control settings top bar: the buttons follow how many instances run.
+//   none running -> Start all is the main button, Pause all / Stop all greyed
+//   some running -> "Start the rest" + "2/8 running", Pause / Stop active
+//   all running  -> Start shows a green "Running" (not clickable), Pause / Stop active
+//   just pressed -> "Starting..." until every instance runs (instances start one by one; gives up after 3 min)
+function paintRibbonRun() {
+  const rib = document.getElementById("ribbon");
+  if (!rib || S.sel !== "control") return;
+  const total = S.devStatus.length, run = S.devStatus.filter((d) => d.state === "run").length;
+  const busy = run + S.devStatus.filter((d) => d.state === "pause").length;
+  const starting = S.startingAt && Date.now() - S.startingAt < 180000 && run < total;
+  if (!starting) S.startingAt = 0;
+  rib.querySelectorAll("[data-act]").forEach((b) => {
+    const a = b.dataset.act, lbl = b.querySelector(".runlbl");
+    b.classList.remove("isrunning", "starting", "greyed");
+    b.className = b.className.replace(/\bcur-\w+/g, "").replace(/\s+/g, " ").trim();
+    if (a === "start" && lbl) {
+      if (starting) { b.classList.add("starting"); lbl.textContent = "Starting\u2026"; }
+      else if (total && run === total) { b.classList.add("isrunning"); lbl.textContent = "Running"; }
+      else lbl.textContent = busy ? "Start the rest" : "Start all";
+    }
+    if ((a === "pause" || a === "stop") && busy === 0 && !starting) b.classList.add("greyed");
+    if (a === "pause" && total && S.devStatus.every((d) => d.state === "pause")) b.classList.add("cur-pause");
+  });
+  const c = document.getElementById("ribCount");
+  if (c) { c.textContent = run && run < total ? run + "/" + total + " running" : ""; }
+}
+setInterval(() => { if (S.startingAt) paintRibbonRun(); }, 3000);
 function paintRunState() {
   let st = null;
   if (S.sel !== "control") { const d = S.devStatus.find((x) => x.id === S.sel); st = d ? d.state : null; }
@@ -443,11 +471,13 @@ function paintRunState() {
     const off = S.sel !== "control" && ((st === "run" && b.dataset.act === "start") || ((st === "stop" || st === "idle" || st === "error") && (b.dataset.act === "pause" || b.dataset.act === "stop")));
     b.classList.toggle("greyed", !!off);
   });
+  paintRibbonRun();
 }
 function ribbonLabels() {
   const all = S.sel === "control";
   const rib = document.getElementById("ribbon"); if (rib) rib.style.display = all ? "" : "none";      // the top button bar belongs to Control settings; each instance has its own bar
   document.querySelectorAll(".runlbl").forEach((e) => { e.textContent = e.dataset.base + (all ? " all" : ""); });
+  paintRunState();
 }
 const TAB_GROUPS = [
   ["dashboard", "Dashboard", null],

@@ -1015,3 +1015,16 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 /* instance header Pause: ":root .instbar .btn" gave it a card background under .warnb's white text, so it looked blank (PC hotfix 21 Oct 23:20) */
 :root .instbar .btn.warnb{background:#f59e0b;color:#1d1400;border-color:transparent;font-weight:600}
 :root .instbar .btn.warnb:hover{background:#d97706}
+/* ---- Control settings top bar: Start / Pause / Stop all follow the running state ---- */
+#ribbon .btn{transition:background-color .15s,border-color .15s,transform .1s,box-shadow .15s}
+#ribbon .btn:active{transform:scale(.97)}
+#ribbon .btn.pri:hover{background:#c8441b;transform:translateY(-1px);box-shadow:0 6px 16px rgba(224,86,36,.22)}
+#ribbon .btn.pri:active{transform:scale(.97);box-shadow:none}
+#ribbon .btn.isrunning{background:#ecfdf5!important;color:#047857!important;border:1px solid #a7f3d0!important;box-shadow:none!important;pointer-events:none}
+#ribbon .btn.isrunning .ico{display:none}
+#ribbon .btn.isrunning::before{content:"";width:8px;height:8px;border-radius:50%;background:#10b981;margin-right:6px;animation:rfpulse 2s ease-in-out infinite}
+#ribbon .btn.starting{pointer-events:none;animation:rfstart 1.2s ease-in-out infinite}
+@keyframes rfstart{50%{opacity:.6}}
+#ribbon .btn.greyed{opacity:.45;pointer-events:none;box-shadow:none}
+.ribcount{align-self:center;margin-left:6px;font-size:12.5px;font-weight:600;color:#047857;background:#ecfdf5;padding:3px 8px;border-radius:6px}
+.ribcount:empty{display:none}
