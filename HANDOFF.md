@@ -158,3 +158,9 @@ Published T13 dashboard-f7 (UI redesign to the mockup, live-checked on the owner
 ### 2.4.85 (22 Oct 09:45 IST) - joint release
 Published T17 feat/bm-fast-refresh (Black Market refresh ~4 s, ran live on K) and T18 feat/flow-record-beta (Record a task (beta) for every user + Save recordings as zip). No conflicts; syntax + 42-step click-through OK; check_release "version 2.4.85: OK". The owner PC can now install updates normally (nothing PC-only is left).
 
+
+### T-IDLE fix/idle-unknown-back (22 Oct 18:35 IST) - READY for the joint release, not tested live
+Owner: Huck sat on a screen and did not press Back (had to do it by hand). Log: after restart 08:46:01 Huck did nothing for 4.5 min (only perf lines) until "Landed on the wrong screen" 08:50:29.
+Fix: DeviceCtl.tap/swipe record dev.acted; main loop: on an "unknown" screen (rally_screen template known) with no tap for 90 s -> save debug/idle_<serial>.png, log "Nothing to do on this screen for 90s - pressing Back", press Back. Not on city (Back there opens Quit) or rally list.
+Changelog line: "If an instance sits on a screen it does not know, it now backs out by itself after about 1.5 minutes."
+Also checked: Huck Black Market is fine (once per game day, done 06:11; forced run 08:51 worked, BM 44 not offered; 390k gems vs 50k floor).
