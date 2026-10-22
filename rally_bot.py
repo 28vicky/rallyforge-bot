@@ -6572,65 +6572,6 @@ def read_building_level(dev, cfg, log, stop, pos):
     return result
 
 
-def scan_city_taps(dev, cfg, log, stop, progress=None):
-    """Test run: the numbered squares of the default city map replace the old per-building taps."""
-    return scan_squares(dev, cfg, log, stop, progress=progress)
-
-
-def scan_city_taps_old(dev, cfg, log, stop, progress=None):
-    """(old) for every building on the saved city map go to it (saved picture), tap it and read its name and level."""
-    serial = dev.serial if hasattr(dev, "serial") else "default"
-    data = load_city()
-    items = (data.get(serial) or {}).get("items", {})
-    if not items:
-        raise ValueError(CITY_MAP_HELP)
-    dev.arm_guard(cfg, log, stop)
-    dev.guard_city = True
-    nav = CityNav(dev, stop, log)
-    nav.to_origin()
-    order = sorted(items, key=lambda k: (0 if k.split("#")[0] in ("Market", "Keep") else 1, items[k][1], items[k][0]))
-    order = [k for k in order if k.split("#")[0] not in RESOURCE_BUILDINGS]
-    t0, got, bad = time.time(), {}, []
-    for i, k in enumerate(order):
-        if stop.is_set():
-            break
-        name = k.split("#")[0]
-        pos = find_building(dev, stop, log, nav, name, items[k], items, k)
-        res = read_building_level(dev, cfg, log, stop, pos) if pos else None
-        if res:
-            got[k] = res
-            same = BUILDING_ALIASES.get(res[0], res[0]).lower() == name.lower() or res[0].lower().replace(" ", "") == name.lower().replace(" ", "")
-            log(f"[*] Tap test: {name} -> '{res[0]}'" + (f" level {res[1]}" if res[1] else " (no level)") + ("" if same else "  (NAME DIFFERS)"))
-            if not same:
-                bad.append(k)
-        else:
-            log(f"[!] Tap test: {name}: could not read it")
-            bad.append(k)
-        if progress:
-            try:
-                progress({"phase": "sweeping", "pct": int(100 * (i + 1) / len(order)), "left": int((time.time() - t0) / (i + 1) * (len(order) - i - 1)),
-                          "text": f"Tap test: {name} done", "mapped": [x.split("#")[0] for x in got], "expected": [x.split("#")[0] for x in order],
-                          "missing": [x.split("#")[0] for x in bad], "seconds": int(time.time() - t0), "stops": i + 1, "total": len(order), "row": 0})
-            except Exception:
-                pass
-    dev.guard_city = False
-    data = load_city()
-    ent = data.setdefault(serial, {"items": items})
-    ent["items"] = items
-    ent["levels"] = {k: {"name": v[0], "level": v[1]} for k, v in got.items()}
-    ent["tap_test"] = {"seconds": int(time.time() - t0), "read": len(got), "total": len(order), "bad": bad}
-    save_city(data)
-    log(f"[+] Tap test: read {len(got)} of {len(order)} buildings in {int(time.time() - t0)}s. Not read: {', '.join(bad) if bad else 'none'}")
-    if progress:
-        try:
-            progress({"phase": "done", "pct": 100, "left": 0, "text": "Done", "mapped": [x.split("#")[0] for x in got],
-                      "expected": [x.split("#")[0] for x in order], "missing": [x.split("#")[0] for x in bad],
-                      "seconds": int(time.time() - t0), "stops": len(order), "total": len(order), "row": 0})
-        except Exception:
-            pass
-    return got
-
-
 def scan_city(dev, cfg, log, stop, progress=None):
     """Sweep the whole city, read the building names and save where each one is on the map. -> {name: [x, y]}"""
     dev.arm_guard(cfg, log, stop)
@@ -8839,6 +8780,34 @@ def picture_items(dev):
     return items
 
 
+def fill_from_squares(ent):
+    """Map by hand: the buildings placed by hand pin where the numbered squares sit, so every other fixed building is
+    filled in from the squares. Hand-placed buildings always win; filled ones are redone on every pick."""
+    items, manual = ent.setdefault("items", {}), set(ent.get("manual", []))
+    for k in ent.get("auto", []):
+        if k not in manual:
+            items.pop(k, None)
+    sq = {}
+    for n, (nm, ox, oy) in CITY_SQUARES.items():
+        base = re.sub(r"\s*\d+$", "", nm)
+        if n not in PARKED_SQUARES and base.lower() in DEFAULT_PICTURE_BUILDINGS:
+            sq.setdefault(base.lower(), (base, ox, oy))
+    pins = [(items[k][0] - sq[k.split("#")[0].lower()][1], items[k][1] - sq[k.split("#")[0].lower()][2])
+            for k in manual if k in items and k.split("#")[0].lower() in sq]
+    if not pins:
+        ent["auto"] = []
+        return 0
+    ax, ay = sum(p[0] for p in pins) / len(pins), sum(p[1] for p in pins) / len(pins)
+    have = {k.split("#")[0].lower() for k in items}
+    auto = []
+    for low, (base, ox, oy) in sq.items():
+        if low not in have:
+            items[f"{base}#1"] = [round(ax + ox), round(ay + oy)]
+            auto.append(f"{base}#1")
+    ent["auto"] = auto
+    return len(auto)
+
+
 CHANGEABLE_PLOTS = [n for n, (nm, _x, _y) in CITY_SQUARES.items()
                     if n not in PARKED_SQUARES and re.sub(r"\s*\d+$", "", nm).lower() not in DEFAULT_PICTURE_BUILDINGS]
 
@@ -9312,127 +9281,6 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     like = got.lower().replace(" ", "") == BUILDING_ALIASES.get(name, name).lower().replace(" ", "") or name.lower().startswith(got.lower())
     log(f"[+] Square {number} -> '{res[0]}'" + (f" level {res[1]}" if res[1] else "") + ("" if like else f"  (the default map says {name})"))
     return name, res[0], res[1], tx, ty, True                # the map is filled with what the game says, not with what we expect
-
-
-def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
-    """Map the city by the numbered squares: go to each square, tap it, read its name and level. Squares that read
-    correctly are saved on this emulator's city map. -> {number: result}"""
-    serial = dev.serial if hasattr(dev, "serial") else "default"
-    dev.arm_guard(cfg, log, stop)
-    dev.guard_city = True
-    t0 = time.time()
-    nav = CityNav(dev, stop, log)
-    order = list(numbers or [n for n in sorted(CITY_SQUARES) if n not in PARKED_SQUARES])
-    got, bad, items, levels = {}, [], {}, {}
-    prog_f = USER / "squares_progress.json"
-    try:                                                     # an unfinished run (stopped, crashed, lost): carry on from where it stopped
-        pst = json.loads(prog_f.read_text(encoding="utf-8")) if prog_f.exists() else {}
-    except Exception:
-        pst = {}
-    mine = pst.get(serial) or {}
-    if not numbers and mine and time.time() - mine.get("t", 0) < 6 * 3600 and mine.get("done"):
-        done_before = set(mine["done"])
-        order = [n for n in order if n not in done_before]
-        try:                                                 # drop saved reads that are not in the done list (a read that was found wrong and cleared)
-            _d = load_city()
-            _e = _d.get(serial) or {}
-            _lv = _e.get("levels", {})
-            _drop = [k for k in list(_e.get("items", {})) if _lv.get(k, {}).get("square") not in done_before]
-            if _drop:
-                for k in _drop:
-                    _e["items"].pop(k, None)
-                    _lv.pop(k, None)
-                save_city(_d)
-        except Exception:
-            pass
-        if order:
-            log(f"[*] Squares: carrying on from the last run - {len(done_before)} squares already read, {len(order)} to go")
-        else:
-            order = [n for n in sorted(CITY_SQUARES) if n not in PARKED_SQUARES]
-            mine = {}
-    done_list = list(mine.get("done", [])) if mine else []
-    wipe = not done_list                                    # a fresh run starts from a blank map; a resumed run keeps what it already read
-    if city_picture() is not None:                           # the camera place comes from the whole-city picture: no slow start, no drifting
-        nav.absolute = True
-        shrine = SHRINE_LABEL_IN_PICTURE
-        log("[i] Squares: finding the camera place by the whole-city picture")
-    else:
-        shrine = locate_shrine(dev, stop, log, nav)
-    if shrine:
-        for i, n in enumerate(order):
-            if stop.is_set():
-                break
-            r = open_square(dev, cfg, log, stop, nav, shrine, n)
-            if not r and not stop.is_set():                  # an ad / pop-up may have covered the city: close it, find our place again, retry once
-                try:
-                    shut = clear_popups(dev, cfg, log, stop, rounds=4)
-                except Exception:
-                    shut = 0
-                if shut:
-                    log(f"[*] Square {n}: closed {shut} pop-up(s) - finding the way again and retrying")
-                    if not nav.absolute:
-                        nav = CityNav(dev, stop, log)
-                        shrine = locate_shrine(dev, stop, log, nav) or shrine
-                    r = open_square(dev, cfg, log, stop, nav, shrine, n)
-            got[n] = r
-            nm = CITY_SQUARES[n][0]
-            if r and r[5] and r[1].lower() in UNIQUE_BUILDINGS and any(k.split("#")[0].lower() == r[1].lower() for k in items):
-                log(f"[!] Square {n}: read '{r[1]}' but that building is already mapped on another square - the camera was probably not where it thought. Left blank.")
-                r = None
-            if r and r[5]:
-                base = re.sub(r"\s*\d+$", "", r[1]).strip() or r[1]
-                k_n = 1
-                while f"{base}#{k_n}" in items:
-                    k_n += 1
-                key = f"{base}#{k_n}"
-                items[key] = [round(r[3]), round(r[4])]
-                levels[key] = {"name": r[1], "level": r[2], "square": n}
-                done_list.append(n)
-                try:
-                    data = load_city()
-                    ent = data.setdefault(serial, {"items": {}})
-                    if nav.absolute and (wipe or ent.get("frame") != "picture"):
-                        ent["items"], ent["levels"], ent["frame"] = {}, {}, "picture"
-                        wipe = False
-                    ent.setdefault("items", {})[key] = items[key]
-                    ent.setdefault("levels", {})[key] = levels[key]
-                    save_city(data)
-                    pst[serial] = {"done": done_list, "t": time.time()}
-                    prog_f.write_text(json.dumps(pst), encoding="utf-8")
-                except Exception:
-                    pass
-            else:
-                bad.append(nm)
-            if progress:
-                try:
-                    progress({"phase": "sweeping", "pct": int(100 * (i + 1) / len(order)), "left": int((time.time() - t0) / (i + 1) * (len(order) - i - 1)),
-                              "text": f"Square {n} ({nm}) done", "mapped": [k.split("#")[0] for k in items], "expected": [CITY_SQUARES[x][0] for x in order],
-                              "missing": bad, "seconds": int(time.time() - t0), "stops": i + 1, "total": len(order), "row": 0})
-                except Exception:
-                    pass
-    dev.guard_city = False
-    if not bad and not stop.is_set():                        # finished: next run starts from square 1
-        try:
-            pst.pop(serial, None)
-            prog_f.write_text(json.dumps(pst), encoding="utf-8")
-        except Exception:
-            pass
-    if items:
-        data = load_city()
-        ent = data.setdefault(serial, {"items": {}})
-        if nav.absolute and ent.get("frame") != "picture":
-            ent["items"], ent["levels"], ent["frame"] = {}, {}, "picture"
-        ent.setdefault("items", {}).update(items)
-        ent.setdefault("levels", {}).update(levels)
-        save_city(data)
-    log(f"[+] Squares: read {len(items)} of {len(order)} in {int(time.time() - t0)}s. Not read: {', '.join(bad) if bad else 'none'}")
-    if progress:
-        try:
-            progress({"phase": "done", "pct": 100, "left": 0, "text": "Done", "mapped": [k.split("#")[0] for k in items], "expected": [CITY_SQUARES[x][0] for x in order],
-                      "missing": bad, "seconds": int(time.time() - t0), "stops": len(order), "total": len(order), "row": 0})
-        except Exception:
-            pass
-    return got
 
 
 def task_needs_city_map(t):

@@ -975,27 +975,6 @@ class Controller:
                 self.event("city_done", {"serial": serial})
         threading.Thread(target=work, daemon=True).start()
 
-    def scan_city_taps(self, serial):
-        job = self.city_job(serial, start=True)
-        adb = rb.find_adb(self.cfg.get("adb_path") or "auto")
-        if not adb:
-            raise ApiError("ADB not found. Set the ADB path in Settings.")
-        stop = threading.Event()
-        job.update(running=True, stop=stop, progress=None)
-        cfg = rb.merge_device_cfg(rb.load_config(), serial)          # this instance's own settings
-
-        def work():
-            try:
-                dev = self.ready_device(serial, adb, stop)
-                rb.scan_city_taps(dev, cfg, lambda m: self.log(m), stop, progress=lambda d: job.update(progress=d))
-            except Exception as e:
-                self.log(f"[!] City tap test: {e}")
-            finally:
-                job["running"] = False
-                job["progress"] = None
-                self.event("city_done", {"serial": serial})
-        threading.Thread(target=work, daemon=True).start()
-
     # ---- map the city by hand: the user clicks each building in a live picture of the emulator
     def manual_open(self, serial):
         if self.city_job(serial)["running"]:
@@ -1069,10 +1048,13 @@ class Controller:
         items[key] = [round(nav.cx + float(x)), round(nav.cy + float(y))]
         ent["missing"] = rb.city_report(items)[1]
         ent["manual"] = sorted(set(ent.get("manual", [])) | {key})
+        filled = rb.fill_from_squares(ent)                    # the rest of the fixed buildings follow from the squares
+        ent["missing"] = rb.city_report(items)[1]
         rb.save_city(data)
         if shot is not None:
             rb.save_building_picture(serial, key, shot, float(x), float(y))
-        self.log(f"[+] City map by hand: {name} placed at {items[key][0]},{items[key][1]}")
+        self.log(f"[+] City map by hand: {name} placed at {items[key][0]},{items[key][1]}"
+                 + (f" - {filled} other building(s) filled in from the squares" if filled else ""))
 
     def slots_info(self, serial):
         """The numbered plots and which building of this emulator sits in which one."""
@@ -2086,10 +2068,6 @@ class Api:
 
     def manual_goto(self, p):
         self.c.manual_goto(p["slot"])
-        return {}
-
-    def scan_city_taps_start(self, p):
-        self.c.scan_city_taps(p["serial"])
         return {}
 
     def city_result(self, p):

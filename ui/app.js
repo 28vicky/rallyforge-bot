@@ -277,7 +277,7 @@ function buildRibbon() {
     grp("Scan",
       btn("Generals", () => openGeneralManager(), "", "users"),
       ...(S.dev ? [btn("Scan generals", () => scanGeneralsFlow(), "", "scan")] : []),
-      btn("Scan city", () => scanCityFlow(S.sel === "control" ? undefined : S.sel), "", "city"), btn("Map by hand", () => manualMapFlow(S.sel === "control" ? undefined : S.sel), "", "pin"), btn("Map by squares", () => scanCityTapsFlow(), "", "city")),
+      btn("Scan city", () => scanCityFlow(S.sel === "control" ? undefined : S.sel), "", "city"), btn("Map by hand", () => manualMapFlow(S.sel === "control" ? undefined : S.sel), "", "pin")),
     grp("Data",
       btn("Profiles ▾", (e) => menu(e.currentTarget, [
         { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user")),
