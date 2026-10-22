@@ -1140,3 +1140,13 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 [data-mode="dark"] #ribbon .btn.isrunning{background:color-mix(in srgb,var(--good) 16%,transparent)!important;color:var(--good)!important;border-color:color-mix(in srgb,var(--good) 40%,transparent)!important}
 [data-mode="dark"] .ribcount{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
 [data-mode="dark"] .pop{box-shadow:0 10px 30px rgba(0,0,0,.45)!important}
+/* card maximize icon (Dashboard cards) */
+.cardhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.cardhead .tdhr{gap:10px;align-items:center;flex-wrap:nowrap}
+.iconbtn.cardmax{width:34px;height:34px;flex:none}
+.iconbtn.cardmax svg{width:16px;height:16px}
+.joinscard .cardhead{margin-bottom:12px}.joinscard .cardhead h3{margin:0}
+.pmax-host>.foundhint{display:none}
+.panel.pmax .tdscroll{flex:1;min-height:0;overflow:auto}
+.panel.pmax .joinsonly{flex:1;min-height:0;display:flex;flex-direction:column}
+.panel.pmax .joinsonly .actwrap{max-height:none;flex:1;min-height:0}

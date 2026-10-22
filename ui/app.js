@@ -64,6 +64,7 @@ const ICO = {
   bolt: '<path d="M13 3 4 14h7l-1 7 9-11h-7l1-7z"/>',
   play: '<path d="M8 5v14l11-7z"/>', pause: '<path d="M9 5v14M15 5v14"/>', stop: '<rect x="6" y="6" width="12" height="12" rx="2.5"/>',
   chev: '<path d="m6.5 9.5 5.5 5.5 5.5-5.5"/>',
+  maxi: '<path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/>', mini: '<path d="M20 4l-6 6M14 4v6h6M4 20l6-6M10 20v-6H4"/>',
   users: '<circle cx="9" cy="8.5" r="3.4"/><path d="M2.8 20c0-3.5 2.8-5.8 6.2-5.8s6.2 2.3 6.2 5.8M16 5.3a3.4 3.4 0 0 1 0 6.4M18.3 14.6c1.8.8 2.9 2.6 2.9 5.4"/>',
   scan: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
   city: '<path d="M3 21h18M5 21V10l5-3v14M10 21V4l9 3v14M13.5 10h2.5M13.5 14h2.5M7 13h1.5M7 17h1.5"/>',

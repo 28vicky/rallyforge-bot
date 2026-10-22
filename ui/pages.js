@@ -93,7 +93,29 @@ function listTable(cols, rows, onSel, selected) {
 
 
 // A "Maximize" switch for a panel: the other panels on the page are hidden and this one fills the whole right section (in place, no popup); press again to bring everything back.
-function maxToggle(panelEl) {
+// small expand icon for a card's header: the card fills the page (other cards hidden); Esc or the icon again goes back
+function cardMax(panelEl) {
+  maxStyle();
+  const b = h("button", { class: "iconbtn cardmax", type: "button", title: "Maximize", "aria-label": "Maximize" });
+  const paint = (on) => { b.innerHTML = ""; b.appendChild(ico(on ? "mini" : "maxi")); b.title = on ? "Back to normal size (Esc)" : "Maximize"; b.setAttribute("aria-label", b.title); };
+  const fit = () => {
+    const m = document.querySelector(".main");
+    if (!panelEl.classList.contains("pmax") || !m || !panelEl.isConnected) return;
+    panelEl.style.height = Math.max(200, m.getBoundingClientRect().bottom - panelEl.getBoundingClientRect().top - 24) + "px";
+  };
+  const key = (e) => { if (e.key === "Escape" && panelEl.classList.contains("pmax")) set(false); };
+  const set = (on) => {
+    panelEl.classList.toggle("pmax", on);
+    if (panelEl.parentElement) panelEl.parentElement.classList.toggle("pmax-host", on);
+    if (on) { const p = $("#pages"); if (p) p.scrollTop = 0; fit(); window.addEventListener("resize", fit); document.addEventListener("keydown", key); }
+    else { panelEl.style.height = ""; window.removeEventListener("resize", fit); document.removeEventListener("keydown", key); }
+    paint(on);
+  };
+  b.onclick = () => set(!panelEl.classList.contains("pmax"));
+  paint(false);
+  return b;
+}
+function maxStyle() {
   if (!document.getElementById("maxStyle")) {
     const st = document.createElement("style"); st.id = "maxStyle";
     st.textContent = ".pmax-host>.panel:not(.pmax){display:none}.panel.pmax{display:flex;flex-direction:column;box-sizing:border-box;margin-bottom:0}" +
@@ -101,6 +123,9 @@ function maxToggle(panelEl) {
       ".panel.pmax .tlist{max-height:none;flex:1;min-height:0}.panel.pmax .pmax-fill{flex:1;min-height:0;display:flex;flex-direction:column}.panel.pmax .pmax-fill>div{flex:1;min-height:0;display:flex;flex-direction:column}";
     document.head.appendChild(st);
   }
+}
+function maxToggle(panelEl) {
+  maxStyle();
   const fit = () => {
     const m = document.querySelector(".main");
     if (!panelEl.classList.contains("pmax") || !m) return;
@@ -127,7 +152,11 @@ PAGES.dashboard = function () {
   const avail = (S.avail || []).filter((a) => !S.devices.some((d) => d.id === a.id));
   const hint = avail.length ? h("div", { class: "foundhint" }, `${avail.length} new emulator${avail.length > 1 ? "s" : ""} found \u00b7 `,
     h("a", { href: "#", onclick: (e) => { e.preventDefault(); pickTab("instances"); } }, "Add them")) : null;
-  return h("div", {}, hint, renderTodayAll(), panel(null, activityBox(null, null, true)));
+  const joins = panel(null, activityBox(null, null, true));
+  joins.classList.add("joinscard");
+  const jh = joins.querySelector(".joinsonly > h3");
+  if (jh) jh.replaceWith(h("div", { class: "cardhead" }, jh, cardMax(joins)));
+  return h("div", {}, hint, renderTodayAll(), joins);
 };
 // ====================================================================== instances (list, detect, found, profiles)
 PAGES.instances = function () {
@@ -1244,7 +1273,7 @@ function renderTodayAll() {
   const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {}), stats = h("div", { class: "actstats tdtiles" });
   const nowCells = {};                                                    // serial -> "Doing now" cell, refreshed every second
   const card = h("div", { class: "panel today" },
-    h("div", { class: "cardhead" }, h("h3", {}, "Today \u00b7 all instances"), head), ce, stats,
+    h("div", { class: "cardhead" }, h("h3", {}, "Today \u00b7 all instances"), h("div", { class: "row tdhr" }, head, null)), ce, stats,
     h("div", { class: "tdscroll" }, h("table", { class: "tdall" },
       h("thead", {}, h("tr", {}, ...["Instance", "Doing now", "Duties", "Joins", "Skipped (late)", "Failed", "Shield", "Buff"].map((c) => h("th", {}, c)))), body)));
   const fails = (serial) => S.acts.filter((l) => l.s === serial && l.a.k === "fail").length;
@@ -1252,6 +1281,7 @@ function renderTodayAll() {
     paintStats(stats, null);
     for (const [s, td] of Object.entries(nowCells)) { const x = S.now[s]; const t = x ? x.text : "-"; if (td.textContent !== t) { td.textContent = t; td.title = t; } }
   };
+  card.querySelector(".tdhr").appendChild(cardMax(card));
   let j = null, last = "";
   const skew = () => (j ? j.now - Date.now() / 1000 : 0);
   const tick = () => {
