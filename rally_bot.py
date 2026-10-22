@@ -7280,6 +7280,9 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "alliance_science":
         run_alliance_science(dev, cfg, log, stop)
         return
+    if cmd in RD_STEPS:                                    # recorded duties (tester flows 22 Oct)
+        RD_STEPS[cmd](dev, cfg, log, stop)
+        return
     if cmd == "view_reset_test":
         run_view_reset_test(dev, cfg, log, stop)
         return
@@ -8571,6 +8574,674 @@ def run_alliance_science(dev, cfg, log, stop):
         raise RuntimeError(f"{left} donation(s) left")
 
 
+# ------------------------------------------------------------ recorded duties (tester flows, 22 Oct 2026)
+# Built from the tester's recordings (project docs claude/flow_*.md, index claude/flows_index_22oct.md).
+# Safety rules shared by all of them:
+# - a button that DOES something (Claim, Free, Levy, Tax, Train, Send, Offer, March, Finish All ...) is pressed only when
+#   its word is read on the screen in the expected place; the recorded spot is never pressed blind for those;
+# - recorded spots are used only to OPEN things (top-bar icons, tabs, card slots) and the page is checked afterwards;
+# - a line that mentions gems / Instant / Buy / Purchase / Clear / Refresh / Enter / packages is never pressed.
+RD_DANGER = ("gem", "instant", "buy", "purchase", "clear", "refresh", "enter", "package", "recharge", "$", "x10", "10 pack")
+RD_SPEEDUP_WORDS = ["Finish All", "Finish all"]
+
+
+def rd_snap(img, tag):
+    try:
+        (USER / "debug").mkdir(exist_ok=True)
+        cv2.imwrite(str(USER / "debug" / f"duty_{tag}.png"), img)
+    except Exception:
+        pass
+
+
+def rd_opt(cfg, duty_id, key, default=None):
+    """A duty's own setting (Duties page), e.g. rd_opt(cfg, 'resource_tax', 'resource', 'Lumber')."""
+    v = ((cfg.get("duties") or {}).get(duty_id) or {}).get(key)
+    if v in (None, ""):
+        for o in (DUTY_BY_ID.get(duty_id) or {}).get("opts") or []:
+            if o["k"] == key:
+                return o.get("def", default)
+        return default
+    return v
+
+
+def rd_lines(img, region=None):
+    ox = oy = 0
+    if region:
+        x, y, w, h = region
+        img, ox, oy = img[max(0, y):y + h, max(0, x):x + w], max(0, x), max(0, y)
+    return [(t, [(s[0], s[1] + ox, s[2] + oy, s[3], s[4]) for s in ws]) for t, ws in ocr_lines(img)]
+
+
+def rd_find(img, words, region=None, cutoff=0.78, whole=False):
+    """-> (x, y, line) of the first of `words` read on the screen, or None. Lines with a danger word (gems, Instant,
+    Buy, Refresh...) are skipped unless the word itself is asked for. whole=True: the line must be the word and
+    nothing else (e.g. a 'Free' button, not 'Free to open in 1d')."""
+    import difflib
+    lines = rd_lines(img, region)
+    for opt in words:
+        ow = opt.lower().split()
+        if not ow:
+            continue
+        for text, ws in lines:
+            low = text.lower()
+            if any(d in low for d in RD_DANGER if d not in opt.lower()):
+                continue
+            if whole:
+                if difflib.SequenceMatcher(None, low.strip(".,:;!() "), " ".join(ow)).ratio() >= cutoff:
+                    return (int(sum(s[1] for s in ws) / len(ws)), int(sum(s[2] for s in ws) / len(ws)), text)
+                continue
+            for i in range(len(ws) - len(ow) + 1):
+                seg = ws[i:i + len(ow)]
+                got = " ".join(s[0] for s in seg).lower().strip(".,:;!")
+                if difflib.SequenceMatcher(None, got, " ".join(ow)).ratio() >= cutoff:
+                    return (int(sum(s[1] for s in seg) / len(seg)), int(sum(s[2] for s in seg) / len(seg)), text)
+    return None
+
+
+def rd_seen(img, words, region=None, cutoff=0.72):
+    return bool(find_text(img, words, region=region, cutoff=cutoff))
+
+
+def rd_tap(dev, stop, words, region=None, cutoff=0.78, whole=False, wait=(1.4, 1.9), shot=None):
+    """Tap a button found by its word (see rd_find). -> True when tapped."""
+    hit = rd_find(shot if shot is not None else dev.screenshot(), words, region, cutoff, whole)
+    if not hit:
+        return False
+    dev.tap(hit[0], hit[1])
+    _nap(stop, *wait)
+    return True
+
+
+def rd_ring(dev, stop, words, cutoff=0.75):
+    """A building's ring menu is open: tap the item with this label (the icon sits just above its label)."""
+    for i in range(2):
+        shot = dev.screenshot()
+        p = rd_find(shot, words, region=(0, 110, 540, 650), cutoff=cutoff)
+        if p:
+            dev.tap(p[0], max(100, p[1] - 35))
+            _nap(stop, 2.0, 2.6)
+            return True
+        _nap(stop, 0.8, 1.1)
+    rd_snap(dev.screenshot(), "ring_" + words[0].replace(" ", "_"))
+    return False
+
+
+def rd_close_reward(dev, stop, spot=(270, 754)):
+    """Close 'Congratulations!' panels (one or more) by tapping their Continue / empty curtain."""
+    n = 0
+    for _ in range(5):
+        if stop.is_set():
+            break
+        if not wheel_reward_panel(dev.screenshot()):
+            break
+        dev.tap(*spot)
+        n += 1
+        _nap(stop, 0.9, 1.2)
+    return n
+
+
+def rd_city_label(dev, stop, names, dy=45):
+    """Find a building by the name printed under it on the city screen (for buildings the city map does not know,
+    e.g. Trade Carriage, World Civilizations) and tap the building just above the name. -> True when tapped."""
+    x, y, w, h = LABEL_VIEW
+    shot = dev.screenshot()
+    for bright in (False, True):
+        for text, ws in ocr_lines(shot[y:y + h, x:x + w], bright=bright):
+            low = text.lower()
+            for n in names:
+                if n.lower() in low:
+                    cx = int(sum(s[1] for s in ws) / len(ws)) + x
+                    cy = int(sum(s[2] for s in ws) / len(ws)) + y
+                    dev.tap(cx, max(110, cy - dy))
+                    _nap(stop, 2.0, 2.6)
+                    return True
+    rd_snap(shot, "label_" + names[0].replace(" ", "_"))
+    return False
+
+
+def rd_numbers(text):
+    return [int(n.replace(",", "")) for n in re.findall(r"\d[\d,]*", text or "")]
+
+
+def rd_keyboard_ok(dev, stop):
+    """Close the Android text box after typing (Enter = OK)."""
+    try:
+        dev._run("shell", "input", "keyevent", "66")
+    except Exception:
+        dev.tap(460, 912)
+    _nap(stop, 1.0, 1.4)
+
+
+def rd_alliance_page(dev, cfg, stop):
+    """From the city: open the Alliance page (same way as Alliance Science)."""
+    shot = dev.screenshot()
+    h = find(shot, "rally_icon", 0.8) if has_template("rally_icon") else None
+    pos = (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
+    dev.tap(*pos)
+    _nap(stop, 1.8, 2.4)
+
+
+def rd_alliance_row(dev, stop, words):
+    """On the Alliance page: tap the row with this name, scrolling the list up when it is below the fold."""
+    for i in range(4):
+        shot = dev.screenshot()
+        row = rd_find(shot, words, region=(40, 300, 400, 640), cutoff=0.75)
+        if row:
+            dev.tap(row[0], row[1])
+            _nap(stop, 1.8, 2.4)
+            return True
+        if stop.is_set():
+            break
+        dev.swipe(316, 778, 303, 548, 450)
+        _nap(stop, 1.0, 1.4)
+    rd_snap(dev.screenshot(), "alliance_row_" + words[0].replace(" ", "_"))
+    return False
+
+
+# --- simple city claims ---------------------------------------------------------------------------------------
+def run_gold_levy(dev, cfg, log, stop):
+    """Keep's ring menu is open: Levy -> Free Levy All. The 'Gems Levy' button is never pressed."""
+    if not rd_ring(dev, stop, ["Levy"]):
+        raise RuntimeError("no Levy button in the Keep menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "levy_1")
+    if not rd_seen(shot, ["Levy"], region=(0, 80, 540, 760)):
+        raise RuntimeError("the Levy window did not open")
+    if not rd_tap(dev, stop, ["Free Levy All"], region=(180, 690, 360, 120), shot=shot, wait=(2.0, 2.6)):
+        log("[+]  Gold Levy: no free levies left today")
+        return
+    rd_close_reward(dev, stop)
+    rd_snap(dev.screenshot(), "levy_2")
+    log("[+]  Gold Levy: free levies used")
+
+
+def run_resource_tax(dev, cfg, log, stop):
+    """Market's ring menu is open: Tax -> Tax on the resource the user picked -> Tax (only while the popup costs 0)."""
+    res = str(rd_opt(cfg, "resource_tax", "resource", "Lumber"))
+    if not rd_ring(dev, stop, ["Tax"]):
+        raise RuntimeError("no Tax button in the Market menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "tax_1")
+    if not rd_seen(shot, ["Revenue", "Free"], region=(0, 80, 540, 600)):
+        raise RuntimeError("the Tax page did not open")
+    row = find_text(shot, [res + " Revenue", res], region=(60, 300, 300, 420), cutoff=0.72)
+    if not row:
+        raise RuntimeError(f"no {res} row on the Tax page")
+    box = (340, row[1] - 40, 200, 80)
+    txt = " ".join(t for t, _ in rd_lines(shot, box))
+    btn = rd_find(shot, ["Tax"], region=box, cutoff=0.8)
+    if not btn or rd_numbers(txt):                          # out of free taxes: the button shows a gem price
+        log(f"[+]  Resource Tax: no free tax left today ({res})")
+        return
+    dev.tap(btn[0], btn[1])
+    _nap(stop, 1.8, 2.3)
+    shot = dev.screenshot()
+    rd_snap(shot, "tax_2")
+    cost = next((t for t, _ in rd_lines(shot, (30, 380, 480, 300)) if "cost" in t.lower()), None)
+    if cost is None or any(rd_numbers(cost)):
+        dev.back()
+        raise RuntimeError("the Tax popup does not show a cost of 0 - not pressed")
+    if not rd_tap(dev, stop, ["Tax"], region=(160, 570, 240, 80), whole=True, wait=(2.0, 2.6), shot=shot):
+        dev.back()
+        raise RuntimeError("no Tax button in the popup")
+    rd_close_reward(dev, stop)
+    log(f"[+]  Resource Tax: free taxes used on {res}")
+
+
+def run_labor(dev, cfg, log, stop):
+    """Prison's ring menu is open: Captives -> Labor -> Labor. Clear Labor CD (gems) is never pressed."""
+    if not rd_ring(dev, stop, ["Captives"]):
+        raise RuntimeError("no Captives button in the Prison menu")
+    if not rd_tap(dev, stop, ["Labor"], region=(300, 870, 240, 90), whole=True, wait=(1.8, 2.3)):
+        rd_snap(dev.screenshot(), "labor_1")
+        log("[+]  Labor: no Labor button (no captives?)")
+        return
+    shot = dev.screenshot()
+    rd_snap(shot, "labor_2")
+    if rd_seen(shot, ["Cooldown"], region=(0, 300, 540, 450)):
+        log("[+]  Labor: on cooldown")
+        return
+    if not rd_tap(dev, stop, ["Labor"], region=(160, 600, 280, 100), whole=True, wait=(2.0, 2.5), shot=shot):
+        raise RuntimeError("no Labor button in the popup")
+    rd_close_reward(dev, stop)
+    log("[+]  Labor: captives put to work (4 h of production)")
+
+
+def run_general_chest(dev, cfg, log, stop):
+    """Tavern's ring menu is open: Great General Chest -> Free (only the free daily open)."""
+    if not rd_ring(dev, stop, ["Great General Chest", "General Chest"]):
+        raise RuntimeError("no Great General Chest button in the Tavern menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "gchest_1")
+    if not rd_tap(dev, stop, ["Free"], region=(230, 660, 260, 110), whole=True, cutoff=0.85, wait=(2.5, 3.0), shot=shot):
+        log("[+]  Great General Chest: the free open is not ready")
+        return
+    rd_close_reward(dev, stop)
+    log("[+]  Great General Chest: free chest opened")
+
+
+def run_vip_claim(dev, cfg, log, stop):
+    """From the city: VIP badge under the avatar -> Claim the daily VIP chest. Packages / More VIP Time never."""
+    dev.tap(128, 75)
+    _nap(stop, 2.2, 2.8)
+    shot = dev.screenshot()
+    rd_snap(shot, "vip_1")
+    if not rd_seen(shot, ["VIP"], region=(0, 0, 540, 200)):
+        raise RuntimeError("the VIP page did not open")
+    if not rd_tap(dev, stop, ["Claim"], region=(330, 560, 210, 120), whole=True, wait=(2.0, 2.5), shot=shot):
+        log("[+]  VIP: daily chest already claimed")
+        return
+    rd_close_reward(dev, stop)
+    log("[+]  VIP: daily chest claimed")
+
+
+def run_recruit_citizens(dev, cfg, log, stop):
+    """From the city: citizens icon on the top bar -> Citizen List -> Recruit Citizens -> the free Recruit Once,
+    then flip the card. Recruit x10 / Buy never."""
+    dev.tap(280, 46)
+    _nap(stop, 2.0, 2.6)
+    shot = dev.screenshot()
+    if not rd_seen(shot, ["Citizen"], region=(0, 0, 540, 160)):
+        raise RuntimeError("the Citizen page did not open")
+    if not rd_tap(dev, stop, ["Citizen List"], region=(270, 80, 270, 70), shot=shot):
+        dev.tap(426, 113)
+        _nap(stop, 1.4, 1.8)
+    if not rd_tap(dev, stop, ["Recruit Citizens"], region=(60, 870, 420, 90), wait=(2.0, 2.5)):
+        rd_snap(dev.screenshot(), "citizens_1")
+        raise RuntimeError("no Recruit Citizens button")
+    shot = dev.screenshot()
+    rd_snap(shot, "citizens_2")
+    if not rd_tap(dev, stop, ["Free"], region=(280, 860, 240, 100), whole=True, cutoff=0.85, wait=(2.0, 2.5), shot=shot):
+        log("[+]  Recruit Citizens: the free recruit is not ready")
+        return
+    for xy in ((269, 676), (268, 549)):                     # flip the card, then close it
+        dev.tap(*xy)
+        _nap(stop, 1.4, 1.8)
+    rd_close_reward(dev, stop)
+    log("[+]  Recruit Citizens: free recruit done")
+
+
+def run_civilization_card(dev, cfg, log, stop):
+    """From the city: World Civilizations building (found by its name) -> the Free card pack. Purchase / Open 10 never."""
+    if not rd_city_label(dev, stop, ["World Civilizations", "Civilizations", "Civilization"]):
+        raise RuntimeError("the World Civilizations building is not on the city screen")
+    shot = dev.screenshot()
+    if not rd_seen(shot, ["Card Pack", "Open Card"], region=(0, 0, 540, 300)):
+        p = rd_find(shot, ["Card Pack", "Cards"], region=(0, 110, 540, 650))      # a ring menu opened instead of the page
+        if p:
+            dev.tap(p[0], max(100, p[1] - 35))
+            _nap(stop, 2.0, 2.6)
+            shot = dev.screenshot()
+    rd_snap(shot, "civ_1")
+    if not rd_seen(shot, ["Card Pack", "Open Card"], region=(0, 0, 540, 300)):
+        raise RuntimeError("the Open Card Pack page did not open")
+    if not rd_tap(dev, stop, ["Free"], region=(0, 300, 180, 120), whole=True, cutoff=0.85, wait=(2.5, 3.0), shot=shot):
+        log("[+]  Civilization card: the free pack is not ready")
+        return
+    rd_close_reward(dev, stop)
+    log("[+]  Civilization card: free pack opened")
+
+
+# --- Super Value Return page (Empire Depot icon) -----------------------------------------------------------------
+def svr_open_tab(dev, stop, log, tab):
+    """From the city: Empire Depot icon (bottom left) -> Super Value Return -> the tab with this name."""
+    dev.tap(53, 825)
+    _nap(stop, 2.2, 2.8)
+    shot = dev.screenshot()
+    if not rd_seen(shot, ["Super Value Return", "Value Return", "Super Value"], region=(40, 0, 460, 95)):
+        rd_snap(shot, "svr_0")
+        raise RuntimeError("the Super Value Return page did not open")
+    moves = [(443, 133, 10, 130)] * 3 + [(10, 130, 500, 133)] * 5      # tab bar: look left to right, then back
+    for i in range(len(moves) + 1):
+        p = find_text(shot, [tab], region=(0, 95, 540, 60), cutoff=0.72)
+        if p:
+            dev.tap(*p)
+            _nap(stop, 1.8, 2.3)
+            return True
+        if i == len(moves) or stop.is_set():
+            break
+        dev.swipe(*moves[i], 900)
+        _nap(stop, 1.0, 1.3)
+        shot = dev.screenshot()
+    rd_snap(shot, "svr_tab")
+    raise RuntimeError(f"no '{tab}' tab on the Super Value Return page")
+
+
+def svr_claimable(dev, stop, log, title):
+    shot = dev.screenshot()
+    rd_snap(shot, "svr_" + title.split()[0].lower())
+    if not rd_tap(dev, stop, ["Claimable"], region=(0, 220, 230, 110), wait=(2.2, 2.8), shot=shot):
+        log(f"[+]  {title}: nothing to claim")
+        return
+    rd_close_reward(dev, stop)
+    log(f"[+]  {title}: claimed")
+
+
+def run_empire_depot(dev, cfg, log, stop):
+    svr_open_tab(dev, stop, log, "Empire Depot")
+    svr_claimable(dev, stop, log, "Empire Depot")
+
+
+def run_lucky_raffle(dev, cfg, log, stop):
+    """Only the free 'Claimable' chest; the Enter buttons (gem / VIP entries) are never pressed."""
+    svr_open_tab(dev, stop, log, "Lucky Raffle")
+    svr_claimable(dev, stop, log, "Lucky Raffle")
+
+
+def run_refining_card(dev, cfg, log, stop):
+    """Refining Weekly Card tab: every green Claim (Daily Activity 20 / 50 / 80 ...). 'Continue' = not reached yet."""
+    svr_open_tab(dev, stop, log, "Refining Weekly Card")
+    n, swiped = 0, False
+    for _ in range(10):
+        if stop.is_set():
+            break
+        shot = dev.screenshot()
+        if rd_tap(dev, stop, ["Claim"], region=(350, 560, 190, 390), whole=True, wait=(2.0, 2.5), shot=shot):
+            n += 1
+            rd_close_reward(dev, stop, spot=(270, 120))
+            continue
+        if swiped:
+            break
+        dev.swipe(443, 888, 460, 613, 800)
+        swiped = True
+        _nap(stop, 1.2, 1.5)
+    log(f"[+]  Refining Weekly Card: {n} reward(s) claimed")
+
+
+# --- Alliance page ------------------------------------------------------------------------------------------------
+def run_alliance_gift(dev, cfg, log, stop):
+    """Alliance > Alliance Gift > Open All."""
+    rd_alliance_page(dev, cfg, stop)
+    if not rd_alliance_row(dev, stop, ["Alliance Gift"]):
+        raise RuntimeError("no Alliance Gift row on the Alliance page")
+    if not rd_tap(dev, stop, ["Open All"], region=(130, 860, 280, 100), wait=(2.2, 2.8)):
+        rd_snap(dev.screenshot(), "agift_1")
+        log("[+]  Alliance Gift: nothing to open")
+        return
+    rd_close_reward(dev, stop, spot=(270, 120))
+    log("[+]  Alliance Gift: all gifts opened")
+
+
+def run_alliance_treasure(dev, cfg, log, stop):
+    """Alliance > Alliance Treasure > Open All (chests still on a timer stay closed)."""
+    rd_alliance_page(dev, cfg, stop)
+    if not rd_alliance_row(dev, stop, ["Alliance Treasure"]):
+        raise RuntimeError("no Alliance Treasure row on the Alliance page")
+    shot = dev.screenshot()
+    rd_snap(shot, "atreasure_1")
+    if not rd_tap(dev, stop, ["Open All"], region=(240, 860, 300, 100), wait=(2.2, 2.8), shot=shot):
+        log("[+]  Alliance Treasure: nothing to open")
+        return
+    rd_close_reward(dev, stop, spot=(270, 120))
+    log("[+]  Alliance Treasure: Open All pressed")
+
+
+# --- Event Center -------------------------------------------------------------------------------------------------
+def run_ranger_knight(dev, cfg, log, stop):
+    """Event Center is open: Limited tab -> Ranger Knight Order -> Quick Dispatch -> Send. Refresh never."""
+    shot = dev.screenshot()
+    if rd_tap(dev, stop, ["Limited"], region=(0, 60, 540, 140), shot=shot):
+        shot = dev.screenshot()
+    for i in range(5):
+        p = rd_find(shot, ["Ranger Knight Order", "Knight Order"], region=(0, 150, 540, 720), cutoff=0.75)
+        if p:
+            dev.tap(p[0], p[1])
+            _nap(stop, 2.2, 2.8)
+            break
+        if i == 4 or stop.is_set():
+            rd_snap(shot, "rko_0")
+            raise RuntimeError("no Ranger Knight Order in the Event Center")
+        dev.swipe(270, 780, 270, 420, 600)
+        _nap(stop, 1.0, 1.3)
+        shot = dev.screenshot()
+    shot = dev.screenshot()
+    rd_snap(shot, "rko_1")
+    if not rd_tap(dev, stop, ["Quick Dispatch"], region=(300, 830, 240, 110), wait=(1.8, 2.3), shot=shot):
+        log("[+]  Ranger Knight Order: nothing to dispatch")
+        return
+    if not rd_tap(dev, stop, ["Send"], region=(140, 700, 280, 110), whole=True, wait=(1.8, 2.3)):
+        rd_snap(dev.screenshot(), "rko_2")
+        dev.back()
+        log("[+]  Ranger Knight Order: no task to send right now")
+        return
+    log("[+]  Ranger Knight Order: tasks sent")
+
+
+# --- training with speed-ups ----------------------------------------------------------------------------------------
+def rd_finish_with_speedups(dev, stop, log, what):
+    """The busy button (Speed Up / Training Speedup) -> Finish All with speed-up ITEMS. Instant (gems) never."""
+    if not rd_tap(dev, stop, ["Training Speedup", "Speed Up", "Speedup"], region=(300, 860, 240, 100), wait=(1.8, 2.3)):
+        log(f"[i]   {what}: no Speed Up button")
+        return False
+    shot = dev.screenshot()
+    rd_snap(shot, "speedup")
+    if not rd_tap(dev, stop, RD_SPEEDUP_WORDS, region=(0, 860, 340, 100), wait=(2.0, 2.6), shot=shot):
+        log(f"[i]   {what}: no Finish All button (no speed-up items?)")
+        dev.back()
+        return False
+    log(f"[i]   {what}: finished with speed-up items")
+    return True
+
+
+def rd_train(dev, cfg, log, stop, duty_id, ring_word, qty_xy, what):
+    """Barracks / Trap Factory ring menu is open: type the amount, check it was taken, press Train."""
+    amount = max(1, min(int(float(rd_opt(cfg, duty_id, "amount", 500) or 500)), 9999999))
+    if not rd_ring(dev, stop, [ring_word]):
+        raise RuntimeError(f"no {ring_word} button in the menu")
+    shot = dev.screenshot()
+    rd_snap(shot, duty_id + "_1")
+    if not rd_find(shot, ["Train"], region=(300, 860, 240, 100), whole=True):
+        if rd_find(shot, ["Speed Up", "Speedup"], region=(300, 860, 240, 100)):
+            log(f"[+]  {what}: already busy")
+            if rd_opt(cfg, duty_id, "speedups", False) in (True, "true", "1", 1):
+                rd_finish_with_speedups(dev, stop, log, what)
+            return
+        raise RuntimeError("the training page did not open")
+    dev.tap(*qty_xy)
+    _nap(stop, 1.4, 1.8)
+    dev.text(str(amount))
+    _nap(stop, 0.6, 0.9)
+    rd_keyboard_ok(dev, stop)
+    shot = dev.screenshot()
+    rd_snap(shot, duty_id + "_2")
+    got = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (qty_xy[0] - 90, qty_xy[1] - 28, 180, 56))))
+    if amount not in got:                                    # never train the full (max) amount by mistake
+        raise RuntimeError(f"the amount box does not show {amount} (read {got[:3]}) - not trained")
+    if not rd_tap(dev, stop, ["Train"], region=(300, 860, 240, 100), whole=True, wait=(2.0, 2.5), shot=shot):
+        raise RuntimeError("no Train button")
+    log(f"[+]  {what}: {amount:,} queued")
+    if rd_opt(cfg, duty_id, "speedups", False) in (True, "true", "1", 1):
+        rd_finish_with_speedups(dev, stop, log, what)
+
+
+def run_train_troops(dev, cfg, log, stop):
+    rd_train(dev, cfg, log, stop, "train_troops", "Train", (418, 797), "Train troops")
+
+
+def run_build_traps(dev, cfg, log, stop):
+    rd_train(dev, cfg, log, stop, "build_traps", "Build", (438, 797), "Build traps")
+
+
+def run_troop_healing(dev, cfg, log, stop):
+    """Hospital's ring menu is open: Heal -> Heal (resources). Instant Heal (gems) never; paid offers are closed."""
+    if not rd_ring(dev, stop, ["Heal"]):
+        raise RuntimeError("no Heal button in the Hospital menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "heal_1")
+    if not rd_seen(shot, ["Wounded", "Hospital"], region=(0, 0, 540, 400)):
+        raise RuntimeError("the Hospital page did not open")
+    if rd_tap(dev, stop, ["Heal"], region=(300, 860, 240, 100), whole=True, wait=(2.0, 2.5), shot=shot):
+        log("[+]  Troop healing: healing started")
+    elif rd_find(shot, ["Speed Up", "Speedup"], region=(300, 860, 240, 100)):
+        log("[+]  Troop healing: already healing")
+    else:
+        log("[+]  Troop healing: no wounded troops")
+        return
+    if rd_opt(cfg, "troop_healing", "speedups", False) in (True, "true", "1", 1):
+        rd_finish_with_speedups(dev, stop, log, "Troop healing")
+
+
+# --- Tavern -------------------------------------------------------------------------------------------------------
+ACTIVITY_CARD_CHEST = (100, 445)                          # the first task card's chest (claimed cards move to the end)
+ACTIVITY_MILESTONES = [(195, 194), (252, 186), (321, 186), (394, 192), (458, 186)]
+
+
+def run_activity_chests(dev, cfg, log, stop):
+    """Tavern's ring menu is open: Activity -> open every task chest that is ready, then the milestone chests."""
+    if not rd_ring(dev, stop, ["Activity"]):
+        raise RuntimeError("no Activity button in the Tavern menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "activity_1")
+    if not rd_seen(shot, ["Activity"], region=(0, 0, 540, 120)):
+        raise RuntimeError("the Activity page did not open")
+    n = 0
+    for _ in range(40):
+        if stop.is_set():
+            break
+        dev.tap(*ACTIVITY_CARD_CHEST)
+        _nap(stop, 1.2, 1.6)
+        if not wheel_reward_panel(dev.screenshot()):
+            break
+        n += 1
+        rd_close_reward(dev, stop, spot=(270, 240))
+    m = 0
+    for xy in ACTIVITY_MILESTONES:
+        if stop.is_set():
+            break
+        dev.tap(*xy)
+        _nap(stop, 1.2, 1.6)
+        if wheel_reward_panel(dev.screenshot()):
+            m += 1
+        dev.tap(*xy)                                        # second tap closes the reward / the preview
+        _nap(stop, 0.9, 1.2)
+        rd_close_reward(dev, stop, spot=(270, 240))
+    rd_snap(dev.screenshot(), "activity_2")
+    log(f"[+]  Activity: {n} task chest(s) and {m} milestone chest(s) opened")
+
+
+# --- loops --------------------------------------------------------------------------------------------------------
+GATE_VISITOR_BUBBLE = (236, 498)
+
+
+def run_gate_visitors(dev, cfg, log, stop):
+    """From the city: while the 'visitor is waiting at the city gate' banner shows, tap the '?' over the gate,
+    skip the envoy's text, Claim, close the reward."""
+    n = 0
+    for _ in range(8):
+        if stop.is_set():
+            break
+        shot = dev.screenshot()
+        if not rd_seen(shot, ["visitor is waiting", "city gate", "visitor"], region=(0, 85, 540, 160)):
+            break
+        dev.tap(*GATE_VISITOR_BUBBLE)
+        _nap(stop, 2.0, 2.5)
+        shot = dev.screenshot()
+        if not rd_seen(shot, ["Visiting Envoy", "Envoy", "Visitor"], region=(0, 300, 540, 600)):
+            rd_snap(shot, "visitor_miss")
+            log("[!]  Gate visitors: the visitor did not open (city view moved?) - stopped")
+            break
+        dev.tap(275, 805)                                   # skip the envoy's text
+        _nap(stop, 1.0, 1.3)
+        if not rd_tap(dev, stop, ["Claim"], region=(140, 840, 260, 100), whole=True, wait=(1.8, 2.3)):
+            rd_snap(dev.screenshot(), "visitor_noclaim")
+            dev.back()
+            break
+        n += 1
+        if wheel_reward_panel(dev.screenshot()):
+            dev.tap(245, 630)
+            _nap(stop, 1.0, 1.3)
+    log(f"[+]  Gate visitors: {n} visitor(s) claimed")
+
+
+CARRIAGE_SLOTS = [(218, 772), (290, 583), (424, 435), (128, 491)]
+
+
+def carriage_left(img):
+    for t, _ in rd_lines(img, (0, 60, 540, 260)):
+        if "transport" in t.lower() and "today" in t.lower():
+            nums = rd_numbers(t)
+            return nums[-1] if nums else None
+    return None
+
+
+def run_trade_carriage(dev, cfg, log, stop):
+    """From the city: Trade Carriage (found by its name) -> each empty slot: take the first carriage, Select Formation,
+    March with the preset already shown, until Transports Left Today is 0. Refresh Goods is never pressed (owner)."""
+    if not rd_city_label(dev, stop, ["Trade Carriage", "Carriage"]):
+        raise RuntimeError("the Trade Carriage is not on the city screen")
+    shot = dev.screenshot()
+    rd_snap(shot, "carriage_1")
+    left = carriage_left(shot)
+    if left is None:
+        raise RuntimeError("the Trade Carriage page did not open")
+    sent = 0
+    for xy in CARRIAGE_SLOTS:
+        if left <= 0 or stop.is_set():
+            break
+        dev.tap(*xy)
+        _nap(stop, 1.8, 2.3)
+        shot = dev.screenshot()
+        if not rd_tap(dev, stop, ["Select Formation"], region=(270, 870, 270, 100), wait=(2.2, 2.8), shot=shot):
+            if carriage_left(shot) is None:                 # a carriage that is already on the road opened: close it
+                dev.back()
+                _nap(stop, 1.2, 1.6)
+            continue
+        if not rd_tap(dev, stop, ["March"], region=(270, 870, 270, 100), whole=True, wait=(2.2, 2.8)):
+            rd_snap(dev.screenshot(), "carriage_nomarch")
+            dev.back()
+            _nap(stop, 1.2, 1.6)
+            raise RuntimeError("no March button on the formation screen")
+        sent += 1
+        shot = dev.screenshot()
+        new = carriage_left(shot)
+        left = new if new is not None else left - 1
+    log(f"[+]  Trade Carriage: {sent} transport(s) sent, {left} left today")
+
+
+# --- Shrine -------------------------------------------------------------------------------------------------------
+def run_offering_tributes(dev, cfg, log, stop):
+    """Shrine's ring menu is open: Offer -> Offer Tribute -> slider to the most (50) -> Offer. Uses Tribute items;
+    Offer Gems is never pressed and the popup must not mention gems."""
+    times = max(1, min(int(float(rd_opt(cfg, "offering_tributes", "times", 1) or 1)), 20))
+    if not rd_ring(dev, stop, ["Offer"]):
+        raise RuntimeError("no Offer button in the Shrine menu")
+    done = 0
+    for _ in range(times):
+        if stop.is_set():
+            break
+        shot = dev.screenshot()
+        rd_snap(shot, "offer_1")
+        if not rd_tap(dev, stop, ["Offer Tribute"], region=(260, 860, 280, 100), wait=(1.6, 2.0), shot=shot):
+            log("[+]  Offering: no Offer Tribute button (no tributes?)")
+            break
+        for _ in range(55):                                 # + to the most allowed (50 per offer)
+            if stop.is_set():
+                break
+            dev.tap(435, 473)
+            time.sleep(0.08)
+        _nap(stop, 0.8, 1.1)
+        shot = dev.screenshot()
+        rd_snap(shot, "offer_2")
+        if any("gem" in t.lower() for t, _ in rd_lines(shot, (30, 330, 480, 330))):
+            dev.back()
+            raise RuntimeError("the offer popup mentions gems - not pressed")
+        if not rd_tap(dev, stop, ["Offer"], region=(170, 575, 220, 70), whole=True, wait=(2.2, 2.8), shot=shot):
+            dev.back()
+            raise RuntimeError("no Offer button in the popup")
+        done += 1
+        rd_close_reward(dev, stop, spot=(270, 120))
+    log(f"[+]  Offering: {done} tribute offer(s) made")
+
+
+RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
+            "general_chest": run_general_chest, "vip_claim": run_vip_claim, "recruit_citizens": run_recruit_citizens,
+            "civilization_card": run_civilization_card, "empire_depot": run_empire_depot, "lucky_raffle": run_lucky_raffle,
+            "refining_card": run_refining_card, "alliance_gift": run_alliance_gift, "alliance_treasure": run_alliance_treasure,
+            "ranger_knight": run_ranger_knight, "train_troops": run_train_troops, "build_traps": run_build_traps,
+            "troop_healing": run_troop_healing, "activity_chests": run_activity_chests, "gate_visitors": run_gate_visitors,
+            "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes}
+
+
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
 DUTY_FILE = USER / "duties_state.json"
 _DUTY_LOCK = threading.Lock()
@@ -8587,8 +9258,8 @@ DUTY_LIBRARY = [
      "note": "Opens Mail and taps Claim all.",
      "target": "icon:Mail", "steps": ["wait 1.5", "tap_text Claim All|Read All|Claim"]},
     {"id": "alliance_gift", "group": "Reward claims", "title": "Alliance gift", "every_min": 0, "verified": False,
-     "note": "Alliance > Gifts > Claim all.",
-     "target": "icon:Alliance", "steps": ["wait 1.5", "tap_text Gifts", "wait 1.2", "tap_text Claim All|Claim", "wait 1"]},
+     "note": "Alliance > Alliance Gift > Open All.",
+     "target": "self:", "steps": ["alliance_gift"]},
     {"id": "alliance_help", "group": "Daily activities", "title": "Alliance help", "every_min": 60, "verified": False,
      "note": "Alliance > Help > Help all.",
      "target": "icon:Alliance", "steps": ["wait 1.5", "tap_text Help", "wait 1.2", "tap_text Help All|Help all", "wait 1"]},
@@ -8632,6 +9303,71 @@ DUTY_LIBRARY = [
     {"id": "reach_embassy", "group": "Common tasks", "title": "Test: go to Embassy", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Embassy and opens its menu (nothing is pressed).",
      "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Embassy"]},
+    # recorded duties (tester flows 22 Oct 2026, project docs claude/flow_*.md). "opts" = the duty's own settings on the Duties page.
+    {"id": "gold_levy", "group": "Daily activities", "title": "Gold Levy", "every_min": 0, "verified": False,
+     "note": "Keep > Levy > Free Levy All. Gems Levy is never pressed. Needs the city map (Keep).",
+     "target": "building:Keep", "tap_dy": 0, "steps": ["wait 1.2", "gold_levy"]},
+    {"id": "resource_tax", "group": "Daily activities", "title": "Resource Tax", "every_min": 0, "verified": False,
+     "note": "Market > Tax: uses all free taxes on the resource you pick. Stops when the button shows a gem price. Needs the city map (Market).",
+     "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.2", "resource_tax"],
+     "opts": [{"k": "resource", "label": "Resource", "type": "select", "choices": ["Food", "Lumber", "Stone", "Ore"], "def": "Lumber"}]},
+    {"id": "labor", "group": "Daily activities", "title": "Labor (Prison)", "every_min": 360, "verified": False,
+     "note": "Prison > Captives > Labor: 4 hours of production from your captives, every 6 hours. Clear Labor CD is never pressed. Needs the city map (Prison).",
+     "target": "building:Prison", "tap_dy": 0, "steps": ["wait 1.2", "labor"]},
+    {"id": "general_chest", "group": "Reward claims", "title": "Great General Chest (free)", "every_min": 0, "verified": False,
+     "note": "Tavern > Great General Chest: opens the free chest when it is ready. Needs the city map (Tavern).",
+     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.2", "general_chest"]},
+    {"id": "vip_claim", "group": "Reward claims", "title": "VIP daily chest", "every_min": 0, "verified": False,
+     "note": "VIP badge (top left) > Claim. VIP packages are never bought.",
+     "target": "self:", "steps": ["vip_claim"]},
+    {"id": "recruit_citizens", "group": "Reward claims", "title": "Recruit Citizens (free)", "every_min": 0, "verified": False,
+     "note": "Citizens (top bar) > Citizen List > Recruit Citizens > the free Recruit Once. Recruit x10 is never pressed.",
+     "target": "self:", "steps": ["recruit_citizens"]},
+    {"id": "civilization_card", "group": "Reward claims", "title": "Civilization card pack (free)", "every_min": 0, "verified": False,
+     "note": "World Civilizations > the free card pack. Finds the building by its name on the city screen.",
+     "target": "self:", "steps": ["civilization_card"]},
+    {"id": "empire_depot", "group": "Reward claims", "title": "Empire Depot", "every_min": 0, "verified": False,
+     "note": "Empire Depot icon (bottom left) > Empire Depot tab > the Claimable chest. Nothing is bought.",
+     "target": "self:", "steps": ["empire_depot"]},
+    {"id": "lucky_raffle", "group": "Reward claims", "title": "Lucky Raffle", "every_min": 0, "verified": False,
+     "note": "Empire Depot icon > Lucky Raffle tab > the Claimable chest. The Enter buttons (gems / VIP) are never pressed.",
+     "target": "self:", "steps": ["lucky_raffle"]},
+    {"id": "refining_card", "group": "Reward claims", "title": "Refining Weekly Card", "every_min": 240, "verified": False,
+     "note": "Empire Depot icon > Refining Weekly Card tab: claims every reward your Daily Activity has reached.",
+     "target": "self:", "steps": ["refining_card"]},
+    {"id": "alliance_treasure", "group": "Reward claims", "title": "Alliance Treasure", "every_min": 240, "verified": False,
+     "note": "Alliance > Alliance Treasure > Open All (chests still on a timer stay closed).",
+     "target": "self:", "steps": ["alliance_treasure"]},
+    {"id": "ranger_knight", "group": "Daily activities", "title": "Ranger Knight Order", "every_min": 70, "verified": False,
+     "note": "Event Center > Limited > Ranger Knight Order > Quick Dispatch > Send. Refresh is never pressed.",
+     "target": "tpl:event_center_icon|Center", "steps": ["wait 2", "ranger_knight"]},
+    {"id": "troop_healing", "group": "Daily activities", "title": "Heal troops", "every_min": 120, "verified": False,
+     "note": "Hospital > Heal > Heal (costs resources). Instant Heal (gems) is never pressed. Needs the city map (Hospital).",
+     "target": "building:Hospital", "tap_dy": 0, "steps": ["wait 1.2", "troop_healing"],
+     "opts": [{"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
+    {"id": "train_troops", "group": "Daily activities", "title": "Train troops", "every_min": 240, "verified": False,
+     "note": "Barracks > Train: trains the amount you set of the troop the page has selected. Instant Train (gems) is never pressed. Needs the city map (Barracks).",
+     "target": "building:Barracks", "tap_dy": 0, "steps": ["wait 1.2", "train_troops"],
+     "opts": [{"k": "amount", "label": "Troops per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
+              {"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
+    {"id": "build_traps", "group": "Daily activities", "title": "Build traps", "every_min": 240, "verified": False,
+     "note": "Trap Factory > Build: builds the amount you set of the trap the page has selected. Instant Train (gems) is never pressed. Needs the city map (Trap Factory).",
+     "target": "building:Trap Factory", "tap_dy": 0, "steps": ["wait 1.2", "build_traps"],
+     "opts": [{"k": "amount", "label": "Traps per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
+              {"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
+    {"id": "gate_visitors", "group": "Reward claims", "title": "Gate visitors", "every_min": 120, "verified": False,
+     "note": "While 'A visitor is waiting at the city gate' shows: opens each visitor and claims the gift.",
+     "target": "self:", "steps": ["gate_visitors"]},
+    {"id": "trade_carriage", "group": "Daily activities", "title": "Trade Carriage", "every_min": 0, "verified": False,
+     "note": "Trade Carriage: sends all 4 daily transports with the first carriage offered and the march preset already shown. Never refreshes goods.",
+     "target": "self:", "steps": ["trade_carriage"]},
+    {"id": "offering_tributes", "group": "Daily activities", "title": "Shrine offering (tributes)", "every_min": 0, "verified": False,
+     "note": "Shrine > Offer > Offer Tribute at the most allowed (50). Uses Tribute items; Offer Gems is never pressed. Needs the city map (Shrine).",
+     "target": "building:Shrine", "tap_dy": 0, "steps": ["wait 1.2", "offering_tributes"],
+     "opts": [{"k": "times", "label": "Offers per day", "type": "number", "min": 1, "max": 20, "def": 1}]},
+    {"id": "activity_chests", "group": "Reward claims", "title": "Activity chests", "every_min": 180, "verified": False,
+     "note": "Tavern > Activity: opens every ready task chest and milestone chest. Runs every 3 hours so the later chests are caught too. Needs the city map (Tavern).",
+     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.2", "activity_chests"]},
 ]
 DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
 

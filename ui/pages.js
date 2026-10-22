@@ -1204,6 +1204,16 @@ PAGES.duties = function (fixed, only, compact) {
   let serial = fixed || "";                       // "" = all instances (the default); an instance id = that instance's own copy
   let rows = [], own = {};
   const GROUPS = ["Reward claims", "Daily activities", "Common tasks"];
+  // a duty's own settings (Resource Tax resource, training amount, speed-ups ...), saved with the duty
+  const dutyOpts = (r) => h("div", { class: "row", style: { flexWrap: "wrap", gap: "14px", padding: "4px 0 10px 46px" } },
+    r.opts.map((o) => {
+      const save = async (v) => { const j = await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } })); if (j) { rows = j.duties; own = j.own || {}; draw(); } };
+      if (o.type === "bool") return h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label));
+      if (o.type === "select") return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
+        h("select", { onchange: (e) => save(e.target.value) }, o.choices.map((c) => h("option", { value: c, selected: c === o.val }, c))));
+      return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
+        h("input", { type: "number", min: o.min, max: o.max, value: o.val, style: { width: "110px" }, onchange: (e) => save(e.target.value) }));
+    }));
   const draw = () => {
     root.innerHTML = "";
     if (fixed === undefined) root.appendChild(hist);
@@ -1239,6 +1249,7 @@ PAGES.duties = function (fixed, only, compact) {
         h("span", { class: "hint", style: { flex: "1", margin: "0 14px" } }, r.note, " · ", r.schedule),
         r.verified ? null : h("span", { class: "chip", title: "Steps are a first guess and have not been watched on a real instance yet" }, "untested"),
         h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text)),
+        (r.on && r.opts && r.opts.length) ? dutyOpts(r) : null,
         (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null, (r.on && r.id === "wheel") ? wh : null,
         (only && !r.on) ? note("Switch it on above and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean))));
     }
@@ -1388,13 +1399,16 @@ const ROUTINE_GROUPS = [
   ["protect", "Protection", "Keep the account safe"],
 ];
 const DUTY_GROUP = { champions: "daily", crazy_eggs: "daily", wheel: "daily", login_gifts: "daily", mail: "daily",
-  alliance_help: "alliance", alliance_gift: "alliance", alliance_science: "alliance",
-  collect_resources: "city", black_market: "shops" };
+  alliance_help: "alliance", alliance_gift: "alliance", alliance_science: "alliance", alliance_treasure: "alliance",
+  collect_resources: "city", black_market: "shops",
+  gold_levy: "city", resource_tax: "city", labor: "city", troop_healing: "city", train_troops: "city", build_traps: "city",
+  offering_tributes: "city", trade_carriage: "city", gate_visitors: "city",
+  general_chest: "daily", vip_claim: "daily", recruit_citizens: "daily", civilization_card: "daily", empire_depot: "daily",
+  lucky_raffle: "daily", refining_card: "daily", ranger_knight: "daily", activity_chests: "daily" };
 const DUTY_OPEN = { black_market: "market", collect_resources: "map" };
 const ROUTINE_SOON = [
   ["rally", "Stamina limit + top-up", "Stop joining below a stamina floor"],
   ["rally", "Recall stuck marches", "Pull back marches that hang"],
-  ["city", "Gold Levy", "Keep \u203a Levy"], ["city", "Resource Tax", "Keep \u203a Tax"], ["city", "Shrine offering", "Shrine \u203a Offer"],
   ["shops", "Daily store items", "Free and cheap daily packs", "spend"],
   ["protect", "Shield keep", "Renew before it expires"], ["protect", "Attack alert", "Telegram message on incoming attack"],
 ];
