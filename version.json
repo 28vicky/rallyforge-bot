@@ -1,24 +1,24 @@
 {
-  "version": "2.4.88",
-  "notes": "Champions ticks 'Don't show this again' so taps go faster. Black Market keeps buying after a purchase (until your gem limit). Faster, surer building search. Now executing shows the current duty.",
+  "version": "2.4.89",
+  "notes": "Instance list timers (start / loading / kicked), much faster Start all, empty rally list reopened, game stuck on loading reopened, Ymir picture learned by name",
   "files": {
     "rally_bot.py": {
-      "sha256": "e5e47d19cd37c70ba07e3693fbdadba51b4cb8784d0c400ce543f36ef2803f70"
+      "sha256": "d0d18f69b011b93bd94a8081de8631bf8e9fa48246d0c7984610164b6e3b614d"
     },
     "web_app.py": {
-      "sha256": "ca465e6955903484a5f7930b3247fa76933fb8695a74b6b4f297a803679c5104"
+      "sha256": "89f457287c14fd60b0080caa4374f0c89f676f0c8ce3dff5f57177acbc83a78d"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "6becb1603d922937bf6b126b9c0631e6adb1d7ccb118be517edd99e5f8c01067"
+      "sha256": "4ff7eedebf38944d42b4aa916cb5ac634171902803e9b8170c63217262c933e1"
     },
     "ui/app.js": {
-      "sha256": "19834191317f9bc0a89b4273ca00a911ceb82ed502ade3a3fccbcfcb9a8bb111"
+      "sha256": "82b2f236e098aad69c38d612bd7a982f3cd8f93e55071fa1ab54fcd1610ca434"
     },
     "ui/changelog.js": {
-      "sha256": "70ed84fb79efd1481d1053d36dd6a70dfd8f1289f3cda3fb4fc0cddcb62ac4b9"
+      "sha256": "4d009083634d9ee6160bbe07360b8edeb6a41e902373f913c24a937903e68f95"
     },
     "ui/dialogs.js": {
       "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
@@ -1617,5 +1617,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "f93a1dee2dd5dacaa935876e688cb84df75865a60645720829b56224b37f7323"
+  "sig": "a08375558e3b1ebabd840c85d59a7ded40716fdab30eb233bf211a724bf8e0ce"
 }
