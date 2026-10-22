@@ -106,3 +106,5 @@ Published: rally on screen joined before a due task (tasks_first no longer skips
 ### 2.4.83 (22 Oct 09:05 IST) - log-fix chat
 Published: stale rally list check (feat/stale-list) - empty list while a same-alliance instance sees rallies -> reopen, then restart Evony. Alliance learned automatically (two instances read the same rally). Not tested live.
 Idea from owner (later): per-instance "Account" section - region (e.g. Europe), server number, keep ID, alliance; later the bot reads these by itself. Then use it for alliance grouping. Also later: check alliance chat for new rallies as a second stale-list proof.
+
+Note (22 Oct 09:04): another chat is saving all monster pictures - they must go in monsters/ on its feat/ branch; the joint release ships them via make_update --monsters monsters.
