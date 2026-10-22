@@ -2,7 +2,10 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
-## LATEST (22 Oct 15:05) - 2.4.97 live
+## LATEST (22 Oct 17:25) - 2.4.98 live
+- Old universal "Black Market" city task (steps contain "market") is skipped by city_tasks_due; the Market page button that added it and the example task are removed. Kiravik had run it 5x today via the universal city task list (doc claude/kiravik_bm_22oct.md). Saved settings untouched. Branch fix/no-bm-city-task.
+
+## EARLIER (22 Oct 15:05) - 2.4.97
 - march_guess default lowered to 10 s (owner: leave it at 10; a missed or late rally is fine).
 
 ## EARLIER (22 Oct 14:35) - 2.4.96

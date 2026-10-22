@@ -41,8 +41,6 @@ EXAMPLE_TASKS = [
      "steps": ["wait 1", "tap_text Collect|Claim"]},
     {"name": "Check mail", "enabled": False, "target": "icon:Mail", "every_min": 180, "count": 1,
      "steps": ["wait 1.5", "tap_text Claim All|Read All|Claim"]},
-    {"name": "Black Market", "enabled": False, "target": "building:Market", "every_min": 240, "count": 1,
-     "steps": ["wait 1.5", "tap_text Black Market", "wait 1.5", "market"]},
 ]
 
 

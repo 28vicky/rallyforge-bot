@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.97"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.98"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -8774,6 +8774,8 @@ def city_tasks_due(cfg, last_run, serial=""):
     for t in cfg.get("city_tasks") or []:
         if not t.get("enabled", True):
             continue
+        if any(str(x).strip() == "market" for x in t.get("steps") or []):
+            continue                                             # old 'Black Market' city task: the Black Market duty replaced it
         if str(t.get("at") or "").strip():                       # fixed times of the day (PC clock)
             lt = time.localtime(now)
             for hm in re.split(r"[ ,;]+", str(t["at"]).strip()):
