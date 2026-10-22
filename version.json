@@ -1,9 +1,9 @@
 {
-  "version": "2.4.82",
-  "notes": "Rallies on screen joined before tasks; Crazy Eggs and stuck-loop fixes",
+  "version": "2.4.83",
+  "notes": "Stale rally list: reopen, then restart the game",
   "files": {
     "rally_bot.py": {
-      "sha256": "d787de6e67a98bbb1fca3b3efaa89777e70c8db109308d394d0f7741e7e86741"
+      "sha256": "4be7fa738f6c42f7213500d2a01a55ae91cf681387b04c4fbbccc9d40757828c"
     },
     "web_app.py": {
       "sha256": "2abd0b8d77b2e947f47fb1a9de046d2011ccd397200383693d8298b4cc0a0242"
@@ -18,7 +18,7 @@
       "sha256": "1be1e6cbf07c5c7ad1dc9f701eb5b7fbbd56e16721238e6af5af2177770a384f"
     },
     "ui/changelog.js": {
-      "sha256": "8cc9ef57035cace7b16fca41d0633b173447f6e12388f62bddd7f49798978211"
+      "sha256": "b9ae64479fc3bf28e486f70283ba8ea3096540c834aebe7b1d86b6c1b87f55dd"
     },
     "ui/dialogs.js": {
       "sha256": "50a8e2aec4a5482b4923fc0096f44916c9cf29b37ca9f149b885b8ffb7410ebf"
@@ -1585,5 +1585,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "edb77afadae856734b25e393199f498f8e7fb522d95c3c1a56214d3e295c252c"
+  "sig": "f153d3583a85f3f528064c12c8ae15d66fc3991d73e8d4ff4425c63538d27a36"
 }
