@@ -79,6 +79,7 @@ PUBLISHED 2.4.76 (T8 update-restart) on 21 Oct 12:20 IST; check_release OK. Not 
 | T13 | UI redesign to the mockup (sidebar button top-left, Overview, Routines cards, status bar, type scale, Start/Pause/Stop all states, dropdowns inside the window) | dashboard-f7 | ui/app.js, ui/pages.js, ui/app.css | T4, T8 (ui) | **ready** - merges cleanly onto 2.4.83; live on the owner's PC 22 Oct 09:17 (statuses, joins, duty badges, Routines switch saves) - claude/ui_redesign_f7_22oct.md |
 | T14 | Daily Rewards window: tap Check-in | feat/daily-checkin | rally_bot.py clear_popups + daily_checkin | T12 (popups) | **ready** - tested on the owner's photo only, not live - claude/daily_checkin_22oct.md |
 | T15 | Monster pictures: Arachne, Behemoth, Bird of Hurricane, Leviathan, Serpopard, Taotie, Temple Guard, Viking #3 | monsters-arachne | monsters/ | T3 | **ready** - Ymir still has no picture - claude/monster_repo.md |
+| T16 | Log export: Save log box (1 h..7 days, one/all instances), zip in Downloads, logs kept 7 days | feat/log-export | rally_bot.py log code, web_app.py save_log route, ui/app.js | T13 (ui/app.js) - trial merge with T13-T15 OK 22 Oct 09:30 | **ready** - tested on a real log in the cloud, not in the app UI - claude/log_export_22oct.md |
 | R | Release chat: merge finished branches into main, version bump, changelog, publish (owner says publish) | main | everything | - | when owner asks |
 
 Safe to run together: T1 + T3 + T4 + T6, or T2 + T6 + T7. Avoid pairs listed in "Clash with".
@@ -112,4 +113,4 @@ Idea from owner (later): per-instance "Account" section - region (e.g. Europe), 
 
 Note (22 Oct 09:04): another chat is saving all monster pictures - they must go in monsters/ on its feat/ branch; the joint release ships them via make_update --monsters monsters.
 
-T13 log export (feat/log-export): READY for the joint release - Save log box with time range (1 h..7 days) + one/all instances, zip in Downloads, logs kept 7 days. Tested on a real log file in the cloud, not in the app UI.
+T16 log export (feat/log-export; was written as "T13", which was already the UI redesign): READY for the joint release - Save log box with time range (1 h..7 days) + one/all instances, zip in Downloads, logs kept 7 days. Tested on a real log file in the cloud, not in the app UI.
