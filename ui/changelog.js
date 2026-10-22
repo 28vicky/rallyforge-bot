@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.90", date: "2026-10-22",
+    new: ["Ymir picture now comes with the app, so Ymir rallies are recognised right away."],
+    fixed: [] },
   { v: "2.4.89", date: "2026-10-22",
     new: ["The instance list shows what each instance is doing with a timer: \u201cstart 0:39\u201d while it waits for its turn, \u201cloading 1:05\u201d while the emulator or game starts, \u201ckicked 4:12\u201d until the bot takes the game back. Otherwise it shows the current job (joining Hydra 5, Black Market, Champions...) or idle.",
       "Start all is much faster: emulators that are already running with Evony open start right away instead of waiting 40 seconds each.",
