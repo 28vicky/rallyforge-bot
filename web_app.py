@@ -1993,6 +1993,24 @@ class Api:
         open_path(root)
         return {"path": str(root)}
 
+    def flow_zip(self, p):
+        """All recorded flows in one zip in Downloads, so a tester can send them (beta)."""
+        import zipfile
+        root = rb.USER / "flows"
+        dirs = sorted(d for d in root.iterdir() if d.is_dir()) if root.exists() else []
+        if not dirs:
+            raise ApiError("Nothing recorded yet - press 'Record a task' first.")
+        path = downloads_dir() / f"rallyforge-recordings-{time.strftime('%Y%m%d-%H%M')}.zip"
+        n = 0
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            for d in dirs:
+                for f in d.rglob("*"):
+                    if f.is_file():
+                        z.write(f, f.relative_to(root))
+                        n += 1
+        open_path(path.parent)
+        return {"path": str(path), "flows": len(dirs), "files": n}
+
     def manual_open(self, p):
         self.c.manual_open(p["serial"])
         return {}
