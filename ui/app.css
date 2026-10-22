@@ -648,7 +648,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 :root .inst:hover{background:transparent!important;border-color:transparent!important}
 :root .inst.sel{background:var(--card)!important;border-color:var(--line)!important}
 /* quieter fields everywhere */
-:root input:not([type=checkbox]):not([type=color]),:root select{background:var(--card);border:var(--bd);box-shadow:none}
+:root input:not([type=checkbox]):not([type=color]),:root select{background-color:var(--card);border:var(--bd);box-shadow:none}
 .dutygrid .dcol .note{display:none}
 /* the pinned instance header is solid, so the page never shows through it */
 .stickyhead{background:var(--bgc);padding:2px 0 0;margin:-2px 0 14px;z-index:30}
