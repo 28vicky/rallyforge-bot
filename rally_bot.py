@@ -6944,12 +6944,16 @@ def run_market(dev, cfg, log, stop):
     """On the Black Market screen: buy the wanted items (gems / resources / both), refresh the shop as set."""
     wanted = market_wanted(cfg)
     img = dev.screenshot()
-    if not market_on_screen(img):                          # the Market's ring menu is open: tap the Black Market icon (above its caption)
+    for _ in range(2):                                     # the Market's ring menu is open: tap the Black Market icon (above its caption)
+        if market_on_screen(img):
+            break
         p = find_text(img, ["Black Market", "Black"], region=(0, 150, 540, 600), cutoff=0.7)
         if p:
             dev.tap(p[0], p[1] - 40)
             _nap(stop, 2.2, 3.0)
-            img = dev.screenshot()
+        else:                                              # the menu was still opening (name read as e.g. 'Detat'): look again
+            _nap(stop, 1.0, 1.4)
+        img = dev.screenshot()
     if not market_on_screen(img):
         raise RuntimeError("the Black Market did not open")
     if not wanted:                                         # the shop is open (proves the way there) but there is nothing to buy
@@ -7119,6 +7123,21 @@ def run_market(dev, cfg, log, stop):
         log(f"[*] Black Market: refresh {refreshes}" + (f" of {limit}" if mode == "count" else ""))
     total = ", ".join(f"{n} x{c}" for n, c in bought.items()) or "nothing"
     log(f"[+] Black Market done: bought {total}; {refreshes} refresh(es)")
+
+
+def fix_building_name(text):
+    """A building name read from the ring menu, made whole when only part was read ('pital' -> 'Hospital').
+    Only when exactly one known building fits; otherwise the text is returned as it was."""
+    t = (text or "").strip()
+    if not t or t in BUILDING_NAMES or t in BUILDING_ALIASES:
+        return t
+    low = t.lower()
+    hits = [b for b in BUILDING_NAMES if len(low) >= 4 and low in b.lower()]
+    if len(hits) != 1:
+        import difflib
+        hits = difflib.get_close_matches(t, list(BUILDING_NAMES), n=2, cutoff=0.8)
+        hits = hits[:1] if len(hits) == 1 else []
+    return hits[0] if hits else t
 
 
 def ring_building_name(shot):
@@ -8785,6 +8804,9 @@ def find_plot(dev, cfg, log, stop, nav, name):
         first = False
         px, py = tx - nav.cx, ty - nav.cy
         if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+            nav.goto(tx, ty)                               # a long move can fall short: one more, shorter move
+            px, py = tx - nav.cx, ty - nav.cy
+        if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
             log(f"[i]   plot {n}: could not be brought into view")
             continue
         close_reward_panel(dev, stop, log)
@@ -8792,6 +8814,10 @@ def find_plot(dev, cfg, log, stop, nav, name):
         dev.tap(int(px), int(py + int(cfg.get("city_tap_dy", 22) or 0)))
         _nap(stop, 1.1, 1.5)
         shot = dev.screenshot()
+        if not find_detail_icon(shot):                     # missed the building: once more, a little higher
+            dev.tap(int(px), int(py) - 25)
+            _nap(stop, 1.1, 1.5)
+            shot = dev.screenshot()
         if not find_detail_icon(shot):
             log(f"[i]   plot {n}: no building menu opened")
             leave_to_city(dev, cfg, stop)
@@ -8800,7 +8826,7 @@ def find_plot(dev, cfg, log, stop, nav, name):
         read = (got[0] if got else "") or ""
         log(f"[i]   plot {n}: {read or 'name not read'}")
         close_ring(dev, stop, (px, py + 35))
-        for b in [x.strip() for x in read.split(",") if x.strip()]:
+        for b in [fix_building_name(x) for x in read.split(",") if x.strip()]:
             bn = BUILDING_ALIASES.get(b, b)
             if bn.lower() == want:
                 save_plot(dev, name, n)
@@ -8887,6 +8913,9 @@ def shrine_plot_task(dev, cfg, log, stop, task, nav_state, base):
         nav.goto(tx, ty)
         px, py = tx - nav.cx, ty - nav.cy
         if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
+            nav.goto(tx, ty)                               # a long move can fall short: one more, shorter move
+            px, py = tx - nav.cx, ty - nav.cy
+        if not (x0 <= px <= x0 + w and y0 <= py <= y0 + h):
             log(f"[i]   plot {n}: could not be brought into view")
             continue
         close_reward_panel(dev, stop, log)
@@ -8894,6 +8923,10 @@ def shrine_plot_task(dev, cfg, log, stop, task, nav_state, base):
         dev.tap(int(px), int(py))
         _nap(stop, 1.1, 1.5)
         shot = dev.screenshot()
+        if not find_detail_icon(shot):                     # missed the building: once more, a little higher
+            dev.tap(int(px), int(py) - 25)
+            _nap(stop, 1.1, 1.5)
+            shot = dev.screenshot()
         if not find_detail_icon(shot):
             log(f"[i]   plot {n}: no building menu opened")
             leave_to_city(dev, cfg, stop)
@@ -8904,7 +8937,7 @@ def shrine_plot_task(dev, cfg, log, stop, task, nav_state, base):
         lab = ring_label(shot, nm0, (px, py))
         if lab:                                            # the label shows where the plot really is: correct the camera drift
             nav.cx, nav.cy = tx - lab[1], ty - (lab[2] - 35)
-        names = [BUILDING_ALIASES.get(b.strip(), b.strip()).lower() for b in read.split(",") if b.strip()]
+        names = [BUILDING_ALIASES.get(fix_building_name(b), fix_building_name(b)).lower() for b in read.split(",") if b.strip()]
         if want in names:
             if saved != n:
                 save_plot(dev, base, n)
@@ -9370,6 +9403,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         duty_id = name[5:] if name.startswith("duty:") else ""
         shown = DUTY_BY_ID[duty_id]["title"] if duty_id in DUTY_BY_ID else name
         log(f"[*] {'Duty' if duty_id else 'City task'}: {shown}")
+        log("@act " + json.dumps({"k": "step", "text": f"{'Duty' if duty_id else 'City task'}: {shown}"}))     # shown under 'Now executing'
         last_run[name] = time.time()
         for rid in (name, "task:" + name):                      # a 'run now' request is used up once the task is started
             run_now_done(getattr(dev, "serial", ""), rid)
