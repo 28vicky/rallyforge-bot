@@ -1,24 +1,24 @@
 {
-  "version": "2.4.85",
-  "notes": "Record a task (beta), faster Black Market refresh",
+  "version": "2.4.86",
+  "notes": "Black Market: tap pictures to choose what to buy (plain names, categories, search, Stamina only). Logs button opens a Logs page: choose time and instance, save as zip. Dropdown arrows are back.",
   "files": {
     "rally_bot.py": {
-      "sha256": "0ba747f7e743d1513fb89d5cf341d6beb37aa451930131cb5f4fbd06b97c5202"
+      "sha256": "01f7dd51ea153a476f69f7c11ddce208d849801efdd76a826333372a1aeb2b6b"
     },
     "web_app.py": {
-      "sha256": "c084f96880acbe1a1092d590cd9d738c8ef7104c4e66ed64e7e8f54e1e5db4d7"
+      "sha256": "ca465e6955903484a5f7930b3247fa76933fb8695a74b6b4f297a803679c5104"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "91688789818ec78f02e1e9d0dab9d00b9bc00a109f6c6a6944c7b32bb867c3ea"
+      "sha256": "6becb1603d922937bf6b126b9c0631e6adb1d7ccb118be517edd99e5f8c01067"
     },
     "ui/app.js": {
-      "sha256": "1622e1b7ee2281cdcf84be8cf8a5483bd598563e63cae2a958996a12567d00b0"
+      "sha256": "19834191317f9bc0a89b4273ca00a911ceb82ed502ade3a3fccbcfcb9a8bb111"
     },
     "ui/changelog.js": {
-      "sha256": "6580b23cb0c6c10fcb6a37094ce97c5b7e129702353ca13c0c1c24fc6d4a3e32"
+      "sha256": "d7ebdf302427e3931ed70892f56b8f4c286fcd4dba4abc1c978da0e320ab4b10"
     },
     "ui/dialogs.js": {
       "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "077f392f34ced4da24766fee230206692dcce9e1232fdc058a62af2b0ace5b01"
+      "sha256": "b35c518b10a0515eeb24868cf5fca00174f69fbb027eb7cff4d478e611f4b56f"
     },
     "ui/tour.js": {
       "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
@@ -1617,5 +1617,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "7863d9b160a1ef60abaf606d4ef6bc6d950ce798c034928978b06fe04a353919"
+  "sig": "c4d05f237a500e5deeaf8be559f03009705f48d3b77888efd5bb988dcff725c3"
 }
