@@ -1488,6 +1488,16 @@ class Api:
         scope = self._scope(p)
         return {"duties": self._duty_rows(scope), "serial": scope, "own": self._own(scope)}
 
+    def duty_retry(self, p):
+        """'Retry' on a duty that failed 3 times today: run it again now (one instance, or every instance)."""
+        did = str(p.get("id", ""))
+        if did not in rb.DUTY_BY_ID:
+            raise ApiError("Unknown duty.")
+        scope = self._scope(p)
+        for s in ([scope] if scope else [d["id"] for d in self.devices]):
+            rb.duty_retry(s, did)
+        return {"duties": self._duty_rows(scope), "serial": scope, "own": self._own(scope)}
+
     def duty_set(self, p):
         did = str(p.get("id", ""))
         if did not in rb.DUTY_BY_ID:

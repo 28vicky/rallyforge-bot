@@ -7066,6 +7066,7 @@ def run_market(dev, cfg, log, stop):
     min_gold = int(cfg.get("market_min_gold", 0) or 0)
     spent = refreshes = 0
     no_change = 0
+    end = None                                               # why the run ended: "floor" / "limit" / "nogems" = nothing more to do today
     bought, failed = {}, set()                              # failed: slot numbers that did not sell (until the next refresh)
     gold, gems = market_totals(img)
     log(f"[*] Black Market: looking for {', '.join(w[0] for w in wanted)}; gold {gold if gold is not None else '?'}, "
@@ -7166,9 +7167,11 @@ def run_market(dev, cfg, log, stop):
             cost = cost_seen
             if budget and spent + cost > budget:
                 log("[i] Black Market: the gem limit is reached")
+                end = "limit"
                 break
             if min_gems and (gems is None or gems - cost < min_gems):
                 log(f"[i] Black Market: a paid refresh ({cost} gems) would go under the gem floor of {min_gems:,} - stopping")
+                end = "floor" if gems is not None else None
                 break
         if stop.is_set():                                    # Stop pressed: no new refresh
             break
@@ -7206,6 +7209,7 @@ def run_market(dev, cfg, log, stop):
             shot = dev.screenshot()
         if not market_on_screen(shot):
             log("[!] Black Market: a dialog opened instead of refreshing (out of gems?) - stopping")
+            end = "nogems" if (gems is not None and cost_seen and gems < 2 * cost_seen) else None
             dev.back()
             _nap(stop, 0.8, 1.2)
             break
@@ -7214,6 +7218,7 @@ def run_market(dev, cfg, log, stop):
             no_change += 1
             if no_change >= 2:
                 log("[!] Black Market: the shop did not change after refreshing (out of gems?) - stopping")
+                end = "nogems" if (gems is not None and cost_seen and gems < 2 * cost_seen) else None
                 break
             continue
         no_change = 0
@@ -7225,6 +7230,15 @@ def run_market(dev, cfg, log, stop):
         log(f"[*] Black Market: refresh {refreshes}" + (f" of {limit}" if mode == "count" else ""))
     total = ", ".join(f"{n} x{c}" for n, c in bought.items()) or "nothing"
     log(f"[+] Black Market done: bought {total}; {refreshes} refresh(es)")
+    if bm_keep_going(cfg) and not stop.is_set():             # keeps coming back all day until the gems reach the floor / run out
+        serial = getattr(dev, "serial", "")
+        if end:
+            bm_save(serial, end_day=_game_day(), next_at=0)
+            log("[i] Black Market: " + {"floor": "gem floor reached", "limit": "gem limit reached",
+                                       "nogems": "out of gems"}[end] + " - done until the game reset")
+        else:
+            bm_save(serial, next_at=time.time() + BM_AGAIN_MIN * 60)
+            log(f"[i] Black Market: gems left above the floor - back in {BM_AGAIN_MIN} min")
 
 
 def fix_building_name(text):
@@ -7814,6 +7828,25 @@ def ce_conf(cfg):
 
 def ce_row(serial):
     return (load_duty_state().get(serial or "default") or {}).get("crazy_eggs") or {}
+
+
+BM_AGAIN_MIN = 10        # Black Market 'until the gem floor' + paid refresh: comes back this many minutes after a run that did not finish
+
+
+def bm_keep_going(cfg):
+    """Refresh until the gem floor + paid refresh on: the Black Market runs all day until the gems are used up."""
+    return cfg.get("market_refresh_mode") == "all" and bool(cfg.get("market_paid_refresh"))
+
+
+def bm_save(serial, **kw):
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        row = data.setdefault(serial or "default", {}).setdefault("black_market", {})
+        row.update(kw)
+        try:
+            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        except OSError:
+            pass
 
 
 def ce_save(serial, **kw):
@@ -8681,10 +8714,24 @@ def duty_record(serial, duty_id, ok, msg=""):
         row["msg"] = msg
         if ok:
             row["last_ok"], row["status"] = time.time(), "done"
-            if duty_id == "crazy_eggs":
+            if duty_id in ("crazy_eggs", "black_market"):
                 row["tries"] = 0
         else:
             row["status"] = "retry" if row["tries"] < DUTY_MAX_TRIES else "gaveup"
+        try:
+            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+        return row.get("status")
+
+
+def duty_retry(serial, duty_id):
+    """'Retry' after a duty failed for the day: clears today's tries so it runs again at once."""
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        row = data.setdefault(serial or "default", {}).setdefault(duty_id, {})
+        row["tries"], row["status"], row["next_at"] = 0, "retry", 0
+        row["last_try"] = 0
         try:
             DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
         except OSError:
@@ -8734,6 +8781,16 @@ def duty_status(serial, duty_id, cfg):
             return "done", "All eggs done"
         if tries >= DUTY_MAX_TRIES:
             return "gaveup", "Gave up for today"
+        if tries and now - row.get("last_try", 0) < DUTY_RETRY_MIN * 60:
+            return "retry", "Retrying " + time.strftime("%H:%M", time.localtime(row.get("last_try", 0) + DUTY_RETRY_MIN * 60))
+        if row.get("next_at", 0) > now:
+            return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"]))
+        return "due", "Due"
+    if duty_id == "black_market" and bm_keep_going(cfg):     # runs all day until the gems reach the floor / run out
+        if row.get("end_day") == day:
+            return "done", "Gems used up " + time.strftime("%H:%M", time.localtime(row.get("last_ok", 0) or now))
+        if tries >= DUTY_MAX_TRIES:
+            return "gaveup", "Failed 3 times - Retry"
         if tries and now - row.get("last_try", 0) < DUTY_RETRY_MIN * 60:
             return "retry", "Retrying " + time.strftime("%H:%M", time.localtime(row.get("last_try", 0) + DUTY_RETRY_MIN * 60))
         if row.get("next_at", 0) > now:
@@ -9547,9 +9604,28 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         if result is not None and not stop.is_set():
             task_event(getattr(dev, "serial", ""), shown, *result)
         if duty_id and result is not None and not stop.is_set():
-            duty_record(getattr(dev, "serial", ""), duty_id, *result)
+            if duty_record(getattr(dev, "serial", ""), duty_id, *result) == "gaveup":
+                duty_failed_report(dev, cfg, log, shown, result[1])
         leave_to_city(dev, cfg, stop, log)
     log("@act " + json.dumps({"k": "step", "text": "Idle - tasks done, back to the rallies"}))   # the instance list stops showing the task
+
+
+def duty_failed_report(dev, cfg, log, shown, why):
+    """A duty failed 3 times today: save a report (log + screenshots) and send an alert, so it can be looked at."""
+    serial = getattr(dev, "serial", "")
+    path = ""
+    try:
+        d = Path.home() / "Desktop" / "RallyForge reports"
+        d.mkdir(parents=True, exist_ok=True)
+        who = re.sub(r"[^\w\-]+", "_", str(shown))[:30].strip("_")
+        p = d / f"rallyforge-report-{who}-failed-{time.strftime('%Y%m%d-%H%M')}.zip"
+        build_report(str(p), include_debug=True, description=f"Automatic report: '{shown}' failed 3 times on {serial} ({why})")
+        path = str(p)
+    except Exception as e:
+        log(f"[!] Could not save the failure report: {e}")
+    log(f"[!] {shown} failed 3 times today ({why}) - press Retry on the Duties page."
+        + (f" Report saved: {path}" if path else ""))
+    notify(cfg, serial, f"{shown} failed 3 times today ({why}). Press Retry in the app." + (f" Report: {path}" if path else ""))
 
 
 def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
