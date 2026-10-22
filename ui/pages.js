@@ -993,13 +993,7 @@ PAGES.market = function () {
       fld("How many refreshes", inp(c, "market_refresh_n", { type: "int", cls: "short" })), fld("Most gems to spend per visit (0 = keep going until the gems run out)", inp(c, "market_max_gems", { type: "int", cls: "short" }))),
     grid2(fld("Keep at least this many gems (0 = no floor)", inp(c, "market_min_gems", { type: "int", cls: "short" })),
       fld("Keep at least this much gold (0 = no floor)", inp(c, "market_min_gold", { type: "int", cls: "short" }))),
-    h("div", { style: { margin: "14px 0" } }, tog(c, "market_paid_refresh", "Also refresh with gems when the free refreshes are used up (costs gems!)")),
-    btn("Add the 'Black Market' city task", () => {
-      if (c.city_tasks && c.city_tasks.some((t) => t.name === "Black Market")) return toast("There is already a 'Black Market' task.");
-      c.city_tasks = c.city_tasks || [];
-      c.city_tasks.push({ name: "Black Market", enabled: true, target: "building:Market", every_min: 240, count: 1, steps: ["wait 1.5", "tap_text Black Market", "wait 1.5", "market"] });
-      toast("Task added (every 240 minutes). Remember to switch on 'Do the tasks' on the Tasks tab and run the city mapper once.", "ok");
-    }));
+    h("div", { style: { margin: "14px 0" } }, tog(c, "market_paid_refresh", "Also refresh with gems when the free refreshes are used up (costs gems!)")));
   return h("div", {}, items, opts);
 };
 

@@ -8774,6 +8774,8 @@ def city_tasks_due(cfg, last_run, serial=""):
     for t in cfg.get("city_tasks") or []:
         if not t.get("enabled", True):
             continue
+        if any(str(x).strip() == "market" for x in t.get("steps") or []):
+            continue                                             # old 'Black Market' city task: the Black Market duty replaced it
         if str(t.get("at") or "").strip():                       # fixed times of the day (PC clock)
             lt = time.localtime(now)
             for hm in re.split(r"[ ,;]+", str(t["at"]).strip()):
