@@ -806,8 +806,9 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .mon-list{grid-template-columns:repeat(auto-fill,minmax(320px,1fr));align-items:stretch;gap:8px}
 .mon-card{min-width:0}
 .mon-card .mon-row{flex-wrap:nowrap;min-height:50px;gap:10px}
-.mon-card .mon-name{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mon-card .mon-sum{min-width:0;white-space:nowrap;flex:0 0 auto}
+.mon-card .mon-name{min-width:0;flex:0 1 auto;overflow:hidden;white-space:nowrap}
+.mon-card .mon-pic{flex:0 0 auto}
+.mon-card .mon-sum{min-width:0;white-space:nowrap;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis}
 .mon-card .mon-row .btn{flex:0 0 auto}
 .mon-card input.short{flex:0 0 84px;width:84px}
 
