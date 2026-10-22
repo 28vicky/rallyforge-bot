@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.83", date: "2026-10-22",
+    new: [],
+    fixed: ["When an instance's rally list stays empty while instances in the same alliance see rallies, the bot reopens the list and restarts the game if it is still empty. The bot learns which instances share an alliance by itself (they see the same rallies)."] },
   { v: "2.4.82", date: "2026-10-22",
     new: [],
     fixed: ["A rally that can be joined is now joined before the bot leaves for a due task (Crazy Eggs etc.) - no more rallies missed for a duty.", "Crazy Eggs no longer wanders into other events (e.g. Wishful Windmill) when the Event Center opens on the Limited tab.", "The bot no longer loops on the Alliance page: it reads the 'Alliance War' row by its words, and restarts the game after 6 taps that do not reach the rally list.", "Endless lag: after 4 lag waits of 20 s in a row the game is restarted instead of carrying on."] },

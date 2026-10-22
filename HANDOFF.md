@@ -101,3 +101,7 @@ Stand-out plan: project doc claude/compare_and_stand_out.md (S1-S5). S1 = T10, S
 
 ### 2.4.82 (22 Oct 08:55 IST) - log-fix chat
 Published: rally on screen joined before a due task (tasks_first no longer skips a joinable rally - the setting now has no effect, remove it in a later UI cleanup); Crazy Eggs Event Center/Windmill fix (feat/eggs-check); stuck guard - Alliance War row by words, restart Evony after 6 taps or 4 lag waits in a row (feat/stuck-guard). Not tested live.
+
+### 2.4.83 (22 Oct 09:05 IST) - log-fix chat
+Published: stale rally list check (feat/stale-list) - empty list while a same-alliance instance sees rallies -> reopen, then restart Evony. Alliance learned automatically (two instances read the same rally). Not tested live.
+Idea from owner (later): per-instance "Account" section - region (e.g. Europe), server number, keep ID, alliance; later the bot reads these by itself. Then use it for alliance grouping. Also later: check alliance chat for new rallies as a second stale-list proof.
