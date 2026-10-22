@@ -1105,3 +1105,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 /* a routine opened from the Routines cards blinks once so the eye finds it */
 .flash{animation:rfflash 1.6s ease-out}
 @keyframes rfflash{0%,40%{box-shadow:0 0 0 3px var(--accent1)}100%{box-shadow:0 0 0 0 transparent}}
+
+/* instance header: one line under the tabs (the tab row and the header each drew one) */
+:root .stickyhead .tabs{border-bottom:0}
+:root .stickyhead.stuck{box-shadow:none}
