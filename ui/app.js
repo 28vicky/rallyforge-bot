@@ -271,7 +271,7 @@ function buildRibbon() {
       btn("Profiles ▾", (e) => menu(e.currentTarget, [
         { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user"),
       btn("Logs ▾", (e) => menu(e.currentTarget, [
-        { label: "Copy log", icon: "copy", run: copyLog }, { label: "Save log to Downloads", icon: "down", run: saveLog },
+        { label: "Copy log", icon: "copy", run: copyLog }, { label: "Save log...", icon: "down", run: saveLog },
         { label: "Report a problem...", icon: "file", run: saveReportFlow }, { label: "Open logs folder", icon: "folder", run: () => act(api("open_logs")) }]), "", "file")),
     grp("App",
       btn("Updates", () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); }, "", "refresh"),
@@ -292,7 +292,21 @@ async function copyLog() {
   }
   toast("The last lines of the log are copied. Paste them into the chat.", "ok");
 }
-async function saveLog() { const j = await act(api("save_log")); if (j) toast("Saved: " + j.path, "ok"); }
+async function saveLog() {
+  const spans = [["Last 1 hour", 1], ["Last 6 hours", 6], ["Last 24 hours", 24], ["Last 3 days", 72], ["Last 7 days", 168]];
+  const r = await api("log_names").catch(() => null);
+  const names = (r && r.names) || [];
+  const span = h("select", {}, ...spans.map(([t, v]) => h("option", { value: v, selected: v === 24 }, t)));
+  const who = h("select", {}, h("option", { value: "" }, "All instances"), ...names.map((n) => h("option", { value: n }, n)));
+  modal({ title: "Save log", body: h("div", { style: { minWidth: "360px", display: "grid", gap: "12px" } },
+      h("div", { class: "field" }, h("label", {}, "Time"), span),
+      h("div", { class: "field" }, h("label", {}, "Instance"), who),
+      h("div", { class: "muted" }, "Saved as a small zip in your Downloads folder, ready to send.")),
+    buttons: [{ label: "Cancel" }, { label: "Save", cls: "pri", onclick: async () => {
+      const j = await act(api("save_log", { hours: +span.value, name: who.value }));
+      if (j) toast(`Saved ${j.lines} lines: ${j.path}`, "ok");
+    } }] });
+}
 async function saveReportFlow() {
   const text = h("textarea", { style: { minHeight: "120px", width: "100%" }, placeholder: "Example: Rory stopped joining rallies after about 10 minutes. It was on the world map and never came back." });
   const shots = h("input", { type: "checkbox", checked: true });

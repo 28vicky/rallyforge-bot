@@ -281,7 +281,7 @@ _SECRET_KEYS = ("telegram_token", "telegram_chat", "discord_webhook", "update_ke
 
 
 def log_to_file(line):
-    """Append a line to today's log file (kept: the last 5 days)."""
+    """Append a line to today's log file (kept: the last 7 days)."""
     try:
         with _log_lock:
             LOG_DIR.mkdir(exist_ok=True)
@@ -290,7 +290,7 @@ def log_to_file(line):
             with open(f, "a", encoding="utf-8") as fh:
                 fh.write(f"{time.strftime('%H:%M:%S')} {line}\n")
             if new:
-                for old in sorted(LOG_DIR.glob("bot_*.log"))[:-5]:
+                for old in sorted(LOG_DIR.glob("bot_*.log"))[:-7]:
                     old.unlink(missing_ok=True)
     except Exception:
         pass
@@ -305,6 +305,60 @@ def recent_log(max_lines=2000):
         return "\n".join(lines[-max_lines:])
     except Exception:
         return ""
+
+
+_LOG_LINE = re.compile(r"^(\d\d):(\d\d):(\d\d) (?:\[([^\]]+)\])?")
+
+
+def _log_files(hours):
+    """The daily log files that can hold lines from the last `hours` hours, oldest first, with their day (epoch at 00:00)."""
+    out = []
+    first = time.strftime("%Y%m%d", time.localtime(time.time() - hours * 3600))
+    for f in sorted(LOG_DIR.glob("bot_*.log")):
+        day = f.stem[4:]
+        if len(day) == 8 and day.isdigit() and day >= first:
+            out.append((f, time.mktime(time.strptime(day, "%Y%m%d"))))
+    return out
+
+
+def log_names(hours=168):
+    """Instance names that appear in the saved logs (for the 'only this instance' choice)."""
+    names = set()
+    for f, _ in _log_files(hours):
+        try:
+            for ln in f.read_text(encoding="utf-8", errors="replace").splitlines():
+                m = _LOG_LINE.match(ln)
+                if m and m.group(4) and len(m.group(4)) > 1 and m.group(4) not in ("perf",):
+                    names.add(m.group(4))
+        except Exception:
+            pass
+    return sorted(names, key=str.lower)
+
+
+def export_log(path, hours=24, name=""):
+    """Write a zip with the log lines of the last `hours` hours (only instance `name` if given). -> number of lines."""
+    import zipfile
+    cut = time.time() - hours * 3600
+    tag = f"[{name}]" if name else ""
+    lines, keep = [], False
+    for f, day0 in _log_files(hours):
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        except Exception:
+            continue
+        for ln in text:
+            m = _LOG_LINE.match(ln)
+            if m:                                          # a new line: keep it if it is in the time range (and the instance matches)
+                t = day0 + int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+                keep = t >= cut and (not tag or ln[9:].startswith(tag))
+                if keep:
+                    lines.append(f"{f.stem[4:]} {ln}")
+            elif keep:                                     # a continued line (e.g. an error trace) stays with its line
+                lines.append(ln)
+    head = f"RallyForge log - version {VERSION} - last {hours} h - {name or 'all instances'} - saved {time.strftime('%Y-%m-%d %H:%M')}\n"
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(Path(path).stem + ".txt", head + "\n".join(lines) + "\n")
+    return len(lines)
 
 
 def build_report(path, include_debug=True, description="", devices=None):
