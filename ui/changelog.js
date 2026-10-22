@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.97", date: "2026-10-22",
+    new: [],
+    fixed: ["March time if not read now defaults to 10 s, so more rallies close to the end are still joined."] },
   { v: "2.4.96", date: "2026-10-22",
     new: ["Settings: \u201cMarch time if not read (s)\u201d - how long your troops take to reach a rally (default 15 s)."],
     fixed: ["Rallies with too little time left for your troops to arrive are skipped, so no stamina is wasted."] },

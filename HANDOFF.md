@@ -2,7 +2,10 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
-## LATEST (22 Oct 14:35) - 2.4.96 live
+## LATEST (22 Oct 15:05) - 2.4.97 live
+- march_guess default lowered to 10 s (owner: leave it at 10; a missed or late rally is fine).
+
+## EARLIER (22 Oct 14:35) - 2.4.96
 - March guess fix (fix/march-guess) tested live on the owner PC 14:24 (log: "march counted as 20s" on every join) and released as 2.4.96 with the default lowered to 15 s (owner: march is usually 5-10 s). Setting: "March time if not read (s)".
 - Notes: project doc claude/handoff_22oct_1427.md.
 
