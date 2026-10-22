@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.98"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.99"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -220,7 +220,7 @@ DEFAULTS = {
     "city_enabled": False,                  # run the tasks (Tasks tab) while no rally is waiting
     "city_tasks": [],                       # [{name, enabled, target, steps, every_min}], see run_step()
     "duties": {},                           # {duty_id: {on, every_min}} - ready-made duties, see DUTY_LIBRARY
-    "wheel": {"button": 1, "spins": 10, "reserve": 0},   # Tavern > Wheel of Fortune: biggest button (1/10/100), spins to do (0 = until the coins are used up), coins to keep
+    "wheel": {"button": 1, "spins": 10, "reserve": 0, "chips": "off"},   # Tavern > Wheel of Fortune: biggest button (1/10/100), spins to do (0 = until the coins are used up), coins to keep
     "champions": {"plan": {}},                      # plan {champion: {taps, greets}}; empty = all on the champion the page opens on
     "crazy_eggs": {"eggs": {}, "lucky": "max", "min_hammers": 0},   # eggs {cost: {on, daily}}, lucky = egg cost / "max" / "" (none)
     "city_icons": {},                       # extra / changed right-side icon positions {name: [x, y]}
@@ -272,6 +272,28 @@ def merge_device_cfg(cfg, serial):
         m["bot_presets"] = [{**bp, "enabled": int(bp.get("n", i + 1)) in want}
                             for i, bp in enumerate(cfg["bot_presets"])]
     return m
+
+
+def live_settings(cfg, serial, seen):
+    """Settings saved while this instance runs: take them over in place (every part of the bot holds this same dict),
+    so a change works from the next action without Stop/Start. seen = [last config.json time]. -> True if taken over."""
+    try:
+        m = CONFIG.stat().st_mtime
+    except OSError:
+        return False
+    if m == seen[0]:
+        return False
+    seen[0] = m
+    try:
+        new = merge_device_cfg(load_config(), serial)
+        changed = [k for k, v in new.items() if cfg.get(k) != v]
+        if not changed:                                      # the file was written (e.g. a duty record) but nothing changed
+            return False
+        cfg.update(new)
+        set_pacing(cfg)
+    except Exception:
+        return False
+    return True
 
 
 # ------------------------------------------------------------------ log files
@@ -892,9 +914,11 @@ class Device:
         return img
 
     def tap(self, x, y):
+        self.acted = time.time()
         self._run("shell", "input", "tap", str(int(x * self.sx)), str(int(y * self.sy)))
 
     def swipe(self, x1, y1, x2, y2, ms=300):
+        self.acted = time.time()
         self._run("shell", "input", "swipe", str(int(x1 * self.sx)), str(int(y1 * self.sy)),
                   str(int(x2 * self.sx)), str(int(y2 * self.sy)), str(int(ms)))
 
@@ -4944,6 +4968,7 @@ def reclaim_if_kicked(dev, cfg, log, stop, screen):
 
 
 _LOAD_RESTARTS = {}
+_START_FAILS = {}            # serial -> emulator starts in a row that did not finish booting
 
 
 LOADING = {}                      # serial -> (what, since epoch s) while the emulator boots / Evony loads (shown in the instance list)
@@ -5081,6 +5106,22 @@ def _bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
                 return False
             notify(cfg, serial, "Not enough free RAM to start the emulator.")
             raise RuntimeError("There was not enough free RAM to start the emulator in time.")
+        fails = _START_FAILS.get(serial, 0)
+        if fails:                                          # last start hung: a half-open instance ignores "launch", so close it fully first
+            log(f"[*] The last start did not finish ({fails}x) - closing this emulator fully before starting it again")
+            LOADING[serial] = ("restart", time.time())
+            stop_cmd = emulator_stop_command(serial, adb, cfg)
+            if stop_cmd:
+                try:
+                    subprocess.run(stop_cmd, shell=isinstance(stop_cmd, str), creationflags=NOWIN,
+                                   capture_output=True, timeout=60)
+                except Exception as e:
+                    log(f"[!] Closing the emulator did not work: {e}")
+                _nap(stop, 10)
+            kill_listener(serial, log)                     # anything still holding the port (stuck VM)
+            _nap(stop, 10)
+            if stop.is_set():
+                return False
         log("[*] The emulator is off - starting it")
         LOADING[serial] = ("starting", time.time())
         with _launch_lock:
@@ -5097,7 +5138,12 @@ def _bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
         else:
             if stop.is_set():
                 return False
+            _START_FAILS[serial] = fails + 1
+            if fails + 1 >= 2:
+                notify(cfg, serial, f"The emulator failed to start {fails + 1} times in a row - "
+                                    "it may need a manual restart (or a PC restart).")
             raise RuntimeError("The emulator did not finish starting in time.")
+        _START_FAILS.pop(serial, None)
         log("[+] The emulator is up")
         _nap(stop, 5)
     pkg = None
@@ -6573,65 +6619,6 @@ def read_building_level(dev, cfg, log, stop, pos):
     return result
 
 
-def scan_city_taps(dev, cfg, log, stop, progress=None):
-    """Test run: the numbered squares of the default city map replace the old per-building taps."""
-    return scan_squares(dev, cfg, log, stop, progress=progress)
-
-
-def scan_city_taps_old(dev, cfg, log, stop, progress=None):
-    """(old) for every building on the saved city map go to it (saved picture), tap it and read its name and level."""
-    serial = dev.serial if hasattr(dev, "serial") else "default"
-    data = load_city()
-    items = (data.get(serial) or {}).get("items", {})
-    if not items:
-        raise ValueError(CITY_MAP_HELP)
-    dev.arm_guard(cfg, log, stop)
-    dev.guard_city = True
-    nav = CityNav(dev, stop, log)
-    nav.to_origin()
-    order = sorted(items, key=lambda k: (0 if k.split("#")[0] in ("Market", "Keep") else 1, items[k][1], items[k][0]))
-    order = [k for k in order if k.split("#")[0] not in RESOURCE_BUILDINGS]
-    t0, got, bad = time.time(), {}, []
-    for i, k in enumerate(order):
-        if stop.is_set():
-            break
-        name = k.split("#")[0]
-        pos = find_building(dev, stop, log, nav, name, items[k], items, k)
-        res = read_building_level(dev, cfg, log, stop, pos) if pos else None
-        if res:
-            got[k] = res
-            same = BUILDING_ALIASES.get(res[0], res[0]).lower() == name.lower() or res[0].lower().replace(" ", "") == name.lower().replace(" ", "")
-            log(f"[*] Tap test: {name} -> '{res[0]}'" + (f" level {res[1]}" if res[1] else " (no level)") + ("" if same else "  (NAME DIFFERS)"))
-            if not same:
-                bad.append(k)
-        else:
-            log(f"[!] Tap test: {name}: could not read it")
-            bad.append(k)
-        if progress:
-            try:
-                progress({"phase": "sweeping", "pct": int(100 * (i + 1) / len(order)), "left": int((time.time() - t0) / (i + 1) * (len(order) - i - 1)),
-                          "text": f"Tap test: {name} done", "mapped": [x.split("#")[0] for x in got], "expected": [x.split("#")[0] for x in order],
-                          "missing": [x.split("#")[0] for x in bad], "seconds": int(time.time() - t0), "stops": i + 1, "total": len(order), "row": 0})
-            except Exception:
-                pass
-    dev.guard_city = False
-    data = load_city()
-    ent = data.setdefault(serial, {"items": items})
-    ent["items"] = items
-    ent["levels"] = {k: {"name": v[0], "level": v[1]} for k, v in got.items()}
-    ent["tap_test"] = {"seconds": int(time.time() - t0), "read": len(got), "total": len(order), "bad": bad}
-    save_city(data)
-    log(f"[+] Tap test: read {len(got)} of {len(order)} buildings in {int(time.time() - t0)}s. Not read: {', '.join(bad) if bad else 'none'}")
-    if progress:
-        try:
-            progress({"phase": "done", "pct": 100, "left": 0, "text": "Done", "mapped": [x.split("#")[0] for x in got],
-                      "expected": [x.split("#")[0] for x in order], "missing": [x.split("#")[0] for x in bad],
-                      "seconds": int(time.time() - t0), "stops": len(order), "total": len(order), "row": 0})
-        except Exception:
-            pass
-    return got
-
-
 def scan_city(dev, cfg, log, stop, progress=None):
     """Sweep the whole city, read the building names and save where each one is on the map. -> {name: [x, y]}"""
     dev.arm_guard(cfg, log, stop)
@@ -7045,6 +7032,7 @@ def run_market(dev, cfg, log, stop):
     min_gold = int(cfg.get("market_min_gold", 0) or 0)
     spent = refreshes = 0
     no_change = 0
+    end = None                                               # why the run ended: "floor" / "limit" / "nogems" = nothing more to do today
     bought, failed = {}, set()                              # failed: slot numbers that did not sell (until the next refresh)
     gold, gems = market_totals(img)
     log(f"[*] Black Market: looking for {', '.join(w[0] for w in wanted)}; gold {gold if gold is not None else '?'}, "
@@ -7145,9 +7133,11 @@ def run_market(dev, cfg, log, stop):
             cost = cost_seen
             if budget and spent + cost > budget:
                 log("[i] Black Market: the gem limit is reached")
+                end = "limit"
                 break
             if min_gems and (gems is None or gems - cost < min_gems):
                 log(f"[i] Black Market: a paid refresh ({cost} gems) would go under the gem floor of {min_gems:,} - stopping")
+                end = "floor" if gems is not None else None
                 break
         if stop.is_set():                                    # Stop pressed: no new refresh
             break
@@ -7185,6 +7175,7 @@ def run_market(dev, cfg, log, stop):
             shot = dev.screenshot()
         if not market_on_screen(shot):
             log("[!] Black Market: a dialog opened instead of refreshing (out of gems?) - stopping")
+            end = "nogems" if (gems is not None and cost_seen and gems < 2 * cost_seen) else None
             dev.back()
             _nap(stop, 0.8, 1.2)
             break
@@ -7193,6 +7184,7 @@ def run_market(dev, cfg, log, stop):
             no_change += 1
             if no_change >= 2:
                 log("[!] Black Market: the shop did not change after refreshing (out of gems?) - stopping")
+                end = "nogems" if (gems is not None and cost_seen and gems < 2 * cost_seen) else None
                 break
             continue
         no_change = 0
@@ -7204,6 +7196,15 @@ def run_market(dev, cfg, log, stop):
         log(f"[*] Black Market: refresh {refreshes}" + (f" of {limit}" if mode == "count" else ""))
     total = ", ".join(f"{n} x{c}" for n, c in bought.items()) or "nothing"
     log(f"[+] Black Market done: bought {total}; {refreshes} refresh(es)")
+    if bm_keep_going(cfg) and not stop.is_set():             # keeps coming back all day until the gems reach the floor / run out
+        serial = getattr(dev, "serial", "")
+        if end:
+            bm_save(serial, end_day=_game_day(), next_at=0)
+            log("[i] Black Market: " + {"floor": "gem floor reached", "limit": "gem limit reached",
+                                       "nogems": "out of gems"}[end] + " - done until the game reset")
+        else:
+            bm_save(serial, next_at=time.time() + BM_AGAIN_MIN * 60)
+            log(f"[i] Black Market: gems left above the floor - back in {BM_AGAIN_MIN} min")
 
 
 def fix_building_name(text):
@@ -7280,6 +7281,9 @@ def run_step(dev, cfg, log, stop, step):
         return
     if cmd == "alliance_science":
         run_alliance_science(dev, cfg, log, stop)
+        return
+    if cmd in RD_STEPS:                                    # recorded duties (tester flows 22 Oct)
+        RD_STEPS[cmd](dev, cfg, log, stop)
         return
     if cmd == "view_reset_test":
         run_view_reset_test(dev, cfg, log, stop)
@@ -7778,7 +7782,8 @@ def wheel_conf(cfg):
     c = dict(cfg.get("wheel") or {})
     b = int(float(c.get("button", 1) or 1))
     return {"button": b if b in WHEEL_BTN else 1, "spins": max(0, min(int(float(c.get("spins", 10) or 0)), 9999999)),
-            "reserve": max(0, min(int(float(c.get("reserve", 0) or 0)), 999999999))}
+            "reserve": max(0, min(int(float(c.get("reserve", 0) or 0)), 999999999)),
+            "chips": c.get("chips") if c.get("chips") in ("off", "needed", "all") else "off"}
 
 
 def ce_conf(cfg):
@@ -7793,6 +7798,25 @@ def ce_conf(cfg):
 
 def ce_row(serial):
     return (load_duty_state().get(serial or "default") or {}).get("crazy_eggs") or {}
+
+
+BM_AGAIN_MIN = 10        # Black Market 'until the gem floor' + paid refresh: comes back this many minutes after a run that did not finish
+
+
+def bm_keep_going(cfg):
+    """Refresh until the gem floor + paid refresh on: the Black Market runs all day until the gems are used up."""
+    return cfg.get("market_refresh_mode") == "all" and bool(cfg.get("market_paid_refresh"))
+
+
+def bm_save(serial, **kw):
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        row = data.setdefault(serial or "default", {}).setdefault("black_market", {})
+        row.update(kw)
+        try:
+            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        except OSError:
+            pass
 
 
 def ce_save(serial, **kw):
@@ -7885,6 +7909,26 @@ def ce_close_panel(dev, stop):
         _nap(stop, 0.9, 1.3)
 
 
+def ce_find_in_list(dev, stop, img):
+    """Find the Crazy Eggs row on the Activities tab: the list order differs per account, so look
+    down the whole list (until it stops moving), then back up to the top. -> (x, y) or None."""
+    names = ["Crazy Eggs", "Crazy Egg"]
+    p = find_text(img, names, cutoff=0.72)
+    for sx, sy, ex, ey in ((270, 760, 270, 330), (270, 330, 270, 760)):     # down, then up
+        last = img
+        for _ in range(8):
+            if p or stop.is_set():
+                return p
+            dev.swipe(sx, sy, ex, ey, 450)
+            _nap(stop, 1.1, 1.5)
+            img = dev.screenshot()
+            p = find_text(img, names, cutoff=0.72)
+            if not p and cv2.absdiff(img[140:900], last[140:900]).mean() < 2:   # end of the list
+                break
+            last = img
+    return p
+
+
 def run_crazy_eggs(dev, cfg, log, stop):
     """On the Crazy Eggs screen: smash the ready eggs, use the Lucky Hammer, then note when to come back."""
     if ce_lucky_confirm(dev, stop):
@@ -7909,19 +7953,14 @@ def run_crazy_eggs(dev, cfg, log, stop):
             _nap(stop, 1.6, 2.2)
             img = dev.screenshot()
             ce_snap(img, "1_activities")
-            p = find_text(img, ["Crazy Eggs"], cutoff=0.72)
-            if not p:                                      # the list may be longer than the screen
-                dev.swipe(270, 700, 270, 350, 400)
-                _nap(stop, 1.0, 1.4)
-                img = dev.screenshot()
-                p = find_text(img, ["Crazy Eggs"], cutoff=0.72)
+            p = ce_find_in_list(dev, stop, img)
             if p:
                 dev.tap(*p)
                 _nap(stop, 2.5, 3.2)
                 if ce_on_screen(dev.screenshot()):
                     break
         else:
-            ce_snap(dev.screenshot(), "2_failed")
+            ce_snap(dev.screenshot(), "2_failed_" + re.sub(r"\W", "_", str(serial)))   # one picture per instance
             raise RuntimeError("the Crazy Eggs screen did not open")
     row = ce_row(serial)
     smashes = dict(row.get("smashes") or {}) if row.get("smash_day") == day else {}
@@ -8155,6 +8194,121 @@ def close_reward_panel(dev, stop, log=None):
     return closed
 
 
+WHEEL_ADD = (405, 147)                                               # "+" next to the coin count -> Purchase Chips page
+CHIP_ROWS = ("1K Chips", "500 Chips", "100 Chips")                   # rows with owned items; 5K Chips is sold for gems - never
+CHIP_MINUS, CHIP_PLUS, CHIP_LEFT_BTN, CHIP_USE = (82, 526), (452, 526), (156, 661), (380, 661)
+CHIP_RECEIVE_BOX = (50, 465, 390, 45)                               # "You can receive: n" (white, easier to read than "n / own")
+CHIP_CLOSE = (500, 296)
+CHIP_BATCH = 400                                                     # most +/- taps for one Use
+CHIP_UNIT = {"1K Chips": 1000, "500 Chips": 500, "100 Chips": 100}
+
+
+def wheel_spin_cost(spins, big):
+    cost = 0
+    for b in (100, 10, 1):
+        if b <= big:
+            n = spins // b
+            cost += n * WHEEL_COST[b]
+            spins -= n * b
+    return cost
+
+
+def chip_count(img, unit):
+    """Items set in the chip window, from "You can receive: n" / chips per item. -> int or None."""
+    x, y, w, h = CHIP_RECEIVE_BOX
+    txt = " ".join(t for t, _ in ocr_lines(img[y:y + h, x:x + w], 3.0))
+    m = re.search(r"([\d][\d,.]*)\s*$", txt.strip())
+    if not m:
+        return None
+    n = int(re.sub(r"[^0-9]", "", m.group(1)) or 0)
+    return n // unit if n and n % unit == 0 else None
+
+
+def chip_use_green(img, y):
+    """The row's button is the green "Use (owned)" one (the gem-price button is orange) -> True."""
+    b, g, r = (float(v) for v in img[y + 8:y + 32, 410:500].reshape(-1, 3).mean(0))
+    return g > r + 20 and g > b + 15
+
+
+def chip_use_row(dev, name, want, log, stop):
+    """Purchase Chips page is open: use `want` owned items of one row (None = all). Only a row whose button says "Use"
+    is pressed (a gem price button is never touched). -> number of items used."""
+    unit = CHIP_UNIT[name]
+    shot = dev.screenshot()
+    p = find_text(shot, [name], region=(90, 150, 260, 760), cutoff=0.95)
+    if not p or not chip_use_green(shot, p[1]):
+        return 0
+    dev.tap(455, p[1] + 18)
+    _nap(stop, 1.2, 1.6)
+    shot = dev.screenshot()
+    own = chip_count(shot, unit)                            # the window opens at the most = all owned
+    if not own or not find_text(shot, [name], region=(150, 310, 300, 80), cutoff=0.95):
+        log(f"[!]  Wheel: the {name} window did not look right - closed it")
+        dev.tap(*CHIP_CLOSE)
+        _nap(stop, 0.8, 1.0)
+        return 0
+    goal = own if want is None else min(want, own)
+    cur = own
+    if goal < own:                                          # go down from the minimum
+        dev.tap(*CHIP_LEFT_BTN)                            # "Minimum"
+        _nap(stop, 0.6, 0.8)
+        for _ in range(4):
+            cur = chip_count(dev.screenshot(), unit)
+            if not cur or cur == goal or stop.is_set():
+                break
+            d = goal - cur
+            for _ in range(min(abs(d), CHIP_BATCH)):
+                dev.tap(*(CHIP_PLUS if d > 0 else CHIP_MINUS))
+                _nap(stop, 0.08, 0.14)
+            _nap(stop, 0.4, 0.6)
+    if cur != goal:
+        log(f"[!]  Wheel: could not set {goal} x {name} (shows {cur if cur else '?'}) - nothing used")
+        dev.tap(*CHIP_CLOSE)
+        _nap(stop, 0.8, 1.0)
+        return 0
+    dev.tap(*CHIP_USE)
+    _nap(stop, 1.5, 2.0)
+    log(f"[i]   Wheel: used {goal:,} x {name} (+{goal * unit:,} coins)")
+    return goal
+
+
+def wheel_add_chips(dev, conf, coins, log, stop):
+    """Wheel page is open: top up the coins from chip items the account already owns (setting "needed" or "all").
+    "needed" adds 1K items for the spins still to do (+ the coins to keep); with "until out" it uses them all."""
+    mode = conf.get("chips", "off")
+    target, big = int(conf["spins"] or 0), int(conf["button"])
+    if mode == "off":
+        return
+    need = None
+    if mode == "needed" and target:
+        short = wheel_spin_cost(target, big) + int(conf["reserve"] or 0) - coins
+        if short <= 0:
+            return
+        need = -(-short // 1000)
+    dev.tap(*WHEEL_ADD)
+    _nap(stop, 1.8, 2.3)
+    if not find_text(dev.screenshot(), ["Purchase Chips"], region=(100, 5, 340, 60), cutoff=0.7):
+        log("[!]  Wheel: the Purchase Chips page did not open - spinning with the coins there are")
+    else:
+        rows = CHIP_ROWS[:1] if need is not None else CHIP_ROWS
+        for name in rows:
+            if stop.is_set():
+                break
+            left = need
+            while not stop.is_set():
+                used = chip_use_row(dev, name, None if left is None else min(left, CHIP_BATCH), log, stop)
+                if not used or left is None:
+                    break
+                left -= used
+                if left <= 0:
+                    break
+    for _ in range(3):                                     # back to the wheel
+        if wheel_on_page(dev.screenshot()):
+            break
+        dev.tap(46, 34)
+        _nap(stop, 1.2, 1.6)
+
+
 def run_wheel(dev, cfg, log, stop):
     """Tavern's ring menu is open: open the Wheel of Fortune and spin with the button the user picked until the number
     of spins is done, the coins run out (or fall to the reserve to keep) or something unexpected is on the screen.
@@ -8171,6 +8325,12 @@ def run_wheel(dev, cfg, log, stop):
         shot = dev.screenshot()
         if not wheel_on_page(shot):
             raise RuntimeError("the Wheel of Fortune page did not open")
+    if conf.get("chips", "off") != "off":
+        c0 = wheel_coins(shot)
+        if c0 is not None:
+            wheel_add_chips(dev, conf, c0, log, stop)
+            if not wheel_on_page(dev.screenshot()):
+                raise RuntimeError("could not get back to the Wheel of Fortune page after adding chips")
     done = 0
     fails = 0
     while not stop.is_set():
@@ -8572,11 +8732,747 @@ def run_alliance_science(dev, cfg, log, stop):
         raise RuntimeError(f"{left} donation(s) left")
 
 
+# ------------------------------------------------------------ recorded duties (tester flows, 22 Oct 2026)
+# Built from the tester's recordings (project docs claude/flow_*.md, index claude/flows_index_22oct.md).
+# Safety rules shared by all of them:
+# - a button that DOES something (Claim, Free, Levy, Tax, Train, Send, Offer, March, Finish All ...) is pressed only when
+#   its word is read on the screen in the expected place; the recorded spot is never pressed blind for those;
+# - recorded spots are used only to OPEN things (top-bar icons, tabs, card slots) and the page is checked afterwards;
+# - a line that mentions gems / Instant / Buy / Purchase / Clear / Refresh / Enter / packages is never pressed.
+RD_DANGER = ("gem", "instant", "buy", "purchase", "clear", "refresh", "enter", "package", "recharge", "$", "x10", "10 pack")
+RD_SPEEDUP_WORDS = ["Finish All", "Finish all"]
+
+
+def rd_snap(img, tag):
+    try:
+        (USER / "debug").mkdir(exist_ok=True)
+        cv2.imwrite(str(USER / "debug" / f"duty_{tag}.png"), img)
+    except Exception:
+        pass
+
+
+def rd_opt(cfg, duty_id, key, default=None):
+    """A duty's own setting (Duties page), e.g. rd_opt(cfg, 'resource_tax', 'resource', 'Lumber')."""
+    v = ((cfg.get("duties") or {}).get(duty_id) or {}).get(key)
+    if v in (None, ""):
+        for o in (DUTY_BY_ID.get(duty_id) or {}).get("opts") or []:
+            if o["k"] == key:
+                return o.get("def", default)
+        return default
+    return v
+
+
+def rd_lines(img, region=None):
+    ox = oy = 0
+    if region:
+        x, y, w, h = region
+        img, ox, oy = img[max(0, y):y + h, max(0, x):x + w], max(0, x), max(0, y)
+    return [(t, [(s[0], s[1] + ox, s[2] + oy, s[3], s[4]) for s in ws]) for t, ws in ocr_lines(img)]
+
+
+def rd_find(img, words, region=None, cutoff=0.78, whole=False):
+    """-> (x, y, line) of the first of `words` read on the screen, or None. Lines with a danger word (gems, Instant,
+    Buy, Refresh...) are skipped unless the word itself is asked for. whole=True: the line must be the word and
+    nothing else (e.g. a 'Free' button, not 'Free to open in 1d')."""
+    import difflib
+    lines = rd_lines(img, region)
+    for opt in words:
+        ow = opt.lower().split()
+        if not ow:
+            continue
+        for text, ws in lines:
+            low = text.lower()
+            if any(d in low for d in RD_DANGER if d not in opt.lower()):
+                continue
+            if whole:
+                if difflib.SequenceMatcher(None, low.strip(".,:;!() "), " ".join(ow)).ratio() >= cutoff:
+                    return (int(sum(s[1] for s in ws) / len(ws)), int(sum(s[2] for s in ws) / len(ws)), text)
+                continue
+            for i in range(len(ws) - len(ow) + 1):
+                seg = ws[i:i + len(ow)]
+                got = " ".join(s[0] for s in seg).lower().strip(".,:;!")
+                if difflib.SequenceMatcher(None, got, " ".join(ow)).ratio() >= cutoff:
+                    return (int(sum(s[1] for s in seg) / len(seg)), int(sum(s[2] for s in seg) / len(seg)), text)
+    return None
+
+
+def rd_seen(img, words, region=None, cutoff=0.72):
+    return bool(find_text(img, words, region=region, cutoff=cutoff))
+
+
+def rd_tap(dev, stop, words, region=None, cutoff=0.78, whole=False, wait=(1.4, 1.9), shot=None):
+    """Tap a button found by its word (see rd_find). -> True when tapped."""
+    hit = rd_find(shot if shot is not None else dev.screenshot(), words, region, cutoff, whole)
+    if not hit:
+        return False
+    dev.tap(hit[0], hit[1])
+    _nap(stop, *wait)
+    return True
+
+
+def rd_ring(dev, stop, words, cutoff=0.75):
+    """A building's ring menu is open: tap the item with this label (the icon sits just above its label)."""
+    for i in range(2):
+        shot = dev.screenshot()
+        p = rd_find(shot, words, region=(0, 110, 540, 650), cutoff=cutoff)
+        if p:
+            dev.tap(p[0], max(100, p[1] - 35))
+            _nap(stop, 2.0, 2.6)
+            return True
+        _nap(stop, 0.8, 1.1)
+    rd_snap(dev.screenshot(), "ring_" + words[0].replace(" ", "_"))
+    return False
+
+
+def rd_close_reward(dev, stop, spot=(270, 754)):
+    """Close 'Congratulations!' panels (one or more) by tapping their Continue / empty curtain."""
+    n = 0
+    for _ in range(5):
+        if stop.is_set():
+            break
+        if not wheel_reward_panel(dev.screenshot()):
+            break
+        dev.tap(*spot)
+        n += 1
+        _nap(stop, 0.9, 1.2)
+    return n
+
+
+def rd_city_label(dev, stop, names, dy=45):
+    """Find a building by the name printed under it on the city screen (for buildings the city map does not know,
+    e.g. Trade Carriage, World Civilizations) and tap the building just above the name. -> True when tapped."""
+    x, y, w, h = LABEL_VIEW
+    shot = dev.screenshot()
+    for bright in (False, True):
+        for text, ws in ocr_lines(shot[y:y + h, x:x + w], bright=bright):
+            low = text.lower()
+            for n in names:
+                if n.lower() in low:
+                    cx = int(sum(s[1] for s in ws) / len(ws)) + x
+                    cy = int(sum(s[2] for s in ws) / len(ws)) + y
+                    dev.tap(cx, max(110, cy - dy))
+                    _nap(stop, 2.0, 2.6)
+                    return True
+    rd_snap(shot, "label_" + names[0].replace(" ", "_"))
+    return False
+
+
+def rd_numbers(text):
+    return [int(n.replace(",", "")) for n in re.findall(r"\d[\d,]*", text or "")]
+
+
+def rd_keyboard_ok(dev, stop):
+    """Close the Android text box after typing (Enter = OK)."""
+    try:
+        dev._run("shell", "input", "keyevent", "66")
+    except Exception:
+        dev.tap(460, 912)
+    _nap(stop, 1.0, 1.4)
+
+
+def rd_alliance_page(dev, cfg, stop):
+    """From the city: open the Alliance page (same way as Alliance Science)."""
+    shot = dev.screenshot()
+    h = find(shot, "rally_icon", 0.8) if has_template("rally_icon") else None
+    pos = (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
+    dev.tap(*pos)
+    _nap(stop, 1.8, 2.4)
+
+
+def rd_alliance_row(dev, stop, words):
+    """On the Alliance page: tap the row with this name, scrolling the list up when it is below the fold."""
+    for i in range(4):
+        shot = dev.screenshot()
+        row = rd_find(shot, words, region=(40, 300, 400, 640), cutoff=0.75)
+        if row:
+            dev.tap(row[0], row[1])
+            _nap(stop, 1.8, 2.4)
+            return True
+        if stop.is_set():
+            break
+        dev.swipe(316, 778, 303, 548, 450)
+        _nap(stop, 1.0, 1.4)
+    rd_snap(dev.screenshot(), "alliance_row_" + words[0].replace(" ", "_"))
+    return False
+
+
+# --- simple city claims ---------------------------------------------------------------------------------------
+def run_gold_levy(dev, cfg, log, stop):
+    """Keep's ring menu is open: Levy -> Free Levy All. The 'Gems Levy' button is never pressed."""
+    if not rd_ring(dev, stop, ["Levy"]):
+        raise RuntimeError("no Levy button in the Keep menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "levy_1")
+    if not rd_seen(shot, ["Levy"], region=(0, 80, 540, 760)):
+        raise RuntimeError("the Levy window did not open")
+    if not rd_tap(dev, stop, ["Free Levy All"], region=(180, 690, 360, 120), shot=shot, wait=(2.0, 2.6)):
+        log("[+]  Gold Levy: no free levies left today")
+        return
+    rd_close_reward(dev, stop)
+    rd_snap(dev.screenshot(), "levy_2")
+    log("[+]  Gold Levy: free levies used")
+
+
+def run_resource_tax(dev, cfg, log, stop):
+    """Market's ring menu is open: Tax -> Tax on the resource the user picked -> Tax (only while the popup costs 0)."""
+    res = str(rd_opt(cfg, "resource_tax", "resource", "Lumber"))
+    if not rd_ring(dev, stop, ["Tax"]):
+        raise RuntimeError("no Tax button in the Market menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "tax_1")
+    if not rd_seen(shot, ["Revenue", "Free"], region=(0, 80, 540, 600)):
+        raise RuntimeError("the Tax page did not open")
+    row = find_text(shot, [res + " Revenue", res], region=(60, 300, 300, 420), cutoff=0.72)
+    if not row:
+        raise RuntimeError(f"no {res} row on the Tax page")
+    box = (340, row[1] - 40, 200, 80)
+    txt = " ".join(t for t, _ in rd_lines(shot, box))
+    btn = rd_find(shot, ["Tax"], region=box, cutoff=0.8)
+    if not btn or rd_numbers(txt):                          # out of free taxes: the button shows a gem price
+        log(f"[+]  Resource Tax: no free tax left today ({res})")
+        return
+    dev.tap(btn[0], btn[1])
+    _nap(stop, 1.8, 2.3)
+    shot = dev.screenshot()
+    rd_snap(shot, "tax_2")
+    cost = next((t for t, _ in rd_lines(shot, (30, 380, 480, 300)) if "cost" in t.lower()), None)
+    if cost is None or any(rd_numbers(cost)):
+        dev.back()
+        raise RuntimeError("the Tax popup does not show a cost of 0 - not pressed")
+    if not rd_tap(dev, stop, ["Tax"], region=(160, 570, 240, 80), whole=True, wait=(2.0, 2.6), shot=shot):
+        dev.back()
+        raise RuntimeError("no Tax button in the popup")
+    rd_close_reward(dev, stop)
+    log(f"[+]  Resource Tax: free taxes used on {res}")
+
+
+def run_labor(dev, cfg, log, stop):
+    """Prison's ring menu is open: Captives -> Labor -> Labor. Clear Labor CD (gems) is never pressed."""
+    if not rd_ring(dev, stop, ["Captives"]):
+        raise RuntimeError("no Captives button in the Prison menu")
+    if not rd_tap(dev, stop, ["Labor"], region=(300, 870, 240, 90), whole=True, wait=(1.8, 2.3)):
+        rd_snap(dev.screenshot(), "labor_1")
+        log("[+]  Labor: no Labor button (no captives?)")
+        return
+    shot = dev.screenshot()
+    rd_snap(shot, "labor_2")
+    if rd_seen(shot, ["Cooldown"], region=(0, 300, 540, 450)):
+        log("[+]  Labor: on cooldown")
+        return
+    if not rd_tap(dev, stop, ["Labor"], region=(160, 600, 280, 100), whole=True, wait=(2.0, 2.5), shot=shot):
+        raise RuntimeError("no Labor button in the popup")
+    rd_close_reward(dev, stop)
+    log("[+]  Labor: captives put to work (4 h of production)")
+
+
+def run_general_chest(dev, cfg, log, stop):
+    """Tavern's ring menu is open: Great General Chest -> Free (only the free daily open)."""
+    if not rd_ring(dev, stop, ["Great General Chest", "General Chest"]):
+        raise RuntimeError("no Great General Chest button in the Tavern menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "gchest_1")
+    if not rd_tap(dev, stop, ["Free"], region=(230, 660, 260, 110), whole=True, cutoff=0.85, wait=(2.5, 3.0), shot=shot):
+        log("[+]  Great General Chest: the free open is not ready")
+        return
+    rd_close_reward(dev, stop)
+    log("[+]  Great General Chest: free chest opened")
+
+
+def run_vip_claim(dev, cfg, log, stop):
+    """From the city: VIP badge under the avatar -> Claim the daily VIP chest. Packages / More VIP Time never."""
+    dev.tap(128, 75)
+    _nap(stop, 2.2, 2.8)
+    shot = dev.screenshot()
+    rd_snap(shot, "vip_1")
+    if not rd_seen(shot, ["VIP"], region=(0, 0, 540, 200)):
+        raise RuntimeError("the VIP page did not open")
+    if not rd_tap(dev, stop, ["Claim"], region=(330, 560, 210, 120), whole=True, wait=(2.0, 2.5), shot=shot):
+        log("[+]  VIP: daily chest already claimed")
+        return
+    rd_close_reward(dev, stop)
+    log("[+]  VIP: daily chest claimed")
+
+
+def run_recruit_citizens(dev, cfg, log, stop):
+    """From the city: citizens icon on the top bar -> Citizen List -> Recruit Citizens -> the free Recruit Once,
+    then flip the card. Recruit x10 / Buy never."""
+    dev.tap(280, 46)
+    _nap(stop, 2.0, 2.6)
+    shot = dev.screenshot()
+    if not rd_seen(shot, ["Citizen"], region=(0, 0, 540, 160)):
+        raise RuntimeError("the Citizen page did not open")
+    if not rd_tap(dev, stop, ["Citizen List"], region=(270, 80, 270, 70), shot=shot):
+        dev.tap(426, 113)
+        _nap(stop, 1.4, 1.8)
+    if not rd_tap(dev, stop, ["Recruit Citizens"], region=(60, 870, 420, 90), wait=(2.0, 2.5)):
+        rd_snap(dev.screenshot(), "citizens_1")
+        raise RuntimeError("no Recruit Citizens button")
+    shot = dev.screenshot()
+    rd_snap(shot, "citizens_2")
+    if not rd_tap(dev, stop, ["Free"], region=(280, 860, 240, 100), whole=True, cutoff=0.85, wait=(2.0, 2.5), shot=shot):
+        log("[+]  Recruit Citizens: the free recruit is not ready")
+        return
+    for xy in ((269, 676), (268, 549)):                     # flip the card, then close it
+        dev.tap(*xy)
+        _nap(stop, 1.4, 1.8)
+    rd_close_reward(dev, stop)
+    log("[+]  Recruit Citizens: free recruit done")
+
+
+def run_civilization_card(dev, cfg, log, stop):
+    """From the city: World Civilizations building (found by its name) -> the Free card pack. Purchase / Open 10 never."""
+    if not rd_city_label(dev, stop, ["World Civilizations", "Civilizations", "Civilization"]):
+        raise RuntimeError("the World Civilizations building is not on the city screen")
+    shot = dev.screenshot()
+    if not rd_seen(shot, ["Card Pack", "Open Card"], region=(0, 0, 540, 300)):
+        p = rd_find(shot, ["Card Pack", "Cards"], region=(0, 110, 540, 650))      # a ring menu opened instead of the page
+        if p:
+            dev.tap(p[0], max(100, p[1] - 35))
+            _nap(stop, 2.0, 2.6)
+            shot = dev.screenshot()
+    rd_snap(shot, "civ_1")
+    if not rd_seen(shot, ["Card Pack", "Open Card"], region=(0, 0, 540, 300)):
+        raise RuntimeError("the Open Card Pack page did not open")
+    if not rd_tap(dev, stop, ["Free"], region=(0, 300, 180, 120), whole=True, cutoff=0.85, wait=(2.5, 3.0), shot=shot):
+        log("[+]  Civilization card: the free pack is not ready")
+        return
+    rd_close_reward(dev, stop)
+    log("[+]  Civilization card: free pack opened")
+
+
+# --- Super Value Return page (Empire Depot icon) -----------------------------------------------------------------
+def svr_open_tab(dev, stop, log, tab):
+    """From the city: Empire Depot icon (bottom left) -> Super Value Return -> the tab with this name."""
+    dev.tap(53, 825)
+    _nap(stop, 2.2, 2.8)
+    shot = dev.screenshot()
+    if not rd_seen(shot, ["Super Value Return", "Value Return", "Super Value"], region=(40, 0, 460, 95)):
+        rd_snap(shot, "svr_0")
+        raise RuntimeError("the Super Value Return page did not open")
+    moves = [(443, 133, 10, 130)] * 3 + [(10, 130, 500, 133)] * 5      # tab bar: look left to right, then back
+    for i in range(len(moves) + 1):
+        p = find_text(shot, [tab], region=(0, 95, 540, 60), cutoff=0.72)
+        if p:
+            dev.tap(*p)
+            _nap(stop, 1.8, 2.3)
+            return True
+        if i == len(moves) or stop.is_set():
+            break
+        dev.swipe(*moves[i], 900)
+        _nap(stop, 1.0, 1.3)
+        shot = dev.screenshot()
+    rd_snap(shot, "svr_tab")
+    raise RuntimeError(f"no '{tab}' tab on the Super Value Return page")
+
+
+def svr_claimable(dev, stop, log, title):
+    shot = dev.screenshot()
+    rd_snap(shot, "svr_" + title.split()[0].lower())
+    if not rd_tap(dev, stop, ["Claimable"], region=(0, 220, 230, 110), wait=(2.2, 2.8), shot=shot):
+        log(f"[+]  {title}: nothing to claim")
+        return
+    rd_close_reward(dev, stop)
+    log(f"[+]  {title}: claimed")
+
+
+def run_empire_depot(dev, cfg, log, stop):
+    svr_open_tab(dev, stop, log, "Empire Depot")
+    svr_claimable(dev, stop, log, "Empire Depot")
+
+
+def run_lucky_raffle(dev, cfg, log, stop):
+    """Only the free 'Claimable' chest; the Enter buttons (gem / VIP entries) are never pressed."""
+    svr_open_tab(dev, stop, log, "Lucky Raffle")
+    svr_claimable(dev, stop, log, "Lucky Raffle")
+
+
+def run_refining_card(dev, cfg, log, stop):
+    """Refining Weekly Card tab: every green Claim (Daily Activity 20 / 50 / 80 ...). 'Continue' = not reached yet."""
+    svr_open_tab(dev, stop, log, "Refining Weekly Card")
+    n, swiped = 0, False
+    for _ in range(10):
+        if stop.is_set():
+            break
+        shot = dev.screenshot()
+        if rd_tap(dev, stop, ["Claim"], region=(350, 560, 190, 390), whole=True, wait=(2.0, 2.5), shot=shot):
+            n += 1
+            rd_close_reward(dev, stop, spot=(270, 120))
+            continue
+        if swiped:
+            break
+        dev.swipe(443, 888, 460, 613, 800)
+        swiped = True
+        _nap(stop, 1.2, 1.5)
+    log(f"[+]  Refining Weekly Card: {n} reward(s) claimed")
+
+
+# --- Alliance page ------------------------------------------------------------------------------------------------
+def run_alliance_gift(dev, cfg, log, stop):
+    """Alliance > Alliance Gift > Open All."""
+    rd_alliance_page(dev, cfg, stop)
+    if not rd_alliance_row(dev, stop, ["Alliance Gift"]):
+        raise RuntimeError("no Alliance Gift row on the Alliance page")
+    if not rd_tap(dev, stop, ["Open All"], region=(130, 860, 280, 100), wait=(2.2, 2.8)):
+        rd_snap(dev.screenshot(), "agift_1")
+        log("[+]  Alliance Gift: nothing to open")
+        return
+    rd_close_reward(dev, stop, spot=(270, 120))
+    log("[+]  Alliance Gift: all gifts opened")
+
+
+def run_alliance_treasure(dev, cfg, log, stop):
+    """Alliance > Alliance Treasure > Open All (chests still on a timer stay closed)."""
+    rd_alliance_page(dev, cfg, stop)
+    if not rd_alliance_row(dev, stop, ["Alliance Treasure"]):
+        raise RuntimeError("no Alliance Treasure row on the Alliance page")
+    shot = dev.screenshot()
+    rd_snap(shot, "atreasure_1")
+    if not rd_tap(dev, stop, ["Open All"], region=(240, 860, 300, 100), wait=(2.2, 2.8), shot=shot):
+        log("[+]  Alliance Treasure: nothing to open")
+        return
+    rd_close_reward(dev, stop, spot=(270, 120))
+    log("[+]  Alliance Treasure: Open All pressed")
+
+
+# --- Event Center -------------------------------------------------------------------------------------------------
+def run_ranger_knight(dev, cfg, log, stop):
+    """Event Center is open: Limited tab -> Ranger Knight Order -> Quick Dispatch -> Send. Refresh never."""
+    shot = dev.screenshot()
+    if rd_tap(dev, stop, ["Limited"], region=(0, 60, 540, 140), shot=shot):
+        shot = dev.screenshot()
+    for i in range(5):
+        p = rd_find(shot, ["Ranger Knight Order", "Knight Order"], region=(0, 150, 540, 720), cutoff=0.75)
+        if p:
+            dev.tap(p[0], p[1])
+            _nap(stop, 2.2, 2.8)
+            break
+        if i == 4 or stop.is_set():
+            rd_snap(shot, "rko_0")
+            raise RuntimeError("no Ranger Knight Order in the Event Center")
+        dev.swipe(270, 780, 270, 420, 600)
+        _nap(stop, 1.0, 1.3)
+        shot = dev.screenshot()
+    shot = dev.screenshot()
+    rd_snap(shot, "rko_1")
+    if not rd_tap(dev, stop, ["Quick Dispatch"], region=(300, 830, 240, 110), wait=(1.8, 2.3), shot=shot):
+        log("[+]  Ranger Knight Order: nothing to dispatch")
+        return
+    if not rd_tap(dev, stop, ["Send"], region=(140, 700, 280, 110), whole=True, wait=(1.8, 2.3)):
+        rd_snap(dev.screenshot(), "rko_2")
+        dev.back()
+        log("[+]  Ranger Knight Order: no task to send right now")
+        return
+    log("[+]  Ranger Knight Order: tasks sent")
+
+
+# --- training with speed-ups ----------------------------------------------------------------------------------------
+def rd_finish_with_speedups(dev, stop, log, what):
+    """The busy button (Speed Up / Training Speedup) -> Finish All with speed-up ITEMS. Instant (gems) never."""
+    if not rd_tap(dev, stop, ["Training Speedup", "Speed Up", "Speedup"], region=(300, 860, 240, 100), wait=(1.8, 2.3)):
+        log(f"[i]   {what}: no Speed Up button")
+        return False
+    shot = dev.screenshot()
+    rd_snap(shot, "speedup")
+    if not rd_tap(dev, stop, RD_SPEEDUP_WORDS, region=(0, 860, 340, 100), wait=(2.0, 2.6), shot=shot):
+        log(f"[i]   {what}: no Finish All button (no speed-up items?)")
+        dev.back()
+        return False
+    log(f"[i]   {what}: finished with speed-up items")
+    return True
+
+
+def rd_train(dev, cfg, log, stop, duty_id, ring_word, qty_xy, what):
+    """Barracks / Trap Factory ring menu is open: type the amount, check it was taken, press Train."""
+    amount = max(1, min(int(float(rd_opt(cfg, duty_id, "amount", 500) or 500)), 9999999))
+    if not rd_ring(dev, stop, [ring_word]):
+        raise RuntimeError(f"no {ring_word} button in the menu")
+    shot = dev.screenshot()
+    rd_snap(shot, duty_id + "_1")
+    if not rd_find(shot, ["Train"], region=(300, 860, 240, 100), whole=True):
+        if rd_find(shot, ["Speed Up", "Speedup"], region=(300, 860, 240, 100)):
+            log(f"[+]  {what}: already busy")
+            if rd_opt(cfg, duty_id, "speedups", False) in (True, "true", "1", 1):
+                rd_finish_with_speedups(dev, stop, log, what)
+            return
+        raise RuntimeError("the training page did not open")
+    dev.tap(*qty_xy)
+    _nap(stop, 1.4, 1.8)
+    dev.text(str(amount))
+    _nap(stop, 0.6, 0.9)
+    rd_keyboard_ok(dev, stop)
+    shot = dev.screenshot()
+    rd_snap(shot, duty_id + "_2")
+    got = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (qty_xy[0] - 90, qty_xy[1] - 28, 180, 56))))
+    if amount not in got:                                    # never train the full (max) amount by mistake
+        raise RuntimeError(f"the amount box does not show {amount} (read {got[:3]}) - not trained")
+    if not rd_tap(dev, stop, ["Train"], region=(300, 860, 240, 100), whole=True, wait=(2.0, 2.5), shot=shot):
+        raise RuntimeError("no Train button")
+    log(f"[+]  {what}: {amount:,} queued")
+    if rd_opt(cfg, duty_id, "speedups", False) in (True, "true", "1", 1):
+        rd_finish_with_speedups(dev, stop, log, what)
+
+
+def run_train_troops(dev, cfg, log, stop):
+    rd_train(dev, cfg, log, stop, "train_troops", "Train", (418, 797), "Train troops")
+
+
+def run_build_traps(dev, cfg, log, stop):
+    rd_train(dev, cfg, log, stop, "build_traps", "Build", (438, 797), "Build traps")
+
+
+def run_troop_healing(dev, cfg, log, stop):
+    """Hospital's ring menu is open: Heal -> Heal (resources). Instant Heal (gems) never; paid offers are closed."""
+    if not rd_ring(dev, stop, ["Heal"]):
+        raise RuntimeError("no Heal button in the Hospital menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "heal_1")
+    if not rd_seen(shot, ["Wounded", "Hospital"], region=(0, 0, 540, 400)):
+        raise RuntimeError("the Hospital page did not open")
+    if rd_tap(dev, stop, ["Heal"], region=(300, 860, 240, 100), whole=True, wait=(2.0, 2.5), shot=shot):
+        log("[+]  Troop healing: healing started")
+    elif rd_find(shot, ["Speed Up", "Speedup"], region=(300, 860, 240, 100)):
+        log("[+]  Troop healing: already healing")
+    else:
+        log("[+]  Troop healing: no wounded troops")
+        return
+    if rd_opt(cfg, "troop_healing", "speedups", False) in (True, "true", "1", 1):
+        rd_finish_with_speedups(dev, stop, log, "Troop healing")
+
+
+# --- Tavern -------------------------------------------------------------------------------------------------------
+ACTIVITY_CARD_CHEST = (100, 445)                          # the first task card's chest (claimed cards move to the end)
+ACTIVITY_MILESTONES = [(195, 194), (252, 186), (321, 186), (394, 192), (458, 186)]
+
+
+def run_activity_chests(dev, cfg, log, stop):
+    """Tavern's ring menu is open: Activity -> open every task chest that is ready, then the milestone chests."""
+    if not rd_ring(dev, stop, ["Activity"]):
+        raise RuntimeError("no Activity button in the Tavern menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "activity_1")
+    if not rd_seen(shot, ["Activity"], region=(0, 0, 540, 120)):
+        raise RuntimeError("the Activity page did not open")
+    n = 0
+    for _ in range(40):
+        if stop.is_set():
+            break
+        dev.tap(*ACTIVITY_CARD_CHEST)
+        _nap(stop, 1.2, 1.6)
+        if not wheel_reward_panel(dev.screenshot()):
+            break
+        n += 1
+        rd_close_reward(dev, stop, spot=(270, 240))
+    m = 0
+    for xy in ACTIVITY_MILESTONES:
+        if stop.is_set():
+            break
+        dev.tap(*xy)
+        _nap(stop, 1.2, 1.6)
+        if wheel_reward_panel(dev.screenshot()):
+            m += 1
+        dev.tap(*xy)                                        # second tap closes the reward / the preview
+        _nap(stop, 0.9, 1.2)
+        rd_close_reward(dev, stop, spot=(270, 240))
+    rd_snap(dev.screenshot(), "activity_2")
+    log(f"[+]  Activity: {n} task chest(s) and {m} milestone chest(s) opened")
+
+
+# --- loops --------------------------------------------------------------------------------------------------------
+GATE_VISITOR_BUBBLE = (236, 498)
+
+
+def run_gate_visitors(dev, cfg, log, stop):
+    """From the city: while the 'visitor is waiting at the city gate' banner shows, tap the '?' over the gate,
+    skip the envoy's text, Claim, close the reward."""
+    n = 0
+    for _ in range(8):
+        if stop.is_set():
+            break
+        shot = dev.screenshot()
+        if not rd_seen(shot, ["visitor is waiting", "city gate", "visitor"], region=(0, 85, 540, 160)):
+            break
+        dev.tap(*GATE_VISITOR_BUBBLE)
+        _nap(stop, 2.0, 2.5)
+        shot = dev.screenshot()
+        if not rd_seen(shot, ["Visiting Envoy", "Envoy", "Visitor"], region=(0, 300, 540, 600)):
+            rd_snap(shot, "visitor_miss")
+            log("[!]  Gate visitors: the visitor did not open (city view moved?) - stopped")
+            break
+        dev.tap(275, 805)                                   # skip the envoy's text
+        _nap(stop, 1.0, 1.3)
+        if not rd_tap(dev, stop, ["Claim"], region=(140, 840, 260, 100), whole=True, wait=(1.8, 2.3)):
+            rd_snap(dev.screenshot(), "visitor_noclaim")
+            dev.back()
+            break
+        n += 1
+        if wheel_reward_panel(dev.screenshot()):
+            dev.tap(245, 630)
+            _nap(stop, 1.0, 1.3)
+    log(f"[+]  Gate visitors: {n} visitor(s) claimed")
+
+
+CARRIAGE_SLOTS = [(218, 772), (290, 583), (424, 435), (128, 491)]
+
+
+def carriage_left(img):
+    for t, _ in rd_lines(img, (0, 60, 540, 260)):
+        if "transport" in t.lower() and "today" in t.lower():
+            nums = rd_numbers(t)
+            return nums[-1] if nums else None
+    return None
+
+
+def run_trade_carriage(dev, cfg, log, stop):
+    """From the city: Trade Carriage (found by its name) -> each empty slot: take the first carriage, Select Formation,
+    March with the preset already shown, until Transports Left Today is 0. Refresh Goods is never pressed (owner)."""
+    if not rd_city_label(dev, stop, ["Trade Carriage", "Carriage"]):
+        raise RuntimeError("the Trade Carriage is not on the city screen")
+    shot = dev.screenshot()
+    rd_snap(shot, "carriage_1")
+    left = carriage_left(shot)
+    if left is None:
+        raise RuntimeError("the Trade Carriage page did not open")
+    sent = 0
+    for xy in CARRIAGE_SLOTS:
+        if left <= 0 or stop.is_set():
+            break
+        dev.tap(*xy)
+        _nap(stop, 1.8, 2.3)
+        shot = dev.screenshot()
+        if not rd_tap(dev, stop, ["Select Formation"], region=(270, 870, 270, 100), wait=(2.2, 2.8), shot=shot):
+            if carriage_left(shot) is None:                 # a carriage that is already on the road opened: close it
+                dev.back()
+                _nap(stop, 1.2, 1.6)
+            continue
+        if not rd_tap(dev, stop, ["March"], region=(270, 870, 270, 100), whole=True, wait=(2.2, 2.8)):
+            rd_snap(dev.screenshot(), "carriage_nomarch")
+            dev.back()
+            _nap(stop, 1.2, 1.6)
+            raise RuntimeError("no March button on the formation screen")
+        sent += 1
+        shot = dev.screenshot()
+        new = carriage_left(shot)
+        left = new if new is not None else left - 1
+    log(f"[+]  Trade Carriage: {sent} transport(s) sent, {left} left today")
+
+
+# --- Shrine -------------------------------------------------------------------------------------------------------
+def run_offering_tributes(dev, cfg, log, stop):
+    """Shrine's ring menu is open: Offer -> Offer Tribute -> slider to the most (50) -> Offer. Uses Tribute items;
+    Offer Gems is never pressed and the popup must not mention gems."""
+    times = max(1, min(int(float(rd_opt(cfg, "offering_tributes", "times", 1) or 1)), 20))
+    if not rd_ring(dev, stop, ["Offer"]):
+        raise RuntimeError("no Offer button in the Shrine menu")
+    done = 0
+    for _ in range(times):
+        if stop.is_set():
+            break
+        shot = dev.screenshot()
+        rd_snap(shot, "offer_1")
+        if not rd_tap(dev, stop, ["Offer Tribute"], region=(260, 860, 280, 100), wait=(1.6, 2.0), shot=shot):
+            log("[+]  Offering: no tributes left")
+            if rd_opt(cfg, "offering_tributes", "gems", False) in (True, "true", "1", 1):
+                offer_with_gems(dev, cfg, log, stop)
+            break
+        for _ in range(55):                                 # + to the most allowed (50 per offer)
+            if stop.is_set():
+                break
+            dev.tap(435, 473)
+            time.sleep(0.08)
+        _nap(stop, 0.8, 1.1)
+        shot = dev.screenshot()
+        rd_snap(shot, "offer_2")
+        if any("gem" in t.lower() for t, _ in rd_lines(shot, (30, 330, 480, 330))):
+            dev.back()
+            raise RuntimeError("the offer popup mentions gems - not pressed")
+        if not rd_tap(dev, stop, ["Offer"], region=(170, 575, 220, 70), whole=True, wait=(2.2, 2.8), shot=shot):
+            dev.back()
+            raise RuntimeError("no Offer button in the popup")
+        done += 1
+        rd_close_reward(dev, stop, spot=(270, 120))
+    log(f"[+]  Offering: {done} tribute offer(s) made")
+
+
+# --- gem duties (owner 22 Oct: the user switches them on knowing they spend gems; no extra gem block) ----------------
+def run_wisdom_dome_tokens(dev, cfg, log, stop):
+    """Wisdom Dome's ring menu is open: Rare Books -> + under the Goddess Honor Token -> Purchase by Gems (500 gems)
+    and Buy in the confirm popup, as many times as set (game limit 5 a day). SPENDS GEMS."""
+    want = max(1, min(int(float(rd_opt(cfg, "wisdom_dome_tokens", "times", 5) or 5)), 5))
+    if not rd_ring(dev, stop, ["Rare Books"]):
+        raise RuntimeError("no Rare Books button in the Wisdom Dome menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "dome_1")
+    if not rd_seen(shot, ["Rare Books", "Honor"], region=(0, 0, 540, 300)):
+        raise RuntimeError("the Rare Books page did not open")
+    dev.tap(222, 819)                                       # + under the Goddess Honor Token
+    _nap(stop, 1.8, 2.3)
+    bought = 0
+    for _ in range(want):
+        if stop.is_set():
+            break
+        shot = dev.screenshot()
+        rd_snap(shot, "dome_2")
+        for t, _ in rd_lines(shot, (0, 80, 540, 300)):
+            if "daily chance" in t.lower():
+                n = rd_numbers(t)
+                if len(n) >= 2 and n[-2] >= n[-1]:
+                    log(f"[+]  Wisdom Dome: today's {n[-1]} gem purchases are used")
+                    want = bought
+                break
+        if bought >= want:
+            break
+        if not rd_tap(dev, stop, ["Purchase by Gems", "Purchase"], region=(300, 100, 240, 120), wait=(1.4, 1.8), shot=shot):
+            if bought == 0:
+                raise RuntimeError("no Purchase by Gems button on the Goddess Honor Token page")
+            break
+        if not rd_tap(dev, stop, ["Buy"], region=(240, 500, 280, 110), whole=True, wait=(1.8, 2.3)):
+            rd_snap(dev.screenshot(), "dome_3")
+            dev.back()
+            raise RuntimeError("no Buy button in the confirm popup")
+        bought += 1
+        rd_close_reward(dev, stop, spot=(270, 120))
+    log(f"[+]  Wisdom Dome: {bought} Goddess Honor Token(s) bought with gems")
+
+
+def offer_with_gems(dev, cfg, log, stop):
+    """The Shrine's Offer page is open and no tributes are left: Offer Gems -> + to the amount set -> Offer.
+    SPENDS GEMS (25 for the first, more for each next one). Only when the user ticked it on the Shrine offering duty."""
+    count = max(1, min(int(float(rd_opt(cfg, "offering_tributes", "gem_count", 3) or 3)), 50))
+    shot = dev.screenshot()
+    rd_snap(shot, "offergems_1")
+    if not rd_tap(dev, stop, ["Offer Gems"], region=(20, 860, 300, 110), wait=(1.6, 2.0), shot=shot):
+        log("[!]  Offering: no Offer Gems button on the Offer page")
+        return
+    for _ in range(count - 1):                              # the slider starts at 1
+        if stop.is_set():
+            break
+        dev.tap(439, 468)
+        _nap(stop, 0.35, 0.5)
+    shot = dev.screenshot()
+    rd_snap(shot, "offergems_2")
+    if not rd_tap(dev, stop, ["Offer"], region=(170, 560, 230, 75), whole=True, wait=(2.2, 2.8), shot=shot):
+        dev.back()
+        log("[!]  Offering: no Offer button in the gem popup")
+        return
+    rd_close_reward(dev, stop, spot=(270, 120))
+    log(f"[+]  Offering: {count} gem offer(s) made (no tributes left)")
+
+
+RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
+            "general_chest": run_general_chest, "vip_claim": run_vip_claim, "recruit_citizens": run_recruit_citizens,
+            "civilization_card": run_civilization_card, "empire_depot": run_empire_depot, "lucky_raffle": run_lucky_raffle,
+            "refining_card": run_refining_card, "alliance_gift": run_alliance_gift, "alliance_treasure": run_alliance_treasure,
+            "ranger_knight": run_ranger_knight, "train_troops": run_train_troops, "build_traps": run_build_traps,
+            "troop_healing": run_troop_healing, "activity_chests": run_activity_chests, "gate_visitors": run_gate_visitors,
+            "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes,
+            "wisdom_dome_tokens": run_wisdom_dome_tokens}
+
+
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
 DUTY_FILE = USER / "duties_state.json"
 _DUTY_LOCK = threading.Lock()
-DUTY_MAX_TRIES = 3                      # tries per game day before a duty gives up until the next reset
-DUTY_RETRY_MIN = 20                     # minutes between two tries of a duty that failed
+DUTY_MAX_TRIES = 3                      # failures in a game day before the alert + report (the duty never gives up)
+DUTY_RETRY_MIN = 60                     # minutes between two tries of a duty that failed (rallies are joined meanwhile)
 # group, id, title, what it does, schedule text, every_min (0 = once per game day), target, steps.
 # verified=False means the steps are a first guess from the game's menu text and have not been watched on a real
 # emulator yet - the interface shows them as "untested" until they are recorded.
@@ -8588,8 +9484,8 @@ DUTY_LIBRARY = [
      "note": "Opens Mail and taps Claim all.",
      "target": "icon:Mail", "steps": ["wait 1.5", "tap_text Claim All|Read All|Claim"]},
     {"id": "alliance_gift", "group": "Reward claims", "title": "Alliance gift", "every_min": 0, "verified": False,
-     "note": "Alliance > Gifts > Claim all.",
-     "target": "icon:Alliance", "steps": ["wait 1.5", "tap_text Gifts", "wait 1.2", "tap_text Claim All|Claim", "wait 1"]},
+     "note": "Alliance > Alliance Gift > Open All.",
+     "target": "self:", "steps": ["alliance_gift"]},
     {"id": "alliance_help", "group": "Daily activities", "title": "Alliance help", "every_min": 60, "verified": False,
      "note": "Alliance > Help > Help all.",
      "target": "icon:Alliance", "steps": ["wait 1.5", "tap_text Help", "wait 1.2", "tap_text Help All|Help all", "wait 1"]},
@@ -8633,6 +9529,77 @@ DUTY_LIBRARY = [
     {"id": "reach_embassy", "group": "Common tasks", "title": "Test: go to Embassy", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Embassy and opens its menu (nothing is pressed).",
      "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Embassy"]},
+    # recorded duties (tester flows 22 Oct 2026, project docs claude/flow_*.md). "opts" = the duty's own settings on the Duties page.
+    {"id": "gold_levy", "group": "Daily activities", "title": "Gold Levy", "every_min": 0, "verified": False,
+     "note": "Keep > Levy > Free Levy All. Gems Levy is never pressed. Needs the city map (Keep).",
+     "target": "building:Keep", "tap_dy": 0, "steps": ["wait 1.2", "gold_levy"]},
+    {"id": "resource_tax", "group": "Daily activities", "title": "Resource Tax", "every_min": 0, "verified": False,
+     "note": "Market > Tax: uses all free taxes on the resource you pick. Stops when the button shows a gem price. Needs the city map (Market).",
+     "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.2", "resource_tax"],
+     "opts": [{"k": "resource", "label": "Resource", "type": "select", "choices": ["Food", "Lumber", "Stone", "Ore"], "def": "Lumber"}]},
+    {"id": "labor", "group": "Daily activities", "title": "Labor (Prison)", "every_min": 360, "verified": False,
+     "note": "Prison > Captives > Labor: 4 hours of production from your captives, every 6 hours. Clear Labor CD is never pressed. Needs the city map (Prison).",
+     "target": "building:Prison", "tap_dy": 0, "steps": ["wait 1.2", "labor"]},
+    {"id": "general_chest", "group": "Reward claims", "title": "Great General Chest (free)", "every_min": 0, "verified": False,
+     "note": "Tavern > Great General Chest: opens the free chest when it is ready. Needs the city map (Tavern).",
+     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.2", "general_chest"]},
+    {"id": "vip_claim", "group": "Reward claims", "title": "VIP daily chest", "every_min": 0, "verified": False,
+     "note": "VIP badge (top left) > Claim. VIP packages are never bought.",
+     "target": "self:", "steps": ["vip_claim"]},
+    {"id": "recruit_citizens", "group": "Reward claims", "title": "Recruit Citizens (free)", "every_min": 0, "verified": False,
+     "note": "Citizens (top bar) > Citizen List > Recruit Citizens > the free Recruit Once. Recruit x10 is never pressed.",
+     "target": "self:", "steps": ["recruit_citizens"]},
+    {"id": "civilization_card", "group": "Reward claims", "title": "Civilization card pack (free)", "every_min": 0, "verified": False,
+     "note": "World Civilizations > the free card pack. Finds the building by its name on the city screen.",
+     "target": "self:", "steps": ["civilization_card"]},
+    {"id": "empire_depot", "group": "Reward claims", "title": "Empire Depot", "every_min": 0, "verified": False,
+     "note": "Empire Depot icon (bottom left) > Empire Depot tab > the Claimable chest. Nothing is bought.",
+     "target": "self:", "steps": ["empire_depot"]},
+    {"id": "lucky_raffle", "group": "Reward claims", "title": "Lucky Raffle", "every_min": 0, "verified": False,
+     "note": "Empire Depot icon > Lucky Raffle tab > the Claimable chest. The Enter buttons (gems / VIP) are never pressed.",
+     "target": "self:", "steps": ["lucky_raffle"]},
+    {"id": "refining_card", "group": "Reward claims", "title": "Refining Weekly Card", "every_min": 240, "verified": False,
+     "note": "Empire Depot icon > Refining Weekly Card tab: claims every reward your Daily Activity has reached.",
+     "target": "self:", "steps": ["refining_card"]},
+    {"id": "alliance_treasure", "group": "Reward claims", "title": "Alliance Treasure", "every_min": 240, "verified": False,
+     "note": "Alliance > Alliance Treasure > Open All (chests still on a timer stay closed).",
+     "target": "self:", "steps": ["alliance_treasure"]},
+    {"id": "ranger_knight", "group": "Daily activities", "title": "Ranger Knight Order", "every_min": 70, "verified": False,
+     "note": "Event Center > Limited > Ranger Knight Order > Quick Dispatch > Send. Refresh is never pressed.",
+     "target": "tpl:event_center_icon|Center", "steps": ["wait 2", "ranger_knight"]},
+    {"id": "troop_healing", "group": "Daily activities", "title": "Heal troops", "every_min": 120, "verified": False,
+     "note": "Hospital > Heal > Heal (costs resources). Instant Heal (gems) is never pressed. Needs the city map (Hospital).",
+     "target": "building:Hospital", "tap_dy": 0, "steps": ["wait 1.2", "troop_healing"],
+     "opts": [{"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
+    {"id": "train_troops", "group": "Daily activities", "title": "Train troops", "every_min": 240, "verified": False,
+     "note": "Barracks > Train: trains the amount you set of the troop the page has selected. Instant Train (gems) is never pressed. Needs the city map (Barracks).",
+     "target": "building:Barracks", "tap_dy": 0, "steps": ["wait 1.2", "train_troops"],
+     "opts": [{"k": "amount", "label": "Troops per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
+              {"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
+    {"id": "build_traps", "group": "Daily activities", "title": "Build traps", "every_min": 240, "verified": False,
+     "note": "Trap Factory > Build: builds the amount you set of the trap the page has selected. Instant Train (gems) is never pressed. Needs the city map (Trap Factory).",
+     "target": "building:Trap Factory", "tap_dy": 0, "steps": ["wait 1.2", "build_traps"],
+     "opts": [{"k": "amount", "label": "Traps per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
+              {"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
+    {"id": "gate_visitors", "group": "Reward claims", "title": "Gate visitors", "every_min": 120, "verified": False,
+     "note": "While 'A visitor is waiting at the city gate' shows: opens each visitor and claims the gift.",
+     "target": "self:", "steps": ["gate_visitors"]},
+    {"id": "trade_carriage", "group": "Daily activities", "title": "Trade Carriage", "every_min": 0, "verified": False,
+     "note": "Trade Carriage: sends all 4 daily transports with the first carriage offered and the march preset already shown. Never refreshes goods.",
+     "target": "self:", "steps": ["trade_carriage"]},
+    {"id": "offering_tributes", "group": "Daily activities", "title": "Shrine offering", "every_min": 0, "verified": False,
+     "note": "Shrine > Offer > Offer Tribute at the most allowed (50), using Tribute items. When no tributes are left it can offer with gems instead (your choice below, off by default). Needs the city map (Shrine).",
+     "target": "building:Shrine", "tap_dy": 0, "steps": ["wait 1.2", "offering_tributes"],
+     "opts": [{"k": "times", "label": "Tribute offers per day", "type": "number", "min": 1, "max": 20, "def": 1},
+              {"k": "gems", "label": "No tributes left: offer with gems", "type": "bool", "def": False},
+              {"k": "gem_count", "label": "Gem offers (25 gems first, then more)", "type": "number", "min": 1, "max": 50, "def": 3}]},
+    {"id": "wisdom_dome_tokens", "group": "Daily activities", "title": "Wisdom Dome tokens (gems)", "every_min": 0, "verified": False, "gems": True,
+     "note": "SPENDS GEMS: Wisdom Dome > Rare Books > buys Goddess Honor Tokens for 500 gems each, as many as you set (game limit 5 a day). Needs the city map (Wisdom Dome).",
+     "target": "building:Wisdom Dome", "tap_dy": 0, "steps": ["wait 1.2", "wisdom_dome_tokens"],
+     "opts": [{"k": "times", "label": "Tokens to buy per day (500 gems each)", "type": "number", "min": 1, "max": 5, "def": 5}]},
+    {"id": "activity_chests", "group": "Reward claims", "title": "Activity chests", "every_min": 180, "verified": False,
+     "note": "Tavern > Activity: opens every ready task chest and milestone chest. Runs every 3 hours so the later chests are caught too. Needs the city map (Tavern).",
+     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.2", "activity_chests"]},
 ]
 DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
 
@@ -8660,10 +9627,25 @@ def duty_record(serial, duty_id, ok, msg=""):
         row["msg"] = msg
         if ok:
             row["last_ok"], row["status"] = time.time(), "done"
-            if duty_id == "crazy_eggs":
-                row["tries"] = 0
+            row["tries"] = 0                                     # fulfilled: failures start counting again from 0
         else:
-            row["status"] = "retry" if row["tries"] < DUTY_MAX_TRIES else "gaveup"
+            row["status"] = "retry"
+            if row["tries"] == DUTY_MAX_TRIES:                   # the 3rd failure today: alert + report once (it keeps trying every hour)
+                row["status"] = "gaveup"
+        try:
+            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+        return row.get("status")
+
+
+def duty_retry(serial, duty_id):
+    """'Retry' after a duty failed for the day: clears today's tries so it runs again at once."""
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        row = data.setdefault(serial or "default", {}).setdefault(duty_id, {})
+        row["tries"], row["status"], row["next_at"] = 0, "retry", 0
+        row["last_try"] = 0
         try:
             DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
         except OSError:
@@ -8700,7 +9682,7 @@ def tasks_active(cfg, serial):
 
 
 def duty_status(serial, duty_id, cfg):
-    """-> (status, text): status is off | waiting | due | done | retry | gaveup."""
+    """-> (status, text): status is off | waiting | due | done | retry | gaveup (failed 3+ times today, still retried hourly)."""
     conf = (cfg.get("duties") or {}).get(duty_id) or {}
     d = DUTY_BY_ID.get(duty_id)
     if not d or not conf.get("on"):
@@ -8711,10 +9693,18 @@ def duty_status(serial, duty_id, cfg):
     if duty_id == "crazy_eggs":                             # timer driven: comes back when the next egg is ready
         if row.get("all_done_day") == day:
             return "done", "All eggs done"
-        if tries >= DUTY_MAX_TRIES:
-            return "gaveup", "Gave up for today"
-        if tries and now - row.get("last_try", 0) < DUTY_RETRY_MIN * 60:
-            return "retry", "Retrying " + time.strftime("%H:%M", time.localtime(row.get("last_try", 0) + DUTY_RETRY_MIN * 60))
+        fs = _duty_fail_state(row, tries, now)
+        if fs:
+            return fs
+        if row.get("next_at", 0) > now:
+            return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"]))
+        return "due", "Due"
+    if duty_id == "black_market" and bm_keep_going(cfg):     # runs all day until the gems reach the floor / run out
+        if row.get("end_day") == day:
+            return "done", "Gems used up " + time.strftime("%H:%M", time.localtime(row.get("last_ok", 0) or now))
+        fs = _duty_fail_state(row, tries, now)
+        if fs:
+            return fs
         if row.get("next_at", 0) > now:
             return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"]))
         return "due", "Due"
@@ -8725,12 +9715,21 @@ def duty_status(serial, duty_id, cfg):
             return "done", "Done " + time.strftime("%H:%M", time.localtime(last_ok))
     elif last_ok and now - last_ok < every * 60:
         return "done", "Done " + time.strftime("%H:%M", time.localtime(last_ok))
-    if tries >= DUTY_MAX_TRIES:
-        return "gaveup", "Gave up for today"
-    if tries and now - row.get("last_try", 0) < DUTY_RETRY_MIN * 60:
-        nxt = row.get("last_try", 0) + DUTY_RETRY_MIN * 60
-        return "retry", "Retrying " + time.strftime("%H:%M", time.localtime(nxt))
+    fs = _duty_fail_state(row, tries, now)
+    if fs:
+        return fs
     return "due", "Due"
+
+
+def _duty_fail_state(row, tries, now):
+    """A duty that failed: tried again every DUTY_RETRY_MIN minutes, all day (rallies are joined in between).
+    From the 3rd failure the status is 'gaveup' (red, with a Retry button) - it still keeps trying."""
+    if not tries or row.get("status") == "done" or now - row.get("last_try", 0) >= DUTY_RETRY_MIN * 60:
+        return None
+    nxt = time.strftime("%H:%M", time.localtime(row.get("last_try", 0) + DUTY_RETRY_MIN * 60))
+    if tries >= DUTY_MAX_TRIES:
+        return "gaveup", f"Failed {tries} times - next try {nxt}"
+    return "retry", "Retrying " + nxt
 
 
 def run_now_tasks(cfg, serial):
@@ -8840,6 +9839,34 @@ def picture_items(dev):
             _nm, ox, oy = CITY_SQUARES[int(n)]
             items[f"{nm}#1"] = [round(SHRINE_LABEL_IN_PICTURE[0] + ox), round(SHRINE_LABEL_IN_PICTURE[1] + oy)]
     return items
+
+
+def fill_from_squares(ent):
+    """Map by hand: the buildings placed by hand pin where the numbered squares sit, so every other fixed building is
+    filled in from the squares. Hand-placed buildings always win; filled ones are redone on every pick."""
+    items, manual = ent.setdefault("items", {}), set(ent.get("manual", []))
+    for k in ent.get("auto", []):
+        if k not in manual:
+            items.pop(k, None)
+    sq = {}
+    for n, (nm, ox, oy) in CITY_SQUARES.items():
+        base = re.sub(r"\s*\d+$", "", nm)
+        if n not in PARKED_SQUARES and base.lower() in DEFAULT_PICTURE_BUILDINGS:
+            sq.setdefault(base.lower(), (base, ox, oy))
+    pins = [(items[k][0] - sq[k.split("#")[0].lower()][1], items[k][1] - sq[k.split("#")[0].lower()][2])
+            for k in manual if k in items and k.split("#")[0].lower() in sq]
+    if not pins:
+        ent["auto"] = []
+        return 0
+    ax, ay = sum(p[0] for p in pins) / len(pins), sum(p[1] for p in pins) / len(pins)
+    have = {k.split("#")[0].lower() for k in items}
+    auto = []
+    for low, (base, ox, oy) in sq.items():
+        if low not in have:
+            items[f"{base}#1"] = [round(ax + ox), round(ay + oy)]
+            auto.append(f"{base}#1")
+    ent["auto"] = auto
+    return len(auto)
 
 
 CHANGEABLE_PLOTS = [n for n, (nm, _x, _y) in CITY_SQUARES.items()
@@ -9317,127 +10344,6 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     return name, res[0], res[1], tx, ty, True                # the map is filled with what the game says, not with what we expect
 
 
-def scan_squares(dev, cfg, log, stop, numbers=None, progress=None):
-    """Map the city by the numbered squares: go to each square, tap it, read its name and level. Squares that read
-    correctly are saved on this emulator's city map. -> {number: result}"""
-    serial = dev.serial if hasattr(dev, "serial") else "default"
-    dev.arm_guard(cfg, log, stop)
-    dev.guard_city = True
-    t0 = time.time()
-    nav = CityNav(dev, stop, log)
-    order = list(numbers or [n for n in sorted(CITY_SQUARES) if n not in PARKED_SQUARES])
-    got, bad, items, levels = {}, [], {}, {}
-    prog_f = USER / "squares_progress.json"
-    try:                                                     # an unfinished run (stopped, crashed, lost): carry on from where it stopped
-        pst = json.loads(prog_f.read_text(encoding="utf-8")) if prog_f.exists() else {}
-    except Exception:
-        pst = {}
-    mine = pst.get(serial) or {}
-    if not numbers and mine and time.time() - mine.get("t", 0) < 6 * 3600 and mine.get("done"):
-        done_before = set(mine["done"])
-        order = [n for n in order if n not in done_before]
-        try:                                                 # drop saved reads that are not in the done list (a read that was found wrong and cleared)
-            _d = load_city()
-            _e = _d.get(serial) or {}
-            _lv = _e.get("levels", {})
-            _drop = [k for k in list(_e.get("items", {})) if _lv.get(k, {}).get("square") not in done_before]
-            if _drop:
-                for k in _drop:
-                    _e["items"].pop(k, None)
-                    _lv.pop(k, None)
-                save_city(_d)
-        except Exception:
-            pass
-        if order:
-            log(f"[*] Squares: carrying on from the last run - {len(done_before)} squares already read, {len(order)} to go")
-        else:
-            order = [n for n in sorted(CITY_SQUARES) if n not in PARKED_SQUARES]
-            mine = {}
-    done_list = list(mine.get("done", [])) if mine else []
-    wipe = not done_list                                    # a fresh run starts from a blank map; a resumed run keeps what it already read
-    if city_picture() is not None:                           # the camera place comes from the whole-city picture: no slow start, no drifting
-        nav.absolute = True
-        shrine = SHRINE_LABEL_IN_PICTURE
-        log("[i] Squares: finding the camera place by the whole-city picture")
-    else:
-        shrine = locate_shrine(dev, stop, log, nav)
-    if shrine:
-        for i, n in enumerate(order):
-            if stop.is_set():
-                break
-            r = open_square(dev, cfg, log, stop, nav, shrine, n)
-            if not r and not stop.is_set():                  # an ad / pop-up may have covered the city: close it, find our place again, retry once
-                try:
-                    shut = clear_popups(dev, cfg, log, stop, rounds=4)
-                except Exception:
-                    shut = 0
-                if shut:
-                    log(f"[*] Square {n}: closed {shut} pop-up(s) - finding the way again and retrying")
-                    if not nav.absolute:
-                        nav = CityNav(dev, stop, log)
-                        shrine = locate_shrine(dev, stop, log, nav) or shrine
-                    r = open_square(dev, cfg, log, stop, nav, shrine, n)
-            got[n] = r
-            nm = CITY_SQUARES[n][0]
-            if r and r[5] and r[1].lower() in UNIQUE_BUILDINGS and any(k.split("#")[0].lower() == r[1].lower() for k in items):
-                log(f"[!] Square {n}: read '{r[1]}' but that building is already mapped on another square - the camera was probably not where it thought. Left blank.")
-                r = None
-            if r and r[5]:
-                base = re.sub(r"\s*\d+$", "", r[1]).strip() or r[1]
-                k_n = 1
-                while f"{base}#{k_n}" in items:
-                    k_n += 1
-                key = f"{base}#{k_n}"
-                items[key] = [round(r[3]), round(r[4])]
-                levels[key] = {"name": r[1], "level": r[2], "square": n}
-                done_list.append(n)
-                try:
-                    data = load_city()
-                    ent = data.setdefault(serial, {"items": {}})
-                    if nav.absolute and (wipe or ent.get("frame") != "picture"):
-                        ent["items"], ent["levels"], ent["frame"] = {}, {}, "picture"
-                        wipe = False
-                    ent.setdefault("items", {})[key] = items[key]
-                    ent.setdefault("levels", {})[key] = levels[key]
-                    save_city(data)
-                    pst[serial] = {"done": done_list, "t": time.time()}
-                    prog_f.write_text(json.dumps(pst), encoding="utf-8")
-                except Exception:
-                    pass
-            else:
-                bad.append(nm)
-            if progress:
-                try:
-                    progress({"phase": "sweeping", "pct": int(100 * (i + 1) / len(order)), "left": int((time.time() - t0) / (i + 1) * (len(order) - i - 1)),
-                              "text": f"Square {n} ({nm}) done", "mapped": [k.split("#")[0] for k in items], "expected": [CITY_SQUARES[x][0] for x in order],
-                              "missing": bad, "seconds": int(time.time() - t0), "stops": i + 1, "total": len(order), "row": 0})
-                except Exception:
-                    pass
-    dev.guard_city = False
-    if not bad and not stop.is_set():                        # finished: next run starts from square 1
-        try:
-            pst.pop(serial, None)
-            prog_f.write_text(json.dumps(pst), encoding="utf-8")
-        except Exception:
-            pass
-    if items:
-        data = load_city()
-        ent = data.setdefault(serial, {"items": {}})
-        if nav.absolute and ent.get("frame") != "picture":
-            ent["items"], ent["levels"], ent["frame"] = {}, {}, "picture"
-        ent.setdefault("items", {}).update(items)
-        ent.setdefault("levels", {}).update(levels)
-        save_city(data)
-    log(f"[+] Squares: read {len(items)} of {len(order)} in {int(time.time() - t0)}s. Not read: {', '.join(bad) if bad else 'none'}")
-    if progress:
-        try:
-            progress({"phase": "done", "pct": 100, "left": 0, "text": "Done", "mapped": [k.split("#")[0] for k in items], "expected": [CITY_SQUARES[x][0] for x in order],
-                      "missing": bad, "seconds": int(time.time() - t0), "stops": len(order), "total": len(order), "row": 0})
-        except Exception:
-            pass
-    return got
-
-
 def task_needs_city_map(t):
     tgt = str(t.get("target", "")).lower()
     steps = [str(x).strip().lower() for x in t.get("steps", [])]
@@ -9526,14 +10432,38 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         if result is not None and not stop.is_set():
             task_event(getattr(dev, "serial", ""), shown, *result)
         if duty_id and result is not None and not stop.is_set():
-            duty_record(getattr(dev, "serial", ""), duty_id, *result)
+            if duty_record(getattr(dev, "serial", ""), duty_id, *result) == "gaveup":
+                duty_failed_report(dev, cfg, log, shown, result[1])
         leave_to_city(dev, cfg, stop, log)
     log("@act " + json.dumps({"k": "step", "text": "Idle - tasks done, back to the rallies"}))   # the instance list stops showing the task
+
+
+def duty_failed_report(dev, cfg, log, shown, why):
+    """A duty failed 3 times today: save a report (log + screenshots) and send an alert, so it can be looked at."""
+    serial = getattr(dev, "serial", "")
+    path = ""
+    try:
+        d = Path.home() / "Desktop" / "RallyForge reports"
+        d.mkdir(parents=True, exist_ok=True)
+        who = re.sub(r"[^\w\-]+", "_", str(shown))[:30].strip("_")
+        p = d / f"rallyforge-report-{who}-failed-{time.strftime('%Y%m%d-%H%M')}.zip"
+        build_report(str(p), include_debug=True, description=f"Automatic report: '{shown}' failed 3 times on {serial} ({why})")
+        path = str(p)
+    except Exception as e:
+        log(f"[!] Could not save the failure report: {e}")
+    log(f"[!] {shown} failed 3 times today ({why}) - it keeps trying every {DUTY_RETRY_MIN} min; Retry on the Duties page runs it now."
+        + (f" Report saved: {path}" if path else ""))
+    notify(cfg, serial, f"{shown} failed 3 times today ({why}). The bot keeps trying every {DUTY_RETRY_MIN} min."
+           + (f" Report: {path}" if path else ""))
 
 
 def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     cfg = merge_device_cfg(cfg, serial)                              # per-instance overrides
     set_pacing(cfg)
+    try:
+        cfg_seen = [CONFIG.stat().st_mtime]                          # settings saved after this are taken over while running
+    except OSError:
+        cfg_seen = [None]
     _TL.ctl, _TL.stop = ctl, stop
 
     def nap(lo, hi=None):
@@ -10187,6 +11117,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     duty_log_at = [0.0]
     while not stop.is_set():
+        if live_settings(cfg, serial, cfg_seen):
+            log("[i] Settings changed - using the new ones from now on")
         if time.time() - duty_log_at[0] > 900:                # every 15 min: what the duties are waiting for, so a silent duty is visible
             duty_log_at[0] = time.time()
             try:
@@ -10230,6 +11162,19 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 continue
 
             rallies_on = cfg.get("rally_enabled", True)
+            if getattr(dev, "acted", None) is None:
+                dev.acted = time.time()
+            if st == "unknown" and has_template("rally_screen") and time.time() - dev.acted > 90:   # no tap for 90 s on a screen it does not know
+                try:
+                    (USER / "debug").mkdir(exist_ok=True)
+                    cv2.imwrite(str(USER / "debug" / ("idle_" + re.sub(r"\W", "_", serial) + ".png")), screen)
+                except Exception:
+                    pass
+                log(f"[!] Nothing to do on this screen for 90s ({st}) - pressing Back")
+                dev.acted = time.time()
+                dev.back()
+                nap(1.5, 2.0)
+                continue
             need_recover = st in ("march", "city", "general") and not (st == "city" and not rallies_on)
             if st == "unknown":
                 if has_template("rally_screen"):

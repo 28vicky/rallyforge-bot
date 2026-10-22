@@ -1011,27 +1011,6 @@ class Controller:
                 self.event("city_done", {"serial": serial})
         threading.Thread(target=work, daemon=True).start()
 
-    def scan_city_taps(self, serial):
-        job = self.city_job(serial, start=True)
-        adb = rb.find_adb(self.cfg.get("adb_path") or "auto")
-        if not adb:
-            raise ApiError("ADB not found. Set the ADB path in Settings.")
-        stop = threading.Event()
-        job.update(running=True, stop=stop, progress=None)
-        cfg = rb.merge_device_cfg(rb.load_config(), serial)          # this instance's own settings
-
-        def work():
-            try:
-                dev = self.ready_device(serial, adb, stop)
-                rb.scan_city_taps(dev, cfg, lambda m: self.log(m), stop, progress=lambda d: job.update(progress=d))
-            except Exception as e:
-                self.log(f"[!] City tap test: {e}")
-            finally:
-                job["running"] = False
-                job["progress"] = None
-                self.event("city_done", {"serial": serial})
-        threading.Thread(target=work, daemon=True).start()
-
     # ---- map the city by hand: the user clicks each building in a live picture of the emulator
     def manual_open(self, serial):
         if self.city_job(serial)["running"]:
@@ -1105,10 +1084,13 @@ class Controller:
         items[key] = [round(nav.cx + float(x)), round(nav.cy + float(y))]
         ent["missing"] = rb.city_report(items)[1]
         ent["manual"] = sorted(set(ent.get("manual", [])) | {key})
+        filled = rb.fill_from_squares(ent)                    # the rest of the fixed buildings follow from the squares
+        ent["missing"] = rb.city_report(items)[1]
         rb.save_city(data)
         if shot is not None:
             rb.save_building_picture(serial, key, shot, float(x), float(y))
-        self.log(f"[+] City map by hand: {name} placed at {items[key][0]},{items[key][1]}")
+        self.log(f"[+] City map by hand: {name} placed at {items[key][0]},{items[key][1]}"
+                 + (f" - {filled} other building(s) filled in from the squares" if filled else ""))
 
     def slots_info(self, serial):
         """The numbered plots and which building of this emulator sits in which one."""
@@ -1515,6 +1497,8 @@ class Api:
                          "on": bool(conf.get("on")), "every_min": int(conf.get("every_min", d["every_min"]) or 0),
                          "default_every": d["every_min"], "verified": bool(d.get("verified")),
                          "status": st, "status_text": txt,
+                         "opts": [dict(o, val=conf.get(o["k"], o.get("def"))) for o in (d.get("opts") or [])],
+                         "gems": bool(d.get("gems")),
                          "schedule": ("When the next egg is ready" if d["id"] == "crazy_eggs" else "Once per game day" if not d["every_min"] else f"Every {d['every_min']} min")})
         return rows
 
@@ -1589,6 +1573,15 @@ class Api:
             if s in [d["id"] for d in self.c.devices]:
                 self.duty_set({"id": "crazy_eggs", "on": True, "serial": s})
         return self.today_all(p)
+    def duty_retry(self, p):
+        """'Retry' on a duty that failed 3 times today: run it again now (one instance, or every instance)."""
+        did = str(p.get("id", ""))
+        if did not in rb.DUTY_BY_ID:
+            raise ApiError("Unknown duty.")
+        scope = self._scope(p)
+        for s in ([scope] if scope else [d["id"] for d in self.devices]):
+            rb.duty_retry(s, did)
+        return {"duties": self._duty_rows(scope), "serial": scope, "own": self._own(scope)}
 
     def duty_set(self, p):
         did = str(p.get("id", ""))
@@ -1601,6 +1594,20 @@ class Api:
             row["on"] = bool(p["on"])
         if "every_min" in p:
             row["every_min"] = max(0, min(int(float(p["every_min"])), 10080))
+        for o in rb.DUTY_BY_ID[did].get("opts") or []:      # the duty's own settings (resource, amount, ...)
+            if o["k"] not in (p.get("opt") or {}):
+                continue
+            v = p["opt"][o["k"]]
+            if o["type"] == "bool":
+                v = bool(v)
+            elif o["type"] == "number":
+                try:
+                    v = max(o.get("min", 0), min(int(float(v)), o.get("max", 10 ** 9)))
+                except (TypeError, ValueError):
+                    raise ApiError(f"{o['label']}: enter a number.")
+            elif o["type"] == "select" and v not in o["choices"]:
+                raise ApiError(f"{o['label']}: pick one of the list.")
+            row[o["k"]] = v
         self._save_scoped(scope, "duties", duties)
         return self.duties(p)
 
@@ -1697,7 +1704,7 @@ class Api:
     def wheel_set(self, p):
         scope = self._scope(p)
         c = rb.wheel_conf(self._eff(scope))
-        for k in ("button", "spins", "reserve"):
+        for k in ("button", "spins", "reserve", "chips"):
             if k in p:
                 c[k] = p[k]
         self._save_scoped(scope, "wheel", rb.wheel_conf({"wheel": c}))
@@ -1874,8 +1881,7 @@ class Api:
         span = f"{hours // 24}d" if hours >= 24 and hours % 24 == 0 else f"{hours}h"
         path = downloads_dir() / f"rallyforge-log-{who}-{span}-{time.strftime('%Y%m%d-%H%M')}.zip"
         n = rb.export_log(str(path), hours, name)
-        open_path(path.parent)
-        return {"path": str(path), "lines": n}
+        return {"path": str(path), "lines": n}            # the folder opens only when the person clicks "Open folder"
 
     def save_report(self, p):
         d = Path.home() / "Desktop" / "RallyForge reports"
@@ -2186,10 +2192,6 @@ class Api:
 
     def manual_goto(self, p):
         self.c.manual_goto(p["slot"])
-        return {}
-
-    def scan_city_taps_start(self, p):
-        self.c.scan_city_taps(p["serial"])
         return {}
 
     def city_result(self, p):

@@ -203,8 +203,7 @@ function layout() {
   root.appendChild(h("div", { class: "app" + (S.cfg.sidebar_open === false ? " nosb" : ""), id: "app" },
     h("div", { class: "side" },
       h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }),
-        h("div", { class: "bt" }, h("b", {}, "RallyForge"), h("small", {}, "Automation Hub")),
-        h("button", { class: "vpill", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "v" + S.version)),
+        h("div", { class: "bt" }, h("b", {}, "RallyForge"), h("small", {}, "Automation Hub"))),
       h("h4", {}, h("span", {}, "Instances"), h("span", { class: "cnt", id: "instCnt" })),
       h("div", { class: "inst-list", id: "instList" }),
       h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }),
@@ -226,7 +225,7 @@ function layout() {
       h("div", { class: "sbl" }, h("span", { class: "sbrun" }, h("span", { class: "sbdot", id: "sbDot" }), h("span", { id: "sbRun" }, "0 running")),
         h("span", { id: "sbRam" }), h("span", { id: "sbTg" }), h("span", { id: "sbLic" })),
       h("div", { class: "sbr" }, h("span", { id: "sbUpd", class: "sb-upd", style: { display: "none" } }),
-        h("span", { class: "l", title: S.copyright || "" }, "v" + S.version + " \u00b7 by " + (S.author || "Kiravik"))))));
+        h("span", { class: "l vlink", role: "button", tabindex: "0", title: "What changed in this version" + (S.copyright ? "\n" + S.copyright : ""), onclick: () => openWhatsNew(), onkeydown: (e) => { if (e.key === "Enter") openWhatsNew(); } }, "v" + S.version + " \u00b7 by " + (S.author || "Kiravik"))))));
   buildRibbon();
   paintRunState();
   renderModeIcon();
@@ -285,11 +284,10 @@ function buildRibbon() {
       btn("Stop", () => { S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop"), h("span", { class: "ribcount", id: "ribCount" })),
     grp("Tools",
       btn("Tools \u25be", (e) => menu(e.currentTarget, [
-        { label: "Generals...", icon: "users", run: () => openGeneralManager() },
+        { label: "Generals", icon: "users", run: () => openGeneralManager() },
         ...(S.dev ? [{ label: "Scan generals", icon: "scan", run: () => scanGeneralsFlow() }] : []),
         { label: "Scan city", icon: "city", run: () => scanCityFlow(S.sel === "control" ? undefined : S.sel) },
         { label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) },
-        { label: "Map by squares", icon: "city", run: () => scanCityTapsFlow() },
         { label: "Save settings", icon: "save", run: saveAll },
         { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow },
         { label: "Close window (bots keep running)", icon: "eye", run: () => act(api("hide_window")) },
@@ -314,7 +312,9 @@ function saveLogRow(fixedName) {
   const who = h("select", { "aria-label": "Instance" }, h("option", { value: "" }, "All instances"));
   if (fixedName) { who.innerHTML = ""; who.appendChild(h("option", { value: fixedName }, fixedName)); who.disabled = true; }
   else api("log_names", {}, { quiet: true }).then((r) => { for (const n of (r && r.names) || []) who.appendChild(h("option", { value: n }, n)); }).catch(() => {});
-  const save = async () => { const j = await act(api("save_log", { hours: +span.value, name: who.value })); if (j) toast(`Saved ${j.lines} lines as a zip in Downloads: ${j.path}`, "ok"); };
+  const save = async () => { const j = await act(api("save_log", { hours: +span.value, name: who.value })); if (j) modal({ title: "Log saved", buttons: [
+    { label: "Open folder", cls: "pri", onclick: () => { act(api("reveal_file", { path: j.path })); } }, { label: "Close" }],
+    body: h("div", { class: "field" }, h("p", {}, `Saved ${j.lines} lines as a zip in Downloads:`), h("p", { style: { wordBreak: "break-all", fontFamily: "var(--mono)" } }, j.path)) }); };
   return h("div", { class: "logsave" }, h("div", { class: "field" }, h("label", {}, "Time"), span), h("div", { class: "field" }, h("label", {}, "Instance"), who),
     h("button", { class: "btn pri", type: "button", onclick: save }, "Save as zip"));
 }

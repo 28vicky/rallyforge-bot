@@ -493,8 +493,8 @@ function instancePage(serial) {
     return [wrapS];
   };
   const mapPanel = () => panel("Map the city",
-    note("The bot needs to know where the buildings are. Scan city reads the names while it holds a finger on the screen. Map by hand and Map by squares are the manual ways when scanning does not fit your city style."),
-    h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } }, btn("Scan city", () => scanCityFlow(serial)), btn("Map by hand", () => manualMapFlow(serial)), btn("Map by squares", () => scanCityTapsFlow(serial))));
+    note("The bot needs to know where the buildings are. Scan city reads the names while it holds a finger on the screen. Map by hand is the manual way when scanning does not fit your city style."),
+    h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } }, btn("Scan city", () => scanCityFlow(serial)), btn("Map by hand", () => manualMapFlow(serial))));
   // Settings tab: section menu on the left (Advanced dimmed, last), Save / Discard bar pinned to the bottom
   const settingsTab = () => {
     const snap = clone(ov);
@@ -585,7 +585,7 @@ function instItinerary(serial) {
     const mk = (f) => d.filter(f).map((x) => ({ when: x.text, name: x.title }));
     const mine = (j.events || []).filter((e) => row && e.emu === row.emu).slice(0, 12).map((e) => ({ when: fmtT(e.t), name: e.task + (e.ok ? "" : " - failed" + (e.msg ? ": " + e.msg : "")) }));
     root.innerHTML = "";
-    const parts = [grp("Overdue - waiting to run", mk((x) => x.status === "due" || x.status === "retry"), true), grp("Gave up today", mk((x) => x.status === "gaveup"), true),
+    const parts = [grp("Overdue - waiting to run", mk((x) => x.status === "due" || x.status === "retry"), true), grp("Failing - tried again every hour", mk((x) => x.status === "gaveup"), true),
       grp("Coming up", mk((x) => x.status === "waiting")), grp("Done today", mk((x) => x.status === "done")), grp("Latest things the bot did here", mine)].filter(Boolean);
     root.appendChild(panel("Itinerary",
       note("What this instance has to do, in plain order. Red = late or given up. Switch things on or off under Duties and Tasks; changes are picked up without stopping the instance."),
@@ -732,7 +732,7 @@ function staminaPanel(store, base) {
     note("Full = slides the bar to the very end, so stamina fills up to the game's limit (9,999) - the default. The game's own Max button is not used (it stops at 100). Game default = the amount the game suggests (2 items). Exact number = the number of items you type."));
 }
 PAGES.settings = function () {
-  const r = PAGES.settings0(); r.insertBefore(panel("Tour", note("A short walkthrough of where to click and how to set up your presets and start the bot."), h("div", { class: "row" }, btn("Take the tour", () => startTour()))), r.firstChild); const t = PAGES.themes(); const f = r.firstChild; while (t.firstChild) r.insertBefore(t.firstChild, f); return r;
+  const r = PAGES.settings0(); r.insertBefore(panel("Tour", note("A short walkthrough of where to click and how to set up your presets and start the bot."), h("div", { class: "row" }, btn("Take the tour", () => startTour()))), r.firstChild); return r;                  // themes live on their own Themes tab only
 };
 PAGES.settings0 = function () {
   const c = S.cfg;
@@ -1344,6 +1344,16 @@ PAGES.duties = function (fixed, only, compact) {
   let serial = fixed || "";                       // "" = all instances (the default); an instance id = that instance's own copy
   let rows = [], own = {};
   const GROUPS = ["Reward claims", "Daily activities", "Common tasks"];
+  // a duty's own settings (Resource Tax resource, training amount, speed-ups ...), saved with the duty
+  const dutyOpts = (r) => h("div", { class: "row", style: { flexWrap: "wrap", gap: "14px", padding: "4px 0 10px 46px" } },
+    r.opts.map((o) => {
+      const save = async (v) => { const j = await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } })); if (j) { rows = j.duties; own = j.own || {}; draw(); } };
+      if (o.type === "bool") return h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label));
+      if (o.type === "select") return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
+        h("select", { onchange: (e) => save(e.target.value) }, o.choices.map((c) => h("option", { value: c, selected: c === o.val }, c))));
+      return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
+        h("input", { type: "number", min: o.min, max: o.max, value: o.val, style: { width: "110px" }, onchange: (e) => save(e.target.value) }));
+    }));
   const draw = () => {
     root.innerHTML = "";
     if (fixed === undefined) root.appendChild(hist);
@@ -1364,7 +1374,7 @@ PAGES.duties = function (fixed, only, compact) {
       return;
     }
     if (!only) root.appendChild(panel("Duties",
-      note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes, retries 3 times a day if it fails, then waits for the next reset. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
+      note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes. If it fails, the bot goes back to the rallies and tries again every hour until it is done; after 3 failures you get an alert and a report is saved. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
       h("div", { class: "row" }, fixed !== undefined ? null : h("span", { class: "lab" }, "Settings for"), fixed !== undefined ? null : pick,
         serial && own.duties ? h("span", { class: "chip own" }, "own settings") : null,
         serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the universal setting") : null),
@@ -1378,7 +1388,9 @@ PAGES.duties = function (fixed, only, compact) {
         h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" }), h("b", {}, r.title)),
         h("span", { class: "hint", style: { flex: "1", margin: "0 14px" } }, r.note, " · ", r.schedule),
         r.verified ? null : h("span", { class: "chip", title: "Steps are a first guess and have not been watched on a real instance yet" }, "untested"),
-        h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text)),
+        h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text),
+        r.status === "gaveup" ? h("button", { class: "btn sm", style: { marginLeft: "8px" }, onclick: async () => { const j = await act(api("duty_retry", { serial, id: r.id })); if (j) { rows = j.duties; own = j.own || {}; draw(); toast("It runs again shortly.", "ok"); } } }, "Retry") : null),
+        (r.on && r.opts && r.opts.length) ? dutyOpts(r) : null,
         (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null, (r.on && r.id === "wheel") ? wh : null,
         (only && !r.on) ? note("Switch it on above and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean))));
     }
@@ -1477,7 +1489,10 @@ PAGES.duties = function (fixed, only, compact) {
         h("span", { class: "hint" }, "e.g. 100, 1000 or 999999. Empty / 0 = spin until the coins are used up.")),
       h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Coins to keep"),
         h("input", { type: "number", class: "short", min: 0, value: c.reserve || "", placeholder: "0", onchange: (ev) => set({ reserve: ev.target.value }) }),
-        h("span", { class: "hint" }, "never spin if it would leave fewer coins than this"))));
+        h("span", { class: "hint" }, "never spin if it would leave fewer coins than this")),
+      h("div", { class: "row", style: { gap: "8px", marginTop: "8px" } }, h("span", { class: "lab" }, "Add chips first"),
+        [["off", "Off"], ["needed", "Only what's needed"], ["all", "All owned"]].map(([v, t]) => h("button", { class: "btn" + ((c.chips || "off") === v ? " primary" : ""), onclick: () => set({ chips: v }) }, t))),
+      note("Uses chip items you already own (100 / 500 / 1K Chips) before spinning. Items sold for gems are never bought.")));
   };
   const loadWh = async () => { const j = await act(api("wheel", { serial })); if (j) drawWh(j); };
   // Champions: how many of the daily 15 taps and 10 greetings each champion gets (this instance or all)
@@ -1528,13 +1543,17 @@ const ROUTINE_GROUPS = [
   ["protect", "Protection", "Keep the account safe"],
 ];
 const DUTY_GROUP = { champions: "daily", crazy_eggs: "daily", wheel: "daily", login_gifts: "daily", mail: "daily",
-  alliance_help: "alliance", alliance_gift: "alliance", alliance_science: "alliance",
-  collect_resources: "city", black_market: "shops" };
+  alliance_help: "alliance", alliance_gift: "alliance", alliance_science: "alliance", alliance_treasure: "alliance",
+  collect_resources: "city", black_market: "shops",
+  gold_levy: "city", resource_tax: "city", labor: "city", troop_healing: "city", train_troops: "city", build_traps: "city",
+  offering_tributes: "city", trade_carriage: "city", gate_visitors: "city",
+  general_chest: "daily", vip_claim: "daily", recruit_citizens: "daily", civilization_card: "daily", empire_depot: "daily",
+  lucky_raffle: "daily", refining_card: "daily", ranger_knight: "daily", activity_chests: "daily",
+  wisdom_dome_tokens: "shops" };
 const DUTY_OPEN = { black_market: "market", collect_resources: "map" };
 const ROUTINE_SOON = [
   ["rally", "Stamina limit + top-up", "Stop joining below a stamina floor"],
   ["rally", "Recall stuck marches", "Pull back marches that hang"],
-  ["city", "Gold Levy", "Keep \u203a Levy"], ["city", "Resource Tax", "Keep \u203a Tax"], ["city", "Shrine offering", "Shrine \u203a Offer"],
   ["shops", "Daily store items", "Free and cheap daily packs", "spend"],
   ["protect", "Shield keep", "Renew before it expires"], ["protect", "Attack alert", "Telegram message on incoming attack"],
 ];
@@ -1582,7 +1601,7 @@ function routinesCards(serial, ov, details) {
     for (const r of duties) {
       const g = DUTY_GROUP[r.id];
       if (!g) continue;                                  // test / developer duties stay on the full duty list only
-      out.push({ g, t: r.title, n: r.note, on: r.on, st: r.on ? r.status_text : null, stc: (badge[r.status] || [""])[0], spend: r.id === "black_market",
+      out.push({ g, t: r.title, n: r.note, on: r.on, st: r.on ? r.status_text : null, stc: (badge[r.status] || [""])[0], spend: r.id === "black_market" || !!r.gems,
         set: async (v) => { const j = await act(api("duty_set", { serial, id: r.id, on: v })); if (j) { duties = j.duties; draw(); } }, open: DUTY_OPEN[r.id] || "duties" });
     }
     out.push({ g: "city", t: "City tasks", n: "Your own tap lists, run when no rally is waiting", on: eff("city_enabled") !== false, set: (v) => setCfg("city_enabled", v), open: "tasks" });
