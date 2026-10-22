@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.93", date: "2026-10-22",
+    new: [],
+    fixed: ["Black Market stops within about a second when you press Stop - no extra refresh after Stop."] },
   { v: "2.4.92", date: "2026-10-22",
     new: [],
     fixed: ["When the game stops updating an instance's rally list (old rallies keep counting down, new ones never show), the bot notices that other instances see rallies it does not, and reopens the list - and restarts Evony if that does not help.",
