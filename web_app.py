@@ -107,6 +107,7 @@ class Controller:
         self.last_poll = time.time()
         self._ram_warned = 0
         self._trim_n = 0
+        self._late_seen = {}
         self.sync_devices()
         threading.Thread(target=self._maintenance, daemon=True).start()
 
@@ -128,6 +129,13 @@ class Controller:
                             rec["busy_until"] = 0
                     d["t"] = time.strftime("%H:%M:%S")
                     self.acts.append((self.seq, serial, name, d))
+                    if serial and d.get("k") == "join":
+                        rb.count_today(serial, "join")
+                    elif serial and d.get("k") == "skip" and str(d.get("why", "")).startswith("not enough time"):
+                        key = (serial, d.get("mon"))                 # the same late rally is reported again every few seconds: count it once
+                        if time.time() - self._late_seen.get(key, 0) > 90:
+                            self._late_seen[key] = time.time()
+                            rb.count_today(serial, "late")
                 except Exception:
                     pass
                 return
@@ -1503,6 +1511,27 @@ class Api:
             row["every_min"] = max(0, min(int(float(p["every_min"])), 10080))
         self._save_scoped(scope, "duties", duties)
         return self.duties(p)
+
+    def today(self, p):
+        """Today card: game reset countdown and, per instance, duties done, joins and late skips (this game day + last 7)."""
+        stats, day = rb.day_stats(), rb._game_day()
+        st = {r["id"]: r for r in self.c.status_list()}
+        rows = []
+        for d in self.c.devices:
+            s = d["id"]
+            eff = rb.merge_device_cfg(self.c.cfg, s)
+            on = done = 0
+            for du in rb.DUTY_LIBRARY:
+                k, _ = rb.duty_status(s, du["id"], eff)
+                if k != "off":
+                    on += 1
+                    done += k == "done"
+            today = (stats.get(day) or {}).get(s, {})
+            rows.append({"id": s, "name": (st.get(s) or {}).get("name") or d.get("name") or s,
+                         "state": (st.get(s) or {}).get("state", "off"), "duties_on": on, "duties_done": done,
+                         "join": int(today.get("join", 0)), "late": int(today.get("late", 0)),
+                         "week_join": sum(int((v.get(s) or {}).get("join", 0)) for v in stats.values())})
+        return {"reset_in": rb.game_reset_in(), "rows": rows}
 
     def task_history(self, p):
         """What the bot did: today's state per emulator and duty, plus the latest task events."""

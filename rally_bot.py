@@ -9458,6 +9458,40 @@ def task_event(serial, task, ok, msg=""):
         pass
 
 
+DAY_STATS = USER / "day_stats.json"        # {game day: {serial: {"join": n, "late": n}}}, last 8 game days, for the Today card
+_day_lock = threading.Lock()
+
+
+def count_today(serial, key):
+    """Add one to today's counter (game day, changes at the game reset) for this instance."""
+    with _day_lock:
+        try:
+            d = json.loads(DAY_STATS.read_text(encoding="utf-8"))
+        except Exception:
+            d = {}
+        row = d.setdefault(_game_day(), {}).setdefault(serial, {})
+        row[key] = int(row.get(key, 0)) + 1
+        for old in sorted(d)[:-8]:
+            d.pop(old, None)
+        try:
+            DAY_STATS.write_text(json.dumps(d), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def day_stats():
+    try:
+        return json.loads(DAY_STATS.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def game_reset_in():
+    """Seconds until the next game reset (the game day changes then)."""
+    now = time.time()
+    return int(86400 - (now - _RESET_MIN[0] * 60) % 86400)
+
+
 def read_task_events(n=150):
     try:
         lines = TASK_LOG.read_text(encoding="utf-8").splitlines()[-n:]

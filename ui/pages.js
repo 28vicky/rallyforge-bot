@@ -160,8 +160,39 @@ PAGES.dashboard = function () {
     btn("Resume all", () => act(api("resume"))),                   // Start / Pause / Stop all live in the top bar and the sidebar
     btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
   const log = panel(null, activityBox(null, "Activity - all instances"));
-  return h("div", {}, found, dev, ctl, log);
+  return h("div", {}, todayCard(), found, dev, ctl, log);
 };
+// ---- Today card (all instances): game reset countdown + per instance duties done, joins and late skips this game day
+function todayCard() {
+  const reset = h("span", { class: "mute" }), body = h("tbody", {}), week = h("div", { class: "mute", style: { fontSize: "12px", marginTop: "8px" } });
+  const th = (t, al) => h("th", { style: { textAlign: al || "left", padding: "6px 10px", fontSize: "11.5px", letterSpacing: ".06em", color: "var(--mute)", borderBottom: "1px solid var(--line)" } }, t);
+  const td = (v, al, st) => h("td", { style: Object.assign({ textAlign: al || "left", padding: "7px 10px", borderBottom: "1px solid var(--line)" }, st || {}) }, v);
+  const hm = (s) => { const m = Math.max(0, Math.round(s / 60)); return (m >= 60 ? Math.floor(m / 60) + "h " : "") + (m % 60) + "m"; };
+  const card = panel(null,
+    h("div", { class: "row", style: { alignItems: "center", marginBottom: "6px" } }, h("h3", { style: { margin: 0 } }, "Today · all instances"),
+      h("span", { style: { marginLeft: "auto", fontSize: "13px" } }, "Game reset in ", reset)),
+    h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "13.5px" } },
+      h("thead", {}, h("tr", {}, th("INSTANCE"), th("DUTIES"), th("JOINS", "right"), th("SKIPPED (LATE)", "right"))), body), week);
+  const load = async () => {
+    if (!card.isConnected && card.dataset.done) return;
+    card.dataset.done = 1;
+    let j; try { j = await api("today", {}, { quiet: true }); } catch (e) { return; }
+    const at = new Date(Date.now() + j.reset_in * 1000);
+    reset.replaceChildren(h("b", { style: { color: "var(--fg)" } }, hm(j.reset_in)), " · " + at.toTimeString().slice(0, 5) + " your time");
+    body.replaceChildren(...j.rows.map((r) => {
+      const off = r.state !== "run", all = r.duties_on && r.duties_done >= r.duties_on;
+      return h("tr", { style: off ? { opacity: ".5" } : {} },
+        td(h("span", {}, h("b", {}, r.name), off ? h("span", { class: "mute" }, " " + (r.state === "off" ? "stopped" : r.state)) : null)),
+        td(r.duties_on ? r.duties_done + "/" + r.duties_on + (all ? " ✓" : "") : h("span", { class: "mute" }, "none on"), "left", all ? { color: "var(--good)", fontWeight: 600 } : null),
+        td(String(r.join), "right"), td(String(r.late), "right", r.late ? { color: "var(--warn)" } : null));
+    }));
+    const wk = j.rows.reduce((a, r) => a + r.week_join, 0);
+    week.textContent = "Last 8 game days: " + wk + " joins. Counting started with this version.";
+    setTimeout(load, 30000);
+  };
+  load();
+  return card;
+}
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
 const TAB_CHOICES = ["Leave as is", "All", "Military", "Development", "Duty", "Subordinate City"];   // index = tab number in the game (0 = do not switch)
