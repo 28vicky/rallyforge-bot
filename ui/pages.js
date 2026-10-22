@@ -160,7 +160,7 @@ PAGES.dashboard = function () {
     btn("Resume all", () => act(api("resume"))),                   // Start / Pause / Stop all live in the top bar and the sidebar
     btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
   const log = panel(null, activityBox(null, "Activity - all instances"));
-  return h("div", {}, found, dev, ctl, log);
+  return h("div", {}, renderTodayAll(), found, dev, ctl, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
@@ -1231,6 +1231,64 @@ function renderTodayCard(serial) {
     tick(); paint();
   };
   paint(); tick();
+  const t1 = setInterval(() => { if (!card.isConnected) { clearInterval(t1); return; } tick(); }, 1000);
+  const t2 = setInterval(() => { if (!card.isConnected) { clearInterval(t2); return; } load(); }, 5000);
+  setTimeout(load, 0);
+  return card;
+}
+
+// ====================================================================== Today - all instances (Dashboard, nothing selected)
+function renderTodayAll() {
+  const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {});
+  const card = h("div", { class: "panel today" },
+    h("div", { class: "cardhead" }, h("h3", {}, "Today \u00b7 all instances"), head), ce,
+    h("table", { class: "tdall" },
+      h("thead", {}, h("tr", {}, ...["Instance", "Shield", "Buff", "Duties", "Joins", "Skipped (late)"].map((c) => h("th", {}, c)))), body));
+  let j = null, last = "";
+  const skew = () => (j ? j.now - Date.now() / 1000 : 0);
+  const tick = () => {
+    if (!j) { head.textContent = "Daily reset -"; return; }
+    head.textContent = `Daily reset in ${fmtLeft(j.reset_at - (Date.now() / 1000 + skew()))} \u00b7 ${hhmm(j.reset_at)} your time`;
+  };
+  const open = (serial) => { S.sel = serial; S.instTab = "ov"; renderSide(); renderTabs(); renderPage(); };
+  const turnOn = async (e) => {
+    e.preventDefault();
+    const r = await act(api("crazy_eggs_on_all"));
+    if (r) { j = r; last = ""; paint(); toast("Crazy Eggs switched on for every instance.", "ok"); }
+  };
+  const paint = () => {
+    if (!j) return;
+    const st = {}; (S.devStatus || []).forEach((d) => (st[d.id] = d.state));
+    const key = JSON.stringify([j.rows, j.crazy_eggs, st]);
+    if (key === last) return;                                               // nothing changed: no flicker
+    last = key;
+    const c = j.crazy_eggs || { total: 0, off: [] };
+    ce.innerHTML = "";
+    ce.className = "tdce" + (c.off.length ? " off" : "");
+    ce.append(h("b", {}, "Crazy Eggs"), " ");
+    if (!c.total) ce.append(h("span", {}, "no instances yet"));
+    else if (!c.off.length) ce.append(h("span", {}, `on for all ${c.total} instance${c.total > 1 ? "s" : ""}`));
+    else ce.append(h("span", { title: "Off on: " + c.off.join(", ") }, `\u26a0 off on ${c.off.length} of ${c.total}`), " \u00b7 ",
+      h("a", { href: "#", title: "Switch the Crazy Eggs duty on for every instance", onclick: turnOn }, "turn on"));
+    body.innerHTML = "";
+    if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: "6", class: "mute" }, "No instances in your list yet.")));
+    j.rows.forEach((r) => {
+      const off = !["run", "pause"].includes(st[r.serial]);
+      const all = r.duties_total && r.duties_done >= r.duties_total;
+      body.appendChild(h("tr", { class: off ? "off" : "", title: "Open " + r.name, onclick: () => open(r.serial) },
+        h("td", {}, h("b", {}, r.name), off ? h("small", {}, " offline") : null),
+        h("td", { title: "Not read from the game yet" }, "-"), h("td", { title: "Not read from the game yet" }, "-"),
+        h("td", { class: all ? "ok" : "" }, r.duties_total ? `${r.duties_done}/${r.duties_total}` + (all ? " \u2713" : "") : "-"),
+        h("td", {}, String(r.joins)), h("td", {}, String(r.late))));
+    });
+  };
+  const load = async () => {
+    if (!card.isConnected) return;
+    const r = await api("today_all", {}, { quiet: true }).catch(() => null);
+    if (r) j = r;
+    tick(); paint();
+  };
+  tick();
   const t1 = setInterval(() => { if (!card.isConnected) { clearInterval(t1); return; } tick(); }, 1000);
   const t2 = setInterval(() => { if (!card.isConnected) { clearInterval(t2); return; } load(); }, 5000);
   setTimeout(load, 0);

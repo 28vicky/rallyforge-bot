@@ -1564,6 +1564,34 @@ class Api:
                 "week": {"days": len(week), "joins": sum(int(w.get("joins", 0)) for w in week),
                          "restarts": sum(int(w.get("restarts", 0)) for w in week)}}
 
+    def today_all(self, p):
+        """Dashboard (nothing selected): one row per instance from today() + which instances have Crazy Eggs off.
+        Shield / buff are not read from the game yet, so they are not sent."""
+        rows, ce_off = [], []
+        for d in self.c.devices:
+            if not d.get("id"):
+                continue
+            t = self.today({"serial": d["id"]})
+            q = t["queue"]
+            rows.append({"serial": d["id"], "name": t["name"], "duties_done": t["results"]["duties_done"], "duties_total": len(q),
+                         "joins": t["results"]["joins"], "late": t["results"]["late"]})
+            if not ((self._eff(d["id"]).get("duties") or {}).get("crazy_eggs") or {}).get("on"):
+                ce_off.append(t["name"])
+        now = time.time()
+        rm = rb._RESET_MIN[0] * 60
+        return {"now": now, "reset_at": ((now - rm) // 86400 + 1) * 86400 + rm, "rows": rows,
+                "crazy_eggs": {"total": len(rows), "off": ce_off}}
+
+    def crazy_eggs_on_all(self, p):
+        """'turn on' link of the Crazy Eggs alert: switch the crazy_eggs duty on in the universal list
+        and in every instance that has its own duties copy. Nothing else in the settings changes."""
+        self.duty_set({"id": "crazy_eggs", "on": True})
+        own = [s for s, v in (self.c.cfg.get("per_device") or {}).items() if "duties" in (v or {})]
+        for s in own:
+            if s in [d["id"] for d in self.c.devices]:
+                self.duty_set({"id": "crazy_eggs", "on": True, "serial": s})
+        return self.today_all(p)
+
     def duty_set(self, p):
         did = str(p.get("id", ""))
         if did not in rb.DUTY_BY_ID:

@@ -1089,3 +1089,16 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .tdres .stile{box-sizing:border-box;height:100%;justify-content:space-between}
 .tdweek{display:block;margin-top:12px;color:var(--mute)}
 
+/* Today - all instances (Dashboard): Crazy Eggs alert line + one row per instance */
+.tdce{margin-top:8px;font-size:13px;color:var(--mute);line-height:20px}
+.tdce b{color:var(--fg);font-weight:600}
+.tdce.off span{color:var(--bad)}
+.tdce a{color:var(--bad);font-weight:600;text-decoration:underline}
+.tdall{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px;font-variant-numeric:tabular-nums}
+.tdall th{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-align:left;color:var(--fg);opacity:.78;padding:6px 8px;border-bottom:1px solid var(--line)}
+.tdall td{padding:7px 8px;border-top:1px solid var(--line)}
+.tdall tbody tr{cursor:pointer}
+.tdall tbody tr:hover td{background:color-mix(in srgb,var(--fg) 5%,transparent)}
+.tdall tr.off td{color:var(--mute);opacity:.6}
+.tdall td small{color:var(--mute)}
+.tdall td.ok{color:var(--good)}
