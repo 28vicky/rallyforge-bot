@@ -98,17 +98,17 @@ function ico(name, cls) {
   return e;
 }
 const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", monsters: "sword", tasks: "list", duties: "clock", market: "bag", logs: "file",
-  telegram: "send", reliability: "shield", schedule: "bell", updates: "down", themes: "palette", license: "key" };
+  instances: "users", telegram: "send", reliability: "shield", schedule: "bell", updates: "down", themes: "palette", license: "key" };
 
 const TABS = [
-  ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
+  ["dashboard", "Dashboard"], ["instances", "Instances"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
   ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["telegram", "Telegram & Discord"], ["reliability", "Reliability"],
   ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Themes"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
 
 // ------------------------------------------------------------------ theme
-const DARK_ON = false;                            // dark mode hidden for now (owner 21 Oct); the saved choice (ui_mode) is kept, only the light look is shown
+const DARK_ON = true;                             // dark mode back for a try (owner 22 Oct); the saved choice (ui_mode) is used as before
 function resolvedMode() {
   if (!DARK_ON) return "light";
   const m = S.cfg.ui_mode || "light";
@@ -168,17 +168,26 @@ function setTheme(pal, mode, save) {
 matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => { if (S.cfg.ui_mode === "auto") applyTheme(); });
 
 // ------------------------------------------------------------------ dropdown menu
+// put a fixed menu right under its button; the Text size option zooms the page, which can push a fixed menu away from its button - measure and correct
+function placeUnder(m, r) {
+  m.style.left = r.left + "px"; m.style.top = (r.bottom + 6) + "px";
+  const got = m.getBoundingClientRect();
+  const k = r.left > 0 && got.left > 0 ? got.left / r.left : 1;
+  if (Math.abs(k - 1) > 0.02) { m.style.left = (r.left / k) + "px"; m.style.top = ((r.bottom + 6) / k) + "px"; }
+  return k;
+}
 function menu(anchor, items) {
   document.querySelectorAll(".pop").forEach((p) => p.remove());
   const r = anchor.getBoundingClientRect();
-  const m = h("div", { class: "pop", style: { position: "fixed", left: r.left + "px", top: r.bottom + 6 + "px", zIndex: 70,
+  const m = h("div", { class: "pop", style: { position: "fixed", zIndex: 70,
     background: "var(--card)", border: "1px solid var(--line)", borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,.12)", padding: "6px", minWidth: "210px" } },
     items.map((it) => h("div", { class: "li", onclick: () => { m.remove(); it.run(); } }, it.icon ? ico(it.icon) : null, it.label)));
   document.body.appendChild(m);
+  const k = placeUnder(m, r);
   // keep the whole menu inside the window: a button near the right edge opens it leftwards, near the bottom upwards
   const mr = m.getBoundingClientRect();
-  if (mr.right > innerWidth - 8) m.style.left = Math.max(8, Math.min(r.right, innerWidth - 8) - mr.width) + "px";
-  if (mr.bottom > innerHeight - 8) m.style.top = Math.max(8, r.top - 6 - mr.height) + "px";
+  if (mr.right > innerWidth - 8) m.style.left = (Math.max(8, Math.min(r.right, innerWidth - 8) - mr.width) / k) + "px";
+  if (mr.bottom > innerHeight - 8) m.style.top = (Math.max(8, r.top - 6 - mr.height) / k) + "px";
   const off = (e) => { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("mousedown", off, true); } };
   setTimeout(() => document.addEventListener("mousedown", off, true), 0);
 }
@@ -209,8 +218,7 @@ function layout() {
         h("button", { class: "btn sm newbtn", id: "newBtn", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "What\u2019s new"),
         h("span", { class: "sum", id: "sum" }),
         h("div", { class: "iconbtn", id: "modeBtn", title: "Dark / light", onclick: quickMode })),
-      h("div", { class: "ribbon", id: "ribbon" }),
-      h("div", { class: "tabs", id: "tabs" }),
+      h("div", { class: "navrow" }, h("div", { class: "tabs", id: "tabs" }), h("div", { class: "ribbon", id: "ribbon" })),
       h("div", { class: "pages", id: "pages" })),
     // status bar: live facts on the left (running, memory, Telegram, account), update + credit on the right
     h("div", { class: "status" },
@@ -274,18 +282,15 @@ function buildRibbon() {
       btn("Start", () => { if (S.sel === "control" && allPaused()) return act(api("resume")); if (S.sel === "control") { S.startingAt = Date.now(); paintRunState(); } collectAndRun("start", { serial: target() }); }, "pri", "play"),
       btn("Pause", () => act(api("pause", { serial: target() })), "", "pause"),
       btn("Stop", () => { S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop"), h("span", { class: "ribcount", id: "ribCount" })),
-    grp("Scan",
-      btn("Generals", () => openGeneralManager(), "", "users"),
-      ...(S.dev ? [btn("Scan generals", () => scanGeneralsFlow(), "", "scan")] : []),
-      btn("Scan city", () => scanCityFlow(S.sel === "control" ? undefined : S.sel), "", "city"), btn("Map by hand", () => manualMapFlow(S.sel === "control" ? undefined : S.sel), "", "pin"), btn("Map by squares", () => scanCityTapsFlow(), "", "city")),
-    grp("Data",
-      btn("Profiles ▾", (e) => menu(e.currentTarget, [
-        { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user"),
-      btn("Logs", () => { S.sel = "control"; pickTab("logs"); renderSide(); }, "", "file")),
-    grp("App",
-      btn("Updates", () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); }, "", "refresh"),
-      btn("Save", saveAll, "", "save"),
-      btn("More ▾", (e) => menu(e.currentTarget, [
+    grp("Tools",
+      btn("Tools \u25be", (e) => menu(e.currentTarget, [
+        { label: "Generals...", icon: "users", run: () => openGeneralManager() },
+        ...(S.dev ? [{ label: "Scan generals", icon: "scan", run: () => scanGeneralsFlow() }] : []),
+        { label: "Scan city", icon: "city", run: () => scanCityFlow(S.sel === "control" ? undefined : S.sel) },
+        { label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) },
+        { label: "Map by squares", icon: "city", run: () => scanCityTapsFlow() },
+        { label: "Save settings", icon: "save", run: saveAll },
+        { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow },
         { label: "Close window (bots keep running)", icon: "eye", run: () => act(api("hide_window")) },
         { label: "Restart app", icon: "refresh", run: restartFlow }, { label: "Quit and stop everything", icon: "power", run: quitFlow }]), "", "more")));
 }
@@ -434,7 +439,7 @@ function sideDrag(el, id) {
       toast("Order saved.", "ok");
     }
     renderSide();
-    if (S.sel === "control" && S.tab === "dashboard") rerender();
+    if (S.sel === "control" && ["dashboard", "instances"].includes(S.tab)) rerender();
   });
 }
 // Paused instances count down to their automatic restart; one 1-second ticker updates every timer in place
@@ -516,6 +521,7 @@ function ribbonLabels() {
 }
 const TAB_GROUPS = [
   ["dashboard", "Dashboard", null],
+  ["instances", "Instances", null],
   ["presets", "Presets & generals", null],
   ["monsters", "Monsters", null],
   ["tasks", "Tasks", null],
@@ -540,9 +546,8 @@ function openTabMenu(btn, items) {
     const l = (TABS.find((x) => x[0] === k) || [k, k])[1];
     m.appendChild(h("button", { class: "tmi" + (S.tab === k ? " on" : ""), role: "menuitem", onclick: () => pickTab(k) }, ico(TAB_ICO[k] || "grid"), l));
   }
-  m.style.left = Math.max(8, Math.min(r.left, innerWidth - 230)) + "px";
-  m.style.top = (r.bottom + 6) + "px";
   document.body.appendChild(m);
+  placeUnder(m, r);
   document.addEventListener("mousedown", tabMenuOutside, true);
   document.addEventListener("keydown", tabMenuKey, true);
 }
@@ -742,7 +747,7 @@ function actNow(serial) {
   const rows = Object.entries(S.now).map(([s, x]) => `${x.n}: ${x.text}`);
   return rows.length ? rows.join("\n") : "Waiting for the bot to start...";
 }
-function activityBox(serial, title) {
+function activityBox(serial, title, joinsOnly) {
   const now = h("div", { class: "actnow" }), stats = h("div", { class: "actstats" });
   const head = ["Time", serial === null ? "Instance" : null, "Monster", "Rally left", "Result", "Details", "Took"].filter(Boolean);
   const body = h("tbody", {});
@@ -751,6 +756,7 @@ function activityBox(serial, title) {
   actViews.push(view);
   for (const l of S.acts.slice(-200)) if (l.a.k !== "step" && (serial === null || l.s === serial)) placeActRow(body, actRow(view, l));
   now.textContent = actNow(serial); paintStats(stats, serial);
+  if (joinsOnly) return h("div", { class: "actright joinsonly" }, h("h3", {}, "Monster joins"), wrap);
   return h("div", { class: "actsplit" },
     h("div", { class: "actleft" }, h("h3", {}, title || "Activity"), h("div", { class: "actbar" }, h("span", { class: "actlab" }, "Now"), now), stats),
     h("div", { class: "actright" }, h("h3", {}, "Monster joins"), wrap));
@@ -866,7 +872,7 @@ function updateSummary() {
 async function handleEvent(ev) {
   const d = ev.d || {};
   if (ev.k === "toast") toast(d.msg, d.kind);
-  else if (ev.k === "devices") { const j = await act(api("state")); if (j) { S.devices = j.devices; if (S.sel === "control" && S.tab === "dashboard") rerender(); } }
+  else if (ev.k === "devices") { const j = await act(api("state")); if (j) { S.devices = j.devices; if (S.sel === "control" && ["dashboard", "instances"].includes(S.tab)) rerender(); } }
   else if (ev.k === "bosses") { const j = await act(api("state", {}, { quiet: true })); if (j) { S.bosses = j.bosses; if (window.refreshBosses) refreshBosses(); } }
   else if (ev.k === "city_done") { const sr = ev.d && ev.d.serial; if (sr) { S.cityDone = { ...(S.cityDone || {}), [sr]: true }; if (S.cityJobs) delete S.cityJobs[sr]; if (window.drawCityProgress) drawCityProgress(); } else { closeScanBox(); if (window.showCityResult) showCityResult(); } const j = await act(api("state")); if (j) { S.cityInfo = j.city_info; if (window.refreshCityInfo) refreshCityInfo(); } toast("City mapper finished.", "ok"); }
   else if (ev.k === "scan_done") scanGeneralsDone(d);

@@ -482,11 +482,11 @@ async function detectDevices(quiet) {
   if (!j) return;
   S.devices = j.devices;
   S.avail = j.available || [];
-  if (quiet === true && !(j.found && S.avail.length)) { if (S.sel === "control" && S.tab === "dashboard") rerender(); return; }
+  if (quiet === true && !(j.found && S.avail.length)) { if (S.sel === "control" && ["dashboard", "instances"].includes(S.tab)) rerender(); return; }
   if (j.found === null) toast("ADB not found. Set the ADB path in Settings.", "error");
   else if (!j.found.length) toast("No instances found. Start them and enable ADB.", "error");
   else toast(S.avail.length ? `Found ${j.found.length} instance(s). ${S.avail.length} are not in your list yet - press Add next to the ones you want.` : `Found ${j.found.length} instance(s) - all of them are already in your list.`, "ok");
-  if (S.sel === "control" && S.tab === "dashboard") rerender();
+  if (S.sel === "control" && ["dashboard", "instances"].includes(S.tab)) rerender();
 }
 
 // ------------------------------------------------------------------ city task editor

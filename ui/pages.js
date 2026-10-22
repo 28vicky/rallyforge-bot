@@ -122,7 +122,15 @@ function maxToggle(panelEl) {
 const PAGES = {};
 
 // ====================================================================== dashboard
+// Dashboard: one Today card for every instance + monster joins; adding / editing instances lives on the Instances tab
 PAGES.dashboard = function () {
+  const avail = (S.avail || []).filter((a) => !S.devices.some((d) => d.id === a.id));
+  const hint = avail.length ? h("div", { class: "foundhint" }, `${avail.length} new emulator${avail.length > 1 ? "s" : ""} found \u00b7 `,
+    h("a", { href: "#", onclick: (e) => { e.preventDefault(); pickTab("instances"); } }, "Add them")) : null;
+  return h("div", {}, hint, renderTodayAll(), panel(null, activityBox(null, null, true)));
+};
+// ====================================================================== instances (list, detect, found, profiles)
+PAGES.instances = function () {
   const rows = h("div", {});
   const applyDevs = () => act(api("set_devices", { devices: S.devices }, { quiet: true })).then(() => poll1());
   const draw = () => {
@@ -158,9 +166,9 @@ PAGES.dashboard = function () {
     avail.length > 1 ? h("div", { class: "row", style: { marginTop: "8px" } }, btn("Add all " + avail.length, () => addFound(avail.map((a) => a.id)), "sm")) : null) : null;
   const ctl = h("div", { class: "row", style: { marginBottom: "16px" } },
     btn("Resume all", () => act(api("resume"))),                   // Start / Pause / Stop all live in the top bar and the sidebar
-    btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
-  const log = panel(null, activityBox(null, "Activity - all instances"));
-  return h("div", {}, renderTodayAll(), found, dev, ctl, log);
+    btn("Save settings", saveAll),
+    btn("More \u25be", (e) => menu(e.currentTarget, [{ label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }])));
+  return h("div", {}, ctl, found, dev);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
@@ -1233,16 +1241,23 @@ function renderTodayCard(serial) {
 
 // ====================================================================== Today - all instances (Dashboard, nothing selected)
 function renderTodayAll() {
-  const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {});
+  const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {}), stats = h("div", { class: "actstats tdtiles" });
+  const nowCells = {};                                                    // serial -> "Doing now" cell, refreshed every second
   const card = h("div", { class: "panel today" },
-    h("div", { class: "cardhead" }, h("h3", {}, "Today \u00b7 all instances"), head), ce,
-    h("table", { class: "tdall" },
-      h("thead", {}, h("tr", {}, ...["Instance", "Shield", "Buff", "Duties", "Joins", "Skipped (late)"].map((c) => h("th", {}, c)))), body));
+    h("div", { class: "cardhead" }, h("h3", {}, "Today \u00b7 all instances"), head), ce, stats,
+    h("div", { class: "tdscroll" }, h("table", { class: "tdall" },
+      h("thead", {}, h("tr", {}, ...["Instance", "Doing now", "Duties", "Joins", "Skipped (late)", "Failed", "Shield", "Buff"].map((c) => h("th", {}, c)))), body)));
+  const fails = (serial) => S.acts.filter((l) => l.s === serial && l.a.k === "fail").length;
+  const paintNow = () => {
+    paintStats(stats, null);
+    for (const [s, td] of Object.entries(nowCells)) { const x = S.now[s]; const t = x ? x.text : "-"; if (td.textContent !== t) { td.textContent = t; td.title = t; } }
+  };
   let j = null, last = "";
   const skew = () => (j ? j.now - Date.now() / 1000 : 0);
   const tick = () => {
     if (!j) { head.textContent = "Daily reset -"; return; }
     head.textContent = `Daily reset in ${fmtHM(j.reset_at - (Date.now() / 1000 + skew()))} \u00b7 ${hhmm(j.reset_at)} your time`;
+    paintNow();
   };
   const open = (serial) => { S.sel = serial; S.instTab = "ov"; renderSide(); renderTabs(); renderPage(); };
   const turnOn = async (e) => {
@@ -1253,7 +1268,7 @@ function renderTodayAll() {
   const paint = () => {
     if (!j) return;
     const st = {}; (S.devStatus || []).forEach((d) => (st[d.id] = d.state));
-    const key = JSON.stringify([j.rows, j.crazy_eggs, st]);
+    const key = JSON.stringify([j.rows, j.crazy_eggs, st, S.acts.length]);
     if (key === last) return;                                               // nothing changed: no flicker
     last = key;
     const c = j.crazy_eggs || { total: 0, off: [] };
@@ -1265,15 +1280,19 @@ function renderTodayAll() {
     else ce.append(h("span", { title: "Off on: " + c.off.join(", ") }, `\u26a0 off on ${c.off.length} of ${c.total}`), " \u00b7 ",
       h("a", { href: "#", title: "Switch the Crazy Eggs duty on for every instance", onclick: turnOn }, "turn on"));
     body.innerHTML = "";
-    if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: "6", class: "mute" }, "No instances in your list yet.")));
+    for (const k in nowCells) delete nowCells[k];
+    if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: "8", class: "mute" }, "No instances in your list yet.")));
     j.rows.forEach((r) => {
       const off = !["run", "pause"].includes(st[r.serial]);
       const all = r.duties_total && r.duties_done >= r.duties_total;
+      const nowTd = h("td", { class: "tdnow" }, off ? "-" : ((S.now[r.serial] || {}).text || "-"));
+      if (!off) nowCells[r.serial] = nowTd;
+      const f = fails(r.serial);
       body.appendChild(h("tr", { class: off ? "off" : "", title: "Open " + r.name, onclick: () => open(r.serial) },
-        h("td", {}, h("b", {}, r.name), off ? h("small", {}, " offline") : null),
-        h("td", { title: "Not read from the game yet" }, "-"), h("td", { title: "Not read from the game yet" }, "-"),
+        h("td", {}, h("b", {}, r.name), off ? h("small", {}, " offline") : null), nowTd,
         h("td", { class: all ? "ok" : "" }, r.duties_total ? `${r.duties_done}/${r.duties_total}` + (all ? " \u2713" : "") : "-"),
-        h("td", {}, String(r.joins)), h("td", {}, String(r.late))));
+        h("td", {}, String(r.joins)), h("td", {}, String(r.late)), h("td", { class: f ? "bad" : "" }, String(f)),
+        h("td", { title: "Not read from the game yet" }, "-"), h("td", { title: "Not read from the game yet" }, "-")));
     });
   };
   const load = async () => {

@@ -14,7 +14,7 @@
     if (t) {
       var m = t.mode === "auto" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : t.mode;
       document.documentElement.dataset.pal = t.pal || "ivory";
-      document.documentElement.dataset.mode = "light";      // dark mode hidden for now
+      document.documentElement.dataset.mode = m;
     }
   } catch (e) {}
 </script>
