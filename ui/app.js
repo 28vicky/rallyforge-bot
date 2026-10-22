@@ -97,12 +97,12 @@ function ico(name, cls) {
   e.innerHTML = '<svg viewBox="0 0 24 24">' + (ICO[name] || "") + "</svg>";
   return e;
 }
-const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", monsters: "sword", tasks: "list", duties: "clock", market: "bag",
+const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", monsters: "sword", tasks: "list", duties: "clock", market: "bag", logs: "file",
   telegram: "send", reliability: "shield", schedule: "bell", updates: "down", themes: "palette", license: "key" };
 
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
-  ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["telegram", "Telegram & Discord"], ["reliability", "Reliability"],
+  ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["telegram", "Telegram & Discord"], ["reliability", "Reliability"],
   ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Themes"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
@@ -281,9 +281,7 @@ function buildRibbon() {
     grp("Data",
       btn("Profiles ▾", (e) => menu(e.currentTarget, [
         { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user"),
-      btn("Logs ▾", (e) => menu(e.currentTarget, [
-        { label: "Copy log", icon: "copy", run: copyLog }, { label: "Save log...", icon: "down", run: saveLog },
-        { label: "Report a problem...", icon: "file", run: saveReportFlow }, { label: "Open logs folder", icon: "folder", run: () => act(api("open_logs")) }]), "", "file")),
+      btn("Logs", () => { S.sel = "control"; pickTab("logs"); renderSide(); }, "", "file")),
     grp("App",
       btn("Updates", () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); }, "", "refresh"),
       btn("Save", saveAll, "", "save"),
@@ -303,20 +301,16 @@ async function copyLog() {
   }
   toast("The last lines of the log are copied. Paste them into the chat.", "ok");
 }
-async function saveLog() {
+// Save log: pick the time and the instance right where the log is shown (Control settings > Logs, and each instance's log)
+function saveLogRow(fixedName) {
   const spans = [["Last 1 hour", 1], ["Last 6 hours", 6], ["Last 24 hours", 24], ["Last 3 days", 72], ["Last 7 days", 168]];
-  const r = await api("log_names").catch(() => null);
-  const names = (r && r.names) || [];
-  const span = h("select", {}, ...spans.map(([t, v]) => h("option", { value: v, selected: v === 24 }, t)));
-  const who = h("select", {}, h("option", { value: "" }, "All instances"), ...names.map((n) => h("option", { value: n }, n)));
-  modal({ title: "Save log", body: h("div", { style: { minWidth: "360px", display: "grid", gap: "12px" } },
-      h("div", { class: "field" }, h("label", {}, "Time"), span),
-      h("div", { class: "field" }, h("label", {}, "Instance"), who),
-      h("div", { class: "muted" }, "Saved as a small zip in your Downloads folder, ready to send.")),
-    buttons: [{ label: "Cancel" }, { label: "Save", cls: "pri", onclick: async () => {
-      const j = await act(api("save_log", { hours: +span.value, name: who.value }));
-      if (j) toast(`Saved ${j.lines} lines: ${j.path}`, "ok");
-    } }] });
+  const span = h("select", { "aria-label": "Time" }, ...spans.map(([t, v]) => h("option", { value: v, selected: v === 24 }, t)));
+  const who = h("select", { "aria-label": "Instance" }, h("option", { value: "" }, "All instances"));
+  if (fixedName) { who.innerHTML = ""; who.appendChild(h("option", { value: fixedName }, fixedName)); who.disabled = true; }
+  else api("log_names", {}, { quiet: true }).then((r) => { for (const n of (r && r.names) || []) who.appendChild(h("option", { value: n }, n)); }).catch(() => {});
+  const save = async () => { const j = await act(api("save_log", { hours: +span.value, name: who.value })); if (j) toast(`Saved ${j.lines} lines as a zip in Downloads: ${j.path}`, "ok"); };
+  return h("div", { class: "logsave" }, h("div", { class: "field" }, h("label", {}, "Time"), span), h("div", { class: "field" }, h("label", {}, "Instance"), who),
+    h("button", { class: "btn pri", type: "button", onclick: save }, "Save as zip"));
 }
 async function saveReportFlow() {
   const text = h("textarea", { style: { minHeight: "120px", width: "100%" }, placeholder: "Example: Rory stopped joining rallies after about 10 minutes. It was on the world map and never came back." });
@@ -505,6 +499,7 @@ const TAB_GROUPS = [
   ["tasks", "Tasks", null],
   ["duties", "Duties", null],
   ["market", "Market", null],
+  ["logs", "Logs", null],
   ["setup", "Setup", ["settings", "reliability", "schedule"]],
   ["app", "App", ["updates", "telegram", "license"]],
 ];

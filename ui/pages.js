@@ -573,7 +573,8 @@ function instHistory(serial) {
     for (const l of rows) body.appendChild(h("div", { class: "hrow " + lineClass(l.t) }, l.t));
   };
   q.addEventListener("input", draw); only.querySelector("input").addEventListener("change", draw);
-  root.appendChild(panel("Log history - this instance", h("div", {}, q, only), body));
+  const dev = S.devices.find((d) => d.id === serial) || {};
+  root.appendChild(panel("Log history - this instance", saveLogRow(dev.name || short(serial)), h("div", { style: { marginTop: "12px" } }, q, only), body));
   draw();
   const t = setInterval(() => { if (!root.isConnected) clearInterval(t); else draw(); }, 3000);
   return root;
@@ -725,13 +726,8 @@ PAGES.settings0 = function () {
     h("div", { class: "row" }, btn("Record a task...", flowRecordFlow, "sm pri"),
       btn("Save recordings as zip", async () => { const j = await act(api("flow_zip")); if (j) toast(`Saved ${j.flows} recording(s) in Downloads: ${j.path}`, "ok"); }, "sm"),
       btn("Open recordings folder", () => act(api("flow_open")), "sm")));
-  const lg = panel("Log (for support)", h("div", { class: "hint", style: { marginBottom: "10px" } }, "The full technical log. Use Save or Copy to share it when something goes wrong."),
-    h("div", { class: "row", style: { marginBottom: "10px" } },
-      btn("Save log", saveLog, "sm pri"), btn("Copy log", copyLog, "sm"), btn("Save report for support...", saveReportFlow, "sm"),
-      btn("Open logs folder", () => act(api("open_logs")), "sm"),
-      btn("Clear", async () => { await act(api("clear_log")); S.logs = []; logViews.forEach((v) => (v.el.innerHTML = "")); }, "sm")), logBox(null, true));
   setTimeout(updateSummary, 0);
-  return h("div", {}, g, staminaPanel(c, c), lr, rec, lg);
+  return h("div", {}, g, staminaPanel(c, c), lr, rec);
 };
 
 
@@ -1429,3 +1425,15 @@ function routinesCards(serial, ov, details) {
   act(api("duties", { serial })).then((j) => { if (j) { duties = j.duties; if (root.querySelector(".rtngrid")) draw(); } });
   return root;
 }
+
+
+// ====================================================================== logs (Control settings > Logs): save the log right here, then the live log
+PAGES.logs = function () {
+  const save = panel("Save the log", h("div", { class: "hint", style: { marginBottom: "10px" } }, "Pick how much and which instance, then save a small zip in Downloads to send for support."),
+    saveLogRow(),
+    h("div", { class: "row", style: { marginTop: "12px" } }, btn("Copy last lines", copyLog, "sm"), btn("Report a problem...", saveReportFlow, "sm"),
+      btn("Open logs folder", () => act(api("open_logs")), "sm")));
+  const live = panel("Live log - all instances", h("div", { class: "row", style: { marginBottom: "10px" } },
+      btn("Clear", async () => { await act(api("clear_log")); S.logs = []; logViews.forEach((v) => (v.el.innerHTML = "")); }, "sm")), logBox(null, true));
+  return h("div", {}, save, live);
+};

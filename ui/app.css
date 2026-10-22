@@ -648,7 +648,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 :root .inst:hover{background:transparent!important;border-color:transparent!important}
 :root .inst.sel{background:var(--card)!important;border-color:var(--line)!important}
 /* quieter fields everywhere */
-:root input:not([type=checkbox]):not([type=color]),:root select{background:var(--card);border:var(--bd);box-shadow:none}
+:root input:not([type=checkbox]):not([type=color]),:root select{background-color:var(--card);border:var(--bd);box-shadow:none}
 .dutygrid .dcol .note{display:none}
 /* the pinned instance header is solid, so the page never shows through it */
 .stickyhead{background:var(--bgc);padding:2px 0 0;margin:-2px 0 14px;z-index:30}
@@ -1047,3 +1047,8 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .sidefoot .ctlbtn:hover{background:rgba(255,255,255,.6)}
 :root .sidefoot .ctlbtn.on{background:var(--card);color:var(--fg);border:1px solid var(--line);font-weight:600}
 :root .sidefoot .ctlbtn .ico,:root .sidefoot .ctlbtn.on .ico{color:var(--mute)}
+
+/* Save log row (Logs page + each instance's log): Time, Instance, Save as zip on one line */
+.logsave{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.logsave .field{margin:0;min-width:170px}
+.logsave .field select{width:100%}
