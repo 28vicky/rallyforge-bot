@@ -76,6 +76,9 @@ PUBLISHED 2.4.76 (T8 update-restart) on 21 Oct 12:20 IST; check_release OK. Not 
 | T10 | S1 Rally proof: missed-rally report (each rally not joined + reason), joins per hour per account, daily summary on dashboard + Telegram | feat/rally-proof | rally loop logging (add only) + one dashboard panel | T7 (rally loop), T9 (scheduler) - rebase often | todo |
 | T11 | S2 Phone control: mobile layout of dashboard, LAN access with PIN, Telegram alerts (kick, stuck, no stamina, lag streak) + commands status/pause/resume | feat/phone-control | web_app.py (server/auth/routes) + ui mobile CSS + telegram code | T4 (ui) | todo |
 | T12 | Popup fix: tap usual X spot after outside taps fail | feat/popup-x | rally_bot.py popup handlers | - | published 2.4.78, not tested live |
+| T13 | UI redesign to the mockup (sidebar button top-left, Overview, Routines cards, status bar, type scale, Start/Pause/Stop all states, dropdowns inside the window) | dashboard-f7 | ui/app.js, ui/pages.js, ui/app.css | T4, T8 (ui) | **ready** - merges cleanly onto 2.4.83; live on the owner's PC 22 Oct 09:17 (statuses, joins, duty badges, Routines switch saves) - claude/ui_redesign_f7_22oct.md |
+| T14 | Daily Rewards window: tap Check-in | feat/daily-checkin | rally_bot.py clear_popups + daily_checkin | T12 (popups) | **ready** - tested on the owner's photo only, not live - claude/daily_checkin_22oct.md |
+| T15 | Monster pictures: Arachne, Behemoth, Bird of Hurricane, Leviathan, Serpopard, Taotie, Temple Guard, Viking #3 | monsters-arachne | monsters/ | T3 | **ready** - Ymir still has no picture - claude/monster_repo.md |
 | R | Release chat: merge finished branches into main, version bump, changelog, publish (owner says publish) | main | everything | - | when owner asks |
 
 Safe to run together: T1 + T3 + T4 + T6, or T2 + T6 + T7. Avoid pairs listed in "Clash with".
