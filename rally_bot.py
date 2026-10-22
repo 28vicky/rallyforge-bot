@@ -281,7 +281,7 @@ _SECRET_KEYS = ("telegram_token", "telegram_chat", "discord_webhook", "update_ke
 
 
 def log_to_file(line):
-    """Append a line to today's log file (kept: the last 5 days)."""
+    """Append a line to today's log file (kept: the last 7 days)."""
     try:
         with _log_lock:
             LOG_DIR.mkdir(exist_ok=True)
@@ -290,7 +290,7 @@ def log_to_file(line):
             with open(f, "a", encoding="utf-8") as fh:
                 fh.write(f"{time.strftime('%H:%M:%S')} {line}\n")
             if new:
-                for old in sorted(LOG_DIR.glob("bot_*.log"))[:-5]:
+                for old in sorted(LOG_DIR.glob("bot_*.log"))[:-7]:
                     old.unlink(missing_ok=True)
     except Exception:
         pass
@@ -305,6 +305,60 @@ def recent_log(max_lines=2000):
         return "\n".join(lines[-max_lines:])
     except Exception:
         return ""
+
+
+_LOG_LINE = re.compile(r"^(\d\d):(\d\d):(\d\d) (?:\[([^\]]+)\])?")
+
+
+def _log_files(hours):
+    """The daily log files that can hold lines from the last `hours` hours, oldest first, with their day (epoch at 00:00)."""
+    out = []
+    first = time.strftime("%Y%m%d", time.localtime(time.time() - hours * 3600))
+    for f in sorted(LOG_DIR.glob("bot_*.log")):
+        day = f.stem[4:]
+        if len(day) == 8 and day.isdigit() and day >= first:
+            out.append((f, time.mktime(time.strptime(day, "%Y%m%d"))))
+    return out
+
+
+def log_names(hours=168):
+    """Instance names that appear in the saved logs (for the 'only this instance' choice)."""
+    names = set()
+    for f, _ in _log_files(hours):
+        try:
+            for ln in f.read_text(encoding="utf-8", errors="replace").splitlines():
+                m = _LOG_LINE.match(ln)
+                if m and m.group(4) and len(m.group(4)) > 1 and m.group(4) not in ("perf",):
+                    names.add(m.group(4))
+        except Exception:
+            pass
+    return sorted(names, key=str.lower)
+
+
+def export_log(path, hours=24, name=""):
+    """Write a zip with the log lines of the last `hours` hours (only instance `name` if given). -> number of lines."""
+    import zipfile
+    cut = time.time() - hours * 3600
+    tag = f"[{name}]" if name else ""
+    lines, keep = [], False
+    for f, day0 in _log_files(hours):
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        except Exception:
+            continue
+        for ln in text:
+            m = _LOG_LINE.match(ln)
+            if m:                                          # a new line: keep it if it is in the time range (and the instance matches)
+                t = day0 + int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+                keep = t >= cut and (not tag or ln[9:].startswith(tag))
+                if keep:
+                    lines.append(f"{f.stem[4:]} {ln}")
+            elif keep:                                     # a continued line (e.g. an error trace) stays with its line
+                lines.append(ln)
+    head = f"RallyForge log - version {VERSION} - last {hours} h - {name or 'all instances'} - saved {time.strftime('%Y-%m-%d %H:%M')}\n"
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(Path(path).stem + ".txt", head + "\n".join(lines) + "\n")
+    return len(lines)
 
 
 def build_report(path, include_debug=True, description="", devices=None):
@@ -3074,6 +3128,52 @@ def cancel_quit_dialog(dev, shot, log):
         return False
 
 
+def _green_button_word(shot, word):
+    """A green game button (white text on green) in the lower half whose text contains `word` -> its centre or None.
+    Plain OCR often misses white-on-green text, so each wide green block is read on its own, inverted."""
+    h, w = shot.shape[:2]
+    y0 = int(h * 0.55)
+    hsv = cv2.cvtColor(shot[y0:int(h * 0.92)], cv2.COLOR_BGR2HSV)
+    m = cv2.inRange(hsv, (40, 90, 70), (85, 255, 255))
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((5, 9), np.uint8))
+    n, _, stats, _ = cv2.connectedComponentsWithStats(m)
+    for i in sorted(range(1, n), key=lambda k: -stats[k][4]):
+        x, y, bw, bh, area = stats[i]
+        if bw < 100 or bh < 25 or bw > w * 0.9 or bw < bh * 2.2:
+            continue
+        crop = cv2.cvtColor(shot[y0 + y:y0 + y + bh, x:x + bw], cv2.COLOR_BGR2GRAY)
+        crop = cv2.resize(crop, None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+        for t in (170, 140, 200):
+            b = 255 - cv2.threshold(crop, t, 255, cv2.THRESH_BINARY)[1]
+            try:
+                txt = pytesseract.image_to_string(b, config="--psm 7").lower()
+            except Exception:
+                return None
+            if word in txt.replace(" ", ""):
+                return (int(x + bw / 2), int(y0 + y + bh / 2))
+    return None
+
+
+_CHECKIN_TAPS = {}                                         # (serial, day) -> Check-in taps; at most 2 a day, so a misread never loops
+
+
+def daily_checkin(dev, shot, log, stop):
+    """The game's Daily Rewards window (Sign-in Rewards + Advanced Daily Rewards, green "Check-in" button): tap Check-in
+    to claim today's reward. Only when both the window title and the button are read. -> True when it tapped."""
+    key = (getattr(dev, "serial", ""), time.strftime("%Y-%m-%d"))
+    if _CHECKIN_TAPS.get(key, 0) >= 2:
+        return False
+    h, w = shot.shape[:2]
+    p = find_text(shot, ["Check-in", "Check in"], region=(0, int(h * 0.55), w, int(h * 0.35))) or _green_button_word(shot, "check")
+    if not p or not find_text(shot, ["Daily Rewards", "Sign-in Rewards", "Advanced Daily Rewards"], region=(0, int(h * 0.12), w, int(h * 0.50))):
+        return False
+    _CHECKIN_TAPS[key] = _CHECKIN_TAPS.get(key, 0) + 1
+    dev.tap(*p)
+    log("[+] Daily Rewards: tapped Check-in (today's sign-in reward)")
+    _nap(stop, 1.5, 2.2)
+    return True
+
+
 def clear_popups(dev, cfg, log, stop, rounds=5):
     """Close whatever covers the game (offers, event pop-ups, full-screen sales, dialogs) so the bot can carry on with
     what it was doing. Uses your popup_* pictures first; on a screen it does not know it presses Back, but only when it
@@ -3109,6 +3209,9 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         st = screen_state(shot, cfg)
         if st != "unknown" or not has_template("city_screen"):
             break
+        if daily_checkin(dev, shot, log, stop):            # the game's Daily Rewards window: claim today's sign-in reward first
+            closed += 1
+            continue
         if tap_alliance_war_row(dev, shot, log):          # the Alliance page is not a pop-up: go on into Alliance War
             _nap(stop, 1.5, 2.2)
             break
@@ -7215,6 +7318,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 continue
             px, py = pos
             opened = False
+            wrong = 0                                       # how often a neighbour's menu opened instead
             for attempt in range(3):                        # tap the building; when no ring menu opens (a reward panel came up, the tap landed beside it) look again and retry
                 close_reward_panel(dev, stop, log)
                 if find_detail_icon(dev.screenshot()):      # a ring menu is still open from before: tapping the building would close it
@@ -7237,6 +7341,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                         want_nm = k.split("#")[0].lower()
                         if got and got[0] and want_nm not in got[0].lower() and any(b.lower() in got[0].lower() for b in BUILDING_NAMES):
                             log(f"[!]   the menu that opened is {got[0]}, not {k} (try {attempt + 1}/3) - closing it and aiming again")
+                            wrong += 1
                             close_ring(dev, stop, (px, py + 35))
                             leave_to_city(dev, cfg, stop, log)
                             dev.expect_city = True
@@ -7256,6 +7361,9 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 px, py = pos
             if not opened:
                 log(f"[!] Task '{task.get('name')}': the menu of {k} did not open - skipped")
+                if wrong >= 3:                              # the saved spot is wrong (e.g. counted another way): forget it, the next try searches the plots again
+                    forget_plot(dev, k.split("#")[0])
+                    log(f"[i]   the saved spot of {k.split('#')[0]} opens another building - forgotten, it is searched again on the next try")
                 if find_detail_icon(dev.screenshot()):
                     close_ring(dev, stop, (px, py + 35))
                 leave_to_city(dev, cfg, stop)

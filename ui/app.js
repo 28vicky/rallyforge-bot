@@ -61,6 +61,7 @@ const S = {
 };
 // ------------------------------------------------------------------ icon set (one outline style: 24 grid, 1.8 stroke, currentColor)
 const ICO = {
+  bolt: '<path d="M13 3 4 14h7l-1 7 9-11h-7l1-7z"/>',
   play: '<path d="M8 5v14l11-7z"/>', pause: '<path d="M9 5v14M15 5v14"/>', stop: '<rect x="6" y="6" width="12" height="12" rx="2.5"/>',
   chev: '<path d="m6.5 9.5 5.5 5.5 5.5-5.5"/>',
   users: '<circle cx="9" cy="8.5" r="3.4"/><path d="M2.8 20c0-3.5 2.8-5.8 6.2-5.8s6.2 2.3 6.2 5.8M16 5.3a3.4 3.4 0 0 1 0 6.4M18.3 14.6c1.8.8 2.9 2.6 2.9 5.4"/>',
@@ -171,9 +172,13 @@ function menu(anchor, items) {
   document.querySelectorAll(".pop").forEach((p) => p.remove());
   const r = anchor.getBoundingClientRect();
   const m = h("div", { class: "pop", style: { position: "fixed", left: r.left + "px", top: r.bottom + 6 + "px", zIndex: 70,
-    background: "var(--bgc)", border: "var(--bd)", borderRadius: "14px", boxShadow: "var(--appsh)", padding: "6px", minWidth: "210px" } },
+    background: "var(--card)", border: "1px solid var(--line)", borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,.12)", padding: "6px", minWidth: "210px" } },
     items.map((it) => h("div", { class: "li", onclick: () => { m.remove(); it.run(); } }, it.icon ? ico(it.icon) : null, it.label)));
   document.body.appendChild(m);
+  // keep the whole menu inside the window: a button near the right edge opens it leftwards, near the bottom upwards
+  const mr = m.getBoundingClientRect();
+  if (mr.right > innerWidth - 8) m.style.left = Math.max(8, Math.min(r.right, innerWidth - 8) - mr.width) + "px";
+  if (mr.bottom > innerHeight - 8) m.style.top = Math.max(8, r.top - 6 - mr.height) + "px";
   const off = (e) => { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("mousedown", off, true); } };
   setTimeout(() => document.addEventListener("mousedown", off, true), 0);
 }
@@ -185,14 +190,12 @@ let logViews = [];                               // {el, serial|null} : every lo
 function layout() {
   const root = $("#root");
   root.innerHTML = "";
-  const burger = () => h("div", { class: "burger", title: "Show / hide the instance list (Ctrl+B)", onclick: toggleSide },
-    h("i"), h("i"), h("i"));
   root.appendChild(h("div", { class: "app" + (S.cfg.sidebar_open === false ? " nosb" : ""), id: "app" },
     h("div", { class: "side" },
       h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }),
         h("div", { class: "bt" }, h("b", {}, "RallyForge"), h("small", {}, "Automation Hub")),
         h("button", { class: "vpill", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "v" + S.version)),
-      h("h4", {}, h("span", {}, "Instances"), h("span", { class: "cnt", id: "instCnt" }), burger()),
+      h("h4", {}, h("span", {}, "Instances"), h("span", { class: "cnt", id: "instCnt" })),
       h("div", { class: "inst-list", id: "instList" }),
       h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }),
         h("div", { class: "sflab" }, "All instances"),
@@ -201,7 +204,7 @@ function layout() {
           h("button", { class: "btn olstop", type: "button", title: "Stop every instance", onclick: () => act(api("stop", { serial: "all" })) }, "Stop all")),
         h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
     h("div", { class: "main" },
-      h("div", { class: "top" }, burger(), h("img", { src: "/assets/logo.png", alt: "" }),
+      h("div", { class: "top" }, sideBtn(), h("img", { src: "/assets/logo.png", alt: "" }),
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
         h("button", { class: "btn sm newbtn", id: "newBtn", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "What\u2019s new"),
         h("span", { class: "sum", id: "sum" }),
@@ -209,9 +212,12 @@ function layout() {
       h("div", { class: "ribbon", id: "ribbon" }),
       h("div", { class: "tabs", id: "tabs" }),
       h("div", { class: "pages", id: "pages" })),
+    // status bar: live facts on the left (running, memory, Telegram, account), update + credit on the right
     h("div", { class: "status" },
-      h("span", { class: "l", title: S.copyright || "" }, "RallyForge Bot " + S.version + "  \u00b7  by " + (S.author || "Kiravik")), h("span", { id: "sbRun" }, "0 running"), h("span", { id: "sbLic" }),
-      h("span", { id: "sbRam" }), h("span", { id: "sbTg" }), h("span", { id: "sbUpd", class: "sb-upd", style: { display: "none" } }))));
+      h("div", { class: "sbl" }, h("span", { class: "sbrun" }, h("span", { class: "sbdot", id: "sbDot" }), h("span", { id: "sbRun" }, "0 running")),
+        h("span", { id: "sbRam" }), h("span", { id: "sbTg" }), h("span", { id: "sbLic" })),
+      h("div", { class: "sbr" }, h("span", { id: "sbUpd", class: "sb-upd", style: { display: "none" } }),
+        h("span", { class: "l", title: S.copyright || "" }, "v" + S.version + " \u00b7 by " + (S.author || "Kiravik"))))));
   buildRibbon();
   paintRunState();
   renderModeIcon();
@@ -220,6 +226,11 @@ function layout() {
   renderPage();
 }
 
+// the sidebar's show/hide button: top-left of the page header, before the instance name (and on Control settings' top bar)
+function sideBtn() {
+  return h("button", { class: "sidebtn", type: "button", title: "Hide / show the instance list (Ctrl+B)", "aria-label": "Hide or show the instance list", onclick: toggleSide },
+    h("i"), h("i"), h("i"));
+}
 function toggleSide() {
   $("#app").classList.toggle("nosb");
   S.cfg.sidebar_open = !$("#app").classList.contains("nosb");
@@ -260,9 +271,9 @@ function buildRibbon() {
   const grp = (cap, ...kids) => h("div", { class: "grp" }, h("div", { class: "row" }, kids), h("div", { class: "cap" }, cap));
   r.append(
     grp("Run",
-      btn("Start", () => collectAndRun("start", { serial: target() }), "pri", "play"),
+      btn("Start", () => { if (S.sel === "control") { S.startingAt = Date.now(); paintRunState(); } collectAndRun("start", { serial: target() }); }, "pri", "play"),
       btn("Pause", () => act(api("pause", { serial: target() })), "", "pause"),
-      btn("Stop", () => act(api("stop", { serial: target() })), "bad", "stop")),
+      btn("Stop", () => { S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop"), h("span", { class: "ribcount", id: "ribCount" })),
     grp("Scan",
       btn("Generals", () => openGeneralManager(), "", "users"),
       ...(S.dev ? [btn("Scan generals", () => scanGeneralsFlow(), "", "scan")] : []),
@@ -271,7 +282,7 @@ function buildRibbon() {
       btn("Profiles ▾", (e) => menu(e.currentTarget, [
         { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user"),
       btn("Logs ▾", (e) => menu(e.currentTarget, [
-        { label: "Copy log", icon: "copy", run: copyLog }, { label: "Save log to Downloads", icon: "down", run: saveLog },
+        { label: "Copy log", icon: "copy", run: copyLog }, { label: "Save log...", icon: "down", run: saveLog },
         { label: "Report a problem...", icon: "file", run: saveReportFlow }, { label: "Open logs folder", icon: "folder", run: () => act(api("open_logs")) }]), "", "file")),
     grp("App",
       btn("Updates", () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); }, "", "refresh"),
@@ -292,7 +303,21 @@ async function copyLog() {
   }
   toast("The last lines of the log are copied. Paste them into the chat.", "ok");
 }
-async function saveLog() { const j = await act(api("save_log")); if (j) toast("Saved: " + j.path, "ok"); }
+async function saveLog() {
+  const spans = [["Last 1 hour", 1], ["Last 6 hours", 6], ["Last 24 hours", 24], ["Last 3 days", 72], ["Last 7 days", 168]];
+  const r = await api("log_names").catch(() => null);
+  const names = (r && r.names) || [];
+  const span = h("select", {}, ...spans.map(([t, v]) => h("option", { value: v, selected: v === 24 }, t)));
+  const who = h("select", {}, h("option", { value: "" }, "All instances"), ...names.map((n) => h("option", { value: n }, n)));
+  modal({ title: "Save log", body: h("div", { style: { minWidth: "360px", display: "grid", gap: "12px" } },
+      h("div", { class: "field" }, h("label", {}, "Time"), span),
+      h("div", { class: "field" }, h("label", {}, "Instance"), who),
+      h("div", { class: "muted" }, "Saved as a small zip in your Downloads folder, ready to send.")),
+    buttons: [{ label: "Cancel" }, { label: "Save", cls: "pri", onclick: async () => {
+      const j = await act(api("save_log", { hours: +span.value, name: who.value }));
+      if (j) toast(`Saved ${j.lines} lines: ${j.path}`, "ok");
+    } }] });
+}
 async function saveReportFlow() {
   const text = h("textarea", { style: { minHeight: "120px", width: "100%" }, placeholder: "Example: Rory stopped joining rallies after about 10 minutes. It was on the world map and never came back." });
   const shots = h("input", { type: "checkbox", checked: true });
@@ -369,17 +394,15 @@ function renderSide() {
   L.innerHTML = "";
   const item = (key, label, dot, extra) => h("div", { class: "inst st-" + (dot || "run") + (S.sel === key ? " sel" : ""), onclick: () => { S.sel = key; renderSide(); renderTabs(); renderPage(); } },
     dot ? h("span", { class: "dot " + dot }) : h("span", { class: "dot run", style: { background: "var(--accent1)" } }),
-    h("span", { class: "nm" }, label), extra ? h("small", {}, extra) : null);
+    h("span", { class: "nm", title: label }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   const ic = $("#instCnt"); if (ic) ic.textContent = S.devStatus.length + " total";
   for (const d of S.devStatus) {
-    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
+    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", "Paused", "Problem", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
+    const chip = d.state === "run" && d.kicked_at ? ["kicked", "warn"] : d.state === "run" && d.no_stamina ? ["no stamina", "warn"]
+      : d.state === "run" ? (d.joins ? ["joins " + d.joins, "ok"] : ["idle", ""]) : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : ["offline", "off"];
+    L.lastChild.querySelector(".nm").after(h("span", { class: "ichip " + chip[1] }, chip[0]));      // status at a glance on the right; Start/Pause/Stop live in the page header
     sideDrag(L.lastChild, d.id);
-    const qb = (t, ico, fn, dim) => h("button", { title: t, class: dim ? "dim" : "", onclick: (e) => { e.stopPropagation(); if (!dim) fn(); } }, ico);
-    const nm = d.name || short(d.id);
-    L.lastChild.appendChild(h("div", { class: "qact" }, ...(d.state === "run" || d.state === "pause"
-      ? [qb(d.state === "pause" ? "Resume " + nm : "Pause " + nm, d.state === "pause" ? "\u25B6" : "\u275A\u275A", () => act(api("pause", { serial: d.id }))), qb("Stop " + nm, "\u25A0", () => act(api("stop", { serial: d.id })))]
-      : [qb("Start " + nm, "\u25B6", () => collectAndRun("start", { serial: d.id })), qb("Stop " + nm, "\u25A0", () => {}, true)])));
     if ((d.state === "pause" && d.resume_at) || (d.state === "run" && d.kicked_at)) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at || d.resume_at), "data-pre": d.kicked_at ? " back in " : "" })); }
   }
   tickPauseTimers();
@@ -427,6 +450,34 @@ function tickPauseTimers() {
 }
 setInterval(tickPauseTimers, 1000);
 // Start / Pause / Stop: the button that matches the current state lights up in its own colour (green / amber / red)
+// Control settings top bar: the buttons follow how many instances run.
+//   none running -> Start all is the main button, Pause all / Stop all greyed
+//   some running -> "Start the rest" + "2/8 running", Pause / Stop active
+//   all running  -> Start shows a green "Running" (not clickable), Pause / Stop active
+//   just pressed -> "Starting..." until every instance runs (instances start one by one; gives up after 3 min)
+function paintRibbonRun() {
+  const rib = document.getElementById("ribbon");
+  if (!rib || S.sel !== "control") return;
+  const total = S.devStatus.length, run = S.devStatus.filter((d) => d.state === "run").length;
+  const busy = run + S.devStatus.filter((d) => d.state === "pause").length;
+  const starting = S.startingAt && Date.now() - S.startingAt < 180000 && run < total;
+  if (!starting) S.startingAt = 0;
+  rib.querySelectorAll("[data-act]").forEach((b) => {
+    const a = b.dataset.act, lbl = b.querySelector(".runlbl");
+    b.classList.remove("isrunning", "starting", "greyed");
+    b.className = b.className.replace(/\bcur-\w+/g, "").replace(/\s+/g, " ").trim();
+    if (a === "start" && lbl) {
+      if (starting) { b.classList.add("starting"); lbl.textContent = "Starting\u2026"; }
+      else if (total && run === total) { b.classList.add("isrunning"); lbl.textContent = "Running"; }
+      else lbl.textContent = busy ? "Start the rest" : "Start all";
+    }
+    if ((a === "pause" || a === "stop") && busy === 0 && !starting) b.classList.add("greyed");
+    if (a === "pause" && total && S.devStatus.every((d) => d.state === "pause")) b.classList.add("cur-pause");
+  });
+  const c = document.getElementById("ribCount");
+  if (c) { c.textContent = run && run < total ? run + "/" + total + " running" : ""; }
+}
+setInterval(() => { if (S.startingAt) paintRibbonRun(); }, 3000);
 function paintRunState() {
   let st = null;
   if (S.sel !== "control") { const d = S.devStatus.find((x) => x.id === S.sel); st = d ? d.state : null; }
@@ -439,11 +490,13 @@ function paintRunState() {
     const off = S.sel !== "control" && ((st === "run" && b.dataset.act === "start") || ((st === "stop" || st === "idle" || st === "error") && (b.dataset.act === "pause" || b.dataset.act === "stop")));
     b.classList.toggle("greyed", !!off);
   });
+  paintRibbonRun();
 }
 function ribbonLabels() {
   const all = S.sel === "control";
   const rib = document.getElementById("ribbon"); if (rib) rib.style.display = all ? "" : "none";      // the top button bar belongs to Control settings; each instance has its own bar
   document.querySelectorAll(".runlbl").forEach((e) => { e.textContent = e.dataset.base + (all ? " all" : ""); });
+  paintRunState();
 }
 const TAB_GROUPS = [
   ["dashboard", "Dashboard", null],
@@ -563,11 +616,11 @@ S.acts = []; S.now = {};
 const esc = (t) => String(t == null ? "" : t);
 function actRow(v, l) {
   const a = l.a, k = a.k;
-  const chip = k === "join" ? ["JOINED", "g"] : k === "fail" ? ["FAILED", "e"] : k === "renew" ? ["RENEWED", "g"] : ["SKIPPED", "w"];
+  const chip = k === "join" ? ["Joined", "g"] : k === "fail" ? ["Failed", "e"] : k === "renew" ? ["Renewed", "g"] : ["Skipped", "w"];
   const took = a.took != null ? a.took + "s" : "";
   const cells = [a.t, v.serial === null ? l.n : null, k === "renew" ? "Auto-Join" : a.mon, a.rally != null ? a.rally + "s" : "", h("span", { class: "chip " + chip[1] }, chip[0]),
     k === "join" ? "Preset " + a.preset + (a.n ? "  (#" + a.n + ")" : "") : k === "renew" ? "Game Auto-Join restarted - now " + a.left + " left" : a.why, took];
-  const tr = h("tr", {}, ...cells.filter((c, i) => !(i === 1 && c === null)).map((c) => h("td", {}, c)));
+  const tr = h("tr", { title: typeof cells[5] === "string" ? cells[5] : "" }, ...cells.filter((c, i) => !(i === 1 && c === null)).map((c) => h("td", {}, c)));
   // one row per rally: same instance + monster + (almost) the same end time = the same rally
   if (a.rally != null && a.t && a.mon) {
     const [hh, mm, ss] = String(a.t).split(":").map(Number);
@@ -687,6 +740,7 @@ function updateSummary() {
   if (c.error) parts.push(c.error + " with a problem");
   const s = $("#sum"); if (s) s.textContent = parts.join("  |  ");
   const r = $("#sbRun"); if (r) r.textContent = c.run + " running";
+  const dt = $("#sbDot"); if (dt) dt.classList.toggle("on", c.run > 0);
   const who = $("#whoami");
   if (who) {
     const L = S.license || {};
@@ -706,8 +760,8 @@ function updateSummary() {
     } else lc.textContent = "";
   }
   const m = $("#sbRam");
-  if (m && S.ram && S.ram.total_mb) m.textContent = `App: ${(S.ram.proc_mb || 0).toFixed(0)} MB  |  PC free: ${S.ram.free_mb.toFixed(0)} MB`;
-  const t = $("#sbTg"); if (t) t.textContent = "Telegram: " + (S.tg.ready ? "connected" : "not connected");
+  if (m && S.ram && S.ram.total_mb) { m.textContent = `${(S.ram.proc_mb || 0).toFixed(0)} MB`; m.title = `The app uses ${(S.ram.proc_mb || 0).toFixed(0)} MB \u00b7 ${S.ram.free_mb.toFixed(0)} MB free on this PC`; }
+  const t = $("#sbTg"); if (t) t.textContent = "Telegram: " + (S.tg.ready ? "Connected" : "Not connected");
   const u = $("#sbUpd");
   if (u) {
     const U = S.update;
@@ -801,16 +855,14 @@ setInterval(async () => {
   } finally { AUTO.busy = false; }
 }, 1000);
 
-// long help paragraphs fold to one line with a small "More" link (quiet screens, nothing lost)
+// long help paragraphs fold to two lines (hover shows the whole text, a click opens / closes it - no extra links)
 (function () {
   const fold = (n) => {
     if (n.dataset.fold || !n.isConnected) return;
     const t = (n.textContent || "").trim();
     if (t.length < 110 || n.closest(".warnbar,.modal,.toasts")) return;
-    n.dataset.fold = "1"; n.classList.add("clamp");
-    const b = document.createElement("button"); b.type = "button"; b.className = "morelnk"; b.textContent = "More";
-    b.onclick = () => { const o = n.classList.toggle("clamp"); b.textContent = o ? "More" : "Less"; };
-    n.insertAdjacentElement("afterend", b);
+    n.dataset.fold = "1"; n.classList.add("clamp", "foldable"); n.title = t;
+    n.onclick = () => n.classList.toggle("clamp");
   };
   const scan = (root) => (root || document).querySelectorAll(".pages .note").forEach(fold);
   const start = () => {

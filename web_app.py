@@ -1721,11 +1721,22 @@ class Api:
     def log_text(self, p):
         return {"text": rb.recent_log(int(p.get("lines", 300)))}
 
+    def log_names(self, p):
+        return {"names": rb.log_names()}
+
     def save_log(self, p):
-        path = downloads_dir() / "rallyforge-log.txt"
-        path.write_text(rb.recent_log(5000) or "", encoding="utf-8")
+        """Save the log as a zip in Downloads: last `hours` hours (1 h .. 7 days), all instances or one."""
+        try:
+            hours = min(max(int(p.get("hours", 24)), 1), 168)
+        except Exception:
+            hours = 24
+        name = str(p.get("name") or "").strip()
+        who = re.sub(r"[^\w\-]+", "_", name)[:30].strip("_") or "all"
+        span = f"{hours // 24}d" if hours >= 24 and hours % 24 == 0 else f"{hours}h"
+        path = downloads_dir() / f"rallyforge-log-{who}-{span}-{time.strftime('%Y%m%d-%H%M')}.zip"
+        n = rb.export_log(str(path), hours, name)
         open_path(path.parent)
-        return {"path": str(path)}
+        return {"path": str(path), "lines": n}
 
     def save_report(self, p):
         d = Path.home() / "Desktop" / "RallyForge reports"
