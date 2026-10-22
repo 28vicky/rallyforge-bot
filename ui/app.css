@@ -1073,7 +1073,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .tdreset{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
 .tdgrid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:22px;margin-top:10px}
 @media (max-width:900px){.tdgrid{grid-template-columns:1fr}}
-.tdlab{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);margin-bottom:8px}
+.tdlab{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--fg);opacity:.78;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
 .tdq{display:flex;flex-direction:column}
 .tdrow{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
 .tdrow:first-child{border-top:0}
@@ -1085,6 +1085,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .tdrow.run .tdi,.tdrow.run small{color:var(--accent)}
 .tdrow.gaveup .tdi,.tdrow.gaveup small{color:var(--bad)}
 .tdsum{margin-top:10px;font-size:13px;color:var(--mute)}
-.tdres{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:14px}
+.tdres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:1fr;gap:14px}
+.tdres .stile{box-sizing:border-box;height:100%;justify-content:space-between}
 .tdweek{display:block;margin-top:12px;color:var(--mute)}
 
