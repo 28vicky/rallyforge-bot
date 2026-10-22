@@ -1403,12 +1403,31 @@ function routinesCards(serial, ov, details) {
   let filter = "all", query = "", duties = [];
   const eff = (k) => (ov && ov[k] !== undefined ? ov[k] : S.cfg[k]);
   const setCfg = (k, v) => { ov[k] = v; draw(); };      // the page's autosave writes it within 2 s
-  const open = (key) => {
+  // opening a card shows its settings at the top of the page (and jumps to that routine inside a long page, e.g. Crazy Eggs
+  // in the Duties page); "All routines" comes back to the same place in the list
+  let backTop = 0;
+  const pg = () => $("#pages");
+  const below = (el) => { const p = pg(); if (!p || !el) return; const sh = p.querySelector(".stickyhead");
+    p.scrollTop += el.getBoundingClientRect().top - p.getBoundingClientRect().top - (sh ? sh.offsetHeight : 0) - 8; };
+  const find = (title) => {
+    const want = String(title || "").toLowerCase();
+    if (!want) return null;
+    const by = (sel) => [...root.querySelectorAll(sel)].find((x) => x.textContent.trim().toLowerCase().startsWith(want));
+    const hit = by(".subtitle,h3,h4,legend,summary") || by(".dname,b");      // its own settings first, else its row in the list
+    return hit ? (hit.closest(".drow,.panel,.subset,details,.card") || hit) : null;
+  };
+  const open = (key, title) => {
     const els = details[key] && details[key]();
     if (!els) return;
+    backTop = pg() ? pg().scrollTop : 0;
     root.innerHTML = "";
-    root.appendChild(h("button", { class: "btn sm rtnback", onclick: draw }, "\u2190 All routines"));
+    root.appendChild(h("button", { class: "btn sm rtnback", onclick: () => { draw(); requestAnimationFrame(() => { if (pg()) pg().scrollTop = backTop; }); } }, "\u2190 All routines"));
     for (const e of els) if (e) root.appendChild(e);
+    below(root);
+    // the page may fill in after a server call: look for the routine a few times
+    let n = 0;
+    const jump = () => { const el = find(title); if (el) { below(el); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600); } else if (++n < 8) setTimeout(jump, 150); };
+    if (title && key === "duties") jump();
   };
   const badge = { done: ["ok", null], due: ["due", null], waiting: ["next", null], retry: ["next", null], gaveup: ["bad", null] };
   const rows = () => {
@@ -1456,7 +1475,7 @@ function routinesCards(serial, ov, details) {
           h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, title), h("small", { class: "sub" }, sub)), h("span", { class: "cnt" }, mine.filter((r) => r.on && !r.soon).length + " on")),
           shown.map((r) => h("div", { class: "rtnrow" + (r.soon ? " soon" : "") },
             h("div", { class: "dtx" }, h("div", { class: "dname" },
-              r.open ? h("a", { href: "#", title: "Open the settings", onclick: (e) => { e.preventDefault(); open(r.open); } }, r.t) : h("b", {}, r.t), tag(r)),
+              r.open ? h("a", { href: "#", title: "Open the settings", onclick: (e) => { e.preventDefault(); open(r.open, r.t); } }, r.t) : h("b", {}, r.t), tag(r)),
               h("small", { title: r.n || "" }, r.n || "")),
             tog(r)))));
       }
