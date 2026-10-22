@@ -9445,6 +9445,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         if duty_id and result is not None and not stop.is_set():
             duty_record(getattr(dev, "serial", ""), duty_id, *result)
         leave_to_city(dev, cfg, stop, log)
+    log("@act " + json.dumps({"k": "step", "text": "Idle - tasks done, back to the rallies"}))   # the instance list stops showing the task
 
 
 def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
