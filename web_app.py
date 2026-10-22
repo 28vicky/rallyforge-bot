@@ -533,9 +533,29 @@ class Controller:
         else:
             self.log(f"[+] Starting {len(todo)} emulator(s)...")
         cfg = self.cfg
-        for i, s in enumerate(todo):
+
+        def launcher():
+            # the gap only spreads out heavy starts (emulator boot / Evony load). An emulator that is already
+            # running with Evony on screen is just picked up, so the next one starts right after it.
             gap = max(0, int(cfg.get("start_gap_seconds", 40) or 0))
-            threading.Timer(i * gap + 0.5, lambda s=s: self._safe(self.start_instance, s, cfg)).start()
+            try:
+                adb = rb.find_adb(cfg.get("adb_path") or "auto")
+            except Exception:
+                adb = None
+            for i, s in enumerate(todo):
+                warm = False
+                if adb and gap:
+                    try:
+                        if rb.device_online(adb, s):
+                            pkg = rb.evony_package(adb, s, rb.merge_device_cfg(cfg, s))
+                            warm = rb.app_foreground(adb, s, pkg) is True
+                    except Exception:
+                        warm = False
+                threading.Thread(target=self._safe, args=(self.start_instance, s, cfg), daemon=True).start()
+                if i < len(todo) - 1:
+                    time.sleep(2 if warm else gap)
+
+        threading.Thread(target=launcher, daemon=True).start()
 
     def _safe(self, fn, *a):
         try:
