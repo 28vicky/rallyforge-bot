@@ -401,16 +401,6 @@ async function manualMapFlow(arg) {
   poll();
 }
 
-async function scanCityTapsFlow(given) {
-  const serial = given || await chooseDevice("Map the city of which instance?");
-  if (!serial) return;
-  if (!(await confirmBox("Map by squares", "The bot goes to each numbered square of the city map, taps the building and reads its name. Open the CITY screen on this instance. The instance must be stopped; the other instances and this app stay free while it runs.", "OK, start"))) return;
-  await act(api("save", { cfg: S.cfg, devices: S.devices }, { quiet: true }));
-  if (!(await act(api("scan_city_taps_start", { serial })))) return;
-  S.cityJobs = { ...(S.cityJobs || {}), [serial]: { running: true, progress: null } };
-  toast("Mapping started on " + cityName(serial) + ". You can keep working - progress is in the corner.", "ok");
-  drawCityProgress();
-}
 async function scanCityFlow(arg) {
   const again = typeof arg === "string" ? arg : null;
   const serial = again || await chooseDevice("Map the city with which instance?");
