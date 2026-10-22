@@ -158,3 +158,8 @@ Published T13 dashboard-f7 (UI redesign to the mockup, live-checked on the owner
 ### 2.4.85 (22 Oct 09:45 IST) - joint release
 Published T17 feat/bm-fast-refresh (Black Market refresh ~4 s, ran live on K) and T18 feat/flow-record-beta (Record a task (beta) for every user + Save recordings as zip). No conflicts; syntax + 42-step click-through OK; check_release "version 2.4.85: OK". The owner PC can now install updates normally (nothing PC-only is left).
 
+
+### T-EMU fix/emulator-start-stuck (22 Oct 18:20 IST) - READY for the joint release, not tested live
+Owner report: GGDarling (MuMu 16416) and Manhattan (other PC) stuck - emulator closed, "did not finish starting in time" then the same launch again forever.
+Fix (rally_bot.py _bring_online): after a start that did not finish, the next try first closes the instance fully (MuMuManager shutdown / LDPlayer quit, then kill_listener on the port) and then launches; 2+ failed starts in a row -> alert "The emulator failed to start N times in a row". Counter resets when the emulator comes up.
+Changelog line: "If an emulator hangs while starting, the bot now closes it fully and starts it again, and alerts you if it keeps failing."
