@@ -274,6 +274,28 @@ def merge_device_cfg(cfg, serial):
     return m
 
 
+def live_settings(cfg, serial, seen):
+    """Settings saved while this instance runs: take them over in place (every part of the bot holds this same dict),
+    so a change works from the next action without Stop/Start. seen = [last config.json time]. -> True if taken over."""
+    try:
+        m = CONFIG.stat().st_mtime
+    except OSError:
+        return False
+    if m == seen[0]:
+        return False
+    seen[0] = m
+    try:
+        new = merge_device_cfg(load_config(), serial)
+        changed = [k for k, v in new.items() if cfg.get(k) != v]
+        if not changed:                                      # the file was written (e.g. a duty record) but nothing changed
+            return False
+        cfg.update(new)
+        set_pacing(cfg)
+    except Exception:
+        return False
+    return True
+
+
 # ------------------------------------------------------------------ log files
 LOG_DIR = USER / "logs"
 _log_lock = threading.Lock()
@@ -9533,6 +9555,10 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
 def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     cfg = merge_device_cfg(cfg, serial)                              # per-instance overrides
     set_pacing(cfg)
+    try:
+        cfg_seen = [CONFIG.stat().st_mtime]                          # settings saved after this are taken over while running
+    except OSError:
+        cfg_seen = [None]
     _TL.ctl, _TL.stop = ctl, stop
 
     def nap(lo, hi=None):
@@ -10179,6 +10205,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     duty_log_at = [0.0]
     while not stop.is_set():
+        if live_settings(cfg, serial, cfg_seen):
+            log("[i] Settings changed - using the new ones from now on")
         if time.time() - duty_log_at[0] > 900:                # every 15 min: what the duties are waiting for, so a silent duty is visible
             duty_log_at[0] = time.time()
             try:
