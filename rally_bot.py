@@ -892,9 +892,11 @@ class Device:
         return img
 
     def tap(self, x, y):
+        self.acted = time.time()
         self._run("shell", "input", "tap", str(int(x * self.sx)), str(int(y * self.sy)))
 
     def swipe(self, x1, y1, x2, y2, ms=300):
+        self.acted = time.time()
         self._run("shell", "input", "swipe", str(int(x1 * self.sx)), str(int(y1 * self.sy)),
                   str(int(x2 * self.sx)), str(int(y2 * self.sy)), str(int(ms)))
 
@@ -11032,6 +11034,19 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 continue
 
             rallies_on = cfg.get("rally_enabled", True)
+            if getattr(dev, "acted", None) is None:
+                dev.acted = time.time()
+            if st == "unknown" and has_template("rally_screen") and time.time() - dev.acted > 90:   # no tap for 90 s on a screen it does not know
+                try:
+                    (USER / "debug").mkdir(exist_ok=True)
+                    cv2.imwrite(str(USER / "debug" / ("idle_" + re.sub(r"\W", "_", serial) + ".png")), screen)
+                except Exception:
+                    pass
+                log(f"[!] Nothing to do on this screen for 90s ({st}) - pressing Back")
+                dev.acted = time.time()
+                dev.back()
+                nap(1.5, 2.0)
+                continue
             need_recover = st in ("march", "city", "general") and not (st == "city" and not rallies_on)
             if st == "unknown":
                 if has_template("rally_screen"):

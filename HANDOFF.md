@@ -169,3 +169,8 @@ Published T17 feat/bm-fast-refresh (Black Market refresh ~4 s, ran live on K) an
 Owner report: GGDarling (MuMu 16416) and Manhattan (other PC) stuck - emulator closed, "did not finish starting in time" then the same launch again forever.
 Fix (rally_bot.py _bring_online): after a start that did not finish, the next try first closes the instance fully (MuMuManager shutdown / LDPlayer quit, then kill_listener on the port) and then launches; 2+ failed starts in a row -> alert "The emulator failed to start N times in a row". Counter resets when the emulator comes up.
 Changelog line: "If an emulator hangs while starting, the bot now closes it fully and starts it again, and alerts you if it keeps failing."
+### T-IDLE fix/idle-unknown-back (22 Oct 18:35 IST) - READY for the joint release, not tested live
+Owner: Huck sat on a screen and did not press Back (had to do it by hand). Log: after restart 08:46:01 Huck did nothing for 4.5 min (only perf lines) until "Landed on the wrong screen" 08:50:29.
+Fix: DeviceCtl.tap/swipe record dev.acted; main loop: on an "unknown" screen (rally_screen template known) with no tap for 90 s -> save debug/idle_<serial>.png, log "Nothing to do on this screen for 90s - pressing Back", press Back. Not on city (Back there opens Quit) or rally list.
+Changelog line: "If an instance sits on a screen it does not know, it now backs out by itself after about 1.5 minutes."
+Also checked: Huck Black Market is fine (once per game day, done 06:11; forced run 08:51 worked, BM 44 not offered; 390k gems vs 50k floor).
