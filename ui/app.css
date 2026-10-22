@@ -1067,3 +1067,24 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .bmcard select{font-size:12px;padding:4px 26px 4px 8px;width:100%;margin:0}
 .bmcard.on{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--card))}
 .bmcard.on::after{content:"\2713";position:absolute;top:6px;right:8px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--accfg);font-size:12px;line-height:20px;font-weight:700}
+
+/* Today card (one instance): duty queue + today's results */
+.today .cardhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.tdreset{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
+.tdgrid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:22px;margin-top:10px}
+@media (max-width:900px){.tdgrid{grid-template-columns:1fr}}
+.tdlab{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);margin-bottom:8px}
+.tdq{display:flex;flex-direction:column}
+.tdrow{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
+.tdrow:first-child{border-top:0}
+.tdrow .tdi{text-align:center;font-weight:700;color:var(--mute)}
+.tdrow .tdt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdrow small{color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tdrow.done .tdi{color:var(--accent2)}
+.tdrow.done .tdt{color:var(--mute)}
+.tdrow.run .tdi,.tdrow.run small{color:var(--accent)}
+.tdrow.gaveup .tdi,.tdrow.gaveup small{color:var(--bad)}
+.tdsum{margin-top:10px;font-size:13px;color:var(--mute)}
+.tdres{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:14px}
+.tdweek{display:block;margin-top:12px;color:var(--mute)}
+

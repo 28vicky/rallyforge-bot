@@ -495,7 +495,7 @@ function instancePage(serial) {
       R.querySelector("h3").replaceWith(h("div", { class: "cardhead" },
         h("div", {}, h("h3", {}, "Monster joins"), h("small", { class: "sub" }, "Live rally history log")),
         h("a", { href: "#", class: "viewall", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("logs"); } }, "View all \u2192")));
-      return [h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
+      return [renderTodayCard(serial), h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
     }],
     ["routines", "Routines", () => [routinesCards(serial, ov, {
       duties: () => [PAGES.duties(serial)], tasks: () => [PAGES.tasks(serial)], market: () => [PAGES.market()],
@@ -1197,6 +1197,45 @@ PAGES.license = function () {
     note("The app checks your account about once an hour. If it was closed or has expired, the bots stop and you need a new ID and password from the seller. Without internet the app keeps working for up to 48 hours.")));
 };
 
+
+// ====================================================================== Today card (one instance)
+function renderTodayCard(serial) {
+  const head = h("div", { class: "tdreset" }), list = h("div", { class: "tdq" }), sum = h("div", { class: "tdsum" });
+  const res = h("div", { class: "tdres" }), week = h("small", { class: "tdweek" });
+  const card = h("div", { class: "panel today" },
+    h("div", { class: "cardhead" }, h("h3", {}, "Today"), head),
+    h("div", { class: "tdgrid" },
+      h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Duty queue"), list, sum),
+      h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Today's results"), res, week)));
+  let m = todayModel({}, serial), last = "";
+  const tick = () => {
+    if (!m.resetAt) { head.textContent = "Daily reset -"; return; }
+    head.textContent = `Daily reset in ${fmtLeft(m.resetAt - (Date.now() / 1000 + m.skew))} · ${m.resetLocal} your time`;
+  };
+  const paint = () => {
+    const key = JSON.stringify([m.items, m.summary, m.results, m.week]);
+    if (key === last) return;                                               // nothing changed: keep the DOM as it is (no flicker)
+    last = key;
+    list.innerHTML = "";
+    m.items.forEach((x) => list.appendChild(h("div", { class: "tdrow " + x.k },
+      h("span", { class: "tdi" }, x.icon), h("span", { class: "tdt" }, x.title), h("small", {}, x.sub))));
+    sum.textContent = m.summary;
+    res.innerHTML = "";
+    m.results.forEach(([l, v, tip]) => res.appendChild(h("div", { class: "stile", title: tip || "" }, h("b", {}, String(v)), h("span", {}, l))));
+    week.textContent = m.week;
+  };
+  const load = async () => {
+    if (!card.isConnected) return;
+    const j = await api("today", { serial }, { quiet: true }).catch(() => null);
+    if (j) m = todayModel(j, serial);
+    tick(); paint();
+  };
+  paint(); tick();
+  const t1 = setInterval(() => { if (!card.isConnected) { clearInterval(t1); return; } tick(); }, 1000);
+  const t2 = setInterval(() => { if (!card.isConnected) { clearInterval(t2); return; } load(); }, 5000);
+  setTimeout(load, 0);
+  return card;
+}
 
 // ====================================================================== duties
 PAGES.duties = function (fixed, only, compact) {

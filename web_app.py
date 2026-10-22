@@ -128,6 +128,10 @@ class Controller:
                             rec["busy_until"] = 0
                     d["t"] = time.strftime("%H:%M:%S")
                     self.acts.append((self.seq, serial, name, d))
+                    if serial and d.get("k") == "join":
+                        self.day_count(serial, "joins", str(d.get("mon") or ""))
+                    elif serial and d.get("k") == "skip" and str(d.get("why", "")).startswith("not enough time"):
+                        self.day_count(serial, "late")
                 except Exception:
                     pass
                 return
@@ -138,6 +142,9 @@ class Controller:
                 rb.log_to_file(msg)
             if serial and serial in self.dev:
                 self._note_status(self.dev[serial], msg)
+                low = msg.lower()
+                if msg.startswith("[!]") and ("restarting evony" in low or "restarting the emulator" in low):
+                    self.day_count(serial, "restarts")
 
     def event(self, kind, data=None):
         with self.lock:
@@ -146,6 +153,37 @@ class Controller:
 
     def toast(self, kind, msg):
         self.event("toast", {"kind": kind, "msg": msg})
+
+    DAY_FILE = rb.USER / "daily_stats.json"            # per instance, per game day: joins, late skips, monsters, restarts (8 days kept)
+
+    def day_count(self, serial, key, mon=""):
+        """Today card numbers that survive an app restart. Called with self.lock held."""
+        try:
+            if not hasattr(self, "_days"):
+                try:
+                    self._days = json.loads(self.DAY_FILE.read_text(encoding="utf-8"))
+                except Exception:
+                    self._days = {}
+            day = rb._game_day()
+            per = self._days.setdefault(serial, {})
+            row = per.setdefault(day, {"joins": 0, "late": 0, "restarts": 0, "monsters": {}})
+            row[key] = int(row.get(key, 0)) + 1
+            if key == "joins" and mon:
+                base = re.sub(r"\s+\d+$", "", mon).strip()
+                row.setdefault("monsters", {})[base] = row.get("monsters", {}).get(base, 0) + 1
+            for old in sorted(per)[:-8]:
+                per.pop(old, None)
+            self.DAY_FILE.write_text(json.dumps(self._days), encoding="utf-8")
+        except Exception:
+            pass
+
+    def day_rows(self, serial):
+        if not hasattr(self, "_days"):
+            try:
+                self._days = json.loads(self.DAY_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                self._days = {}
+        return dict(self._days.get(serial) or {})
 
     def _note_status(self, d, msg):
         if "[+] Connected" in msg:
@@ -1489,6 +1527,42 @@ class Api:
     def duties(self, p):
         scope = self._scope(p)
         return {"duties": self._duty_rows(scope), "serial": scope, "own": self._own(scope)}
+
+    def today(self, p):
+        """Today card for one instance: reset time, duty queue (Daily activities + Reward claims that are on),
+        today's results and the last 7 days. Only data the bot already has - nothing is read from the game here."""
+        serial = self._scope(p) or (self.c.devices[0]["id"] if self.c.devices else "default")
+        cfg = self._eff(serial)
+        now = time.time()
+        rm = rb._RESET_MIN[0] * 60
+        reset_at = ((now - rm) // 86400 + 1) * 86400 + rm
+        state = (rb.load_duty_state().get(serial) or {})
+        day = rb._game_day()
+        queue, done_n = [], 0
+        for d in rb.DUTY_LIBRARY:
+            if d["group"] not in ("Daily activities", "Reward claims"):
+                continue
+            conf = (cfg.get("duties") or {}).get(d["id"]) or {}
+            if not conf.get("on"):
+                continue
+            row = state.get(d["id"]) or {}
+            st, txt = rb.duty_status(serial, d["id"], cfg)
+            last_ok = row.get("last_ok", 0)
+            ok_today = bool(last_ok) and time.strftime("%Y-%m-%d", time.gmtime(last_ok - rb._RESET_MIN[0] * 60)) == day
+            done_n += ok_today
+            queue.append({"id": d["id"], "title": d["title"], "group": d["group"], "status": st, "text": txt,
+                          "last_ok": last_ok if ok_today else 0, "msg": row.get("msg", "") if row.get("day") == day else "",
+                          "every": int(conf.get("every_min", d["every_min"]) or 0)})
+        rows = self.c.day_rows(serial)
+        t = rows.get(day) or {}
+        week = [rows[k] for k in sorted(rows)[-7:]]
+        name = next((x.get("name") for x in self.c.devices if x["id"] == serial), "") or serial
+        return {"serial": serial, "name": name, "now": now, "reset_at": reset_at, "tasks_on": bool(cfg.get("city_enabled")) or any(q for q in queue),
+                "queue": queue,
+                "results": {"joins": int(t.get("joins", 0)), "late": int(t.get("late", 0)), "restarts": int(t.get("restarts", 0)),
+                            "monsters": t.get("monsters") or {}, "duties_done": done_n},
+                "week": {"days": len(week), "joins": sum(int(w.get("joins", 0)) for w in week),
+                         "restarts": sum(int(w.get("restarts", 0)) for w in week)}}
 
     def duty_set(self, p):
         did = str(p.get("id", ""))
