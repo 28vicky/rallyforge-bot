@@ -275,15 +275,12 @@ function buildRibbon() {
       btn("Pause", () => act(api("pause", { serial: target() })), "", "pause"),
       btn("Stop", () => { S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop"), h("span", { class: "ribcount", id: "ribCount" })),
     grp("Tools",
-      S.dev ? btn("Generals ▾", (e) => menu(e.currentTarget, [
-        { label: "Manage generals", icon: "users", run: () => openGeneralManager() },
-        { label: "Scan generals", icon: "scan", run: () => scanGeneralsFlow() }]), "", "users")
-        : btn("Generals", () => openGeneralManager(), "", "users"),
-      btn("City ▾", (e) => menu(e.currentTarget, [
+      btn("Tools ▾", (e) => menu(e.currentTarget, [
+        { label: "Generals", icon: "users", run: () => openGeneralManager() },
+        ...(S.dev ? [{ label: "Scan generals", icon: "scan", run: () => scanGeneralsFlow() }] : []),
         { label: "Scan city", icon: "city", run: () => scanCityFlow(S.sel === "control" ? undefined : S.sel) },
-        { label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) }]), "", "city"),
-      btn("Profiles ▾", (e) => menu(e.currentTarget, [
-        { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "user"),
+        { label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) },
+        { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "grid"),
       btn("More ▾", (e) => menu(e.currentTarget, [
         { label: "Updates", icon: "refresh", run: () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); } },
         { label: "Close window (bots keep running)", icon: "eye", run: () => act(api("hide_window")) },
