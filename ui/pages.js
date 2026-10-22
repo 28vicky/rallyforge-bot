@@ -96,8 +96,8 @@ function listTable(cols, rows, onSel, selected) {
 // small expand icon for a card's header: the card fills the page (other cards hidden); Esc or the icon again goes back
 function cardMax(panelEl) {
   maxStyle();
-  const b = h("button", { class: "iconbtn cardmax", type: "button", title: "Maximize", "aria-label": "Maximize" });
-  const paint = (on) => { b.innerHTML = ""; b.appendChild(ico(on ? "mini" : "maxi")); b.title = on ? "Back to normal size (Esc)" : "Maximize"; b.setAttribute("aria-label", b.title); };
+  const b = h("button", { class: "iconbtn cardmax", type: "button", title: "Expand card", "aria-label": "Expand card" });
+  const paint = (on) => { b.innerHTML = ""; b.appendChild(ico(on ? "mini" : "maxi")); b.title = on ? "Back to normal size (Esc)" : "Expand card"; b.setAttribute("aria-label", b.title); };
   const fit = () => {
     const m = document.querySelector(".main");
     if (!panelEl.classList.contains("pmax") || !m || !panelEl.isConnected) return;
@@ -155,7 +155,7 @@ PAGES.dashboard = function () {
   const joins = panel(null, activityBox(null, null, true));
   joins.classList.add("joinscard");
   const jh = joins.querySelector(".joinsonly > h3");
-  if (jh) jh.replaceWith(h("div", { class: "cardhead" }, jh, cardMax(joins)));
+  if (jh) { const ch = h("div", { class: "cardhead" }); jh.replaceWith(ch); ch.append(jh, cardMax(joins)); }   // move jh after the swap (it cannot go inside its own replacement)
   return h("div", {}, hint, renderTodayAll(), joins);
 };
 // ====================================================================== instances (list, detect, found, profiles)
@@ -173,12 +173,14 @@ PAGES.instances = function () {
     });
   };
   draw();
-  const dev = panel("Instances", rows, h("div", { class: "row" },
+  const manage = (e) => menu(e.currentTarget, [
+    { label: "Clear empty rows", icon: "list", run: () => { S.devices = S.devices.filter((d) => d.id); if (!S.devices.length) S.devices.push({ id: "", name: "" }); draw(); applyDevs(); } },
+    { label: "Update instance list", icon: "refresh", run: applyDevs },
+    { label: "Show removed instances again", icon: "eye", run: async () => { if (!(await confirmBox("Removed instances", "Instances you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) { toast(j.restored ? `${j.restored} instance(s) can be detected again. Press Detect instances.` : "No instances were removed.", "ok"); } } }]);
+  const dev = panel("Instances", rows, h("div", { class: "row instbtns" },
     btn("+ Add device", () => { S.devices.push({ id: "", name: "" }); draw(); }),
     btn("Detect instances", detectDevices, "pri"),
-    btn("Clear empty rows", () => { S.devices = S.devices.filter((d) => d.id); if (!S.devices.length) S.devices.push({ id: "", name: "" }); draw(); applyDevs(); }),
-    btn("Update instance list", applyDevs),
-    btn("Show removed instances again", async () => { if (!(await confirmBox("Removed instances", "Instances you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) { toast(j.restored ? `${j.restored} instance(s) can be detected again. Press Detect instances.` : "No instances were removed.", "ok"); } }, "sm")),
+    btn("Manage list \u25be", manage)),
     note("Any number of instances can be in this list. Detect shows the instances it finds - you add the ones you want. Drag them in the left list to change the order. Instances you remove stay removed, even after a restart."));
   // ---- instances found by Detect but not added: one click each (nothing is added by itself)
   const addFound = async (ids) => {
@@ -193,11 +195,8 @@ PAGES.instances = function () {
       h("span", { class: "mute", style: { minWidth: "140px" } }, (a.name || "") + (a.removed ? "  (removed earlier)" : "")),
       btn("Add", () => addFound([a.id]), "sm pri"))),
     avail.length > 1 ? h("div", { class: "row", style: { marginTop: "8px" } }, btn("Add all " + avail.length, () => addFound(avail.map((a) => a.id)), "sm")) : null) : null;
-  const ctl = h("div", { class: "row", style: { marginBottom: "16px" } },
-    btn("Resume all", () => act(api("resume"))),                   // Start / Pause / Stop all live in the top bar and the sidebar
-    btn("Save settings", saveAll),
-    btn("More \u25be", (e) => menu(e.currentTarget, [{ label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }])));
-  return h("div", {}, ctl, found, dev);
+  dev.appendChild(h("div", { class: "instsave" }, btn("Save settings", saveAll)));   // changes also save by themselves; Start/Pause/Stop all are in the top bar, profiles in Tools
+  return h("div", {}, found, dev);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
@@ -1270,7 +1269,7 @@ function renderTodayCard(serial) {
 
 // ====================================================================== Today - all instances (Dashboard, nothing selected)
 function renderTodayAll() {
-  const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {}), stats = h("div", { class: "actstats tdtiles" });
+  const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {}), stats = h("div", { class: "tdtiles" });
   const nowCells = {};                                                    // serial -> "Doing now" cell, refreshed every second
   const card = h("div", { class: "panel today" },
     h("div", { class: "cardhead" }, h("h3", {}, "Today \u00b7 all instances"), h("div", { class: "row tdhr" }, head, null)), ce, stats,
@@ -1278,7 +1277,6 @@ function renderTodayAll() {
       h("thead", {}, h("tr", {}, ...["Instance", "Doing now", "Duties", "Joins", "Skipped (late)", "Failed", "Shield", "Buff"].map((c) => h("th", {}, c)))), body)));
   const fails = (serial) => S.acts.filter((l) => l.s === serial && l.a.k === "fail").length;
   const paintNow = () => {
-    paintStats(stats, null);
     for (const [s, td] of Object.entries(nowCells)) { const x = S.now[s]; const t = x ? x.text : "-"; if (td.textContent !== t) { td.textContent = t; td.title = t; } }
   };
   card.querySelector(".tdhr").appendChild(cardMax(card));
@@ -1309,6 +1307,11 @@ function renderTodayAll() {
     else if (!c.off.length) ce.append(h("span", {}, `on for all ${c.total} instance${c.total > 1 ? "s" : ""}`));
     else ce.append(h("span", { title: "Off on: " + c.off.join(", ") }, `\u26a0 off on ${c.off.length} of ${c.total}`), " \u00b7 ",
       h("a", { href: "#", title: "Switch the Crazy Eggs duty on for every instance", onclick: turnOn }, "turn on"));
+    const sum = (f) => j.rows.reduce((t, r) => t + f(r), 0);
+    const dt = sum((r) => r.duties_total), dd = sum((r) => r.duties_done), ft = sum((r) => fails(r.serial));
+    stats.innerHTML = "";
+    [["Duties", dt ? `${dd}/${dt}` : "-"], ["Joins", sum((r) => r.joins)], ["Skipped (late)", sum((r) => r.late)], ["Failed", ft]].forEach(([l, v]) =>
+      stats.appendChild(h("div", { class: "stile" + (l === "Failed" && ft ? " bad" : "") }, h("b", {}, String(v)), h("span", {}, l))));
     body.innerHTML = "";
     for (const k in nowCells) delete nowCells[k];
     if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: "8", class: "mute" }, "No instances in your list yet.")));

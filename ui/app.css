@@ -1154,3 +1154,21 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .panel.pmax .tdscroll{flex:1;min-height:0;overflow:auto}
 .panel.pmax .joinsonly{flex:1;min-height:0;display:flex;flex-direction:column}
 .panel.pmax .joinsonly .actwrap{max-height:none;flex:1;min-height:0}
+
+/* ===== Polish 22 Oct 19:52: one-row nav, Instances buttons, Today tiles, maximize spacing, sidebar footer ===== */
+.navrow{flex-wrap:nowrap;gap:8px}
+:root .navrow #tabs{flex:1 1 auto;flex-wrap:nowrap;min-width:0;gap:12px;overflow-x:auto;scrollbar-width:none}   /* never a 2nd line; narrow windows scroll the tabs */
+.navrow .tabs::-webkit-scrollbar{display:none}
+:root .navrow #tabs .tab{padding:9px 0}
+:root .navrow .ribbon{gap:6px}
+:root .navrow .ribbon .btn{padding:0 10px}
+.navrow .ribbon{flex:none;align-self:center}
+.navrow .ribbon .grp .cap{display:none}
+.instbtns{gap:8px;flex-wrap:wrap}
+.instsave{display:flex;justify-content:flex-end;margin-top:14px}
+.today .tdtiles{gap:12px}
+.today .tdtiles .stile{display:flex;flex-direction:column-reverse;align-items:flex-start;justify-content:flex-end;gap:4px;padding:12px;border-radius:8px;background:var(--bg);border:1px solid var(--line)}
+.today .tdtiles .stile.bad b{color:var(--bad)}
+.cardhead .tdhr{gap:16px}
+.iconbtn.cardmax{margin:4px 0 0 4px}
+:root .sidefoot{padding:14px 16px 16px}
