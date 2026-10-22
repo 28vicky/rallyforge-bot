@@ -220,7 +220,7 @@ DEFAULTS = {
     "city_enabled": False,                  # run the tasks (Tasks tab) while no rally is waiting
     "city_tasks": [],                       # [{name, enabled, target, steps, every_min}], see run_step()
     "duties": {},                           # {duty_id: {on, every_min}} - ready-made duties, see DUTY_LIBRARY
-    "wheel": {"button": 1, "spins": 10, "reserve": 0},   # Tavern > Wheel of Fortune: biggest button (1/10/100), spins to do (0 = until the coins are used up), coins to keep
+    "wheel": {"button": 1, "spins": 10, "reserve": 0, "chips": "off"},   # Tavern > Wheel of Fortune: biggest button (1/10/100), spins to do (0 = until the coins are used up), coins to keep
     "champions": {"plan": {}},                      # plan {champion: {taps, greets}}; empty = all on the champion the page opens on
     "crazy_eggs": {"eggs": {}, "lucky": "max", "min_hammers": 0},   # eggs {cost: {on, daily}}, lucky = egg cost / "max" / "" (none)
     "city_icons": {},                       # extra / changed right-side icon positions {name: [x, y]}
@@ -7777,7 +7777,8 @@ def wheel_conf(cfg):
     c = dict(cfg.get("wheel") or {})
     b = int(float(c.get("button", 1) or 1))
     return {"button": b if b in WHEEL_BTN else 1, "spins": max(0, min(int(float(c.get("spins", 10) or 0)), 9999999)),
-            "reserve": max(0, min(int(float(c.get("reserve", 0) or 0)), 999999999))}
+            "reserve": max(0, min(int(float(c.get("reserve", 0) or 0)), 999999999)),
+            "chips": c.get("chips") if c.get("chips") in ("off", "needed", "all") else "off"}
 
 
 def ce_conf(cfg):
@@ -8154,6 +8155,121 @@ def close_reward_panel(dev, stop, log=None):
     return closed
 
 
+WHEEL_ADD = (405, 147)                                               # "+" next to the coin count -> Purchase Chips page
+CHIP_ROWS = ("1K Chips", "500 Chips", "100 Chips")                   # rows with owned items; 5K Chips is sold for gems - never
+CHIP_MINUS, CHIP_PLUS, CHIP_LEFT_BTN, CHIP_USE = (82, 526), (452, 526), (156, 661), (380, 661)
+CHIP_RECEIVE_BOX = (50, 465, 390, 45)                               # "You can receive: n" (white, easier to read than "n / own")
+CHIP_CLOSE = (500, 296)
+CHIP_BATCH = 400                                                     # most +/- taps for one Use
+CHIP_UNIT = {"1K Chips": 1000, "500 Chips": 500, "100 Chips": 100}
+
+
+def wheel_spin_cost(spins, big):
+    cost = 0
+    for b in (100, 10, 1):
+        if b <= big:
+            n = spins // b
+            cost += n * WHEEL_COST[b]
+            spins -= n * b
+    return cost
+
+
+def chip_count(img, unit):
+    """Items set in the chip window, from "You can receive: n" / chips per item. -> int or None."""
+    x, y, w, h = CHIP_RECEIVE_BOX
+    txt = " ".join(t for t, _ in ocr_lines(img[y:y + h, x:x + w], 3.0))
+    m = re.search(r"([\d][\d,.]*)\s*$", txt.strip())
+    if not m:
+        return None
+    n = int(re.sub(r"[^0-9]", "", m.group(1)) or 0)
+    return n // unit if n and n % unit == 0 else None
+
+
+def chip_use_green(img, y):
+    """The row's button is the green "Use (owned)" one (the gem-price button is orange) -> True."""
+    b, g, r = (float(v) for v in img[y + 8:y + 32, 410:500].reshape(-1, 3).mean(0))
+    return g > r + 20 and g > b + 15
+
+
+def chip_use_row(dev, name, want, log, stop):
+    """Purchase Chips page is open: use `want` owned items of one row (None = all). Only a row whose button says "Use"
+    is pressed (a gem price button is never touched). -> number of items used."""
+    unit = CHIP_UNIT[name]
+    shot = dev.screenshot()
+    p = find_text(shot, [name], region=(90, 150, 260, 760), cutoff=0.95)
+    if not p or not chip_use_green(shot, p[1]):
+        return 0
+    dev.tap(455, p[1] + 18)
+    _nap(stop, 1.2, 1.6)
+    shot = dev.screenshot()
+    own = chip_count(shot, unit)                            # the window opens at the most = all owned
+    if not own or not find_text(shot, [name], region=(150, 310, 300, 80), cutoff=0.95):
+        log(f"[!]  Wheel: the {name} window did not look right - closed it")
+        dev.tap(*CHIP_CLOSE)
+        _nap(stop, 0.8, 1.0)
+        return 0
+    goal = own if want is None else min(want, own)
+    cur = own
+    if goal < own:                                          # go down from the minimum
+        dev.tap(*CHIP_LEFT_BTN)                            # "Minimum"
+        _nap(stop, 0.6, 0.8)
+        for _ in range(4):
+            cur = chip_count(dev.screenshot(), unit)
+            if not cur or cur == goal or stop.is_set():
+                break
+            d = goal - cur
+            for _ in range(min(abs(d), CHIP_BATCH)):
+                dev.tap(*(CHIP_PLUS if d > 0 else CHIP_MINUS))
+                _nap(stop, 0.08, 0.14)
+            _nap(stop, 0.4, 0.6)
+    if cur != goal:
+        log(f"[!]  Wheel: could not set {goal} x {name} (shows {cur if cur else '?'}) - nothing used")
+        dev.tap(*CHIP_CLOSE)
+        _nap(stop, 0.8, 1.0)
+        return 0
+    dev.tap(*CHIP_USE)
+    _nap(stop, 1.5, 2.0)
+    log(f"[i]   Wheel: used {goal:,} x {name} (+{goal * unit:,} coins)")
+    return goal
+
+
+def wheel_add_chips(dev, conf, coins, log, stop):
+    """Wheel page is open: top up the coins from chip items the account already owns (setting "needed" or "all").
+    "needed" adds 1K items for the spins still to do (+ the coins to keep); with "until out" it uses them all."""
+    mode = conf.get("chips", "off")
+    target, big = int(conf["spins"] or 0), int(conf["button"])
+    if mode == "off":
+        return
+    need = None
+    if mode == "needed" and target:
+        short = wheel_spin_cost(target, big) + int(conf["reserve"] or 0) - coins
+        if short <= 0:
+            return
+        need = -(-short // 1000)
+    dev.tap(*WHEEL_ADD)
+    _nap(stop, 1.8, 2.3)
+    if not find_text(dev.screenshot(), ["Purchase Chips"], region=(100, 5, 340, 60), cutoff=0.7):
+        log("[!]  Wheel: the Purchase Chips page did not open - spinning with the coins there are")
+    else:
+        rows = CHIP_ROWS[:1] if need is not None else CHIP_ROWS
+        for name in rows:
+            if stop.is_set():
+                break
+            left = need
+            while not stop.is_set():
+                used = chip_use_row(dev, name, None if left is None else min(left, CHIP_BATCH), log, stop)
+                if not used or left is None:
+                    break
+                left -= used
+                if left <= 0:
+                    break
+    for _ in range(3):                                     # back to the wheel
+        if wheel_on_page(dev.screenshot()):
+            break
+        dev.tap(46, 34)
+        _nap(stop, 1.2, 1.6)
+
+
 def run_wheel(dev, cfg, log, stop):
     """Tavern's ring menu is open: open the Wheel of Fortune and spin with the button the user picked until the number
     of spins is done, the coins run out (or fall to the reserve to keep) or something unexpected is on the screen.
@@ -8170,6 +8286,12 @@ def run_wheel(dev, cfg, log, stop):
         shot = dev.screenshot()
         if not wheel_on_page(shot):
             raise RuntimeError("the Wheel of Fortune page did not open")
+    if conf.get("chips", "off") != "off":
+        c0 = wheel_coins(shot)
+        if c0 is not None:
+            wheel_add_chips(dev, conf, c0, log, stop)
+            if not wheel_on_page(dev.screenshot()):
+                raise RuntimeError("could not get back to the Wheel of Fortune page after adding chips")
     done = 0
     fails = 0
     while not stop.is_set():
