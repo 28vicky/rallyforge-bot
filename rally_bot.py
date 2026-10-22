@@ -8202,7 +8202,7 @@ def ch_do_taps(dev, stop, log, name, want, serial, day):
         shot = dev.screenshot()
         if find_text(shot, ["interact with"], region=(0, 300, 540, 300), cutoff=0.7):          # "Are you sure you want to interact...?"
             box = find_text(shot, ["Don't show this again", "Don't show"], region=(100, 420, 440, 120), cutoff=0.65)
-            dev.tap(*((box[0] - 150, box[1]) if box and box[0] > 200 else (216, 486)))           # the tick box is left of its text
+            dev.tap(216, box[1] if box and 460 <= box[1] <= 510 else 486)                        # the tick box (the box is always at x 216; its text starts right of it)
             _nap(stop, 0.5, 0.8)
             p = find_text(dev.screenshot(), ["Confirm"], region=(150, 500, 300, 120), cutoff=0.7) or (380, 562)
             dev.tap(*p)
