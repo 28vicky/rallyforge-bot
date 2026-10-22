@@ -8629,8 +8629,8 @@ def run_alliance_science(dev, cfg, log, stop):
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
 DUTY_FILE = USER / "duties_state.json"
 _DUTY_LOCK = threading.Lock()
-DUTY_MAX_TRIES = 3                      # tries per game day before a duty gives up until the next reset
-DUTY_RETRY_MIN = 20                     # minutes between two tries of a duty that failed
+DUTY_MAX_TRIES = 3                      # failures in a game day before the alert + report (the duty never gives up)
+DUTY_RETRY_MIN = 60                     # minutes between two tries of a duty that failed (rallies are joined meanwhile)
 # group, id, title, what it does, schedule text, every_min (0 = once per game day), target, steps.
 # verified=False means the steps are a first guess from the game's menu text and have not been watched on a real
 # emulator yet - the interface shows them as "untested" until they are recorded.
@@ -8714,10 +8714,11 @@ def duty_record(serial, duty_id, ok, msg=""):
         row["msg"] = msg
         if ok:
             row["last_ok"], row["status"] = time.time(), "done"
-            if duty_id in ("crazy_eggs", "black_market"):
-                row["tries"] = 0
+            row["tries"] = 0                                     # fulfilled: failures start counting again from 0
         else:
-            row["status"] = "retry" if row["tries"] < DUTY_MAX_TRIES else "gaveup"
+            row["status"] = "retry"
+            if row["tries"] == DUTY_MAX_TRIES:                   # the 3rd failure today: alert + report once (it keeps trying every hour)
+                row["status"] = "gaveup"
         try:
             DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
         except OSError:
@@ -8768,7 +8769,7 @@ def tasks_active(cfg, serial):
 
 
 def duty_status(serial, duty_id, cfg):
-    """-> (status, text): status is off | waiting | due | done | retry | gaveup."""
+    """-> (status, text): status is off | waiting | due | done | retry | gaveup (failed 3+ times today, still retried hourly)."""
     conf = (cfg.get("duties") or {}).get(duty_id) or {}
     d = DUTY_BY_ID.get(duty_id)
     if not d or not conf.get("on"):
@@ -8779,20 +8780,18 @@ def duty_status(serial, duty_id, cfg):
     if duty_id == "crazy_eggs":                             # timer driven: comes back when the next egg is ready
         if row.get("all_done_day") == day:
             return "done", "All eggs done"
-        if tries >= DUTY_MAX_TRIES:
-            return "gaveup", "Gave up for today"
-        if tries and now - row.get("last_try", 0) < DUTY_RETRY_MIN * 60:
-            return "retry", "Retrying " + time.strftime("%H:%M", time.localtime(row.get("last_try", 0) + DUTY_RETRY_MIN * 60))
+        fs = _duty_fail_state(row, tries, now)
+        if fs:
+            return fs
         if row.get("next_at", 0) > now:
             return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"]))
         return "due", "Due"
     if duty_id == "black_market" and bm_keep_going(cfg):     # runs all day until the gems reach the floor / run out
         if row.get("end_day") == day:
             return "done", "Gems used up " + time.strftime("%H:%M", time.localtime(row.get("last_ok", 0) or now))
-        if tries >= DUTY_MAX_TRIES:
-            return "gaveup", "Failed 3 times - Retry"
-        if tries and now - row.get("last_try", 0) < DUTY_RETRY_MIN * 60:
-            return "retry", "Retrying " + time.strftime("%H:%M", time.localtime(row.get("last_try", 0) + DUTY_RETRY_MIN * 60))
+        fs = _duty_fail_state(row, tries, now)
+        if fs:
+            return fs
         if row.get("next_at", 0) > now:
             return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"]))
         return "due", "Due"
@@ -8803,12 +8802,21 @@ def duty_status(serial, duty_id, cfg):
             return "done", "Done " + time.strftime("%H:%M", time.localtime(last_ok))
     elif last_ok and now - last_ok < every * 60:
         return "done", "Done " + time.strftime("%H:%M", time.localtime(last_ok))
-    if tries >= DUTY_MAX_TRIES:
-        return "gaveup", "Gave up for today"
-    if tries and now - row.get("last_try", 0) < DUTY_RETRY_MIN * 60:
-        nxt = row.get("last_try", 0) + DUTY_RETRY_MIN * 60
-        return "retry", "Retrying " + time.strftime("%H:%M", time.localtime(nxt))
+    fs = _duty_fail_state(row, tries, now)
+    if fs:
+        return fs
     return "due", "Due"
+
+
+def _duty_fail_state(row, tries, now):
+    """A duty that failed: tried again every DUTY_RETRY_MIN minutes, all day (rallies are joined in between).
+    From the 3rd failure the status is 'gaveup' (red, with a Retry button) - it still keeps trying."""
+    if not tries or row.get("status") == "done" or now - row.get("last_try", 0) >= DUTY_RETRY_MIN * 60:
+        return None
+    nxt = time.strftime("%H:%M", time.localtime(row.get("last_try", 0) + DUTY_RETRY_MIN * 60))
+    if tries >= DUTY_MAX_TRIES:
+        return "gaveup", f"Failed {tries} times - next try {nxt}"
+    return "retry", "Retrying " + nxt
 
 
 def run_now_tasks(cfg, serial):
@@ -9623,9 +9631,10 @@ def duty_failed_report(dev, cfg, log, shown, why):
         path = str(p)
     except Exception as e:
         log(f"[!] Could not save the failure report: {e}")
-    log(f"[!] {shown} failed 3 times today ({why}) - press Retry on the Duties page."
+    log(f"[!] {shown} failed 3 times today ({why}) - it keeps trying every {DUTY_RETRY_MIN} min; Retry on the Duties page runs it now."
         + (f" Report saved: {path}" if path else ""))
-    notify(cfg, serial, f"{shown} failed 3 times today ({why}). Press Retry in the app." + (f" Report: {path}" if path else ""))
+    notify(cfg, serial, f"{shown} failed 3 times today ({why}). The bot keeps trying every {DUTY_RETRY_MIN} min."
+           + (f" Report: {path}" if path else ""))
 
 
 def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):

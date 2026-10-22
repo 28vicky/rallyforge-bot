@@ -548,7 +548,7 @@ function instItinerary(serial) {
     const mk = (f) => d.filter(f).map((x) => ({ when: x.text, name: x.title }));
     const mine = (j.events || []).filter((e) => row && e.emu === row.emu).slice(0, 12).map((e) => ({ when: fmtT(e.t), name: e.task + (e.ok ? "" : " - failed" + (e.msg ? ": " + e.msg : "")) }));
     root.innerHTML = "";
-    const parts = [grp("Overdue - waiting to run", mk((x) => x.status === "due" || x.status === "retry"), true), grp("Gave up today", mk((x) => x.status === "gaveup"), true),
+    const parts = [grp("Overdue - waiting to run", mk((x) => x.status === "due" || x.status === "retry"), true), grp("Failing - tried again every hour", mk((x) => x.status === "gaveup"), true),
       grp("Coming up", mk((x) => x.status === "waiting")), grp("Done today", mk((x) => x.status === "done")), grp("Latest things the bot did here", mine)].filter(Boolean);
     root.appendChild(panel("Itinerary",
       note("What this instance has to do, in plain order. Red = late or given up. Switch things on or off under Duties and Tasks; changes are picked up without stopping the instance."),
@@ -1218,7 +1218,7 @@ PAGES.duties = function (fixed, only, compact) {
       return;
     }
     if (!only) root.appendChild(panel("Duties",
-      note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes, retries 3 times a day if it fails, then waits for the next reset. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
+      note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes. If it fails, the bot goes back to the rallies and tries again every hour until it is done; after 3 failures you get an alert and a report is saved. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
       h("div", { class: "row" }, fixed !== undefined ? null : h("span", { class: "lab" }, "Settings for"), fixed !== undefined ? null : pick,
         serial && own.duties ? h("span", { class: "chip own" }, "own settings") : null,
         serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the universal setting") : null),
