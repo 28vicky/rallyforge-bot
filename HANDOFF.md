@@ -158,3 +158,9 @@ Published T13 dashboard-f7 (UI redesign to the mockup, live-checked on the owner
 ### 2.4.85 (22 Oct 09:45 IST) - joint release
 Published T17 feat/bm-fast-refresh (Black Market refresh ~4 s, ran live on K) and T18 feat/flow-record-beta (Record a task (beta) for every user + Save recordings as zip). No conflicts; syntax + 42-step click-through OK; check_release "version 2.4.85: OK". The owner PC can now install updates normally (nothing PC-only is left).
 
+
+### T-EGGS fix/crazy-eggs-find (22 Oct 18:30 IST) - READY for the joint release, not tested live
+Owner: Kulim/Huck/SexyPotato "Crazy Eggs: Gave up for today" although it is a permanent event.
+Cause (Kulim log 07:07): Event Center + Activities tab opened fine, but the bot looked for the "Crazy Eggs" row only on one screen + one swipe down; the list order differs per account, and the swipe scrolled the row off the top so the 2nd try never saw it. 3 fails -> gave up for the day.
+Fix: ce_find_in_list scrolls down the whole Activities list (stops when it no longer moves), then back up to the top; failure picture saved per instance (debug/crazy_eggs_2_failed_<serial>.png); Crazy Eggs never gives up - after 3 fails it retries every 2 h (DUTY_LONG_RETRY_MIN).
+Changelog line: "Crazy Eggs is found wherever it sits in the Activities list, and the bot keeps trying through the day instead of giving up."

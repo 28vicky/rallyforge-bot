@@ -7884,6 +7884,26 @@ def ce_close_panel(dev, stop):
         _nap(stop, 0.9, 1.3)
 
 
+def ce_find_in_list(dev, stop, img):
+    """Find the Crazy Eggs row on the Activities tab: the list order differs per account, so look
+    down the whole list (until it stops moving), then back up to the top. -> (x, y) or None."""
+    names = ["Crazy Eggs", "Crazy Egg"]
+    p = find_text(img, names, cutoff=0.72)
+    for sx, sy, ex, ey in ((270, 760, 270, 330), (270, 330, 270, 760)):     # down, then up
+        last = img
+        for _ in range(8):
+            if p or stop.is_set():
+                return p
+            dev.swipe(sx, sy, ex, ey, 450)
+            _nap(stop, 1.1, 1.5)
+            img = dev.screenshot()
+            p = find_text(img, names, cutoff=0.72)
+            if not p and cv2.absdiff(img[140:900], last[140:900]).mean() < 2:   # end of the list
+                break
+            last = img
+    return p
+
+
 def run_crazy_eggs(dev, cfg, log, stop):
     """On the Crazy Eggs screen: smash the ready eggs, use the Lucky Hammer, then note when to come back."""
     if ce_lucky_confirm(dev, stop):
@@ -7908,19 +7928,14 @@ def run_crazy_eggs(dev, cfg, log, stop):
             _nap(stop, 1.6, 2.2)
             img = dev.screenshot()
             ce_snap(img, "1_activities")
-            p = find_text(img, ["Crazy Eggs"], cutoff=0.72)
-            if not p:                                      # the list may be longer than the screen
-                dev.swipe(270, 700, 270, 350, 400)
-                _nap(stop, 1.0, 1.4)
-                img = dev.screenshot()
-                p = find_text(img, ["Crazy Eggs"], cutoff=0.72)
+            p = ce_find_in_list(dev, stop, img)
             if p:
                 dev.tap(*p)
                 _nap(stop, 2.5, 3.2)
                 if ce_on_screen(dev.screenshot()):
                     break
         else:
-            ce_snap(dev.screenshot(), "2_failed")
+            ce_snap(dev.screenshot(), "2_failed_" + re.sub(r"\W", "_", str(serial)))   # one picture per instance
             raise RuntimeError("the Crazy Eggs screen did not open")
     row = ce_row(serial)
     smashes = dict(row.get("smashes") or {}) if row.get("smash_day") == day else {}
@@ -8576,6 +8591,7 @@ DUTY_FILE = USER / "duties_state.json"
 _DUTY_LOCK = threading.Lock()
 DUTY_MAX_TRIES = 3                      # tries per game day before a duty gives up until the next reset
 DUTY_RETRY_MIN = 20                     # minutes between two tries of a duty that failed
+DUTY_LONG_RETRY_MIN = 120               # Crazy Eggs after 3 failed tries: try again every 2 h instead of giving up
 # group, id, title, what it does, schedule text, every_min (0 = once per game day), target, steps.
 # verified=False means the steps are a first guess from the game's menu text and have not been watched on a real
 # emulator yet - the interface shows them as "untested" until they are recorded.
@@ -8662,7 +8678,7 @@ def duty_record(serial, duty_id, ok, msg=""):
             if duty_id == "crazy_eggs":
                 row["tries"] = 0
         else:
-            row["status"] = "retry" if row["tries"] < DUTY_MAX_TRIES else "gaveup"
+            row["status"] = "retry" if row["tries"] < DUTY_MAX_TRIES or duty_id == "crazy_eggs" else "gaveup"
         try:
             DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
         except OSError:
@@ -8710,10 +8726,9 @@ def duty_status(serial, duty_id, cfg):
     if duty_id == "crazy_eggs":                             # timer driven: comes back when the next egg is ready
         if row.get("all_done_day") == day:
             return "done", "All eggs done"
-        if tries >= DUTY_MAX_TRIES:
-            return "gaveup", "Gave up for today"
-        if tries and now - row.get("last_try", 0) < DUTY_RETRY_MIN * 60:
-            return "retry", "Retrying " + time.strftime("%H:%M", time.localtime(row.get("last_try", 0) + DUTY_RETRY_MIN * 60))
+        gap = (DUTY_LONG_RETRY_MIN if tries >= DUTY_MAX_TRIES else DUTY_RETRY_MIN) * 60   # permanent event: never give up for the day
+        if tries and now - row.get("last_try", 0) < gap:
+            return "retry", "Retrying " + time.strftime("%H:%M", time.localtime(row.get("last_try", 0) + gap))
         if row.get("next_at", 0) > now:
             return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"]))
         return "due", "Due"
