@@ -1070,6 +1070,8 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 
 /* Button sizes: two only. Normal = :root .btn (34px tall, 14px sides), small = .btn.sm (30px, 10px). Top bar used its own 7px/12px. */
 :root .ribbon .btn{min-height:34px;padding:0 14px}
-/* Sidebar title: keep "RallyForge" and "Automation Hub" on one line each; the version pill no longer squeezes them. */
+/* Sidebar title: keep "RallyForge" and "Automation Hub" on one line each; the version pill drops under the title when the sidebar is narrow. */
+.side .brand{flex-wrap:wrap;row-gap:6px}
+.side .brand .bt{flex:1 1 100px}
 .side .brand .vpill{flex:none}
-.side .brand .bt b,.side .brand .bt small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side .brand .bt b,.side .brand .bt small{white-space:nowrap}
