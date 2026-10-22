@@ -394,9 +394,8 @@ function renderSide() {
   for (const d of S.devStatus) {
     L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", "Paused", "Problem", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
     const chip = d.state === "run" && d.kicked_at ? ["kicked", "warn"] : d.state === "run" && d.no_stamina ? ["no stamina", "warn"]
-      : d.state === "run" && busyTask(d.id) ? [busyTask(d.id), "ok"]
-      : d.state === "run" ? (d.joins ? ["joins " + d.joins, "ok"] : ["idle", ""]) : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : ["offline", "off"];
-    L.lastChild.querySelector(".nm").after(h("span", { class: "ichip " + chip[1] }, chip[0]));      // status at a glance on the right; Start/Pause/Stop live in the page header
+      : d.state === "run" ? (busyTask(d.id) ? [busyTask(d.id), "ok"] : ["idle", ""]) : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : ["offline", "off"];
+    L.lastChild.querySelector(".nm").after(h("span", { class: "ichip " + chip[1], title: d.state === "run" ? ((S.now[d.id] || {}).text || "Idle") + (d.joins ? " \u2022 " + d.joins + " joins" : "") : "" }, chip[0]));      // status at a glance on the right; Start/Pause/Stop live in the page header
     sideDrag(L.lastChild, d.id);
     if ((d.state === "pause" && d.resume_at) || (d.state === "run" && d.kicked_at)) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at || d.resume_at), "data-pre": d.kicked_at ? " back in " : "" })); }
   }
@@ -610,11 +609,21 @@ function logBox(serial, tall) {
 // ---- Activity screen: what the bot is doing, and how each rally went
 S.acts = []; S.now = {};
 const esc = (t) => String(t == null ? "" : t);
-// the duty / city task an instance is doing right now (from its latest step), shortened for the instance list
+// what an instance is doing right now (from its latest step), in a few words for the instance list; "" = nothing (idle)
 function busyTask(serial) {
-  const x = S.now && S.now[serial];
-  const m = x && /^(?:Duty|City task): (.+)$/.exec(x.text || "");
-  return m ? (m[1].length > 14 ? m[1].slice(0, 13) + "\u2026" : m[1]) : "";
+  const t = ((S.now && S.now[serial]) || {}).text || "";
+  const cut = (x) => (x.length > 16 ? x.slice(0, 15) + "\u2026" : x);
+  let m;
+  if (!t || /^(Looking|Idle|Auto-Join is on)/.test(t)) return "";
+  if ((m = /^(?:Duty|City task): (.+)$/.exec(t))) return cut(m[1]);
+  if ((m = /^Joining (.+?) rally/.exec(t))) return cut("joining " + m[1]);
+  if (/^(Trying preset|Choosing generals|Marching)/.test(t)) return "joining";
+  if (/^Checking stamina/.test(t)) return "stamina";
+  if (/Auto-Join/.test(t)) return "Auto-Join";
+  if (/^Taking the game back/.test(t)) return "taking back";
+  if (/^KICKED/.test(t)) return "";
+  if ((m = /^(Champions|Crazy Eggs)/.exec(t))) return m[1];
+  return cut(t.split(/[:\-(]/)[0].trim());
 }
 function actRow(v, l) {
   const a = l.a, k = a.k;
