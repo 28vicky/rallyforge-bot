@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.88", date: "2026-10-22",
+    new: [],
+    fixed: ["Champions: the bot now ticks 'Don't show this again for today', so the 'Are you sure you want to interact' question stops coming back and the taps go faster."] },
   { v: "2.4.87", date: "2026-10-22",
     new: [],
     fixed: ["Black Market no longer stops after the first purchase: it keeps buying and refreshing until your gem limit.", "'Stamina only' also sets the stamina items to pay with gems.",
