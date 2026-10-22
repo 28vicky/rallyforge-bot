@@ -241,7 +241,7 @@ const FIELD_HELP = {
   rally_enabled: "No = do not join rallies, only run the city tasks.",
   city_enabled: "Yes = do the city tasks when no rally is waiting.",
   game_reset_utc: "When the game's daily reset happens, in UTC (Evony: 00:00 UTC). At that moment every daily duty (Crazy Eggs hammer counts, daily claims) and every task starts again.",
-  tasks_first: "Yes = when a task or duty is due (an egg timer ended, a daily task) the bot leaves the rally list, does it, then comes back to rallies. No = tasks only run when no rally is waiting.",
+  tasks_first: "Yes = when a task or duty is due (an egg timer ended, a daily task) the bot first joins any rally already on screen, then leaves the rally list, does the task and comes back. No = tasks only run when no rally is waiting.",
   general_max_scrolls: "How many times to scroll the general list while looking for a general.",
   monster_presets: "Different presets per monster, e.g. Witch:1,2; Pan:3.",
   log_timers: "Yes = write the timers it reads into the log (useful for checking).",

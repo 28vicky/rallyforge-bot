@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.82", date: "2026-10-22",
+    new: [],
+    fixed: ["A rally that can be joined is now joined before the bot leaves for a due task (Crazy Eggs etc.) - no more rallies missed for a duty.", "Crazy Eggs no longer wanders into other events (e.g. Wishful Windmill) when the Event Center opens on the Limited tab.", "The bot no longer loops on the Alliance page: it reads the 'Alliance War' row by its words, and restarts the game after 6 taps that do not reach the rally list.", "Endless lag: after 4 lag waits of 20 s in a row the game is restarted instead of carrying on."] },
   { v: "2.4.81", date: "2026-10-21",
     new: ["Black Market: 33 ready-made item pictures now come with the app. On the Black Market page press \u201cAdd the ready-made pictures\u201d, remove the ones you do not want, then switch on Black Market."],
     fixed: ["Dark mode is hidden for now while the new look is finished. Your saved choice is kept and comes back when dark mode returns."] },

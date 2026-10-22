@@ -97,3 +97,7 @@ Stand-out plan: project doc claude/compare_and_stand_out.md (S1-S5). S1 = T10, S
 - Only change: "Bird of Hurricane" added to MONSTER_CATALOG (Limited-time event, level 1) so it has an on/off switch. Bot was joining it on all accounts (not in any skip list).
 - Owner still has to switch it off per account (or Claude writes config.json with the app closed; prepared copy adds "Bird of Hurricane": [1] to global + every per-device monster_skip).
 - Installing 2.4.79 on the PC replaces the dev copy v2.4.77 (feat/science-market + PC-only flow recorder).
+
+
+### 2.4.82 (22 Oct 08:55 IST) - log-fix chat
+Published: rally on screen joined before a due task (tasks_first no longer skips a joinable rally - the setting now has no effect, remove it in a later UI cleanup); Crazy Eggs Event Center/Windmill fix (feat/eggs-check); stuck guard - Alliance War row by words, restart Evony after 6 taps or 4 lag waits in a row (feat/stuck-guard). Not tested live.

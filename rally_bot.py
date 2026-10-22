@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.81"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.82"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -215,7 +215,7 @@ DEFAULTS = {
     "ui_name": 24,                          # emulator name heading size in px (18-40)
     "rally_enabled": True,                  # join rallies (first priority); off = the bot only does the tasks
     "game_reset_utc": "00:00",               # when the game's daily reset happens (UTC, HH:MM); daily duties start again then
-    "tasks_first": True,                    # a task/duty that is due (e.g. Crazy Eggs timer ended) goes before rallies; the bot comes back afterwards
+    "tasks_first": True,                    # a task/duty that is due goes before waiting for new rallies (a rally already on screen is always joined first)
     "city_enabled": False,                  # run the tasks (Tasks tab) while no rally is waiting
     "city_tasks": [],                       # [{name, enabled, target, steps, every_min}], see run_step()
     "duties": {},                           # {duty_id: {on, every_min}} - ready-made duties, see DUTY_LIBRARY
@@ -10104,10 +10104,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 city_day[0] = _game_day()
                 city_last.clear()
                 log("[*] The game day reset - all tasks start again")
-            if (not target or cfg.get("tasks_first", True) or run_now_list(serial)) and tasks_active(cfg, serial) and st == "rally_list" and now >= city_block[0]:
+            if (not target or run_now_list(serial)) and tasks_active(cfg, serial) and st == "rally_list" and now >= city_block[0]:
                 due = city_tasks_due(cfg, city_last, serial)
                 if due:
-                    log(f"[*] {'No rally waiting' if not target else 'A task is due, it goes before rallies'} - going to the city for {len(due)} task(s)")
+                    log(f"[*] {'No rally waiting' if not target else 'A task was started by hand'} - going to the city for {len(due)} task(s)")
                     if reach_city():
                         run_city_tasks(dev, cfg, log, stop, due, city_last)
                     else:
