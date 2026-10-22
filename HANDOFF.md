@@ -2,6 +2,10 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## LATEST (22 Oct 14:00) - 2.4.95 live, owner PC on 2.4.95
+- 2.4.89-2.4.95 released today: empty / out-of-date rally list reopen + Evony restart (max 1 per 30 min), loading-hang reopen, fast Start all, chip timers, Ymir picture, start countdown after update restart, Black Market fast Stop (T28), Resume all when everything is paused.
+- Full notes: project doc claude/handoff_22oct_1400.md (open items: update restart ends a manual pause; watch Dida/Princess for the new "does not show N rally(s)" log line).
+
 ## Branches
 - `origin/main` = published. Latest release 2.4.70. Do NOT publish unless the owner says so.
 - `ui-polish` = main + UI polish (Universal wording, Extra Large, readable Pause/Stop/primary buttons, Monsters = universal list, tour in Setup, Auto-Join time-left line, card/button sizes, contrast fixes). Pending the owner's OK to merge/publish.
