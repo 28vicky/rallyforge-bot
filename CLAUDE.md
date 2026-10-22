@@ -21,7 +21,7 @@ Owner: Vicky. Evony rally automation, Windows app. Repo 28vicky/rallyforge-bot. 
 - Keep thinking short. Ask the owner before anything that costs a lot of usage (live tests, screenshots, long reads, subagents, high-effort debugging).
 
 ## Release rules
-- Never publish unless the owner says so. Never push changed files to main without a release (users get checksum errors); use a branch.
+- Never publish unless the owner says so. (22 Oct) Chats do NOT publish their own work: push your feat/ branch and mark it ready in HANDOFF.md; one Release chat publishes all ready branches together when the owner asks. Never push changed files to main without a release (users get checksum errors); use a branch.
 - Release order: bump VERSION in rally_bot.py + changelog entry (ui/changelog.js) -> push files -> `git fetch` -> `python check_release.py origin/main` -> `make_update.py --notes "..." --templates . --monsters monsters --catalog catalog` with UPDATE_KEY (from the PC's %APPDATA%\RallyForgeBot\config.json; never print it) -> push version.json last -> check_release again.
 - Admin and free (no-login) installers are never shared with testers.
 - Every release (owner, 21 Oct): first remove junk files that are no longer needed (old pictures, test files, leftovers) and delete code that a fix replaced or that is no longer used (e.g. dropped features, old workarounds). Mention the clean-up in the changelog only if users notice it.
