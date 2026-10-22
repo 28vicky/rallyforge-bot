@@ -975,27 +975,6 @@ class Controller:
                 self.event("city_done", {"serial": serial})
         threading.Thread(target=work, daemon=True).start()
 
-    def scan_city_taps(self, serial):
-        job = self.city_job(serial, start=True)
-        adb = rb.find_adb(self.cfg.get("adb_path") or "auto")
-        if not adb:
-            raise ApiError("ADB not found. Set the ADB path in Settings.")
-        stop = threading.Event()
-        job.update(running=True, stop=stop, progress=None)
-        cfg = rb.merge_device_cfg(rb.load_config(), serial)          # this instance's own settings
-
-        def work():
-            try:
-                dev = self.ready_device(serial, adb, stop)
-                rb.scan_city_taps(dev, cfg, lambda m: self.log(m), stop, progress=lambda d: job.update(progress=d))
-            except Exception as e:
-                self.log(f"[!] City tap test: {e}")
-            finally:
-                job["running"] = False
-                job["progress"] = None
-                self.event("city_done", {"serial": serial})
-        threading.Thread(target=work, daemon=True).start()
-
     # ---- map the city by hand: the user clicks each building in a live picture of the emulator
     def manual_open(self, serial):
         if self.city_job(serial)["running"]:
@@ -2086,10 +2065,6 @@ class Api:
 
     def manual_goto(self, p):
         self.c.manual_goto(p["slot"])
-        return {}
-
-    def scan_city_taps_start(self, p):
-        self.c.scan_city_taps(p["serial"])
         return {}
 
     def city_result(self, p):
