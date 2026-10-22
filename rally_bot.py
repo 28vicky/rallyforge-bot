@@ -6748,6 +6748,13 @@ def free_refreshes(img, refresh):
     return 0
 
 
+def _sig_diff(a, b):
+    """How different two shop pictures are; a different number of goods (one sold out) counts as different."""
+    if a is None or b is None:
+        return None
+    return 255.0 if a.shape != b.shape else float(abs(a - b).mean())
+
+
 def _market_sig(img):
     """A small picture of the six items, to tell whether the shop changed after a refresh."""
     price, _ = _market_buttons(img)
@@ -7072,12 +7079,12 @@ def run_market(dev, cfg, log, stop):
             if not market_on_screen(shot):
                 break
             sg = _market_sig(shot)
-            if sg is not None and before is not None and abs(sg - before).mean() >= 2.0:
+            if (_sig_diff(sg, before) or 0) >= 2.0:
                 for _s in range(4):                          # new goods: wait until two pictures in a row agree (icons done drawing)
                     stop.wait(0.3)
                     s2 = dev.screenshot()
                     g2s = _market_sig(s2) if market_on_screen(s2) else None
-                    if g2s is not None and abs(g2s - sg).mean() < 2.0:
+                    if g2s is not None and _sig_diff(g2s, sg) < 2.0:
                         shot = s2
                         break
                     shot, sg = s2, g2s
@@ -7096,7 +7103,8 @@ def run_market(dev, cfg, log, stop):
             dev.back()
             _nap(stop, 0.8, 1.2)
             break
-        if _market_sig(shot) is not None and before is not None and abs(_market_sig(shot) - before).mean() < 2.0:
+        d = _sig_diff(_market_sig(shot), before)
+        if d is not None and d < 2.0:
             no_change += 1
             if no_change >= 2:
                 log("[!] Black Market: the shop did not change after refreshing (out of gems?) - stopping")
