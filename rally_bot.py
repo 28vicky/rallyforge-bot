@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.95"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.4.96"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -131,7 +131,7 @@ DEFAULTS = {
     "rally_timer_source": "progress_bar",   # where the rally countdown is read
     "march_timer_source": "",               # the game shows no march time on the rally list or the march screen: not read ("Spare time" covers it)
     "safety_margin": 4,                     # join only if rally_left - march_time >= this many seconds
-    "march_guess": 20,                      # march time used when it is not read (the walk to a rally is usually 10-20 s)
+    "march_guess": 15,                      # march time used when it is not read (the walk to a rally is usually 5-10 s)
     "max_rally_seconds": 0,                 # skip rallies with MORE than this left (0 = no limit)
     "log_timers": True,                     # log what was read for every Join button
     # monster filter: "off" = join any | "skip" = skip monsters in monster_list | "only" = join only those
@@ -1734,7 +1734,7 @@ def judge(screen, hit, cfg, extra=0.0):
         return rally, march, False, "rally timer unreadable"
     if cfg["max_rally_seconds"] and rally > cfg["max_rally_seconds"]:
         return rally, march, False, "more time left than max_rally_seconds"
-    guess = int(cfg.get("march_guess", 20) or 0)
+    guess = int(cfg.get("march_guess", 15) or 0)
     walk = march if march is not None else guess          # walk time not read: count the usual walk so stamina is not wasted
     spare = rally - walk - int(extra)
     note = "" if march is not None else f", march counted as {guess}s"
@@ -10168,7 +10168,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         limit = cfg.get("lost_seconds", 0)
         return bool(cfg["auto_launch_game"] and limit and time.time() - off_list[0] > limit)
 
-    log(f"[+] Running: join when rally time left minus march time ({cfg.get('march_guess', 20)}s unless read) "
+    log(f"[+] Running: join when rally time left minus march time ({cfg.get('march_guess', 15)}s unless read) "
         f"and the bot's own time is at least {cfg['safety_margin']}s, "
         f"presets {rot.presets} ({cfg['preset_mode']}).")
     if cfg["monster_mode"] != "off":
@@ -10546,7 +10546,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             log(f"[*] Rally{vs} with {left}s left -> joining")
             t_join = time.time()
             t_march = None
-            walk = last_march[0] if last_march[0] is not None else int(cfg.get("march_guess", 20) or 0)
+            walk = last_march[0] if last_march[0] is not None else int(cfg.get("march_guess", 15) or 0)
             t_deadline = t_join + left - walk - 2                     # latest moment to press March and still arrive in time
             mon_name = last_dn[0] or (mon if mon and mon != "hidden" else "?")
             base_name = last_base[0] or "?"

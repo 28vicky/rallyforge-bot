@@ -1,12 +1,12 @@
 {
-  "version": "2.4.95",
-  "notes": "Resume all on the main button when everything is paused",
+  "version": "2.4.96",
+  "notes": "Rallies with too little time left for your troops to arrive are skipped, so no stamina is wasted",
   "files": {
     "rally_bot.py": {
-      "sha256": "0e5c58823bf890f0881ae998cb877ce5c375c81728efdaedd9d3e1bd35cddd92"
+      "sha256": "fad092413b8743746f797a09592fe001e3a6db4e7ed1c148ba3b1e63b549dd5a"
     },
     "web_app.py": {
-      "sha256": "4041376cf3ada24e4bb227621b4dda17c181e55b49ef4af2e3b6268d52987ef9"
+      "sha256": "ff27674191f23e1106906c4b6d4fd473914c55d3e0a4038a368577824be30964"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "2dbf665f54478d933e1d9a135e7121510b647fa22b69fe5ed7801866e6212b70"
     },
     "ui/changelog.js": {
-      "sha256": "5e7a1d2d02274689720968723c8b552e4cbc6e58d9ac953e5ac9487542d7b26a"
+      "sha256": "ddd74d1d397f7fdfaf9286a9277ba1a4ad3e2a2de2b5dc3a6f6ed9d33c735533"
     },
     "ui/dialogs.js": {
       "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "301a5338cddcff14318017e676e7b296a3f756095d7ee05fd35d0ca75b0b946b"
+      "sha256": "02d95edb796f8b22f6dbf5aecd76e8514f2d553c81ae8206f364630007977a95"
     },
     "ui/tour.js": {
       "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
@@ -1621,5 +1621,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "bb0afe7a01aa68bbbb5426895e984f86338d13e202b3cb72da26846fdf233065"
+  "sig": "59c3cd33055969351d2d78cd518cc20ec68cb74a91e5ef43bff1a9ef0cb747c9"
 }

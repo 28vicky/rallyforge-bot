@@ -197,7 +197,7 @@ const FIELD_HELP = {
   presets: "Which game presets this instance uses, e.g. 1,2,3. Blank = the universal list.",
   preset_mode: "rotate = take presets in turn, random = any armed one, fixed = always the lowest.",
   safety_margin: "Join only if the rally has at least this many seconds to spare after the march.",
-  march_guess: "How long troops take to walk to a rally when the bot cannot read it (default 20 s).",
+  march_guess: "How long troops take to walk to a rally when the bot cannot read it (default 15 s).",
   max_rally_seconds: "Ignore rallies that still have more time than this (0 = no limit).",
   max_joins: "Stop this instance after this many joins (0 = never stop).",
   monster_mode: "off = join everything, skip = skip the ticked monsters, only = join only the ticked ones.",
@@ -703,7 +703,7 @@ PAGES.settings0 = function () {
     grid2(
       fld("ADB path (auto)", inp(c, "adb_path")), fld("Evony package name", inp(c, "evony_package")), fld("Pause lasts (minutes, 0 = until I press Pause again)", inp(c, "pause_minutes", { type: "int", cls: "short", get: (v) => (v === undefined ? 15 : v) })),
       fld("Presets if bot presets unused (1-8)", inp(c, "presets", { get: (v) => (v || []).join(","), set: (t) => parsePresets(t) || [1] })), fld("Preset mode", sel(c, "preset_mode", ["rotate", "random", "fixed"])),
-      fld("Join if spare time >= (s)", inp(c, "safety_margin", { type: "int", cls: "short" })), fld("March time if not read (s)", inp(c, "march_guess", { type: "int", cls: "short", get: (v) => (v === undefined ? 20 : v) })), fld("Skip if rally has more than (s, 0 = any)", inp(c, "max_rally_seconds", { type: "int", cls: "short" })),
+      fld("Join if spare time >= (s)", inp(c, "safety_margin", { type: "int", cls: "short" })), fld("March time if not read (s)", inp(c, "march_guess", { type: "int", cls: "short", get: (v) => (v === undefined ? 15 : v) })), fld("Skip if rally has more than (s, 0 = any)", inp(c, "max_rally_seconds", { type: "int", cls: "short" })),
       fld("Rally countdown read from", sel(c, "rally_timer_source", ["progress_bar", "join_button"])), fld("March time read from", sel(c, "march_timer_source", ["join_button", "progress_bar", "none"], { get: (v) => v || "none", set: (v) => (v === "none" ? "" : v) })),
       fld("Max joins per device (0 = no limit)", inp(c, "max_joins", { type: "int", cls: "short" })), fld("Buttons to tap to reach the rally list", inp(c, "rally_nav_steps", { get: (v) => (v || []).join(", "), set: (t) => parseNames(t) })),
       fld("Click delay (ms): lower = faster, higher = slower", inp(c, "click_delay_ms", { type: "int", cls: "short" })),
