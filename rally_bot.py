@@ -9689,6 +9689,13 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         lab = read_monster_label(screen[max(ny0 - 18, 0):ny0 + 18, max(nx0 - 150, 0):nx0 + 150])
                         if lab in MONSTER_NAMES:
                             mon = lab
+                            # first picture of a monster known only by name (e.g. Ymir): keep its portrait so the next
+                            # rally is recognised from the picture. Only a fully visible card - never a cut-off one.
+                            if lab != "Viking" and not cut_off(hit) and not any(_base_monster(n) == lab for n in _raw_monsters()):
+                                mdx, mdy = cfg["monster_offset"]
+                                mcx, mcy, mh = int(hit[0] + mdx), int(hit[1] + mdy), MON_SIZE // 2
+                                if mcy - mh >= MON_TOP + 10 and mcx - mh >= 0 and mcx + mh <= screen.shape[1] and mcy + mh <= screen.shape[0]:
+                                    learn_monster(lab, screen[mcy - mh:mcy + mh, mcx - mh:mcx + mh].copy(), cfg, log)
                     except Exception:
                         pass
                 if mon == "Viking":                                   # which set is it? level on the card + power decide
