@@ -1,9 +1,9 @@
 {
-  "version": "2.4.94",
-  "notes": "Resume all button when everything is paused",
+  "version": "2.4.95",
+  "notes": "Resume all on the main button when everything is paused",
   "files": {
     "rally_bot.py": {
-      "sha256": "050245fd9e70eb3bce176f9133ef07e8d2322326f781d11a335a243be15627f6"
+      "sha256": "0e5c58823bf890f0881ae998cb877ce5c375c81728efdaedd9d3e1bd35cddd92"
     },
     "web_app.py": {
       "sha256": "4041376cf3ada24e4bb227621b4dda17c181e55b49ef4af2e3b6268d52987ef9"
@@ -15,10 +15,10 @@
       "sha256": "4ff7eedebf38944d42b4aa916cb5ac634171902803e9b8170c63217262c933e1"
     },
     "ui/app.js": {
-      "sha256": "29ab8dec50bb47fa3b6b24f6a7b29419cd8e23e2a2482feba8a8164c096a6fdf"
+      "sha256": "2dbf665f54478d933e1d9a135e7121510b647fa22b69fe5ed7801866e6212b70"
     },
     "ui/changelog.js": {
-      "sha256": "8e8e2d84b58676eb5e7829eae8926a3099b317812aa2104b9699e2c23ae28291"
+      "sha256": "5e7a1d2d02274689720968723c8b552e4cbc6e58d9ac953e5ac9487542d7b26a"
     },
     "ui/dialogs.js": {
       "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
@@ -1621,5 +1621,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "01b5cdfe955b14cd028305f30e48889e4f76ee7229f46cdf79316927b9c7055c"
+  "sig": "bb0afe7a01aa68bbbb5426895e984f86338d13e202b3cb72da26846fdf233065"
 }
