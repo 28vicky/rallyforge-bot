@@ -1,5 +1,10 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.87", date: "2026-10-22",
+    new: [],
+    fixed: ["Black Market no longer stops after the first purchase: it keeps buying and refreshing until your gem limit.", "'Stamina only' also sets the stamina items to pay with gems.",
+      "Finding buildings in the city: half-read names are recognised (for example Hospital), a missed tap or a far-away spot is tried once more, and the Black Market opens on the first visit more often.",
+      "'Now executing' shows the duty the bot is doing."] },
   { v: "2.4.86", date: "2026-10-22",
     new: ["Black Market: pick what to buy by tapping pictures. Each item shows its picture and a plain name (for example Stamina 50 x10, Food 500M), sorted into Stamina, Resources, Chests, Gear and Other, with a search box and a 'Stamina only' button. Your earlier choices are kept.",
       "Logs: the Logs button now opens a Logs page where you choose the time (last 1 hour to 7 days) and the instance, then save the log as a zip. Each instance's Itinerary & Logs tab can save its own log too."],
