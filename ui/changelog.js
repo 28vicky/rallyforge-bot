@@ -1,5 +1,9 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Plain words please. */
 window.CHANGELOG = [
+  { v: "2.4.86", date: "2026-10-22",
+    new: ["Black Market: pick what to buy by tapping pictures. Each item shows its picture and a plain name (for example Stamina 50 x10, Food 500M), sorted into Stamina, Resources, Chests, Gear and Other, with a search box and a 'Stamina only' button. Your earlier choices are kept.",
+      "Logs: the Logs button now opens a Logs page where you choose the time (last 1 hour to 7 days) and the instance, then save the log as a zip. Each instance's Itinerary & Logs tab can save its own log too."],
+    fixed: ["Dropdowns show their arrow again."] },
   { v: "2.4.85", date: "2026-10-22",
     new: ["Record a task (beta): in Control settings > Setup > Settings you can record a task you play by hand (taps, swipes and a small picture of each step), give it a title and save all recordings as one zip to send to the developer. This helps us build new tasks faster."],
     fixed: ["Black Market refreshes about twice as fast (about 4 seconds instead of 9-12): the bot looks for the new goods as soon as they appear instead of waiting a fixed time."] },
