@@ -1,27 +1,27 @@
 {
-  "version": "2.4.98",
-  "notes": "Black Market only runs where its duty is on",
+  "version": "2.4.99",
+  "notes": "Today card, recorded duties, live settings, hourly duty retry, Black Market all day, emulator start and Crazy Eggs fixes",
   "files": {
     "rally_bot.py": {
-      "sha256": "83da54d839e6dd1086a73de6653b864cf445a047cdf0df911decd89e8922b916"
+      "sha256": "539ec3faeb43567a3fab3af18ec9b4472b514c63237e434fd6350a4963ea1fb4"
     },
     "web_app.py": {
-      "sha256": "8d6d6152b3856da5c609b2f8fee0cfa36dfb6c07089135307ce0c4a8ed92a74a"
+      "sha256": "ef8c3d8f73423dd27d1752a78b69a7a756988550d7071a51ab64fed51191c42e"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "4ff7eedebf38944d42b4aa916cb5ac634171902803e9b8170c63217262c933e1"
+      "sha256": "c41af95aa2ca9cfdc9d769a35151e5a8ce28846837d945d4962242a938f658dc"
     },
     "ui/app.js": {
-      "sha256": "2dbf665f54478d933e1d9a135e7121510b647fa22b69fe5ed7801866e6212b70"
+      "sha256": "ca28fd3c881c7cde7fb0afd004ce50a1a27826f0a8edeebf612c5ec614c28b3a"
     },
     "ui/changelog.js": {
-      "sha256": "f2df6d0adc44cdf46c8ee2c772d290fe6b38c98007de5720ba6eecaf0bde8d71"
+      "sha256": "108487e303bfcea235cf720193b34454d9f7fc2cc9268506f2effdc83e2568b7"
     },
     "ui/dialogs.js": {
-      "sha256": "b876bf4c00120ffef81877cafe7798137fdd2ee406ee8867af5ce2a1d02fea01"
+      "sha256": "cb14dbc570d46555e6f7212fd8779681fbeb828e781a7ea85381b6f2fb1b2da6"
     },
     "ui/fonts.css": {
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
@@ -30,10 +30,10 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "594bd60e57d159a5babd56fb01b33db75c16249b5e747e4dd73f3cce71ab5086"
+      "sha256": "7cd5431f9ff9995cdaa4bfc9abc648141d77d676e9c16f48a74706382093e1a8"
     },
     "ui/tour.js": {
-      "sha256": "ed75557e8c36b2a80bb7b72b52a071d6c9d77de062f3f9e29fe20150d62ea0c4"
+      "sha256": "97832158ac492e07b26ebeedf630bcd55ce7e70353d19df386aa183616bcac2a"
     }
   },
   "mode": "ask",
@@ -1621,5 +1621,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "7bc36b3dc42bca77eedecb61f3deb77d1da830326373963a03cfe23c87d8ffaa"
+  "sig": "266bc26b131e155f7f3109da69db551c364ef185c4ce091784cb80f5c2d0097a"
 }
