@@ -5173,7 +5173,7 @@ def force_restart_game(dev, cfg, log, stop):
     """Close Evony completely, open it again and wait until it is stable (used when the bot is lost)."""
     pkg = evony_package(dev.adb, dev.serial, cfg)
     log("[!] Lost for too long - restarting Evony")
-    LOADING[dev.serial] = ("restarting", time.time())
+    LOADING[dev.serial] = ("restart", time.time())
     _adb(dev.adb, dev.serial, "shell", "am", "force-stop", pkg)
     _nap(stop, 3, 4)
     while not _HEAVY_LOCK.acquire(timeout=2):             # loading Evony is heavy: one at a time

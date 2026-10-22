@@ -397,7 +397,7 @@ function renderSide() {
     const tm = d.state === "run" && d.kicked_at ? { "data-at": String(d.kicked_at) } : d.state === "run" && d.loading ? { "data-since": String(d.loading_since) }
       : d.state !== "run" && d.start_at ? { "data-at": String(d.start_at) } : null;
     const chip = d.state === "run" && d.kicked_at ? ["kicked", "warn"] : d.state === "run" && d.loading ? [d.loading, "warn"] : d.state === "run" && d.no_stamina ? ["no stamina", "warn"]
-      : d.state === "run" ? (busyTask(d.id) ? [busyTask(d.id), "ok"] : ["idle", ""]) : d.start_at ? ["starts in", "off"] : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : ["offline", "off"];
+      : d.state === "run" ? (busyTask(d.id) ? [busyTask(d.id), "ok"] : ["idle", ""]) : d.start_at ? ["start", "off"] : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : ["offline", "off"];
     L.lastChild.querySelector(".nm").after(h("span", { class: "ichip " + chip[1], title: d.state === "run" ? (d.loading ? "Emulator / game starting" : ((S.now[d.id] || {}).text || "Idle") + (d.joins ? " \u2022 " + d.joins + " joins" : "")) : d.start_at ? "Waiting for its turn in Start all" : "" },
       chip[0], tm ? h("span", Object.assign({ class: "ctimer" }, tm)) : null));      // status at a glance on the right; Start/Pause/Stop live in the page header
     sideDrag(L.lastChild, d.id);
@@ -442,7 +442,8 @@ function fmtLeft(sec) { sec = Math.max(0, Math.round(sec)); const m = Math.floor
 function tickPauseTimers() {
   document.querySelectorAll(".ctimer").forEach((e) => {          // timers inside the instance-list chips
     const now = Date.now() / 1000;
-    e.textContent = " " + (e.dataset.since ? fmtLeft(now - Number(e.dataset.since)) : fmtLeft(Number(e.dataset.at) - now));
+    const left = Number(e.dataset.at) - now;
+    e.textContent = " " + (e.dataset.since ? fmtLeft(now - Number(e.dataset.since)) : left > 0 ? fmtLeft(left) : "now");
   });
   document.querySelectorAll(".ptimer").forEach((e) => {
     const left = Number(e.dataset.at) - Date.now() / 1000;
