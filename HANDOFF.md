@@ -174,3 +174,8 @@ Owner: Huck sat on a screen and did not press Back (had to do it by hand). Log: 
 Fix: DeviceCtl.tap/swipe record dev.acted; main loop: on an "unknown" screen (rally_screen template known) with no tap for 90 s -> save debug/idle_<serial>.png, log "Nothing to do on this screen for 90s - pressing Back", press Back. Not on city (Back there opens Quit) or rally list.
 Changelog line: "If an instance sits on a screen it does not know, it now backs out by itself after about 1.5 minutes."
 Also checked: Huck Black Market is fine (once per game day, done 06:11; forced run 08:51 worked, BM 44 not offered; 390k gems vs 50k floor).
+### T-EGGS fix/crazy-eggs-find (22 Oct 18:30 IST) - READY for the joint release, not tested live
+Owner: Kulim/Huck/SexyPotato "Crazy Eggs: Gave up for today" although it is a permanent event.
+Cause (Kulim log 07:07): Event Center + Activities tab opened fine, but the bot looked for the "Crazy Eggs" row only on one screen + one swipe down; the list order differs per account, and the swipe scrolled the row off the top so the 2nd try never saw it. 3 fails -> gave up for the day.
+Fix: ce_find_in_list scrolls down the whole Activities list (stops when it no longer moves), then back up to the top; failure picture saved per instance (debug/crazy_eggs_2_failed_<serial>.png); Crazy Eggs never gives up - after 3 fails it retries every 2 h (DUTY_LONG_RETRY_MIN).
+Changelog line: "Crazy Eggs is found wherever it sits in the Activities list, and the bot keeps trying through the day instead of giving up."
