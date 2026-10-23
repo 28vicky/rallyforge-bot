@@ -895,7 +895,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .actbar{background:transparent;border:0;padding:0}
 .actnow{font-size:17px;font-weight:700;color:var(--fg)}
 :root .insthead h2{font-family:var(--font)!important;font-weight:800}
-#modeBtn{display:none!important}
 .inst .ichip{flex:none;font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:6px;background:rgba(107,114,128,.12);color:var(--mute);white-space:nowrap}
 .inst .ichip.ok{background:#ecfdf5;color:#047857}
 .inst .ichip.warn{background:#fffbeb;color:#b45309}
@@ -1526,3 +1525,8 @@ a.lnk,.lnkb,.viewall,.vlink{display:inline-flex;align-items:center;min-height:28
 .tdall td small.bad{color:var(--bad)}
 .app:not(.nosb) .status .sbl>.sbrun+span::before{content:none}
 .side h4 .cnt:empty{display:none}
+/* light / dark button next to the account in the sidebar footer (feat/appearance-access) */
+.whorow{display:flex;align-items:center;gap:8px}
+.whorow .whoami{flex:1;min-width:0}
+.whorow #modeBtn{width:32px;height:32px;box-shadow:none;background:transparent;border-color:transparent;color:var(--mute)}
+.whorow #modeBtn:hover{border-color:var(--line);color:var(--fg)}

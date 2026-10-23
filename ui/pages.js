@@ -1316,8 +1316,8 @@ PAGES.themes = function () {
   hexIn.onchange = () => { let v = hexIn.value.trim(); if (v && v[0] !== "#") v = "#" + v; if (/^#[0-9a-f]{6}$/i.test(v)) { setLook({ ui_accent: v.toLowerCase() }); drawLook(); } else toast("Type a colour like #d9a566.", "bad"); };
   drawLook();
   return h("div", {},
-    panel("Appearance", DARK_ON ? h("div", { class: "row", style: { gap: "16px" } }, h("span", { class: "lab" }, "Appearance"), segs, h("span", { class: "hint" }, "Light, dark, or follow Windows.")) : null,
-      note("The sun / moon button at the top right flips between dark and light from any tab.")),
+    DARK_ON ? panel("Light or dark", segs,
+      note("Follow Windows switches by itself when Windows does. The sun / moon button at the bottom of the sidebar flips it from any screen.")) : null,
     panel("Accent colour", note("Pick a colour for the highlights: the active tab, switches, the selected instance and the focus outlines. The text colour on top of it is chosen automatically so it stays readable."),
       h("div", { class: "row", style: { gap: "12px" } }, sw, picker, hexIn)),
     panel("Look", look,
