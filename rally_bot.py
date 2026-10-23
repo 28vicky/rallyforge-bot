@@ -10406,8 +10406,8 @@ def zoom_out_full(dev, cfg, stop, log):
 
 
 def run_map_city(dev, cfg, log, stop):
-    """Duty 'Map my city': at the widest zoom, walk the city in rows from the top-left corner (serpentine, views ~75 %
-    of a screen apart, a row ends where the camera stops), keep every view that shows buildings, then solve all the
+    """Duty 'Map my city': at the widest zoom, walk the city in rows from the top (each row left to its edge, then right
+    to the other edge; views ~75 % of a screen apart), keep every view that shows buildings, then solve all the
     views' places from their picture links at once and save them as keyframes. The finger only chooses the next drag."""
     leave_to_city(dev, cfg, stop, log)
     zoom_out_full(dev, cfg, stop, log)
@@ -10454,33 +10454,32 @@ def run_map_city(dev, cfg, log, stop):
             return True
         return False
 
-    nav.to_origin()                                        # top-left corner (the camera stops there)
+    for _ in range(20):                                    # to the top (the city is a diamond: its top is a point, so a
+        if stop.is_set():                                  # row there is one view wide and rows widen going down)
+            return
+        dx, dy, _ = nav._drag(270, 300, 270, 640)
+        drags[0] += 1
+        if abs(dy) < 4:
+            break
     nav.cx = nav.cy = 0.0
     keep(clean_shot())
-    dirx = 1
-    for row in range(12):
+    for row in range(14):
         if timed_out():
             break
-        empty = 0
-        for _ in range(12):                                # along the row
-            if timed_out():
-                break
-            mx, my = move(dirx * STEPX, 0)
-            if abs(mx) < STEPX * 0.3:                      # the edge: the camera did not follow the finger
-                break
-            if keep(clean_shot()):
-                empty = 0
-            else:
-                empty += 1
-                if empty >= 2:
+        for sign, n in ((-1, 8), (1, 16)):                 # each row: left to its edge, then right across to the other edge
+            for _ in range(n):
+                if timed_out():
                     break
+                mx, my = move(sign * STEPX, 0)
+                if abs(mx) < STEPX * 0.3:                  # the edge: the camera did not follow the finger
+                    break
+                keep(clean_shot())
         if timed_out():
             break
         mx, my = move(0, STEPY)                            # next row
         if abs(my) < STEPY * 0.3:
             break                                          # the bottom
         keep(clean_shot())
-        dirx = -dirx
     if len(views) < 2:
         log("[!]  Map my city: fewer than 2 views with buildings - nothing saved")
         return
