@@ -6239,14 +6239,13 @@ def real_wheel_zoom_out(dev, log, name=None, notches=6):
         u32.SetWindowPos(top, -1, 0, 0, 0, 0, 0x0043)     # HWND_TOPMOST for the scroll: other windows may cover it (PC 23 Oct)
         time.sleep(0.4)
         lowered = []
-        for _ in range(3):                                # always-on-top windows over it (e.g. the RallyForge launcher): lower them for the scroll
+        for _ in range(3):                                # windows in front of it (e.g. the RallyForge window): minimise them for the scroll
             cov = u32.GetAncestor(u32.WindowFromPoint(wintypes.POINT(cx, cy)), 2)
-            if not cov or cov == top or u32.IsChild(top, cov) or not (u32.GetWindowLongW(cov, -20) & 0x8):
+            if not cov or cov == top or u32.IsChild(top, cov) or u32.GetAncestor(h, 2) == cov:
                 break
-            u32.SetWindowPos(cov, -2, 0, 0, 0, 0, 0x0013)
+            u32.ShowWindow(cov, 6)                        # SW_MINIMIZE the window in front of the emulator for the scroll
             lowered.append(cov)
-            u32.SetWindowPos(top, -1, 0, 0, 0, 0, 0x0043)
-            time.sleep(0.2)
+            time.sleep(0.4)
         cov = u32.WindowFromPoint(wintypes.POINT(cx, cy))
         if cov not in (h, top) and not u32.IsChild(top, cov):
             def _wn(w):
@@ -6266,11 +6265,11 @@ def real_wheel_zoom_out(dev, log, name=None, notches=6):
         time.sleep(0.3)
         u32.SetCursorPos(old.x, old.y)
         u32.SetWindowPos(top, -2, 0, 0, 0, 0, 0x0013)     # HWND_NOTOPMOST again, no move/size/activate
-        for w in lowered:
-            u32.SetWindowPos(w, -1, 0, 0, 0, 0, 0x0013)   # always-on-top windows back on top
+        for w in reversed(lowered):
+            u32.ShowWindow(w, 4)                          # SW_SHOWNOACTIVATE: back as it was, without taking focus
         if prev:
             u32.SetForegroundWindow(prev)
-    log(f"[i] Zoom out: real Ctrl+wheel x{notches} over the emulator window ({cx},{cy})")
+    log(f"[i] Zoom out: real Ctrl+wheel x{notches} over the emulator window ({cx},{cy})" + (f", {len(lowered)} window(s) in front minimised for it" if lowered else ""))
     return True
 
 
