@@ -1,5 +1,13 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.3", date: "2026-10-23",
+    new: ["Royal Thief duty: when an alliance member invites you, the bot attacks a thief that is still alive - with Power First or the preset you choose - and keeps at it until it is killed.",
+      "Routines page redesigned: your daily activities on the left, the chosen one's settings on the right."],
+    fixed: ["Duties with nothing left to do stop for the day instead of coming back again.",
+      "Crazy Eggs and Champions stop once the day's eggs, taps and greets are used.",
+      "Train troops and Build traps type the right amount.",
+      "When several instances reopen Evony, they take turns in order, and one whose game won't load gets its emulator restarted.",
+      "The Updates page is simpler."] },
   { v: "2.5.2", date: "2026-10-23",
     new: ["Reports page: see which instance joined which monsters - today, this week or this month."],
     fixed: ["Today's monster joins are kept when the app restarts. They start again from zero at the game's daily reset.",
