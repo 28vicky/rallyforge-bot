@@ -9663,6 +9663,7 @@ def run_refining_card(dev, cfg, log, stop):
 
 
 # --- Activity > Go: reach a building without the city map ------------------------------------------------------------
+ACT_GO_BTN = (270, 750)                     # green Go button on an Activity task card
 MORE_BTN = (488, 648)                       # the round "..." button in the right column (fallback; normally 110 px above the word Alliance)
 
 
@@ -9731,8 +9732,22 @@ def _activity_go(dev, cfg, log, stop, tile, probe=False):
     rd_snap(shot, "ago_3_tile")
     if probe:
         log("[i]   Activity tile opened: " + " | ".join(t for t, _ in rd_lines(shot, (0, 200, 540, 700)))[:300])
-    if not rd_tap(dev, stop, ["Go"], region=(0, 300, 540, 660), whole=True, wait=(2.5, 3.0), shot=shot):
+    prog = re.search(r"progress[^0-9]*(\d+)\s*/\s*(\d+)", " ".join(t for t, _ in rd_lines(shot, (40, 380, 460, 200))).lower())
+    if prog:
+        log(f"[i]   {tile}: progress {prog.group(1)}/{prog.group(2)}")
+        if int(prog.group(1)) >= int(prog.group(2)) > 0:
+            log(f"[+]   {tile}: already complete today")
+            dev.back()
+            _nap(stop, 0.8, 1.0)
+            return "complete"
+    go = rd_find(shot, ["Go"], region=(100, 680, 340, 140), cutoff=0.8)
+    if go:
+        dev.tap(int(go[0]), int(go[1]))
+    elif prog or rd_seen(shot, ["Current Progress", "Complete all"], region=(40, 380, 460, 300)):
+        dev.tap(*ACT_GO_BTN)                             # the card is open: its green Go button's fixed spot
+    else:
         raise RuntimeError(f"no Go button on the '{tile}' card")
+    _nap(stop, 2.5, 3.0)
     shot = dev.screenshot()
     rd_snap(shot, "ago_4_after_go")
     if probe:
