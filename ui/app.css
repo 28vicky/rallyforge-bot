@@ -466,7 +466,7 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 /* general lists: grid view */
 .lst.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;align-content:start}
 .lst.grid .li{flex-direction:column;justify-content:flex-start;text-align:center;padding:8px 4px;gap:5px;font-size:13px;line-height:1.2}
-.lst.grid .li img{width:56px;height:62px}
+.lst.grid .li img{width:56px;height:62px;object-position:50% 12%}             /* portraits: keep the head in view (cover crops top + bottom) */
 .lst.grid .li .gname{flex:none!important;word-break:break-word}
 .lst.grid .li .gmeta,.lst.grid .li .hint{display:none}
 .lst.grid .empty{grid-column:1/-1}
