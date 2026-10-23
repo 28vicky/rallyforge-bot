@@ -10167,7 +10167,7 @@ _CITY_MAPS = {}                                            # serial -> CityMap (
 KF_MIN_PTS = 60                                            # agreeing feature points for a link / a locate
 KF_MIN_NCC = 0.5                                           # pixel correlation of the overlap: kills links between non-overlapping views
                                                            # made by the static HUD pixels inside CITY_VIEW (a confident 0,0 shift)
-KF_MAP_MINUTES = 8                                         # hard cap for one mapping
+KF_MAP_MINUTES = 12                                        # hard cap for one mapping (Kiravik 24 Oct: 21 views = half the city in 8 min)
 
 
 def _map_dir(dev):
@@ -10411,7 +10411,7 @@ def run_map_city(dev, cfg, log, stop):
     views' places from their picture links at once and save them as keyframes. The finger only chooses the next drag."""
     leave_to_city(dev, cfg, stop, log)
     zoom_out_full(dev, cfg, stop, log)
-    nav = CityNav(dev, stop, log)
+    nav = CityNav(dev, stop, log, pause=0.6)
     x, y, w, h = CITY_VIEW
     STEPX, STEPY = int(w * 0.65), 400                  # views overlap ~1/3 sideways, ~40 % downwards (one drag each)
     views = []                                             # [(crop_bgr, gray, feats, est_x, est_y)]
@@ -10500,6 +10500,8 @@ def run_map_city(dev, cfg, log, stop):
     edges = []
     for i in range(len(views)):
         for j in range(i + 1, len(views)):
+            if abs(views[i][3] - views[j][3]) > w * 1.3 or abs(views[i][4] - views[j][4]) > h * 1.3:
+                continue                                   # too far apart by the drags to overlap (solve 101 s -> ~40 s)
             s = _kf_link(views[i][2], views[j][2], views[i][1], views[j][1])
             if s:
                 edges.append((i, j, s[0], s[1], s[2]))
