@@ -92,7 +92,7 @@ Starter prompt for any chat: "Read CLAUDE.md and HANDOFF.md (section PARALLEL WO
 6. Owner's PC is shared: only ONE chat deploys / reopens the app at a time, and only after asking the owner. Write "PC: <task id> testing" in the PC line below while testing, clear it after.
 7. Low effort by default. Ask the owner before anything costly (live tests, screenshots, long reads, subagents, high-effort debugging).
 
-PC: free (dev copy v2.4.77 has feat/science-market + PC-only flow recorder; an update to 2.4.78 is offered and would replace it)
+PC: T54 testing (23 Oct 08:45 IST) - dev copy app\v2.4.99 = 2.5.5 + feat/monster-rally (rebased on 2.5.5, 4f9be51)
 
 PUBLISHED 2.4.76 (T8 update-restart) on 21 Oct 12:20 IST; check_release OK. Not yet tested live. main = origin/main.
 
