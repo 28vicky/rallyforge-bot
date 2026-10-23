@@ -6238,6 +6238,15 @@ def real_wheel_zoom_out(dev, log, name=None, notches=6):
         u32.SetForegroundWindow(top)
         u32.SetWindowPos(top, -1, 0, 0, 0, 0, 0x0043)     # HWND_TOPMOST for the scroll: other windows may cover it (PC 23 Oct)
         time.sleep(0.4)
+        lowered = []
+        for _ in range(3):                                # always-on-top windows over it (e.g. the RallyForge launcher): lower them for the scroll
+            cov = u32.GetAncestor(u32.WindowFromPoint(wintypes.POINT(cx, cy)), 2)
+            if not cov or cov == top or u32.IsChild(top, cov) or not (u32.GetWindowLongW(cov, -20) & 0x8):
+                break
+            u32.SetWindowPos(cov, -2, 0, 0, 0, 0, 0x0013)
+            lowered.append(cov)
+            u32.SetWindowPos(top, -1, 0, 0, 0, 0, 0x0043)
+            time.sleep(0.2)
         cov = u32.WindowFromPoint(wintypes.POINT(cx, cy))
         if cov not in (h, top) and not u32.IsChild(top, cov):
             def _wn(w):
@@ -6257,6 +6266,8 @@ def real_wheel_zoom_out(dev, log, name=None, notches=6):
         time.sleep(0.3)
         u32.SetCursorPos(old.x, old.y)
         u32.SetWindowPos(top, -2, 0, 0, 0, 0, 0x0013)     # HWND_NOTOPMOST again, no move/size/activate
+        for w in lowered:
+            u32.SetWindowPos(w, -1, 0, 0, 0, 0, 0x0013)   # always-on-top windows back on top
         if prev:
             u32.SetForegroundWindow(prev)
     log(f"[i] Zoom out: real Ctrl+wheel x{notches} over the emulator window ({cx},{cy})")
