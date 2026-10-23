@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## NEXT CHAT: read project doc claude/handoff_23oct_0740.md first (released today + open list: 1. too many game restarts, 2. slow building label search, 3. Rory Champions, 4. recorder on BlueStacks).
+
 ## LATEST (23 Oct 07:40 IST) - 2.5.3 live: everything ready went out (T39 Routines page, T40 Royal Thief kill side, T41 restart queue, T43 train amount, T44 Crazy Eggs/Champions stop, T46 done till reset, T50 Updates page, T51 tidy changelog). Owner: testers test and report / send logs. PC test copy = same content; installing 2.5.3 there is fine.
 
 ## EARLIER (23 Oct 07:30 IST) - 2.5.2 live: Reports page + monster joins kept across restarts (T48), world bosses never joined (T49). PC test build (test/all-23oct) has the rest (T39-T41, T43, T44, T46).
