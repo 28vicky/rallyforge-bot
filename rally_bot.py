@@ -9692,11 +9692,30 @@ ACT_GO_BTN = (270, 750)                     # green Go button on an Activity tas
 MORE_BTN = (488, 648)                       # the round "..." button in the right column (fallback; normally 110 px above the word Alliance)
 
 
+def find_more_btn(shot):
+    """The round '...' button: three orange dots in a row, ~17 px apart, in the right-hand column. -> (x, y) or None."""
+    try:
+        x0, y0 = 430, 420                                # below the event icons (their badges have orange dots too)
+        hsv = cv2.cvtColor(shot[y0:880, x0:540], cv2.COLOR_BGR2HSV)
+        m = cv2.inRange(hsv, (10, 120, 180), (30, 255, 255))
+        n, _, st, cen = cv2.connectedComponentsWithStats(m)
+        b = sorted((float(c[0]) + x0, float(c[1]) + y0) for c, a in zip(cen[1:], st[1:, 4]) if 40 <= a <= 100)
+        for i, (ax, ay) in enumerate(b):
+            row = [p for p in b if abs(p[1] - ay) <= 4 and 0 <= p[0] - ax <= 45]
+            xs = sorted(p[0] for p in row)
+            if len(xs) == 3 and all(12 <= xs[k + 1] - xs[k] <= 22 for k in range(2)):
+                return int(xs[1]), int(ay)
+    except Exception:
+        pass
+    return None
+
+
 def open_more_menu(dev, cfg, stop, log):
     """City screen: open the '...' (More) menu. -> screenshot with 'Activity' in it, or None."""
     shot = dev.screenshot()
-    ab = find_text(shot, ["Alliance"], region=(400, 200, 140, 740), cutoff=0.7)
-    spots = ([(int(ab[0]) - 7, int(ab[1]) - 110)] if ab else []) + [MORE_BTN]
+    mb = find_more_btn(shot)
+    ab = None if mb else find_text(shot, ["Alliance"], region=(400, 200, 140, 740), cutoff=0.7)
+    spots = ([mb] if mb else []) + ([(int(ab[0]) - 7, int(ab[1]) - 110)] if ab else []) + [MORE_BTN]
     for x, y in spots:
         dev.tap(x, y)
         _nap(stop, 1.2, 1.5)
