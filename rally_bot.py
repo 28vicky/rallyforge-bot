@@ -9949,9 +9949,27 @@ def learn_building(dev, shot, bname, x, y):
         pass
 
 
+def _learn_match(shot, tpl):
+    """Best match of a learned picture on the city view, at a few sizes. -> (score, (x, y) top-left on screen, size)"""
+    best = (0.0, None, 1.0)
+    for f in (1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 0.8):         # the city may be zoomed in (seen after a game restart, 23 Oct)
+        t = tpl if f == 1.0 else cv2.resize(tpl, None, fx=f, fy=f, interpolation=cv2.INTER_LINEAR)
+        if t.shape[0] >= 760 or t.shape[1] >= 460:
+            continue
+        r = cv2.matchTemplate(shot[90:860, 0:470], t, cv2.TM_CCOEFF_NORMED)
+        _, v, _, l = cv2.minMaxLoc(r)
+        if v > best[0]:
+            best = (v, (l[0], l[1] + 90), f)
+        if v >= 0.85:
+            break
+    return best
+
+
 def find_learned_building(dev, cfg, log, stop, bname):
-    """No Go route today: look for the building's learned picture on screen, panning the city in a small spiral.
-    -> True when its ring menu is open (name checked)."""
+    """No Go route today: find the building's learned picture on the city.
+    The city reopens wherever the camera was left (often far from the building; Kiravik 23 Oct 17:50: 17 spiral views
+    all 0.3), so: look here -> top-left corner -> the spot where it was found before -> sweep the whole city row by row
+    (each move measured from the pictures). The spot found is saved for next time. -> True when its ring menu is open."""
     p = _learn_path(dev, bname)
     if not p.exists():
         return False
@@ -9960,40 +9978,63 @@ def find_learned_building(dev, cfg, log, stop, bname):
         meta = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
     except Exception:
         return False
+    tag = "learn_" + re.sub(r"[^a-z]+", "_", bname.lower())
     scores = []
-    moves = [(0, 0), (260, 0), (0, 300), (-260, 0), (-260, 0), (0, -300), (0, -300), (260, 0), (260, 0),
-             (260, 0), (0, 300), (0, 300), (0, 300), (-260, 0), (-260, 0), (-260, 0), (-260, 0)]
-    for i, (mx, my) in enumerate(moves):
-        if stop.is_set():
-            return False
-        if mx or my:                                     # finger moves the other way: the map follows the finger
-            dev.swipe(270 + mx / 2, 460 + my / 2, 270 - mx / 2, 460 - my / 2, 500)
-            _nap(stop, 1.0, 1.3)
+    nav = None
+
+    def look(where):
         shot = dev.screenshot()
         if view_of(shot, cfg) != "city":
             leave_to_city(dev, cfg, stop, log)
             shot = dev.screenshot()
-        best = (0.0, None, 1.0)
-        for f in (1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 0.8):     # the city may be zoomed in (seen after a game restart, 23 Oct)
-            t = tpl if f == 1.0 else cv2.resize(tpl, None, fx=f, fy=f, interpolation=cv2.INTER_LINEAR)
-            if t.shape[0] >= 760 or t.shape[1] >= 460:
-                continue
-            r = cv2.matchTemplate(shot[90:860, 0:470], t, cv2.TM_CCOEFF_NORMED)
-            _, v, _, l = cv2.minMaxLoc(r)
-            if v > best[0]:
-                best = (v, l, f)
-            if v >= 0.85:
-                break
-        mv, ml, f = best
-        scores.append(f"{mv:.2f}@{f}")
-        if i == 0:
-            rd_snap(shot, "learn_" + re.sub(r"[^a-z]+", "_", bname.lower()) + "_0")
-        if mv >= 0.78:
-            x, y = ml[0] + int(meta["dx"] * f), ml[1] + 90 + int(meta["dy"] * f)
-            if 60 <= x <= 470 and 150 <= y <= 820 and open_building_here(dev, cfg, log, stop, bname, spots=[(x, y)], how=f"its learned picture (match {mv:.2f})"):
+        mv, ml, f = _learn_match(shot, tpl)
+        scores.append(f"{where}:{mv:.2f}")
+        if mv < 0.78:
+            return False
+        x, y = ml[0] + int(meta["dx"] * f), ml[1] + int(meta["dy"] * f)
+        if not (60 <= x <= 470 and 150 <= y <= 820):
+            return False
+        if nav is not None:                                # remember the spot (map pixels from the top-left corner)
+            meta["map"] = [round(nav.cx + x), round(nav.cy + y)]
+        if open_building_here(dev, cfg, log, stop, bname, spots=[(x, y)], how=f"its learned picture (match {mv:.2f}, {where})"):
+            if nav is not None:
+                try:
+                    p.with_suffix(".json").write_text(json.dumps(meta), encoding="utf-8")
+                except Exception:
+                    pass
+            return True
+        return False
+
+    if look("here"):
+        return True
+    rd_snap(dev.screenshot(), tag + "_0")
+    nav = CityNav(dev, stop, log)
+    nav.to_origin()
+    if stop.is_set():
+        return False
+    if meta.get("map"):                                    # found there before: straight to it
+        nav.goto(*meta["map"])
+        if look("saved spot"):
+            return True
+        nav.to_origin()
+    for row in range(5):                                   # serpentine: right along a row, down, back left ...
+        if stop.is_set():
+            return False
+        step = 300 if row % 2 == 0 else -300
+        for col in range(7):
+            if look(f"r{row}c{col}"):
                 return True
-    rd_snap(dev.screenshot(), "learn_" + re.sub(r"[^a-z]+", "_", bname.lower()) + "_last")
-    log(f"[i]   {bname}: its learned picture was not found on the city (best per view: {' '.join(scores)})")
+            mx, _ = nav.pan(step, 0)
+            if abs(mx) < 40:                               # the edge of the city (it is a diamond: rows differ in width)
+                break
+        before = nav.cy
+        nav.pan(0, 560)
+        if abs(nav.cy - before) < 40:                      # the bottom of the city
+            if look("bottom"):
+                return True
+            break
+    rd_snap(dev.screenshot(), tag + "_last")
+    log(f"[i]   {bname}: its learned picture was not found on the city ({' '.join(scores)})")
     return False
 
 # --- Alliance page ------------------------------------------------------------------------------------------------
