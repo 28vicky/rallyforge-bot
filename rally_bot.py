@@ -7757,6 +7757,9 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "alliance_science":
         run_alliance_science(dev, cfg, log, stop)
         return
+    if cmd == "activity_go":                               # More > Activity > tile > Go: the game itself walks to the building
+        activity_go(dev, cfg, log, stop, arg or "Greet Champion", probe=True)
+        return
     if cmd in RD_STEPS:                                    # recorded duties (tester flows 22 Oct)
         RD_STEPS[cmd](dev, cfg, log, stop)
         return
@@ -9630,6 +9633,70 @@ def run_refining_card(dev, cfg, log, stop):
     log(f"[+]  Refining Weekly Card: {n} reward(s) claimed")
 
 
+# --- Activity > Go: reach a building without the city map ------------------------------------------------------------
+MORE_BTN = (495, 592)                       # the round "..." button in the right column (fallback; found above the word Alliance)
+
+
+def open_more_menu(dev, stop, log):
+    """City screen: open the '...' (More) menu. -> screenshot with 'Activity' in it, or None."""
+    shot = dev.screenshot()
+    ab = find_text(shot, ["Alliance"], region=(400, 200, 140, 740), cutoff=0.7)
+    spots = ([(int(ab[0]), int(ab[1]) - 246)] if ab else []) + [MORE_BTN]
+    for x, y in spots:
+        dev.tap(x, y)
+        _nap(stop, 1.2, 1.5)
+        shot = dev.screenshot()
+        if rd_seen(shot, ["Activity"], region=(0, 100, 540, 800)):
+            return shot
+        rd_snap(shot, "ago_more_miss")
+        dev.back()
+        _nap(stop, 0.8, 1.0)
+    return None
+
+
+def activity_go(dev, cfg, log, stop, tile, probe=False):
+    """More > Activity > tap the daily's tile > Go. The game moves the camera to the building (any culture, any city
+    layout). probe=True saves a picture at every step (debug/duty_ago_*.png) and logs what is read. -> True when Go was pressed."""
+    shot = open_more_menu(dev, stop, log)
+    if shot is None:
+        raise RuntimeError("the '...' menu with Activity did not open")
+    rd_snap(shot, "ago_1_more")
+    if not rd_tap(dev, stop, ["Activity"], region=(0, 100, 540, 800), wait=(1.6, 2.0), shot=shot):
+        raise RuntimeError("no Activity in the '...' menu")
+    words = [tile] + ([tile.rstrip("s")] if tile.endswith("s") else [tile + "s"])
+    hit = None
+    for i in range(8):                                   # 3 tiles a row, the grid scrolls
+        shot = dev.screenshot()
+        if i == 0:
+            rd_snap(shot, "ago_2_activity")
+        hit = rd_find(shot, words, region=(0, 260, 540, 700), cutoff=0.75)
+        if hit or stop.is_set():
+            break
+        dev.swipe(270, 820, 270, 520, 600)
+        _nap(stop, 1.0, 1.2)
+    if not hit:
+        rd_snap(dev.screenshot(), "ago_2_notile")
+        raise RuntimeError(f"no '{tile}' tile on the Activity page")
+    dev.tap(int(hit[0]), int(hit[1]))
+    _nap(stop, 1.4, 1.8)
+    shot = dev.screenshot()
+    rd_snap(shot, "ago_3_tile")
+    if probe:
+        log("[i]   Activity tile opened: " + " | ".join(t for t, _ in rd_lines(shot, (0, 200, 540, 700)))[:300])
+    if not rd_tap(dev, stop, ["Go"], region=(0, 300, 540, 660), whole=True, wait=(2.5, 3.0), shot=shot):
+        raise RuntimeError(f"no Go button on the '{tile}' card")
+    shot = dev.screenshot()
+    rd_snap(shot, "ago_4_after_go")
+    if probe:
+        _nap(stop, 1.5, 2.0)
+        later = dev.screenshot()
+        rd_snap(later, "ago_5_later")
+        name = ring_building_name(later)
+        log(f"[i]   After Go: view {view_of(later, cfg)}, building label {name[0] if name else 'none'}; "
+            + " | ".join(t for t, _ in rd_lines(later, (0, 100, 540, 760)))[:300])
+    return True
+
+
 # --- Alliance page ------------------------------------------------------------------------------------------------
 def run_alliance_gift(dev, cfg, log, stop):
     """Alliance > Alliance Gift > Open All. Gifts keep coming all day: this runs every hour, and 'nothing to open'
@@ -10653,6 +10720,9 @@ DUTY_LIBRARY = [
     {"id": "reach_embassy", "group": "Common tasks", "title": "Test: go to Embassy", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Embassy and opens its menu (nothing is pressed).",
      "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Embassy"]},
+    {"id": "test_activity_go", "group": "Common tasks", "title": "Test: Activity Go (Greet Champion)", "every_min": 60, "verified": False,
+     "note": "Test only: '...' > Activity > Greet Champion > Go, saves a picture at every step. Nothing else is pressed.",
+     "target": "self:", "steps": ["activity_go Greet Champion"]},
     # recorded duties (tester flows 22 Oct 2026, project docs claude/flow_*.md). "opts" = the duty's own settings on the Duties page.
     {"id": "gold_levy", "group": "Daily activities", "title": "Gold Levy", "every_min": 0, "verified": False,
      "note": "Keep > Levy > Free Levy All. Gems Levy is never pressed. Needs the city map (Keep).",
