@@ -9953,7 +9953,7 @@ def run_royal_thief(dev, cfg, log, stop):
 # No free march: stay on the monster until it is rallied (owner 23 Oct 08:20) - only a march line to it or the monster
 # disappearing makes the bot move on. 'max_wait' minutes > 0 sets a limit (0 = no limit, the default).
 # Skipped: a monster that is gone (no Attack / other name on its page) or that a march line is already going to.
-MR_POLL_MIN = 5                          # look for a new target this often
+MR_POLL_MIN = 1                          # look for a new target this often (monsters die fast - owner 23 Oct)
 MR_FORGET_MIN = 30                       # a target that was started / skipped is not tried again for this long
 MR_CENTER = (272, 480)                   # the searched tile sits in the middle of the map
 MR_ALLIANCE_WAR = (384, 768)              # Alliance War button on a monster page (Attack sits at 170)
@@ -10220,7 +10220,7 @@ def _run_monster_rally(dev, cfg, log, stop):
     shot = _wait_view(dev, cfg, stop, "landscape", 30)
     if shot is None:
         return later(MR_POLL_MIN, "the map did not open")
-    for tgt in targets[:3]:                                 # a gone / busy monster: try the next coordinate
+    for tgt in targets[:10]:                                # a gone / busy monster: try the next coordinate
         if stop.is_set():
             return
         mode, preset = tgt["rule"]["time"], tgt["rule"]["preset"]   # this monster's own preset and rally time
