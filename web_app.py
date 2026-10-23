@@ -1564,6 +1564,69 @@ def open_path(path):
         pass
 
 
+# ---- start with Windows (T71): a Run-key entry pointing at the installed exe, never a copy of the exe.
+# A copied exe cannot start: it looks for its _internal folder next to itself ("Failed to load Python DLL").
+WIN_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+WIN_RUN_NAME = "RallyForgeBot"
+
+
+def win_startup_supported():
+    return os.name == "nt" and bool(getattr(sys, "frozen", False))
+
+
+def win_startup_on():
+    if not win_startup_supported():
+        return False
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, WIN_RUN_KEY) as k:
+            winreg.QueryValueEx(k, WIN_RUN_NAME)
+            return True
+    except OSError:
+        return False
+
+
+def win_startup_set(on):
+    if not win_startup_supported():
+        return
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, WIN_RUN_KEY, 0, winreg.KEY_SET_VALUE) as k:
+        if on:
+            winreg.SetValueEx(k, WIN_RUN_NAME, 0, winreg.REG_SZ, f'"{os.path.abspath(sys.executable)}"')
+        else:
+            try:
+                winreg.DeleteValue(k, WIN_RUN_NAME)
+            except OSError:
+                pass
+
+
+def win_startup_repair(log=None):
+    """Every launch: remove RallyForge exe copies from the Startup folder (they cannot run) and keep the Run entry
+    pointing at this exe (the install folder may have moved). A copy found there means the user wanted it -> Run entry on."""
+    if not win_startup_supported():
+        return
+    me = os.path.abspath(sys.executable)
+    folder = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    wanted = False
+    try:
+        for f in folder.glob("*.exe"):
+            if (f.name.lower() == os.path.basename(me).lower() or f.name.lower().startswith("rallyforge")) and os.path.abspath(f) != me:
+                try:
+                    f.unlink()
+                    wanted = True
+                    if log:
+                        log(f"[*] Removed a copy of the app from the Windows Startup folder ({f.name}); it now starts with Windows the proper way.")
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    try:
+        if wanted or win_startup_on():
+            win_startup_set(True)
+    except OSError:
+        pass
+
+
 class Api:
     """One method per button. Each takes the JSON the page sent and returns a dict (or raises ApiError)."""
 
@@ -2093,6 +2156,19 @@ class Api:
         rb.LOG_DIR.mkdir(exist_ok=True)
         open_path(rb.LOG_DIR)
         return {"path": str(rb.LOG_DIR)}
+
+    # ---- start with Windows (T71)
+    def win_startup(self, p):
+        return {"supported": win_startup_supported(), "on": win_startup_on()}
+
+    def win_startup_set(self, p):
+        if not win_startup_supported():
+            raise ApiError("Start with Windows works only in the installed app.")
+        try:
+            win_startup_set(bool(p.get("on")))
+        except OSError as e:
+            raise ApiError(f"Windows did not accept the change: {e}")
+        return {"on": win_startup_on()}
 
     # ---- profiles
     def profile_save(self, p):
@@ -2736,7 +2812,16 @@ def open_window(url, ctl):
 
 
 def main():
+    if getattr(sys, "frozen", False):
+        try:
+            os.chdir(os.path.dirname(os.path.abspath(sys.executable)))   # started by Windows: the folder is System32 otherwise
+        except OSError:
+            pass
     ctl = Controller()
+    try:
+        win_startup_repair(ctl.log)
+    except Exception:
+        pass
     try:
         rb.setup_tesseract()                                  # the scans read general names with OCR
     except Exception:

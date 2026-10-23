@@ -700,6 +700,23 @@ function staminaPanel(store, base) {
 PAGES.settings = function () {
   const r = PAGES.settings0(); r.insertBefore(panel("Tour", note("A short walkthrough of where to click and how to set up your presets and start the bot."), h("div", { class: "row" }, btn("Take the tour", () => startTour()))), r.firstChild); return r;                  // themes live on their own Themes tab only
 };
+// T71: start the app with Windows - a Windows setting, saved at once (not part of Save / Discard)
+function winStartRow() {
+  const box = h("input", { type: "checkbox", disabled: true });
+  const row = h("div", { style: { marginBottom: "8px" } }, h("label", { class: "tgl" }, box, h("span", { class: "sw" }), "Start RallyForge when Windows starts"));
+  api("win_startup").then((j) => {
+    if (!j || !j.supported) { row.style.display = "none"; return; }
+    box.checked = !!j.on; box.disabled = false;
+  }).catch(() => { row.style.display = "none"; });
+  box.addEventListener("change", async () => {
+    box.disabled = true;
+    const j = await act(api("win_startup_set", { on: box.checked }));
+    if (j) { box.checked = !!j.on; toast(j.on ? "RallyForge will start with Windows." : "RallyForge will no longer start with Windows.", "ok"); }
+    else box.checked = !box.checked;
+    box.disabled = false;
+  });
+  return row;
+}
 PAGES.settings0 = function () {
   const c = S.cfg;
   const g = panel("Universal settings (every instance, unless it has its own)",
@@ -718,6 +735,7 @@ PAGES.settings0 = function () {
   const lr = panel("Low RAM / weak PC", h("div", { id: "ramInfo", class: "hint", style: { marginBottom: "10px" } }, "PC memory: ..."),
     tog(c, "low_memory", "Low-memory mode (no live picture, shorter logs, one text reading at a time, lower priority, slower instance start-up)"),
     h("div", { style: { marginBottom: "8px" } }, tog(c, "keep_running_on_close", "Keep the bots running in the background when I close this window (off = closing the window stops everything)")),
+    winStartRow(),
     h("div", { style: { marginBottom: "12px" } }, tog(c, "auto_start", "Start all instances by itself whenever the app opens (default for every instance - each one can override it on its own page)")),
     grid2(fld("Gap between starting one instance and the next (seconds)", inp(c, "start_gap_seconds", { type: "int", cls: "short" })),
       fld("Run at most this many instances at once (0 = no limit)", inp(c, "max_running_emulators", { type: "int", cls: "short" })),
