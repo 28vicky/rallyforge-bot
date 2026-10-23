@@ -1,0 +1,711 @@
+{
+ "built": "2026-10-21",
+ "generals": [
+  {
+   "name": "Alfred the Great",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ranged Troop"
+   ],
+   "art": "Alfred the Great.png"
+  },
+  {
+   "name": "Andrew Jackson",
+   "region": [
+    "America"
+   ],
+   "troops": [
+    "Subordinate City"
+   ],
+   "art": "Andrew Jackson.png"
+  },
+  {
+   "name": "Arminius",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Subordinate City"
+   ],
+   "art": "Arminius.png"
+  },
+  {
+   "name": "Attila",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Mounted Troop"
+   ],
+   "art": "Attila.png"
+  },
+  {
+   "name": "Aurelian",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ground Troop",
+    "Mounted Troop"
+   ],
+   "art": "Aurelian.png"
+  },
+  {
+   "name": "Casimir Pulaski",
+   "region": [
+    "America"
+   ],
+   "troops": [],
+   "art": "Casimir Pulaski.png"
+  },
+  {
+   "name": "Charles Martel",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Subordinate City"
+   ],
+   "art": "Charles Martel.png"
+  },
+  {
+   "name": "Charles the Great",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Subordinate City"
+   ],
+   "art": "Charles the Great.png"
+  },
+  {
+   "name": "Charles XII",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ranged Troop"
+   ],
+   "art": "Charles XII.png"
+  },
+  {
+   "name": "Cyrus the Great",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Subordinate City"
+   ],
+   "art": "Cyrus the Great.png"
+  },
+  {
+   "name": "Edward Teach",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Siege Machine"
+   ],
+   "art": "Edward Teach.png"
+  },
+  {
+   "name": "Edward the Black Prince",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ranged Troop"
+   ],
+   "art": "Edward the Black Prince.png"
+  },
+  {
+   "name": "Eulji Mundeok",
+   "region": [
+    "Korea"
+   ],
+   "troops": [
+    "Duty"
+   ],
+   "art": "Eulji Mundeok.png"
+  },
+  {
+   "name": "Gaius Marius",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Administration"
+   ],
+   "art": "Gaius Marius.png"
+  },
+  {
+   "name": "George A. Custer",
+   "region": [
+    "America"
+   ],
+   "troops": [],
+   "art": "George A. Custer.png"
+  },
+  {
+   "name": "Gustavus Adolphus",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Mixed"
+   ],
+   "art": "Gustavus Adolphus.png"
+  },
+  {
+   "name": "Gwanggaeto the Great",
+   "region": [
+    "Korea"
+   ],
+   "troops": [
+    "Mixed"
+   ],
+   "art": "Gwanggaeto the Great.png"
+  },
+  {
+   "name": "Gwon Ryul",
+   "region": [
+    "Korea"
+   ],
+   "troops": [],
+   "art": "Gwon Ryul.png"
+  },
+  {
+   "name": "Henry V",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ranged Troop"
+   ],
+   "art": "Henry V.png"
+  },
+  {
+   "name": "Himiko",
+   "region": [
+    "Japan"
+   ],
+   "troops": [
+    "Ranged Troop"
+   ],
+   "art": "Himiko.png"
+  },
+  {
+   "name": "Honda Tadakatsu",
+   "region": [
+    "Japan"
+   ],
+   "troops": [],
+   "art": "Honda Tadakatsu.png"
+  },
+  {
+   "name": "Isabella",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Mixed"
+   ],
+   "art": "Isabella.png"
+  },
+  {
+   "name": "Jadwiga",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Defense"
+   ],
+   "art": "Jadwiga.png"
+  },
+  {
+   "name": "Jefferson",
+   "region": [
+    "America"
+   ],
+   "troops": [
+    "Subordinate City"
+   ],
+   "art": "Jefferson.png"
+  },
+  {
+   "name": "John Buford",
+   "region": [
+    "America"
+   ],
+   "troops": [
+    "Administration"
+   ],
+   "art": "John Buford.png"
+  },
+  {
+   "name": "John Churchill",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Siege Machine"
+   ],
+   "art": "John Churchill.png"
+  },
+  {
+   "name": "John I of Portugal",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Duty"
+   ],
+   "art": "John I of Portugal.png"
+  },
+  {
+   "name": "Jumong",
+   "region": [
+    "Korea"
+   ],
+   "troops": [
+    "Ranged Troop"
+   ],
+   "art": "Jumong.png"
+  },
+  {
+   "name": "Kim Si-min",
+   "region": [
+    "Korea"
+   ],
+   "troops": [
+    "Mixed"
+   ],
+   "art": "Kim Si-min.png"
+  },
+  {
+   "name": "King Arthur",
+   "region": [
+    "Europe"
+   ],
+   "troops": [],
+   "art": "King Arthur.png"
+  },
+  {
+   "name": "King Sejong",
+   "region": [
+    "Korea"
+   ],
+   "troops": [
+    "Subordinate City"
+   ],
+   "art": "King Sejong.png"
+  },
+  {
+   "name": "Kusunoki Masashige",
+   "region": [
+    "Japan"
+   ],
+   "troops": [
+    "Defense"
+   ],
+   "art": "Kusunoki Masashige.png"
+  },
+  {
+   "name": "Laudon",
+   "region": [
+    "Europe"
+   ],
+   "troops": [],
+   "art": "Laudon.png"
+  },
+  {
+   "name": "Lincoln",
+   "region": [
+    "America"
+   ],
+   "troops": [
+    "Subordinate City"
+   ],
+   "art": "Lincoln.png"
+  },
+  {
+   "name": "Lucilla",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ground Troop",
+    "Mounted Troop"
+   ],
+   "art": "Lucilla.png"
+  },
+  {
+   "name": "Margaret I",
+   "region": [
+    "Europe"
+   ],
+   "troops": [],
+   "art": "Margaret I.png"
+  },
+  {
+   "name": "Matthias I",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Mixed"
+   ],
+   "art": "Matthias I.png"
+  },
+  {
+   "name": "Mihai",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ranged Troop"
+   ],
+   "art": "Mihai.png"
+  },
+  {
+   "name": "Minamoto no Yoshitsune",
+   "region": [
+    "Japan"
+   ],
+   "troops": [
+    "Ranged Troop"
+   ],
+   "art": "Minamoto no Yoshitsune.png"
+  },
+  {
+   "name": "Napoleon",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Mixed"
+   ],
+   "art": "Napoleon.png"
+  },
+  {
+   "name": "Narcissus",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ground Troop",
+    "Mounted Troop"
+   ],
+   "art": "Narcissus.png"
+  },
+  {
+   "name": "Nathanael Greene",
+   "region": [
+    "America"
+   ],
+   "troops": [],
+   "art": "Nathanael Greene.png"
+  },
+  {
+   "name": "Oda Nobunaga",
+   "region": [
+    "Japan"
+   ],
+   "troops": [
+    "Ground Troop",
+    "Mounted Troop"
+   ],
+   "art": "Oda Nobunaga.png"
+  },
+  {
+   "name": "Pyrrhus",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ground Troop",
+    "Mounted Troop"
+   ],
+   "art": "Pyrrhus.png"
+  },
+  {
+   "name": "Queen Boudica",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Defense"
+   ],
+   "art": "Queen Boudica.png"
+  },
+  {
+   "name": "Queen Jindeok",
+   "region": [
+    "Korea"
+   ],
+   "troops": [
+    "Administration"
+   ],
+   "art": "Queen Jindeok.png"
+  },
+  {
+   "name": "Queen Victoria",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Mixed"
+   ],
+   "art": "Queen Victoria.png"
+  },
+  {
+   "name": "Richard the Lionheart",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Defense"
+   ],
+   "art": "Richard the Lionheart.png"
+  },
+  {
+   "name": "Robert the Bruce",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ground Troop",
+    "Mounted Troop"
+   ],
+   "art": "Robert the Bruce.png"
+  },
+  {
+   "name": "Roland",
+   "region": [
+    "Europe"
+   ],
+   "troops": [],
+   "art": "Roland.png"
+  },
+  {
+   "name": "Sanada Yukimura",
+   "region": [
+    "Japan"
+   ],
+   "troops": [
+    "Administration"
+   ],
+   "art": "Sanada Yukimura.png"
+  },
+  {
+   "name": "Scipio Africanus",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ground Troop",
+    "Mounted Troop"
+   ],
+   "art": "Scipio Africanus.png"
+  },
+  {
+   "name": "Sherman",
+   "region": [
+    "America"
+   ],
+   "troops": [
+    "Siege Machine"
+   ],
+   "art": "Sherman.png"
+  },
+  {
+   "name": "Shimazu Yoshihiro",
+   "region": [
+    "Japan"
+   ],
+   "troops": [
+    "Administration"
+   ],
+   "art": "Shimazu Yoshihiro.png"
+  },
+  {
+   "name": "Skanderbeg",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Duty"
+   ],
+   "art": "Skanderbeg.png"
+  },
+  {
+   "name": "Soult",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ground Troop",
+    "Mounted Troop"
+   ],
+   "art": "Soult.png"
+  },
+  {
+   "name": "Spartacus",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Administration"
+   ],
+   "art": "Spartacus.png"
+  },
+  {
+   "name": "Suchet",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Mounted Troop"
+   ],
+   "art": "Suchet.png"
+  },
+  {
+   "name": "Sulla",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Duty"
+   ],
+   "art": "Sulla.png"
+  },
+  {
+   "name": "Takeda Shingen",
+   "region": [
+    "Japan"
+   ],
+   "troops": [
+    "Mixed"
+   ],
+   "art": "Takeda Shingen.png"
+  },
+  {
+   "name": "Theobald I",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Siege Machine"
+   ],
+   "art": "Theobald I.png"
+  },
+  {
+   "name": "Theodora",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Administration"
+   ],
+   "art": "Theodora.png"
+  },
+  {
+   "name": "Tokugawa Ieyasu",
+   "region": [
+    "Japan"
+   ],
+   "troops": [],
+   "art": "Tokugawa Ieyasu.png"
+  },
+  {
+   "name": "Toyotomi Hideyoshi",
+   "region": [
+    "Japan"
+   ],
+   "troops": [
+    "Duty",
+    "Ranged Troop"
+   ],
+   "art": "Toyotomi Hideyoshi.png"
+  },
+  {
+   "name": "Turenne",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ground Troop",
+    "Mounted Troop"
+   ],
+   "art": "Turenne.png"
+  },
+  {
+   "name": "Uesugi Kenshin",
+   "region": [
+    "Japan"
+   ],
+   "troops": [
+    "Subordinate City"
+   ],
+   "art": "Uesugi Kenshin.png"
+  },
+  {
+   "name": "Ulysses S. Grant",
+   "region": [
+    "America"
+   ],
+   "troops": [
+    "Siege Machine"
+   ],
+   "art": "Ulysses S. Grant.png"
+  },
+  {
+   "name": "Wallenstein",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Ranged Troop"
+   ],
+   "art": "Wallenstein.png"
+  },
+  {
+   "name": "Washington",
+   "region": [
+    "America"
+   ],
+   "troops": [],
+   "art": "Washington.png"
+  },
+  {
+   "name": "William Wallace",
+   "region": [
+    "Europe"
+   ],
+   "troops": [
+    "Siege Machine"
+   ],
+   "art": "William Wallace.png"
+  },
+  {
+   "name": "Winfield Scott",
+   "region": [
+    "America"
+   ],
+   "troops": [],
+   "art": "Winfield Scott.png"
+  },
+  {
+   "name": "Yi Song-gye",
+   "region": [
+    "Korea"
+   ],
+   "troops": [
+    "Ranged Troop"
+   ],
+   "art": "Yi Song-gye.png"
+  }
+ ]
+}
