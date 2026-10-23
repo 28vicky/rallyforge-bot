@@ -9960,6 +9960,7 @@ def find_learned_building(dev, cfg, log, stop, bname):
         meta = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
     except Exception:
         return False
+    scores = []
     moves = [(0, 0), (260, 0), (0, 300), (-260, 0), (-260, 0), (0, -300), (0, -300), (260, 0), (260, 0),
              (260, 0), (0, 300), (0, 300), (0, 300), (-260, 0), (-260, 0), (-260, 0), (-260, 0)]
     for i, (mx, my) in enumerate(moves):
@@ -9984,11 +9985,15 @@ def find_learned_building(dev, cfg, log, stop, bname):
             if v >= 0.85:
                 break
         mv, ml, f = best
+        scores.append(f"{mv:.2f}@{f}")
+        if i == 0:
+            rd_snap(shot, "learn_" + re.sub(r"[^a-z]+", "_", bname.lower()) + "_0")
         if mv >= 0.78:
             x, y = ml[0] + int(meta["dx"] * f), ml[1] + 90 + int(meta["dy"] * f)
             if 60 <= x <= 470 and 150 <= y <= 820 and open_building_here(dev, cfg, log, stop, bname, spots=[(x, y)], how=f"its learned picture (match {mv:.2f})"):
                 return True
-    log(f"[i]   {bname}: its learned picture was not found on the city")
+    rd_snap(dev.screenshot(), "learn_" + re.sub(r"[^a-z]+", "_", bname.lower()) + "_last")
+    log(f"[i]   {bname}: its learned picture was not found on the city (best per view: {' '.join(scores)})")
     return False
 
 # --- Alliance page ------------------------------------------------------------------------------------------------
