@@ -8703,6 +8703,7 @@ def run_alliance_science(dev, cfg, log, stop):
     log(f"[i]   Alliance Science: donations left {left}/{top}")
     if left == 0:
         log("[+]  Alliance Science: all donations already done today")
+        rd_nothing()
         return
     if not btn:
         raise RuntimeError("no Donate button on the recommended science")
@@ -8741,6 +8742,12 @@ def run_alliance_science(dev, cfg, log, stop):
 # - a line that mentions gems / Instant / Buy / Purchase / Clear / Refresh / Enter / packages is never pressed.
 RD_DANGER = ("gem", "instant", "buy", "purchase", "clear", "refresh", "enter", "package", "recharge", "$", "x10", "10 pack")
 RD_SPEEDUP_WORDS = ["Finish All", "Finish all"]
+
+
+def rd_nothing():
+    """A duty step found nothing left to do in the game (all claimed / daily limit reached). Two such runs in a row
+    = the duty is done until the daily reset (duty_record)."""
+    _TL.rd_nothing = True
 
 
 def rd_snap(img, tag):
@@ -8907,6 +8914,7 @@ def run_gold_levy(dev, cfg, log, stop):
         raise RuntimeError("the Levy window did not open")
     if not rd_tap(dev, stop, ["Free Levy All"], region=(180, 690, 360, 120), shot=shot, wait=(2.0, 2.6)):
         log("[+]  Gold Levy: no free levies left today")
+        rd_nothing()
         return
     rd_close_reward(dev, stop)
     rd_snap(dev.screenshot(), "levy_2")
@@ -8930,6 +8938,7 @@ def run_resource_tax(dev, cfg, log, stop):
     btn = rd_find(shot, ["Tax"], region=box, cutoff=0.8)
     if not btn or rd_numbers(txt):                          # out of free taxes: the button shows a gem price
         log(f"[+]  Resource Tax: no free tax left today ({res})")
+        rd_nothing()
         return
     dev.tap(btn[0], btn[1])
     _nap(stop, 1.8, 2.3)
@@ -8988,6 +8997,7 @@ def run_vip_claim(dev, cfg, log, stop):
         raise RuntimeError("the VIP page did not open")
     if not rd_tap(dev, stop, ["Claim"], region=(330, 560, 210, 120), whole=True, wait=(2.0, 2.5), shot=shot):
         log("[+]  VIP: daily chest already claimed")
+        rd_nothing()
         return
     rd_close_reward(dev, stop)
     log("[+]  VIP: daily chest claimed")
@@ -9070,6 +9080,7 @@ def svr_claimable(dev, stop, log, title):
     rd_snap(shot, "svr_" + title.split()[0].lower())
     if not rd_tap(dev, stop, ["Claimable"], region=(0, 220, 230, 110), wait=(2.2, 2.8), shot=shot):
         log(f"[+]  {title}: nothing to claim")
+        rd_nothing()
         return
     rd_close_reward(dev, stop)
     log(f"[+]  {title}: claimed")
@@ -9115,6 +9126,7 @@ def run_alliance_gift(dev, cfg, log, stop):
     if not rd_tap(dev, stop, ["Open All"], region=(130, 860, 280, 100), wait=(2.2, 2.8)):
         rd_snap(dev.screenshot(), "agift_1")
         log("[+]  Alliance Gift: nothing to open")
+        rd_nothing()
         return
     rd_close_reward(dev, stop, spot=(270, 120))
     log("[+]  Alliance Gift: all gifts opened")
@@ -9129,6 +9141,7 @@ def run_alliance_treasure(dev, cfg, log, stop):
     rd_snap(shot, "atreasure_1")
     if not rd_tap(dev, stop, ["Open All"], region=(240, 860, 300, 100), wait=(2.2, 2.8), shot=shot):
         log("[+]  Alliance Treasure: nothing to open")
+        rd_nothing()
         return
     rd_close_reward(dev, stop, spot=(270, 120))
     log("[+]  Alliance Treasure: Open All pressed")
@@ -9156,6 +9169,7 @@ def run_ranger_knight(dev, cfg, log, stop):
     rd_snap(shot, "rko_1")
     if not rd_tap(dev, stop, ["Quick Dispatch"], region=(300, 830, 240, 110), wait=(1.8, 2.3), shot=shot):
         log("[+]  Ranger Knight Order: nothing to dispatch")
+        rd_nothing()
         return
     if not rd_tap(dev, stop, ["Send"], region=(140, 700, 280, 110), whole=True, wait=(1.8, 2.3)):
         rd_snap(dev.screenshot(), "rko_2")
@@ -9417,6 +9431,7 @@ def run_wisdom_dome_tokens(dev, cfg, log, stop):
                 n = rd_numbers(t)
                 if len(n) >= 2 and n[-2] >= n[-1]:
                     log(f"[+]  Wisdom Dome: today's {n[-1]} gem purchases are used")
+                    rd_nothing()
                     want = bought
                 break
         if bought >= want:
@@ -9615,7 +9630,7 @@ def load_duty_state():
         return {}
 
 
-def duty_record(serial, duty_id, ok, msg=""):
+def duty_record(serial, duty_id, ok, msg="", nothing=False):
     with _DUTY_LOCK:
         data = load_duty_state()
         row = data.setdefault(serial or "default", {}).setdefault(duty_id, {})
@@ -9628,6 +9643,13 @@ def duty_record(serial, duty_id, ok, msg=""):
         if ok:
             row["last_ok"], row["status"] = time.time(), "done"
             row["tries"] = 0                                     # fulfilled: failures start counting again from 0
+            if nothing:                                          # the game had nothing left: once more to be sure, then done until the reset
+                row["empty"] = int(row.get("empty", 0)) + 1 if row.get("empty_day") == day else 1
+                row["empty_day"] = day
+                if row["empty"] >= 2:
+                    row["done_day"] = day
+            else:
+                row["empty"] = 0
         else:
             row["status"] = "retry"
             if row["tries"] == DUTY_MAX_TRIES:                   # the 3rd failure today: alert + report once (it keeps trying every hour)
@@ -9690,6 +9712,8 @@ def duty_status(serial, duty_id, cfg):
     row = (load_duty_state().get(serial or "default") or {}).get(duty_id) or {}
     day, now = _game_day(), time.time()
     tries = int(row.get("tries", 0)) if row.get("day") == day else 0
+    if row.get("done_day") == day:                          # checked twice: nothing left in the game until the reset
+        return "done", "Done for today"
     if duty_id == "crazy_eggs":                             # timer driven: comes back when the next egg is ready
         if row.get("all_done_day") == day:
             return "done", "All eggs done"
@@ -10417,6 +10441,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                     ok = city_task_target(dev, cfg, log, stop, t, nav_state)
                 if ok:
                     _nap(stop, 1.2, 1.8)
+                    _TL.rd_nothing = False
                     for st in t.get("steps", []):
                         run_step(dev, cfg, log, stop, st)
                     leave_to_city(dev, cfg, stop, log)
@@ -10432,7 +10457,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         if result is not None and not stop.is_set():
             task_event(getattr(dev, "serial", ""), shown, *result)
         if duty_id and result is not None and not stop.is_set():
-            if duty_record(getattr(dev, "serial", ""), duty_id, *result) == "gaveup":
+            if duty_record(getattr(dev, "serial", ""), duty_id, *result, nothing=bool(result[0] and getattr(_TL, "rd_nothing", False))) == "gaveup":
                 duty_failed_report(dev, cfg, log, shown, result[1])
         leave_to_city(dev, cfg, stop, log)
     log("@act " + json.dumps({"k": "step", "text": "Idle - tasks done, back to the rallies"}))   # the instance list stops showing the task
