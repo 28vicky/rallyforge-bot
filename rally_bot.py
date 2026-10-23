@@ -10413,7 +10413,7 @@ def run_map_city(dev, cfg, log, stop):
     zoom_out_full(dev, cfg, stop, log)
     nav = CityNav(dev, stop, log)
     x, y, w, h = CITY_VIEW
-    STEPX, STEPY = int(w * 0.75), int(h * 0.75)
+    STEPX, STEPY = int(w * 0.65), 400                  # views overlap ~1/3 sideways, ~40 % downwards (one drag each)
     views = []                                             # [(crop_bgr, gray, feats, est_x, est_y)]
     t0 = time.time()
     drags = [0]
@@ -10444,9 +10444,13 @@ def run_map_city(dev, cfg, log, stop):
         return True
 
     def move(dx, dy):
-        mx, my = nav.pan(dx, dy)
+        """ONE measured drag per step (pan() tops a step up with extra drags: 20 s per step on Kiravik 24 Oct 00:08).
+        Wherever the camera lands is fine - the places come from the pictures, not from the steps."""
+        ddx, ddy, _ = nav._drag(270 + dx / 2, 440 + dy / 2, 270 - dx / 2, 440 - dy / 2)
         drags[0] += 1
-        return mx, my
+        nav.cx -= ddx
+        nav.cy -= ddy
+        return -ddx, -ddy
 
     def timed_out():
         if stop.is_set() or time.time() - t0 > KF_MAP_MINUTES * 60:
@@ -10463,17 +10467,19 @@ def run_map_city(dev, cfg, log, stop):
             break
     nav.cx = nav.cy = 0.0
     keep(clean_shot())
-    for row in range(14):
+    sign = -1                                              # first row: left to the edge, then right across; after that
+    for row in range(14):                                  # each row starts at an edge, so one sweep the other way (serpentine)
         if timed_out():
             break
-        for sign, n in ((-1, 8), (1, 16)):                 # each row: left to its edge, then right across to the other edge
-            for _ in range(n):
+        for leg in ((-1, 1) if row == 0 else (sign,)):
+            for _ in range(16):
                 if timed_out():
                     break
-                mx, my = move(sign * STEPX, 0)
+                mx, my = move(leg * STEPX, 0)
                 if abs(mx) < STEPX * 0.3:                  # the edge: the camera did not follow the finger
                     break
                 keep(clean_shot())
+            sign = -leg
         if timed_out():
             break
         mx, my = move(0, STEPY)                            # next row
