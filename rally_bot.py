@@ -9687,6 +9687,15 @@ def open_more_menu(dev, cfg, stop, log):
 
 
 def activity_go(dev, cfg, log, stop, tile, probe=False):
+    was = getattr(dev, "_guard_busy", False)
+    dev._guard_busy = True                               # the pop-up closer would shut the tile's Go card (seen 23 Oct)
+    try:
+        return _activity_go(dev, cfg, log, stop, tile, probe)
+    finally:
+        dev._guard_busy = was
+
+
+def _activity_go(dev, cfg, log, stop, tile, probe=False):
     """More > Activity > tap the daily's tile > Go. The game moves the camera to the building (any culture, any city
     layout). probe=True saves a picture at every step (debug/duty_ago_*.png) and logs what is read. -> True when Go was pressed."""
     shot = open_more_menu(dev, cfg, stop, log)
