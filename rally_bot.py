@@ -10388,7 +10388,7 @@ def mr_still_there(dev, stop):
     return False
 
 
-def mr_open_monster(dev, stop, want):
+def mr_open_monster(dev, stop, want, level=None):
     """Tap the monster in the middle; its ring menu must have Attack, its page must show the wanted name.
     -> ('ok', page_shot) | ('gone', None) | ('other', name_read)"""
     for dx, dy in MR_NEAR:
@@ -10414,8 +10414,13 @@ def mr_open_monster(dev, stop, want):
             _nap(stop, 0.8, 1.1)
             continue
         head = " ".join(t for t, _ in ocr_lines(page[120:300, 0:540], 2.5, bright=True))   # plain OCR garbled the name
+        import difflib
+        toks = re.findall(r"[a-z]+", head.lower())
         words = [w for w in want.lower().split() if len(w) > 2]
-        if words and not any(w in head.lower() for w in words):
+        missing = [w for w in words if not any(w == t or difflib.SequenceMatcher(None, w, t).ratio() >= (0.75 if len(w) <= 5 else 0.8) for t in toks)]
+        lv = re.search(r"(?:lv|level)\.?\s*(\d{1,2})\b", head.lower())
+        wrong_lv = bool(level and lv and int(lv.group(1)) != int(level))
+        if missing or wrong_lv:                               # every word of the name (Epic Cerberus is not Legendary Cerberus) and the level must fit
             dev.back()
             _nap(stop, 0.8, 1.1)
             return "other", head[:40]
@@ -10504,7 +10509,7 @@ def _run_monster_rally(dev, cfg, log, stop):
         if line or gone:
             continue
         while True:                                          # the march count was not read / was wrong: keep trying here
-            got, page = mr_open_monster(dev, stop, tgt.get("name") or "")
+            got, page = mr_open_monster(dev, stop, tgt.get("name") or "", tgt.get("level"))
             if got != "ok":
                 break
             dev.tap(*MR_ALLIANCE_WAR)                        # fixed spot (the white-on-brown label is rarely read); window checked below
