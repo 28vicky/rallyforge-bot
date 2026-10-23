@@ -10006,6 +10006,9 @@ def find_learned_building(dev, cfg, log, stop, bname):
         if view_of(shot, cfg) != "city":
             leave_to_city(dev, cfg, stop, log)
             shot = dev.screenshot()
+        if find_detail_icon(shot):                         # a drag read as a tap opened some building's ring: close it first
+            close_ring(dev, stop, (270, 490))
+            shot = dev.screenshot()
         mv, ml, f = _learn_match(shot, tpl)
         cam = f"@{round(nav.cx)},{round(nav.cy)}" if nav is not None else ""
         scores.append(f"{where}{cam}:{mv:.2f}")
@@ -10040,8 +10043,17 @@ def find_learned_building(dev, cfg, log, stop, bname):
             break
     nav.cx = nav.cy = 0.0
     log(f"[i]   {bname}: to the corner, map moved per drag: {' '.join(moved)}")
-    if meta.get("map"):                                    # found there before: straight to it
-        nav.goto(*meta["map"])
+    if meta.get("map"):                                    # found there before: go there in steps (a long jump drifts), looking on the way
+        mx, my = meta["map"][0] - 235, meta["map"][1] - 445          # camera place that puts the spot mid-view
+        for _ in range(8):
+            if stop.is_set():
+                return False
+            rx, ry = mx - nav.cx, my - nav.cy
+            if abs(rx) < 60 and abs(ry) < 60:
+                break
+            nav.pan(max(-300, min(300, rx)), max(-420, min(420, ry)))
+            if look("saved spot"):
+                return True
         if look("saved spot"):
             return True
         nav.to_origin()
