@@ -3460,6 +3460,37 @@ def daily_checkin(dev, shot, log, stop):
 CITY_POPUP_WORDS = ["Event starts in", "Truce Agreement", "Server War is about to begin"]   # event pop-ups that sit over the city (the city is still recognised behind them)
 
 
+DANGER_PATTERNS = [                         # account / money dialogs: the bot never answers these, it stops the instance and alerts
+    r"switch\s*account", r"current\s*progress", r"delete\s*(your|the)?\s*(account|progress|data)", r"log\s*out",
+    r"(bind|link|unlink)\s*(your|this|to|with)?\s*(account|facebook|apple|google|email)", r"apple\s*id",
+    r"(use|spend|cost)\w*\s*[\d,]+\s*gems?", r"confirm\s*(the)?\s*(purchase|payment)",
+]
+
+
+def safety_stop(dev, shot, cfg, log, stop):
+    """A dangerous dialog (switch/link/delete account, log out, gem spend, payment) is on screen -> stop this instance,
+    alert the owner, keep the picture. Never taps anything. -> True if it stopped."""
+    try:
+        txt = " ".join(t for t, _ in ocr_lines(shot[150:820, 20:520])).lower()
+    except Exception:
+        return False
+    hit = next((p for p in DANGER_PATTERNS if re.search(p, txt)), None)
+    if not hit:
+        return False
+    try:
+        (USER / "debug").mkdir(exist_ok=True)
+        cv2.imwrite(str(USER / "debug" / f"safety_stop_{dev.serial.replace(':', '_')}.png"), shot)
+    except Exception:
+        pass
+    log(f"[!] SAFETY STOP: an account / payment window is open ({hit}) - the bot will not touch it. Instance stopped; please check it by hand.")
+    try:
+        notify(cfg, dev.serial, "Safety stop: an account or payment window opened. The bot stopped this instance and pressed nothing - please check it.")
+    except Exception:
+        pass
+    stop.set()
+    return True
+
+
 _STUCK_POPUPS = {}                         # serial -> times clear_popups ended still lost (3 in 10 min -> game restart)
 POPUP_LIB = USER / "popup_library"          # every unknown pop-up the bot meets: picture + what closed it (grows by itself)
 _poplib_lock = threading.Lock()
@@ -3557,6 +3588,8 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
         shot = dev.screenshot()
         _poplib_learn(pending, shot, log)
         pending = None
+        if screen_state(shot, cfg) == "unknown" and safety_stop(dev, shot, cfg, log, stop):
+            return closed
         if cancel_quit_dialog(dev, shot, log):
             closed += 1
             continue
