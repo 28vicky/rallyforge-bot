@@ -8179,6 +8179,30 @@ def view_of(shot, cfg):
     return "world" if world_map(shot) else "other"
 
 
+GROUND_TAP = (8, 480)                     # left edge, middle: empty ground in the city and on the map (no button there)
+
+
+def buttons_hidden(shot):
+    """The game shows the city / map with ALL its buttons hidden: no avatar, no globe, no gold Back arrow, no window
+    frame - just the picture, full of detail. -> True."""
+    try:
+        if has_template("city_screen") and find(shot, "city_screen", 0.8, STATE_REGIONS["city_screen"]):
+            return False
+        if world_map(shot):
+            return False
+        g = cv2.cvtColor(shot, cv2.COLOR_BGR2GRAY)
+        if float(g.std()) < 30 or float(g[100:860].mean()) < 45:     # dark / dimmed = a window or a pop-up over it
+            return False
+        hsv = cv2.cvtColor(shot[8:80, 5:75], cv2.COLOR_BGR2HSV)
+        if cv2.countNonZero(cv2.inRange(hsv, (12, 110, 150), (32, 255, 255))) > 250:   # gold Back arrow of a full page
+            return False
+        top = cv2.cvtColor(shot[0:70], cv2.COLOR_BGR2HSV)
+        red = cv2.countNonZero(cv2.inRange(top, (0, 120, 80), (8, 255, 255))) + cv2.countNonZero(cv2.inRange(top, (170, 120, 80), (180, 255, 255)))
+        return red < 0.25 * top.shape[0] * top.shape[1]                 # a red title bar = a game page, not the bare map
+    except Exception:
+        return False
+
+
 def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
     """THE universal recovery routine. Whatever is on the screen - a building's window, stacked pages, a pop-up, a ring menu,
     a reward panel, the 'exit the game?' box - get out of it and land on the wanted view: 'city' or 'landscape'.
@@ -8241,6 +8265,11 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
         if cx:
             dev.tap(cx[0][0], cx[0][1])
             say(f"[*] Recovery: closed a window with its X button ({cx[0][0]},{cx[0][1]})")
+        elif unknown <= 2 and buttons_hidden(shot):        # the city/map with all game buttons hidden (a tap on empty ground hides them)
+            dev.tap(*GROUND_TAP)
+            say("[*] Recovery: the game's buttons were hidden - tapped the ground to show them")
+            _nap(stop, 1.0, 1.4)
+            continue
         elif unknown >= 5 and toggled < 2:                  # backing out leads nowhere known: maybe the other main view is showing without being recognised
             toggled += 1
             dev.tap(*VIEW_TOGGLE)
@@ -12141,6 +12170,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         outside_taps = [0]
         back_taps = [0]
         mail_backs = [0]
+        hidden_taps = [0]
         war_row_taps = [0]
         view_toggles = [0]
         last_toggle = [0.0]
@@ -12211,6 +12241,12 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     log("[*] Unknown page with a Back arrow - tapped the Back arrow")
                     nap(1.2, 1.8)
                     continue
+            if st == "unknown" and hidden_taps[0] < 2 and buttons_hidden(screen):   # bare city/map: the game's buttons are hidden
+                hidden_taps[0] += 1
+                dev.tap(*GROUND_TAP)
+                log("[*] The game's buttons were hidden - tapped the ground to show them")
+                nap(1.0, 1.4)
+                continue
             if st == "unknown" and outside_taps[0] < 3:       # a dialog we have no picture of: wait until it is steady, then tap beside it
                 outside_taps[0] += 1
                 prev = screen
