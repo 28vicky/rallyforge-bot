@@ -9819,7 +9819,7 @@ def _activity_go(dev, cfg, log, stop, tile, probe=False, route=False):
         rd_snap(shot, "ago_2_activity" if i == 0 else f"ago_scroll_{i}")
         if has_template(tpl):
             h = find(shot, tpl, 0.85, (0, 260, 540, 700))
-            if h and 330 <= h[1] <= 820:                 # the whole tile on screen (one at the bottom edge cannot be tapped)
+            if h and 330 <= h[1] <= 885:                 # the whole picture on screen (a 76 px picture centred lower is cut off)
                 hit = (h[0], h[1] - 45)                  # tapped 45 px lower below = the picture's centre
         if not hit:
             t = rd_find(shot, words, region=(0, 260, 540, 700), cutoff=0.75)
