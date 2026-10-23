@@ -3436,7 +3436,7 @@ def daily_checkin(dev, shot, log, stop):
 CITY_POPUP_WORDS = ["Event starts in", "Truce Agreement", "Server War is about to begin"]   # event pop-ups that sit over the city (the city is still recognised behind them)
 
 
-def clear_popups(dev, cfg, log, stop, rounds=5):
+def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
     """Close whatever covers the game (offers, event pop-ups, full-screen sales, dialogs) so the bot can carry on with
     what it was doing. Uses your popup_* pictures first; on a screen it does not know it presses Back, but only when it
     can recognise the city (Back on the city would open the quit dialog). -> number of things closed."""
@@ -3452,6 +3452,16 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         if cancel_quit_dialog(dev, shot, log):
             closed += 1
             continue
+        if find_text(shot, ["new game updates", "restart the game"], region=(20, 300, 500, 300), cutoff=0.75):
+            rs = find_text(shot, ["Restart"], region=(60, 380, 420, 320), cutoff=0.8) or find_text(shot, ["Restart"], cutoff=0.8)
+            if not rs:
+                log("[!] Game update window - the Restart button could not be read")
+                return closed
+            dev.tap(*rs)                                    # the game's 'new updates, please restart' window: only Restart closes it
+            LOADING[dev.serial] = ("restart", time.time())
+            log("[*] Game update window - tapped Restart, the game reloads")
+            _nap(stop, 8, 10)
+            return closed + 1
         hit = None
         for name in list_templates("popup_"):
             if name == "popup_exit_cancel":
@@ -3469,7 +3479,7 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         if tab_row(shot) is not None:                      # a Generals screen: nothing in the way
             break
         st = screen_state(shot, cfg)
-        if st == "city" and find_text(shot, CITY_POPUP_WORDS, region=(30, 90, 480, 720), cutoff=0.8):
+        if st in ("city", "unknown") and find_text(shot, CITY_POPUP_WORDS, region=(30, 90, 480, 720), cutoff=0.8):
             cx = find_close_x(shot[90:810, 30:510])        # an event pop-up over the city (e.g. Server War): its X if it has one, else tap outside it
             if cx:
                 dev.tap(cx[0][0] + 30, cx[0][1] + 90)
@@ -3489,7 +3499,10 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         if tap_alliance_war_row(dev, shot, log):          # the Alliance page is not a pop-up: go on into Alliance War
             _nap(stop, 1.5, 2.2)
             break
-        if world_map(shot):                                # the world map: the globe goes to the city (Back / the portrait would loop)
+        if world_map(shot):                                # the world map: go to the city only when the caller needs it
+            if not want_city:
+                log("[*] On the world map - working from here")
+                break
             dev.tap(*VIEW_TOGGLE)
             log("[*] On the world map - tapped the globe to go to the city")
             closed += 1
@@ -3504,21 +3517,15 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
                 _gold = 0
         except Exception:
             _gold = 0
-        if _gold > 250 and back_arrow_taps < 6:
-            back_arrow_taps += 1
-            dev.tap(*cfg.get("city_to_tap", (35, 35)))
-            log("[*] A full page is open (not a pop-up) - tapped the Back arrow")
-            closed += 1
-            _nap(stop, 1.2, 1.8)
-            continue
-        cx = find_close_x(shot)
-        if cx:                                             # any pop-up with a round X button: tap it (works on every instance)
+        full_page = _gold > 250
+        cx = find_close_x(shot)                            # unknown window, step 1: its round X button
+        if cx:
             dev.tap(cx[0][0], cx[0][1])
             log(f"[*] Closed a pop-up with its X button ({cx[0][0]},{cx[0][1]})")
             closed += 1
             _nap(stop, 0.8, 1.3)
             continue
-        if not outside_done:                               # an unknown dialog: wait until it is steady, tap beside it first
+        if not outside_done and not full_page:             # step 2: no X - wait until it is steady, tap outside it
             outside_done = True
             prev = shot
             for _w in range(6):
@@ -3529,17 +3536,24 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
                 prev = cur
             ox, oy = cfg.get("popup_outside_tap") or (8, 480)
             dev.tap(int(ox), int(oy))
-            log(f"[*] Unknown pop-up - waited until it was steady, tapped outside it ({ox},{oy})")
+            log(f"[*] Unknown pop-up - no X button, tapped outside it ({ox},{oy})")
             closed += 1
             _nap(stop, 1.0, 1.5)
             continue
-        if not x_spot_done:                                # tapping outside did not close it: try the usual X spot once (offer pop-ups with a round X on the corner)
+        if not x_spot_done and not full_page:              # tapping outside did not close it: try the usual X spot once
             x_spot_done = True
             ox, oy = cfg.get("popup_x_tap") or (477, 141)
             dev.tap(int(ox), int(oy))
             log(f"[*] Unknown pop-up - tapping outside did not close it, tapped the usual X spot ({ox},{oy})")
             closed += 1
             _nap(stop, 1.0, 1.5)
+            continue
+        if _gold > 250 and back_arrow_taps < 6:            # step 3: the Back arrow at the top left
+            back_arrow_taps += 1
+            dev.tap(*cfg.get("city_to_tap", (35, 35)))
+            log("[*] Still not a known screen - tapped the Back arrow at the top left")
+            closed += 1
+            _nap(stop, 1.2, 1.8)
             continue
         _now = time.time()
         _tg = [t for t in getattr(_TL, "toggles", []) if _now - t < 90]
