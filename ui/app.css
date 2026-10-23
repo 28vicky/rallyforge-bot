@@ -861,10 +861,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .inst .dot.run{background:#10b981}.inst .dot.pause{background:#f59e0b}.inst .dot.error{background:var(--bad)}.inst .dot.stop,.inst .dot.idle{background:#9ca3af}
 .sidefoot{padding:12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .sidefoot .sflab{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);padding:0 4px}
-.allbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.allbtns .btn{padding:7px 0;font-size:12.5px;font-weight:700;background:#fff;border-radius:8px;box-shadow:none}
-.btn.olpause{color:#b45309;border:1px solid #fcd34d}.btn.olpause:hover{background:#fffbeb}
-.btn.olstop{color:#b91c1c;border:1px solid #fca5a5}.btn.olstop:hover{background:#fef2f2}
 .sidefoot .ctlbtn{border:1px solid var(--line);background:rgba(255,255,255,.8);color:var(--fg);font-size:13px;padding:9px;border-radius:8px}
 .sidefoot .ctlbtn.on{background:var(--accent);color:#fff;border-color:transparent}
 .app.inst-mode .top{display:none}
@@ -1089,8 +1085,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .whoami .wtx b{font-size:13px}
 :root .whoami .wtx small{font-size:11.5px}
 :root .sidefoot .sflab{margin-top:2px;font-size:10.5px}
-:root .allbtns{gap:6px}
-:root .allbtns .btn{min-height:30px;padding:0;font-size:12.5px}
 :root .sidefoot .ctlbtn{min-height:32px;padding:0 10px;font-size:13px;font-weight:600}
 :root .sidefoot .ctlbtn.on{background:var(--card);color:var(--accent1);border:1px solid var(--accent1)}
 :root .sidefoot .ctlbtn.on .ico{color:var(--accent1)}
@@ -1270,3 +1264,12 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .tabs,:root .stickyhead .tabs{flex-wrap:nowrap;overflow:hidden}
 .tmh{font-size:11.5px;font-weight:600;color:var(--mute);padding:10px 12px 4px}
 .tmh:first-child{padding-top:4px}
+/* ---- aligned form grid (ui-simple): label above field, equal widths ---- */
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,260px));gap:12px 20px;align-items:end}
+.fgrid .field input,.fgrid .field select{width:100%}
+.ptap{letter-spacing:0!important;text-transform:none}
+/* ---- sidebar (ui-simple): names are never cut; the status chip gives way instead ---- */
+.side{width:256px}
+.app.nosb .side{margin-left:-256px}
+.inst .nm{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere;flex:1 1 auto;min-width:64px}
+.inst .ichip{max-width:110px;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
