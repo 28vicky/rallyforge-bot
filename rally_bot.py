@@ -9409,6 +9409,13 @@ def rd_finish_with_speedups(dev, stop, log, what):
     return True
 
 
+def rd_clear_field(dev, stop, n=12):
+    """Empty the text box that has the keyboard: cursor to the end, then delete backwards (and forwards, in case
+    the cursor stayed at the start)."""
+    dev._run("shell", "input", "keyevent", "123", *(["67"] * n), *(["112"] * n), timeout=15)
+    _nap(stop, 0.4, 0.6)
+
+
 def rd_train(dev, cfg, log, stop, duty_id, ring_word, qty_xy, what):
     """Barracks / Trap Factory ring menu is open: type the amount, check it was taken, press Train."""
     amount = max(1, min(int(float(rd_opt(cfg, duty_id, "amount", 500) or 500)), 9999999))
@@ -9425,6 +9432,7 @@ def rd_train(dev, cfg, log, stop, duty_id, ring_word, qty_xy, what):
         raise RuntimeError("the training page did not open")
     dev.tap(*qty_xy)
     _nap(stop, 1.4, 1.8)
+    rd_clear_field(dev, stop)                                # the box already holds a number: typing would add to it
     dev.text(str(amount))
     _nap(stop, 0.6, 0.9)
     rd_keyboard_ok(dev, stop)
