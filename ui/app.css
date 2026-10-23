@@ -1315,3 +1315,5 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .ajdot{width:8px;height:8px;border-radius:50%;background:var(--mute);flex:none}
 .ajdot.ok{background:var(--good)}.ajdot.bad{background:var(--bad)}
 .ajline[hidden]{display:none}
+.ajline{cursor:pointer}.ajline:hover{border-color:var(--accent1)}
+:root .stile.txt b{font-size:15px;line-height:1.9}

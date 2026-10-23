@@ -447,17 +447,13 @@ function instancePage(serial) {
     e.addEventListener("input", () => { const t = e.value.trim(); if (t === "") delete ov[key]; else ov[key] = Math.max(0, parseInt(t, 10) || 0); }); return e; };
   const ajOn = h("input", { type: "checkbox", checked: !!eff("game_auto_join", false) });
   ajOn.addEventListener("change", () => { ov.game_auto_join = ajOn.checked; });
-  const ajLeft = h("div", { class: "hint", style: { marginTop: "10px" } }, "Time left on the game's Auto-Join: not read yet (it is read the next time this instance checks it).");
-  const ajRefresh = async () => { if (!ajLeft.isConnected && ajLeft.dataset.shown) return; ajLeft.dataset.shown = "1";
-    try { const r = await api("aj_status", { serial }); if (r && r.left_s !== undefined) { const t = r.left_s, m = Math.round(r.age_s / 60); ajLeft.textContent = "Time left on the game's Auto-Join: " + Math.floor(t / 3600) + ":" + String(Math.floor(t % 3600 / 60)).padStart(2, "0") + " (read " + (m < 1 ? "just now" : m + " min ago") + ")."; } } catch (e) {} };
-  ajRefresh(); const ajTimer = setInterval(() => { if (!ajLeft.isConnected) clearInterval(ajTimer); else ajRefresh(); }, 30000);
   const autoJoin = panel("Auto-Join (the game's own, needs the Rally Monthly Card)",
     h("div", { class: "hint", style: { marginBottom: "10px" } }, "On: the bot stops joining rallies itself. It opens Alliance War > Auto-Join, reads the time left and presses Start again when it falls under your limit. Only turn it on for accounts that have the card. Leave the minutes blank to use the universal value."),
     h("div", { class: "row", style: { gap: "22px", alignItems: "center", flexWrap: "wrap" } },
       h("label", { class: "tgl" }, ajOn, h("span", { class: "sw" }), "Use the game's Auto-Join"),
       h("span", {}, "Renew when less than "), numOv("auto_join_renew_min", 120), h("span", {}, " min are left"),
       h("span", {}, "Check every "), numOv("auto_join_check_min", 10), h("span", {}, " min")),
-    ajLeft);
+    note("Time left and the next renew show on this instance's Overview, in the Today card."));
   const asOn = h("input", { type: "checkbox", checked: !!eff("auto_start", false) });
   asOn.addEventListener("change", () => { ov.auto_start = asOn.checked; });
   const autoStart = panel("Start by itself",
@@ -1232,7 +1228,8 @@ function renderTodayCard(serial) {
   const head = h("div", { class: "tdreset" }), list = h("div", { class: "tdq" }), sum = h("div", { class: "tdsum" });
   const res = h("div", { class: "tdres" }), week = h("small", { class: "tdweek" });
   // the game's Auto-Join (ui-simple): time left, when the bot renews it, and a warning when it has not been checked for a while
-  const aj = h("div", { class: "ajline", hidden: true });
+  const aj = h("div", { class: "ajline", hidden: true, role: "button", tabindex: "0", title: "Open the Auto-Join settings",
+    onclick: () => { S.sec = S.sec || {}; S.sec.routines = "aj"; if (S.gotoInstTab) S.gotoInstTab("routines"); } });
   const ajEff = (k, d) => { const o = ((S.cfg.per_device || {})[serial]) || {}; return o[k] !== undefined ? o[k] : S.cfg[k] !== undefined ? S.cfg[k] : d; };
   const ajPaint = async () => {
     if (!ajEff("game_auto_join", false)) { aj.hidden = true; return; }
@@ -1262,7 +1259,7 @@ function renderTodayCard(serial) {
     head.textContent = `Daily reset in ${fmtHM(m.resetAt - (Date.now() / 1000 + m.skew))} · ${m.resetLocal} your time`;
   };
   const paint = () => {
-    const key = JSON.stringify([m.items, m.summary, m.results, m.week]);
+    const key = JSON.stringify([m.items, m.summary, m.results, m.week, ajEff("game_auto_join", false)]);
     if (key === last) return;                                               // nothing changed: keep the DOM as it is (no flicker)
     last = key;
     list.innerHTML = "";
@@ -1270,7 +1267,9 @@ function renderTodayCard(serial) {
       h("span", { class: "tdi" }, x.icon), h("span", { class: "tdt" }, x.title), h("small", {}, x.sub))));
     sum.textContent = m.summary;
     res.innerHTML = "";
-    m.results.forEach(([l, v, tip]) => res.appendChild(h("div", { class: "stile", title: tip || "" }, h("b", {}, String(v)), h("span", {}, l))));
+    const gameJoins = ajEff("game_auto_join", false);
+    m.results.forEach(([l, v, tip]) => { if (gameJoins && l === "Rallies joined") { l = "Rallies joined"; v = "By the game"; tip = "The game's Auto-Join is on, so the game joins rallies itself"; }
+      res.appendChild(h("div", { class: "stile" + (v === "By the game" ? " txt" : ""), title: tip || "" }, h("b", {}, String(v)), h("span", {}, l))); });
     week.textContent = m.week;
   };
   const load = async () => {
