@@ -1407,7 +1407,7 @@ def read_monster_label(strip):
             t = " ".join(t.split())
             if len(t) > len(best_raw):
                 best_raw = t
-            for nm in MONSTER_NAMES + list(_MONSTER_ALIASES):
+            for nm in MONSTER_NAMES + list(_MONSTER_ALIASES) + WORLD_BOSS_NAMES:   # world bosses too: "Behemoth King" must not read as "Behemoth"
                 nn = re.sub(r"[^a-z ]", " ", nm.lower())
                 nn = " ".join(nn.split())
                 r = difflib.SequenceMatcher(None, t.lower(), nn).ratio()
@@ -1668,6 +1668,10 @@ def viking_resolve(power, level=None):
 # Point bosses: hit once for alliance points, nobody needs to join them. World bosses (owner 23 Oct): they show on the
 # rally list but cannot be joined as alliance rallies. Never joined, whatever the monster list says.
 NEVER_JOIN = {"silver lionheart knight", "thunder scorpion", "bird of hurricane", "behemoth king", "lord of lava"}
+WORLD_BOSS_NAMES = [" ".join(w.capitalize() for w in n.split()) for n in sorted(NEVER_JOIN)]
+# A world boss whose picture is close to a normal monster (owner 23 Oct: Behemoth King was joined as "Behemoth"):
+# when the picture says one of these, the name under the portrait is read as well.
+WORLD_BOSS_LOOKALIKE = {"Behemoth"}
 
 
 def never_join_present():
@@ -6062,6 +6066,17 @@ def tap_alliance_war_row(dev, shot, log):
             if h:
                 row = (int(h[0]), int(h[1]))
         if row:
+            # loop guard (DD 23 Oct: 43 taps in 3.5 min, every 5 s, nothing logged as a problem): 6 taps in 2 min means
+            # this is not really the Alliance page or the row does not open - stop tapping so recovery / restart takes over
+            now = time.time()
+            taps = [t for t in getattr(dev, "war_row_times", []) if now - t < 120]
+            if len(taps) >= 6:
+                if now - getattr(dev, "war_row_warned", 0) > 120:
+                    dev.war_row_warned = now
+                    log(f"[!] Tapped the 'Alliance War' row {len(taps)} times in 2 min without reaching the rally list - not tapping it again for now")
+                dev.war_row_times = taps
+                return False
+            dev.war_row_times = taps + [now]
             dev.tap(int(row[0]), int(row[1]))
             log(f"[*] On the Alliance page - tapped the 'Alliance War' row ({int(row[0])},{int(row[1])})")
             return True
@@ -11871,6 +11886,15 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                                 mcx, mcy, mh = int(hit[0] + mdx), int(hit[1] + mdy), MON_SIZE // 2
                                 if mcy - mh >= MON_TOP + 10 and mcx - mh >= 0 and mcx + mh <= screen.shape[1] and mcy + mh <= screen.shape[0]:
                                     learn_monster(lab, screen[mcy - mh:mcy + mh, mcx - mh:mcx + mh].copy(), cfg, log)
+                    except Exception:
+                        pass
+                if mon and _base_monster(mon) in WORLD_BOSS_LOOKALIKE:   # Behemoth or Behemoth King? the picture alone cannot tell
+                    try:
+                        nx0, ny0 = int(hit[0] - 21), int(hit[1] - 113)
+                        lab = read_monster_label(screen[max(ny0 - 18, 0):ny0 + 18, max(nx0 - 150, 0):nx0 + 150])
+                        if str(lab).lower() in NEVER_JOIN or "king" in str(lab).lower().split():
+                            say(f"[{mon}] name reads '{lab}' - world boss, never joined")
+                            mon = lab if str(lab).lower() in NEVER_JOIN else f"{mon} King"
                     except Exception:
                         pass
                 if mon == "Viking":                                   # which set is it? level on the card + power decide
