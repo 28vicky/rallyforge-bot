@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.5", date: "2026-10-23",
+    new: [],
+    fixed: ["Reports also shows your joins from before you updated (up to the last 7 days)."] },
   { v: "2.5.4", date: "2026-10-23",
     new: [],
     fixed: ["The daily reset follows Evony's own reset time, also when daylight saving changes. You no longer need to set it."] },
