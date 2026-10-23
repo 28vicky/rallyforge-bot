@@ -8285,7 +8285,15 @@ def run_crazy_eggs(dev, cfg, log, stop):
         ce_save(serial, next_at=time.time() + max(min(waits) + 15, gap))
         log(f"[i]   Crazy Eggs: next egg ready in {min(waits) // 60} min" + (f"; next visit in {max(min(waits) + 15, gap) // 60} min (visit gap {conf['min_gap']} min)" if gap > min(waits) + 15 else ""))
     else:
-        ce_save(serial, next_at=time.time() + 1800)
+        row = ce_row(serial)
+        blank = int(row.get("blank", 0)) + 1 if row.get("blank_day") == day else 1
+        if blank >= 2:                                      # 2 visits in a row with no egg ready or on a timer: all hatched / event over
+            ce_save(serial, all_done_day=day, next_at=0, blank=0, blank_day=day)
+            log("[+]  Crazy Eggs: no egg left to smash today - done until the next reset")
+        else:
+            ce_save(serial, next_at=time.time() + 1800, blank=blank, blank_day=day)
+    if eggs and any(e and e[0] in ("ready", "wait") for e in eggs):
+        ce_save(serial, blank=0)
 
 
 # ------------------------------------------------------------ Champions (Keep > Champions)
@@ -8744,6 +8752,11 @@ def run_champions(dev, cfg, log, stop):
     if not ch_open_page(dev, stop, log):
         ch_snap(dev.screenshot(), "1_failed")
         raise RuntimeError("the Champion page did not open")
+    shot = dev.screenshot()
+    t_used, g_used = ch_taps_used(shot), ch_greet_label(shot).get("n")
+    if t_used is not None and t_used >= CH_TAPS and g_used is not None and g_used >= CH_GREETS:
+        log(f"[+]  Champions: today's taps ({t_used}/{CH_TAPS}) and greets ({g_used}/{CH_GREETS}) are all used - nothing to do")
+        return
     plan = ch_conf(cfg)["plan"]
     row = ch_row(serial)
     taps_used = row.get("taps") or {} if row.get("taps_day") == day else {}
