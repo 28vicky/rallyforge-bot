@@ -1578,7 +1578,7 @@ class Api:
             cfg.setdefault(k, "")
         return {
             "version": rb.VERSION, "author": rb.AUTHOR, "copyright": rb.COPYRIGHT, "cfg": cfg, "devices": c.devices, "first_run": c.first_run,
-            "generals": c.generals_info(), "monsters": rb.list_monsters(refresh=True), "catalog": rb.MONSTER_CATALOG,
+            "generals": c.generals_info(), "monsters": rb.list_monsters(refresh=True), "catalog": rb.MONSTER_CATALOG, "never_join": sorted(rb.NEVER_JOIN),
             "profiles": rb.list_profiles(), "city_info": c.city_info(),
             "bosses": rb.get_bosses(), "building_names": rb.BUILDING_NAMES,
             "icons": rb.DEFAULT_CITY_ICONS, "example_tasks": EXAMPLE_TASKS,
