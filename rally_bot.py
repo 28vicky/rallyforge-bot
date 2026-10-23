@@ -10240,12 +10240,23 @@ def run_monster_rally(dev, cfg, log, stop):
             if not rd_tap(dev, stop, ["Alliance War"], region=(270, 730, 270, 130), wait=(1.8, 2.2), shot=page):
                 dev.tap(*MR_ALLIANCE_WAR)                    # white-on-brown label is often not read: its fixed spot
                 _nap(stop, 1.8, 2.2)
-            shot = dev.screenshot()
-            rd_snap(shot, "mrally_time")
-            if not rd_seen(shot, ["Alliance War Rally", "rally time"], region=(0, 300, 540, 160)):
-                dev.back()
-                _nap(stop, 1.0, 1.3)
-                raise RuntimeError("the rally time popup did not open (stamina?)")
+            shot = None
+            for _ in range(3):                               # the rally time window can be slow to open
+                shot = dev.screenshot()
+                if rd_seen(shot, ["Alliance War Rally", "rally time"], region=(0, 300, 540, 160)):
+                    break
+                _nap(stop, 1.2, 1.5)
+            else:
+                rd_snap(shot, "mrally_time")
+                if view_of(shot, cfg) not in ("landscape", "world"):
+                    dev.back()
+                    _nap(stop, 1.0, 1.3)
+                if not max_wait or time.time() - t0 < max_wait:   # back on the map = no free march (or no stamina): wait here
+                    log(f"[*]  Monster rally: {label} - no rally window (all marches busy?), trying again in 30 s")
+                    _nap(stop, 30, 32)
+                    continue
+                tried.pop(key, None)
+                return later(2, "no rally window (all marches busy or no stamina)")
             if not rd_tap(dev, stop, [f"{mode} minute(s)", f"{mode} minute"], region=(0, 460, 540, 180), cutoff=0.85, wait=(2.0, 2.5), shot=shot):
                 dev.tap(*MR_TIMES.get(mode, MR_TIMES["5"]))
                 _nap(stop, 2.0, 2.5)
