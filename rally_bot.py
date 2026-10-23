@@ -11740,6 +11740,12 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 return True
             if cancel_quit_dialog(dev, scr, log):
                 continue
+            if i > 0 and world_map(scr):                       # the arrow led to the world map: Back there asks to quit - use the city button
+                dev.tap(*VIEW_TOGGLE)
+                log("[*] On the world map - tapped the city button")
+                if wait_state("city", 8):
+                    return True
+                continue
             if i == 0:
                 dev.tap(*cfg["city_to_tap"])
             elif i == 3:
