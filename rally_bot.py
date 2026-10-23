@@ -10026,22 +10026,34 @@ def find_learned_building(dev, cfg, log, stop, bname):
         if look("saved spot"):
             return True
         nav.to_origin()
-    for row in range(5):                                   # serpentine: right along a row, down, back left ...
+    # The city is a diamond, not a rectangle: a row sweep stops at its slanted edges (Kiravik 18:32 saw a third of it).
+    # Explore it cell by cell instead (flood fill): try every neighbouring cell, keep those the camera really reaches.
+    SX, SY = 300, 420                                      # one cell = a bit less than one view (CITY_VIEW 360 x 690)
+    seen, todo, dead = {(0, 0)}, [(1, 0), (0, 1), (0, -1), (-1, 0)], set()
+    if look("c0,0"):
+        return True
+    while todo and len(seen) < 40:
         if stop.is_set():
             return False
-        step = 300 if row % 2 == 0 else -300
-        for col in range(7):
-            if look(f"r{row}c{col}"):
-                return True
-            mx, _ = nav.pan(step, 0)
-            if abs(mx) < 40:                               # the edge of the city (it is a diamond: rows differ in width)
-                break
-        before = nav.cy
-        nav.pan(0, 560)
-        if abs(nav.cy - before) < 40:                      # the bottom of the city
-            if look("bottom"):
-                return True
-            break
+        cur = (round(nav.cx / SX), round(nav.cy / SY))
+        todo.sort(key=lambda c: abs(c[0] - cur[0]) + abs(c[1] - cur[1]))   # nearest cell first: fewer drags
+        c = todo.pop(0)
+        if c in seen or c in dead:
+            continue
+        nav.pan(c[0] * SX - nav.cx, c[1] * SY - nav.cy)
+        got = (round(nav.cx / SX), round(nav.cy / SY))
+        if got != c:                                       # the camera could not get there: outside the city
+            dead.add(c)
+            if got not in seen:                            # it ended in another new cell: look there instead
+                c = got
+            else:
+                continue
+        seen.add(c)
+        if look(f"c{c[0]},{c[1]}"):
+            return True
+        for n in ((c[0] + 1, c[1]), (c[0], c[1] + 1), (c[0] - 1, c[1]), (c[0], c[1] - 1)):
+            if n not in seen and n not in dead and n not in todo:
+                todo.append(n)
     rd_snap(dev.screenshot(), tag + "_last")
     log(f"[i]   {bname}: its learned picture was not found on the city ({' '.join(scores)})")
     return False
