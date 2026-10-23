@@ -9703,11 +9703,12 @@ def activity_go(dev, cfg, log, stop, tile, probe=False):
         shot = dev.screenshot()
         rd_snap(shot, "ago_2_activity" if i == 0 else f"ago_scroll_{i}")
         if has_template(tpl):
-            h = find(shot, tpl, 0.8, (0, 260, 540, 700))
-            if h:
-                hit = (h[0], h[1] - 45)                  # tapped 45 px lower below
+            h = find(shot, tpl, 0.85, (0, 260, 540, 700))
+            if h and 330 <= h[1] <= 820:                 # the whole tile on screen (one at the bottom edge cannot be tapped)
+                hit = (h[0], h[1] - 45)                  # tapped 45 px lower below = the picture's centre
         if not hit:
-            hit = rd_find(shot, words, region=(0, 260, 540, 700), cutoff=0.75)
+            t = rd_find(shot, words, region=(0, 260, 540, 700), cutoff=0.75)
+            hit = t if t and t[1] <= 760 else None
         if hit or stop.is_set():
             break
         dev.swipe(270, 820, 270, 520, 600)
