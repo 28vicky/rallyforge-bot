@@ -1231,8 +1231,28 @@ PAGES.license = function () {
 function renderTodayCard(serial) {
   const head = h("div", { class: "tdreset" }), list = h("div", { class: "tdq" }), sum = h("div", { class: "tdsum" });
   const res = h("div", { class: "tdres" }), week = h("small", { class: "tdweek" });
+  // the game's Auto-Join (ui-simple): time left, when the bot renews it, and a warning when it has not been checked for a while
+  const aj = h("div", { class: "ajline", hidden: true });
+  const ajEff = (k, d) => { const o = ((S.cfg.per_device || {})[serial]) || {}; return o[k] !== undefined ? o[k] : S.cfg[k] !== undefined ? S.cfg[k] : d; };
+  const ajPaint = async () => {
+    if (!ajEff("game_auto_join", false)) { aj.hidden = true; return; }
+    aj.hidden = false;
+    const r = await api("aj_status", { serial }, { quiet: true }).catch(() => null);
+    const renewMin = +ajEff("auto_join_renew_min", 120) || 120, checkMin = +ajEff("auto_join_check_min", 10) || 10;
+    const run = (S.devStatus.find((d) => d.id === serial) || {}).state === "run";
+    aj.innerHTML = "";
+    const dot = (k) => h("span", { class: "ajdot " + k });
+    if (!r || r.left_s === undefined) { aj.append(dot("mute"), h("b", {}, "Auto-Join"), h("span", {}, run ? "time left not read yet - the bot checks it shortly" : "on - checked when the bot runs")); return; }
+    const left = Math.max(0, r.left_s - r.age_s), at = new Date(Date.now() + Math.max(0, left - renewMin * 60) * 1000);
+    const stale = run && r.age_s > Math.max(3 * checkMin * 60, 30 * 60);
+    const hm = (t) => Math.floor(t / 3600) + "h " + String(Math.floor(t % 3600 / 60)).padStart(2, "0") + "m";
+    aj.append(dot(stale || left === 0 ? "bad" : "ok"), h("b", {}, "Auto-Join"), h("span", {}, hm(left) + " left"),
+      h("span", { class: "ajsub" }, left <= renewMin * 60 ? "renews now" : "renews at " + at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
+      stale ? h("span", { class: "ajwarn" }, "Not checked for " + Math.round(r.age_s / 60) + " min") : h("span", { class: "ajsub" }, "checked " + (r.age_s < 60 ? "just now" : Math.round(r.age_s / 60) + " min ago")));
+  };
   const card = h("div", { class: "panel today" },
     h("div", { class: "cardhead" }, h("h3", {}, "Today"), head),
+    aj,
     h("div", { class: "tdgrid" },
       h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Duty queue"), list, sum),
       h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Today's results"), res, week)));
@@ -1258,6 +1278,7 @@ function renderTodayCard(serial) {
     const j = await api("today", { serial }, { quiet: true }).catch(() => null);
     if (j) m = todayModel(j, serial);
     tick(); paint();
+    ajPaint();
   };
   paint(); tick();
   const t1 = setInterval(() => { if (!card.isConnected) { clearInterval(t1); return; } tick(); }, 1000);

@@ -1306,3 +1306,12 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .btn[disabled]{opacity:.45;cursor:not-allowed}
 .sideempty{display:flex;flex-direction:column;gap:4px;padding:10px 12px;font-size:13px;color:var(--mute)}
 .dhead select{width:auto!important;min-width:200px;flex:0 0 auto}
+/* ---- Today card: the game's Auto-Join line (ui-simple) ---- */
+.ajline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;margin:0 0 14px;border:1px solid var(--line);border-radius:10px;font-size:13.5px}
+.ajline b{font-weight:600}
+.ajline .ajsub{color:var(--mute);font-size:12.5px}
+.ajline .ajsub::before,.ajline .ajwarn::before{content:"\00b7";margin-right:8px;color:var(--mute)}
+.ajline .ajwarn{color:var(--bad);font-weight:500;font-size:12.5px}
+.ajdot{width:8px;height:8px;border-radius:50%;background:var(--mute);flex:none}
+.ajdot.ok{background:var(--good)}.ajdot.bad{background:var(--bad)}
+.ajline[hidden]{display:none}
