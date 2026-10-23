@@ -10413,9 +10413,10 @@ def run_map_city(dev, cfg, log, stop):
     zoom_out_full(dev, cfg, stop, log)
     nav = CityNav(dev, stop, log, pause=0.6)
     x, y, w, h = CITY_VIEW
-    STEPX, STEPY = int(w * 0.67), int(h * 0.67)        # one step in GAME px: views overlap one third each way (the finger
-    views = []                                             # distance comes from the measured gain - a fixed 234 finger px moved
-    t0 = time.time()                                       # up to 340 game px sideways = 20 px overlap, no picture link)
+    STEPX, STEPY = int(w * 0.5), int(h * 0.6)          # one step in GAME px: views overlap half sideways, 40 % up/down. The
+    views = []                                             # finger distance comes from the measured gain (a fixed 234 finger px
+    t0 = time.time()                                       # moved up to 340 game px = 20 px overlap, no picture link); a third
+    # of a view sideways (120 px) was not enough on Kiravik's east side (cliff, few features): 03:28 "no picture link".
     drags = [0]
     gain = [1.3, 1.3]                                      # game px per finger px, per axis (measured as we go)
 
@@ -10427,16 +10428,21 @@ def run_map_city(dev, cfg, log, stop):
         """Where the pictures say the camera is: median of the places implied by picture links to the kept views nearby
         (by the running estimate). -> (x, y) or None when no nearby view links. The drag estimates drift (24 Oct 02:44:
         164 moves put 3 'new' views on one edge spot and lost the west half as a separate group), the pictures do not."""
-        px_, py_ = [], []
-        for _, g2, f2, ex, ey in views:
-            if abs(ex - nav.cx) < w * 1.5 and abs(ey - nav.cy) < h * 1.5:
+        for rng in (1.5, None):                            # nearby first; then ALL views (a drag read as 0 by the static HUD
+            px_, py_ = [], []                              # pixels leaves the estimate a whole step off - 24 Oct 03:28)
+            for _, g2, f2, ex, ey in views:
+                if rng and not (abs(ex - nav.cx) < w * rng and abs(ey - nav.cy) < h * rng):
+                    continue
                 s = _kf_link(f2, (k, d), g2, g)
                 if s:
                     px_.append(ex - s[0])
                     py_.append(ey - s[1])
-        if not px_:
-            return None
-        return float(np.median(px_)), float(np.median(py_))
+            if px_:
+                ax, ay = float(np.median(px_)), float(np.median(py_))
+                if rng is None or abs(ax - nav.cx) > 60 or abs(ay - nav.cy) > 60:
+                    log(f"[i]   view at {round(nav.cx)},{round(nav.cy)}: the pictures put it at {round(ax)},{round(ay)} ({len(px_)} links{'' if rng else ', found far from the estimate'})")
+                return ax, ay
+        return None
 
     def clean_shot(shot=None):
         shot = dev.screenshot() if shot is None else shot
@@ -10458,7 +10464,8 @@ def run_map_city(dev, cfg, log, stop):
         if views:
             a = anchor(k, d, g)
             if a is None:
-                log(f"[i]   view at {round(nav.cx)},{round(nav.cy)}: no picture link to a nearby view - not kept")
+                log(f"[i]   view at {round(nav.cx)},{round(nav.cy)}: no picture link to any kept view - not kept")
+                rd_snap(shot, f"map_x{drags[0]:03d}")       # debug: the view that did not link
                 return False
             nav.cx, nav.cy = a                             # the estimate follows the pictures from here on
         if known(nav.cx, nav.cy):                          # the same ground again (the edge slid the camera back)
@@ -10505,7 +10512,7 @@ def run_map_city(dev, cfg, log, stop):
     # No "idle" stop: Kiravik 24 Oct 01:45 ended after 8 old-ground moves in a row at the diamond's edge with half the
     # city unexplored (18 views, 13 min) while Stalds got the whole city (51 views, 28 min) only because its edge runs were
     # shorter. The walk ends when every kept view has had its 4 directions; the time cap is the safety.
-    while len(views) < 60 and not timed_out():
+    while len(views) < 80 and not timed_out():            # ~45 views with half-view steps; Stalds needed 51 at a third
         if len(tried[at]) == 4:                            # this view is done: go to the nearest view with directions left
             cand = [i for i in range(len(views)) if len(tried[i]) < 4]
             if not cand:
