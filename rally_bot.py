@@ -5987,11 +5987,48 @@ def patch_shift(before, after):
     return best
 
 
+_ORB = [None]
+
+
+def feat_shift(before, after):
+    """Map shift by feature points: hundreds of distinctive points matched between the two map views; the shift that
+    most of them agree on wins (repeating walls / troop rows cannot fool that, a single patch can - Kiravik 23 Oct).
+    -> (dx, dy, agreeing points) of the map content, or None."""
+    try:
+        x, y, w, h = CITY_VIEW
+        if _ORB[0] is None:
+            _ORB[0] = cv2.ORB_create(2500)
+        ga = cv2.cvtColor(before[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+        gb = cv2.cvtColor(after[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+        ka, da = _ORB[0].detectAndCompute(ga, None)
+        kb, db = _ORB[0].detectAndCompute(gb, None)
+        if da is None or db is None or len(ka) < 30 or len(kb) < 30:
+            return None
+        m = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(da, db)
+        if len(m) < 30:
+            return None
+        d = np.float32([kb[q.trainIdx].pt for q in m]) - np.float32([ka[q.queryIdx].pt for q in m])
+        best_n, best = 0, None
+        for i in range(0, len(d), max(1, len(d) // 400)):   # each shift as a candidate: how many agree within 6 px
+            n = int(np.sum(np.all(np.abs(d - d[i]) < 6, axis=1)))
+            if n > best_n:
+                best_n, best = n, d[i]
+        if best_n < 40:
+            return None
+        inl = d[np.all(np.abs(d - best) < 6, axis=1)]
+        return float(inl[:, 0].mean()), float(inl[:, 1].mean()), best_n
+    except Exception:
+        return None
+
+
 def safe_shift(before, after, cmd_dx, cmd_dy):
     """-> (dx, dy) of the map content between the two screenshots.
     First by following a patch of the picture (direction-free: at the city's slanted edge the game slides the camera
     ALONG the edge, so a straight drag moves the map sideways - Kiravik 23 Oct 18:47, 180 px). Only when the patch
     is not found: phase correlation, bounded by the finger move; then the finger itself."""
+    f = feat_shift(before, after)
+    if f:
+        return f[0], f[1]
     pdx, pdy, score = patch_shift(before, after)
     if score >= 0.6:
         return pdx, pdy
@@ -6582,11 +6619,24 @@ class CityNav:
             _nap(self.stop, self.pause, self.pause + 0.3)
         return False
 
+    def _settled(self):
+        """Screenshot taken once the map has stopped moving (it glides after a swipe and springs back at the city's
+        edge - measuring 1 s after the swipe saw the map 480 px from where it ended, Kiravik 23 Oct)."""
+        x, y, w, h = CITY_VIEW
+        last = self.dev.screenshot()
+        for _ in range(8):
+            _nap(self.stop, 0.35, 0.45)
+            cur = self.dev.screenshot()
+            if float(cv2.absdiff(last[y:y + h, x:x + w], cur[y:y + h, x:x + w]).mean()) < 1.5:
+                return cur
+            last = cur
+        return last
+
     def _drag(self, fx, fy, tx, ty):
-        before = self.dev.screenshot()
+        before = self._settled()
         self.dev.swipe(int(fx), int(fy), int(tx), int(ty), 600)
         _nap(self.stop, self.pause, self.pause + 0.3)
-        after = self.dev.screenshot()
+        after = self._settled()
         dx, dy = safe_shift(before, after, tx - fx, ty - fy)
         if abs(dx) < 3 and abs(dy) < 3 and find_detail_icon(after):   # the drag was taken as a tap on a building
             self.log("[i]   the drag opened a building's ring instead of moving the map - closing it")
@@ -7841,6 +7891,11 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         return True
     if kind == "self":                                     # the step finds its own way from the city (e.g. alliance_science)
         return True
+    if kind == "learned":                                  # by its learned picture only (owner 23 Oct: the Activity route is a teacher, not the way)
+        if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
+            zoom_out_city(dev, stop, log)
+        leave_to_city(dev, cfg, stop, log)
+        return find_learned_building(dev, cfg, log, stop, name.strip())
     if kind in ("go", "via"):                              # Activity > tile > Go walks to the building (any city layout); map as fallback
         tile, _, bname = name.partition("|")
         if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
@@ -11124,7 +11179,7 @@ DUTY_LIBRARY = [
      "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Embassy"]},
     {"id": "test_learned_keep", "group": "Common tasks", "title": "Test: find the Keep without its tile", "every_min": 60, "verified": False,
      "note": "Test only: Gold Levy tile (gone once done) -> learned Keep picture -> Keep menu. Nothing else is pressed.",
-     "target": "via:Gold Levy|Keep", "tap_dy": 0, "steps": ["wait 1.2", "ring_name Keep"]},
+     "target": "learned:Keep", "tap_dy": 0, "steps": ["wait 1.2", "ring_name Keep"]},
     {"id": "test_activity_go", "group": "Common tasks", "title": "Test: Activity Go (Greet Champion)", "every_min": 60, "verified": False,
      "note": "Test only: '...' > Activity > Greet Champion > Go, saves a picture at every step. Nothing else is pressed.",
      "target": "self:", "steps": ["activity_go Greet Champion"]},
