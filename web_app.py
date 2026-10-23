@@ -72,8 +72,8 @@ class Controller:
         self.lock = threading.RLock()
         try:
             rb.backup_before_new_version()                     # a copy of your settings before this version changes anything
-        except Exception:
-            pass
+        except Exception as _e:
+            rb.quiet_err("Controller.__init__", _e)
         self.cfg = rb.load_config()
         self.lic = rf_license.AccountLicense(rb.USER, rb.RES)
         self.lic.set_source(self.cfg.get("update_url"))
@@ -139,8 +139,8 @@ class Controller:
                         self.day_count(serial, "joins", str(d.get("mon") or ""))
                     elif serial and d.get("k") == "skip" and str(d.get("why", "")).startswith("not enough time"):
                         self.day_count(serial, "late")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    rb.quiet_err("Controller.log", _e)
                 return
             self.logs.append((self.seq, serial, name, msg))
             if serial:
@@ -178,16 +178,16 @@ class Controller:
                     self.acts.append((self.seq, r.get("s", ""), r.get("n", ""), r.get("a") or {}))
                 except Exception:
                     continue
-        except Exception:
-            pass
+        except Exception as _e:
+            rb.quiet_err("Controller._load_acts", _e)
 
     def _save_act(self, serial, name, d):
         try:
             self.ACT_DIR.mkdir(parents=True, exist_ok=True)
             with open(self._act_file(self._acts_day), "a", encoding="utf-8") as f:
                 f.write(json.dumps({"s": serial, "n": name, "a": d}) + "\n")
-        except Exception:
-            pass
+        except Exception as _e:
+            rb.quiet_err("Controller._save_act", _e)
 
     def _new_game_day(self, day):
         """Daily reset: the Activity screen starts again from 0; files older than KEEP_DAYS go."""
@@ -198,8 +198,8 @@ class Controller:
         try:
             for f in sorted(self.ACT_DIR.glob("acts_*.jsonl"))[:-self.KEEP_DAYS]:
                 f.unlink()
-        except Exception:
-            pass
+        except Exception as _e:
+            rb.quiet_err("Controller._new_game_day", _e)
 
     def day_count(self, serial, key, mon=""):
         """Today card numbers that survive an app restart. Called with self.lock held."""
@@ -219,8 +219,8 @@ class Controller:
             for old in sorted(per)[:-self.KEEP_DAYS]:
                 per.pop(old, None)
             rb.save_json(self.DAY_FILE, self._days, indent=None)
-        except Exception:
-            pass
+        except Exception as _e:
+            rb.quiet_err("Controller.day_count", _e)
 
     BACKFILL_DONE = rb.USER / "daily_stats_backfill.done"
 
@@ -286,8 +286,8 @@ class Controller:
                 self.DAY_FILE.parent.mkdir(parents=True, exist_ok=True)
                 rb.save_json(self.DAY_FILE, self._days, indent=None)
             self.BACKFILL_DONE.write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as _e:
+            rb.quiet_err("Controller._backfill_days", _e)
 
     def day_rows(self, serial):
         if not hasattr(self, "_days"):
@@ -1012,8 +1012,8 @@ class Controller:
                 if re.fullmatch(r"General \d+", p.stem):
                     p.unlink()
             rb.list_generals(refresh=True)
-        except Exception:
-            pass
+        except Exception as _e:
+            rb.quiet_err("Controller.scan_generals", _e)
 
         def work():
             try:
@@ -1417,8 +1417,8 @@ class Controller:
         if any(rb.USER.glob("tg_session*")) and str(self.cfg.get("tg_api_id", "")).strip() and self.cfg.get("tg_api_hash"):
             try:
                 self.tg_connect()
-            except ApiError:
-                pass
+            except ApiError as _e:
+                rb.quiet_err("Controller._tg_autoconnect", _e)
 
     def _tg_tick(self):
         mins = int(self.cfg.get("tg_auto_min", 0) or 0)
@@ -1437,8 +1437,8 @@ class Controller:
                 info = rb.check_update(cfg)
                 try:
                     rb.sync_monster_pack(lambda m: self.log(m))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    rb.quiet_err("check_updates.work", _e)
                 if info is None:
                     if manual:
                         self.event("update_none", {"version": rb.VERSION})
@@ -1519,8 +1519,8 @@ class Controller:
         running = [s for s in self.dev if self.running(s)]
         try:
             rb.save_json(self.RESUME_FILE, {"serials": running, "t": now}, indent=None)
-        except OSError:
-            pass
+        except OSError as _e:
+            rb.quiet_err("Controller.restart_for_update", _e)
         self.log(f"[+] Restarting to use the new version - {len(running)} emulator(s) start again by themselves")
         self.restart_pending = False
         self.restart_app()
@@ -1543,8 +1543,8 @@ class Controller:
         self.shutdown()
         try:
             STATE_FILE.unlink()
-        except OSError:
-            pass
+        except OSError as _e:
+            rb.quiet_err("Controller.restart_app", _e)
         subprocess.Popen(args, env=env)
         threading.Timer(0.6, lambda: os._exit(0)).start()
 
@@ -1563,8 +1563,8 @@ def open_path(path):
             subprocess.Popen(["open", str(path)])
         else:
             subprocess.Popen(["xdg-open", str(path)])
-    except Exception:
-        pass
+    except Exception as _e:
+        rb.quiet_err("open_path", _e)
 
 
 class Api:
@@ -2635,8 +2635,8 @@ def start_server(ctl):
     port = srv.server_address[1]
     try:
         rb.save_json(STATE_FILE, {"port": port, "key": key, "pid": os.getpid()}, indent=None)
-    except OSError:
-        pass
+    except OSError as _e:
+        rb.quiet_err("start_server", _e)
     return port, key
 
 
@@ -2668,8 +2668,8 @@ def window_size(want_w=1260, want_h=840):
             aw, ah = (rc.right - rc.left) / scale, (rc.bottom - rc.top) / scale
             w, h = int(min(want_w, aw - 40)), int(min(want_h, ah - 100))                  # room for the title bar and a margin
             return w, h, int(rc.left / scale + (aw - w) / 2), int(rc.top / scale + 12)
-    except Exception:
-        pass
+    except Exception as _e:
+        rb.quiet_err("window_size", _e)
     return want_w, want_h, None, None
 
 
@@ -2692,8 +2692,8 @@ def open_window(url, ctl):
                 if hit:
                     try:
                         ctl_events["win"].destroy()
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        rb.quiet_err("open_window.watch", _e)
                     return
         threading.Thread(target=watch, daemon=True).start()
         started = time.time()
@@ -2708,8 +2708,8 @@ def open_window(url, ctl):
                 failed["v"] = True
                 try:
                     ctl_events["win"].destroy()
-                except Exception:
-                    pass
+                except Exception as _e:
+                    rb.quiet_err("open_window.health", _e)
         threading.Thread(target=health, daemon=True).start()
         try:
             sp = rb.USER / "webview"
@@ -2726,8 +2726,8 @@ def open_window(url, ctl):
         try:
             import traceback
             (rb.USER / "startup.log").open("a", encoding="utf-8").write("webview failed:\n" + traceback.format_exc() + "\n")
-        except Exception:
-            pass
+        except Exception as _e:
+            rb.quiet_err("open_window", _e)
     exe = browser_path()
     if exe:
         prof = rb.USER / "browser"
@@ -2745,8 +2745,8 @@ def main():
     ctl = Controller()
     try:
         rb.setup_tesseract()                                  # the scans read general names with OCR
-    except Exception:
-        pass
+    except Exception as _e:
+        rb.quiet_err("main", _e)
     if ctl.lic.on:
         rb.INSTANCE_GUARD = ctl.allowed
 
@@ -2758,8 +2758,8 @@ def main():
                     if not ctl.lic.recheck():
                         ctl.log("[!] The account is no longer valid - stopping all bots. Log in again.")
                         ctl._safe(ctl.stop_all)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    rb.quiet_err("main._lic_watch", _e)
                 if ctl.quit_event.wait(3600):
                     return
         threading.Thread(target=_lic_watch, daemon=True).start()
@@ -2767,8 +2767,8 @@ def main():
     url = f"http://127.0.0.1:{port}/?k={key}"
     try:
         (rb.USER / "startup.log").open("a", encoding="utf-8").write(f"server up on port {port}\n")
-    except Exception:
-        pass
+    except Exception as _e:
+        rb.quiet_err("main", _e)
     resume = ctl.take_resume()
     if resume:
         def _resume():                                  # restarted for an update: carry on where we were
@@ -2798,16 +2798,16 @@ def main():
     if shown and not ctl.cfg.get("keep_running_on_close") and not getattr(ctl, "hide_requested", False):       # closing the window = stop everything and quit
         try:
             ctl.log("[*] Window closed - stopping all bots")
-        except Exception:
-            pass
+        except Exception as _e:
+            rb.quiet_err("main", _e)
         ctl.shutdown()
         t1 = time.time()
         while ctl.n_running() and time.time() - t1 < 8:
             time.sleep(0.3)
         try:
             STATE_FILE.unlink()
-        except OSError:
-            pass
+        except OSError as _e:
+            rb.quiet_err("main", _e)
         os._exit(0)
     # window closed: keep the bots running quietly until they all stop (or the user quits from the window)
     t0 = time.time()
@@ -2820,8 +2820,8 @@ def main():
     ctl.shutdown()
     try:
         STATE_FILE.unlink()
-    except OSError:
-        pass
+    except OSError as _e:
+        rb.quiet_err("main", _e)
     os._exit(0)
 
 
