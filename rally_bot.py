@@ -5973,9 +5973,28 @@ def city_shift(a, b):
     return dx, dy, resp
 
 
+def patch_shift(before, after):
+    """Where did the picture go? Three patches of the map area in `before` are looked for in `after`.
+    -> (dx, dy, score) of the map content; score < 0.6 = not found (moved too far, or a repeating pattern)."""
+    x, y, w, h = CITY_VIEW
+    best = (0.0, 0.0, 0.0)
+    for px, py, pw, ph in ((x + 80, y + 245, 200, 200), (x + 30, y + 120, 150, 150), (x + 180, y + 420, 150, 150)):
+        t = before[py:py + ph, px:px + pw]
+        r = cv2.matchTemplate(after[y:y + h, x:x + w], t, cv2.TM_CCOEFF_NORMED)
+        _, v, _, l = cv2.minMaxLoc(r)
+        if v > best[2]:
+            best = (float(l[0] + x - px), float(l[1] + y - py), float(v))
+    return best
+
+
 def safe_shift(before, after, cmd_dx, cmd_dy):
-    """city_shift, but never believe an impossible answer: the map cannot move further than the finger did (repeating
-    pictures such as rows of troops fool the matcher). -> (dx, dy) of the map content between the two screenshots."""
+    """-> (dx, dy) of the map content between the two screenshots.
+    First by following a patch of the picture (direction-free: at the city's slanted edge the game slides the camera
+    ALONG the edge, so a straight drag moves the map sideways - Kiravik 23 Oct 18:47, 180 px). Only when the patch
+    is not found: phase correlation, bounded by the finger move; then the finger itself."""
+    pdx, pdy, score = patch_shift(before, after)
+    if score >= 0.6:
+        return pdx, pdy
     dx, dy, resp = city_shift(before, after)
     G = 1.9                                                # the game moves the map up to ~1.5x as far as the finger (measured on a real city): allow it
     ok = (resp >= 0.05
@@ -9952,7 +9971,7 @@ def learn_building(dev, shot, bname, x, y):
 def _learn_match(shot, tpl):
     """Best match of a learned picture on the city view, at a few sizes. -> (score, (x, y) top-left on screen, size)"""
     best = (0.0, None, 1.0)
-    for f in (1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 0.8):         # the city may be zoomed in (seen after a game restart, 23 Oct)
+    for f in (1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 0.8, 0.7, 0.6):   # the city may be zoomed in or out compared with the learning time
         t = tpl if f == 1.0 else cv2.resize(tpl, None, fx=f, fy=f, interpolation=cv2.INTER_LINEAR)
         if t.shape[0] >= 760 or t.shape[1] >= 460:
             continue
