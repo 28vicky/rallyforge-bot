@@ -7934,6 +7934,15 @@ _WM_NOTE = [0.0, ""]                                       # last time a 'not th
 def world_map(shot):
     """The world map (after the globe button): its bottom-left buttons 'Bookmarks' / 'World Map' are not in the city."""
     try:
+        tp = template_path("world_map_btn")                  # picture of the World Map button (OCR differs per PC - Kiravik 23 Oct)
+        if tp is not None:
+            t = cv2.imread(str(tp))
+            if t is not None:
+                a = shot[740:920, 0:160]
+                r = cv2.matchTemplate(a, t, cv2.TM_CCOEFF_NORMED)
+                _, mx, _, (x, y) = cv2.minMaxLoc(r)
+                if mx >= 0.85 and a[y:y + t.shape[0], x:x + t.shape[1]].mean() >= 0.8 * t.mean():   # not dimmed by a window on top
+                    return True
         if find_text(shot, ["World Map", "Bookmarks"], region=(0, 600, 200, 330), cutoff=0.75) is not None:
             return True
         texts = [t for t, _ in ocr_lines(shot[600:930, 0:200], 2.5, bright=True)]
