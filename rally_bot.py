@@ -9959,6 +9959,7 @@ MR_POLL_MIN = 1                          # look for a new target this often (mon
 MR_FORGET_MIN = 30                       # a target that was started / skipped is not tried again for this long
 MR_CENTER = (272, 480)                   # the searched tile sits in the middle of the map
 MR_ALLIANCE_WAR = (384, 768)              # Alliance War button on a monster page (Attack sits at 170)
+MR_MARCH = (404, 910)                    # March button on the Alliance War troop page
 MR_EMPTY = (330, 250)                     # a map spot with no button: closes a ring (40,640 was the Quests button)
 MR_NEAR = [(0, 0), (0, -30), (-30, 10), (30, 10), (0, 35)]   # the monster's picture can sit a little off the tile centre
 MR_TIMES = {"5": (190, 512), "10": (395, 512), "30": (190, 590), "60": (395, 590)}   # Alliance War Rally! buttons (fallback spots)
@@ -10331,8 +10332,11 @@ def _run_monster_rally(dev, cfg, log, stop):
             _nap(stop, 1.0, 1.3)
             return later(60, f"stamina {sta[-2]} would drop under {keep_sta}")
         if not rd_tap(dev, stop, ["March"], region=(330, 880, 210, 75), wait=(2.0, 2.5), shot=shot):
-            dev.back()
-            raise RuntimeError("no March button")
+            if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)):
+                dev.back()
+                raise RuntimeError("no March button")
+            dev.tap(*MR_MARCH)                               # gold March label is often not read (PC 23 Oct) - fixed spot
+            _nap(stop, 2.0, 2.5)
         shot = dev.screenshot()
         if rd_seen(shot, ["Select a Preset"], region=(0, 120, 540, 60)):
             rd_snap(shot, "mrally_stuck")
