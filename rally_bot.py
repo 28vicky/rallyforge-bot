@@ -10284,25 +10284,35 @@ def run_map_city(dev, cfg, log, stop):
     shot = clean_shot()
     keep(shot, 0.0, 0.0)
     nav.cx = nav.cy = 0.0
-    seen, todo, dead = {(0, 0)}, [(1, 0), (0, 1), (0, -1), (-1, 0)], set()
-    tries = 0
-    while todo and len(seen) < 90 and tries < 150:
+    # The frontier is the VIEWS, not a grid: a diamond-shaped city slides the camera along its edge, so a grid cell is
+    # often unreachable from one side but fine from another (Kiravik 21:40: 7 of 9 cells "dead" from the corner).
+    # From the current view try each direction once; wherever the camera lands is a new view when it is new ground.
+    STEP = ((SX, 0), (0, SY), (-SX, 0), (0, -SY))
+    tried = [set()]                                        # per view: directions already tried from it
+    at = 0                                                 # the view the camera is on (or nearest to)
+    tries = dead = 0
+    while tries < 150 and len(views) < 90:
         if stop.is_set():
             return
-        tries += 1
-        cur = (round(nav.cx / SX), round(nav.cy / SY))
-        todo.sort(key=lambda c: abs(c[0] - cur[0]) + abs(c[1] - cur[1]))
-        c = todo.pop(0)
-        if c in seen or c in dead:
+        if len(tried[at]) == 4:                            # this view is done: go to the nearest view with directions left
+            cand = [i for i in range(len(views)) if len(tried[i]) < 4]
+            if not cand:
+                break
+            at = min(cand, key=lambda i: abs(views[i][0] - nav.cx) + abs(views[i][1] - nav.cy))
+            for _ in range(3):
+                rx, ry = views[at][0] - nav.cx, views[at][1] - nav.cy
+                if abs(rx) < 60 and abs(ry) < 60:
+                    break
+                shot = nav._settled()
+                nav.pan(rx, ry)
+                shot = clean_shot()
+                p = place(shot)
+                if p is not None:
+                    nav.cx, nav.cy = p
             continue
-        # ONE measured drag towards the cell (at the diamond's slanted edge the game slides the camera sideways instead;
-        # pan() would spend 6 drags on that - Kiravik 21:25): wherever the camera lands is kept when it is new ground.
-        sx = max(-200, min(200, c[0] * SX - nav.cx))
-        sy = max(-300, min(300, c[1] * SY - nav.cy))
-        ln = (sx * sx + sy * sy) ** 0.5
-        if ln < 200:                                       # never a short drag (read as a tap on a building)
-            ux, uy = (sx / ln, sy / ln) if ln else (0.0, 1.0)
-            sx, sy = ux * 200, uy * 200
+        tries += 1
+        sx, sy = min(STEP, key=lambda d: (d in tried[at], abs(d[0]) == 0))   # x first (the diamond is wider than tall on screen)
+        tried[at].add((sx, sy))
         dx, dy, shot = nav._drag(270 + sx / 2, 440 + sy / 2, 270 - sx / 2, 440 - sy / 2, before=shot)
         nav.cx -= dx
         nav.cy -= dy
@@ -10310,22 +10320,16 @@ def run_map_city(dev, cfg, log, stop):
         p = place(shot)
         if p is not None:
             nav.cx, nav.cy = p                             # the picture says where we are (the finger only estimated it)
-        near = min((abs(mx - nav.cx) + abs(my - nav.cy) for mx, my, _, _ in views), default=9e9)
-        got = (round(nav.cx / SX), round(nav.cy / SY))
-        if near < 90:                                      # the camera did not move (or barely): that cell is off the city
-            dead.add(c)
+        near_i = min(range(len(views)), key=lambda i: abs(views[i][0] - nav.cx) + abs(views[i][1] - nav.cy))
+        near = abs(views[near_i][0] - nav.cx) + abs(views[near_i][1] - nav.cy)
+        if near < 120:                                     # old ground (the edge: did not move, or slid back)
+            dead += 1
+            at = near_i
             continue
-        if got != c:
-            dead.add(c)                                    # slid elsewhere: the cell asked for is not reachable this way
-            if got in seen:
-                continue
-            c = got
-        seen.add(c)
         keep(shot, nav.cx, nav.cy)
-        log(f"[i]   map view {len(views)}: cell {c[0]},{c[1]} at {round(nav.cx)},{round(nav.cy)}" + ("" if p else " (by the drags)") + f", {len(todo)} to go")
-        for n in ((c[0] + 1, c[1]), (c[0], c[1] + 1), (c[0] - 1, c[1]), (c[0], c[1] - 1)):
-            if n not in seen and n not in dead and n not in todo:
-                todo.append(n)
+        tried.append(set())
+        at = len(views) - 1
+        log(f"[i]   map view {len(views)} at {round(nav.cx)},{round(nav.cy)}" + ("" if p else " (by the drags)"))
     # stitch
     xs = [v[0] for v in views]
     ys = [v[1] for v in views]
@@ -10338,7 +10342,7 @@ def run_map_city(dev, cfg, log, stop):
     d = _map_dir(dev)
     d.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(d / "map.png"), canvas)
-    meta = {"at": time.strftime("%Y-%m-%d %H:%M"), "views": len(views), "cells": sorted(seen), "size": [W, H],
+    meta = {"at": time.strftime("%Y-%m-%d %H:%M"), "views": len(views), "size": [W, H],
             "origin": [ox, oy], "zoomed_out": bool(getattr(dev, "zoomed_out", False))}
     (d / "map.json").write_text(json.dumps(meta), encoding="utf-8")
     _CITY_MAPS.pop(str(getattr(dev, "serial", "default")), None)
@@ -10352,7 +10356,7 @@ def run_map_city(dev, cfg, log, stop):
                     p.write_text(json.dumps(m), encoding="utf-8")
             except Exception:
                 pass
-    log(f"[+]  City map built: {len(views)} views, {W}x{H} px, {len(dead)} cells off the city, {tries} drags, {round(time.time() - t0)} s")
+    log(f"[+]  City map built: {len(views)} views, {W}x{H} px, {tries} drags ({dead} led to old ground), {round(time.time() - t0)} s")
 
 
 def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
