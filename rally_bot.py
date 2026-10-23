@@ -10167,7 +10167,7 @@ _CITY_MAPS = {}                                            # serial -> CityMap (
 KF_MIN_PTS = 60                                            # agreeing feature points for a link / a locate
 KF_MIN_NCC = 0.5                                           # pixel correlation of the overlap: kills links between non-overlapping views
                                                            # made by the static HUD pixels inside CITY_VIEW (a confident 0,0 shift)
-KF_MAP_MINUTES = 25                                        # hard cap for one mapping (owner 24 Oct: a long one-time job is fine if it is complete)
+KF_MAP_MINUTES = 45                                        # hard cap only; the walk ends by itself when every view is explored
 
 
 def _map_dir(dev):
@@ -10470,7 +10470,7 @@ def run_map_city(dev, cfg, log, stop):
     def nearest():
         return min(range(len(views)), key=lambda i: abs(views[i][3] - nav.cx) + abs(views[i][4] - nav.cy))
 
-    while len(views) < 40 and idle < 8 and not timed_out():
+    while len(views) < 60 and idle < 8 and not timed_out():
         if len(tried[at]) == 4:                            # this view is done: go to the nearest view with directions left
             cand = [i for i in range(len(views)) if len(tried[i]) < 4]
             if not cand:
