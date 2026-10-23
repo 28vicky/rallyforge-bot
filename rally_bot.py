@@ -6584,10 +6584,13 @@ class CityNav:
 
     def _drag(self, fx, fy, tx, ty):
         before = self.dev.screenshot()
-        self.dev.swipe(int(fx), int(fy), int(tx), int(ty), 450)
+        self.dev.swipe(int(fx), int(fy), int(tx), int(ty), 600)
         _nap(self.stop, self.pause, self.pause + 0.3)
         after = self.dev.screenshot()
         dx, dy = safe_shift(before, after, tx - fx, ty - fy)
+        if abs(dx) < 3 and abs(dy) < 3 and find_detail_icon(after):   # the drag was taken as a tap on a building
+            self.log("[i]   the drag opened a building's ring instead of moving the map - closing it")
+            close_ring(self.dev, self.stop, (270, 490))
         return dx, dy, after
 
     def to_origin(self, on_step=None):
@@ -6610,17 +6613,17 @@ class CityNav:
             rx, ry = want_dx - mx, want_dy - my
             if abs(rx) < 25 and abs(ry) < 25:
                 break
-            sx = max(-120, min(120, rx))              # bigger drags leave too little overlap to measure
-            sy = max(-240, min(240, ry))
+            sx = max(-200, min(200, rx))              # one drag at a time; each is measured (patch tracking)
+            sy = max(-300, min(300, ry))
             # dragging the finger left/up moves the camera right/down.
             # A short drag can be read by the game as a TAP on a building (that opened Prison, Rare Books ...), so a
             # short move is done as one long drag past the target and a second long drag back.
             ln = (sx * sx + sy * sy) ** 0.5
-            if ln < 80:
-                ux, uy = (sx / ln, sy / ln) if ln else (0.0, 1.0)
-                ax, ay = sx + ux * 90, sy + uy * 90
+            if ln < 200:                                 # the game read a 120 px drag on a building as a TAP (ring opened,
+                ux, uy = (sx / ln, sy / ln) if ln else (0.0, 1.0)   # camera stayed; Kiravik 19:13 x8): always drag far,
+                ax, ay = sx + ux * 200, sy + uy * 200    # then come back
                 d1x, d1y, _ = self._drag(270 + ax / 2, 440 + ay / 2, 270 - ax / 2, 440 - ay / 2)
-                d2x, d2y, _ = self._drag(270 - ux * 45, 440 - uy * 45, 270 + ux * 45, 440 + uy * 45)
+                d2x, d2y, _ = self._drag(270 - ux * 100, 440 - uy * 100, 270 + ux * 100, 440 + uy * 100)
                 dx, dy = d1x + d2x, d1y + d2y
             else:
                 dx, dy, _ = self._drag(270 + sx / 2, 440 + sy / 2, 270 - sx / 2, 440 - sy / 2)
