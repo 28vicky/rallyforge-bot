@@ -215,7 +215,7 @@ DEFAULTS = {
     "ui_text": 100,                         # whole-window text size in percent (85-150)
     "ui_name": 24,                          # emulator name heading size in px (18-40)
     "rally_enabled": True,                  # join rallies (first priority); off = the bot only does the tasks
-    "game_reset_utc": "00:00",               # when the game's daily reset happens (UTC, HH:MM); daily duties start again then
+    "game_reset_utc": "auto",                # when the game's daily reset happens: auto = Evony's own (midnight US Pacific, follows daylight saving), or HH:MM UTC
     "tasks_first": True,                    # a task/duty that is due goes before waiting for new rallies (a rally already on screen is always joined first)
     "city_enabled": False,                  # run the tasks (Tasks tab) while no rally is waiting
     "city_tasks": [],                       # [{name, enabled, target, steps, every_min}], see run_step()
@@ -426,6 +426,11 @@ def build_report(path, include_debug=True, description="", devices=None):
 
 def migrate_cfg(cfg):
     """Older configs pointed the general tap at the magnifier (x~477), which opens the info view."""
+    if not cfg.get("_reset_auto_v1"):                   # one time (owner 23 Oct): the old default 00:00 UTC was wrong and 07:00
+        cfg["_reset_auto_v1"] = True                    # does not follow daylight saving - both become Evony's own reset time
+        if str(cfg.get("game_reset_utc") or "").strip() in ("", "00:00", "0:00", "07:00", "7:00"):
+            cfg["game_reset_utc"] = "auto"
+        set_game_reset(cfg)
     for k, new in (("general_main_tap", [90, 532]), ("general_assistant_tap", [90, 688])):
         v = cfg.get(k)
         if not v or (len(v) == 2 and v[0] > 300):
@@ -483,12 +488,31 @@ def save_config(cfg):
     set_game_reset(cfg)
 
 
-_RESET_MIN = [0]                          # minutes after 00:00 UTC at which the game day changes
+_RESET_MIN = [None]                       # minutes after 00:00 UTC at which the game day changes; None = Evony's own (auto)
+
+
+def evony_reset_min(t=None):
+    """Evony's daily reset is midnight US Pacific time and follows US daylight saving: 07:00 UTC in summer
+    (second Sunday of March to first Sunday of November), 08:00 UTC in winter."""
+    import calendar
+    t = time.time() if t is None else t
+    y = time.gmtime(t).tm_year
+    def nth_sunday(month, n):
+        first = calendar.weekday(y, month, 1)               # Monday = 0 ... Sunday = 6
+        return 1 + (6 - first) % 7 + 7 * (n - 1)
+    start = calendar.timegm((y, 3, nth_sunday(3, 2), 10, 0, 0))   # 02:00 PST = 10:00 UTC
+    end = calendar.timegm((y, 11, nth_sunday(11, 1), 9, 0, 0))    # 02:00 PDT = 09:00 UTC
+    return 7 * 60 if start <= t < end else 8 * 60
+
+
+def reset_min(t=None):
+    return evony_reset_min(t) if _RESET_MIN[0] is None else _RESET_MIN[0]
 
 
 def set_game_reset(cfg):
-    m = re.fullmatch(r"\s*([01]?\d|2[0-3]):([0-5]\d)\s*", str((cfg or {}).get("game_reset_utc") or "00:00"))
-    _RESET_MIN[0] = int(m.group(1)) * 60 + int(m.group(2)) if m else 0
+    v = str((cfg or {}).get("game_reset_utc") or "auto").strip().lower()
+    m = re.fullmatch(r"([01]?\d|2[0-3]):([0-5]\d)", v)
+    _RESET_MIN[0] = int(m.group(1)) * 60 + int(m.group(2)) if m else None
 
 
 # ------------------------------------------------------------ tool discovery
@@ -10063,7 +10087,7 @@ DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
 
 
 def _game_day():
-    return time.strftime("%Y-%m-%d", time.gmtime(time.time() - _RESET_MIN[0] * 60))     # the game day changes at the reset time (default 00:00 UTC, server time)
+    return time.strftime("%Y-%m-%d", time.gmtime(time.time() - reset_min() * 60))     # the game day changes at Evony's reset (midnight US Pacific) unless a time is set
 
 
 def load_duty_state():

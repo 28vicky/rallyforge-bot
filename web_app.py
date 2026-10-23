@@ -1565,7 +1565,7 @@ class Api:
         serial = self._scope(p) or (self.c.devices[0]["id"] if self.c.devices else "default")
         cfg = self._eff(serial)
         now = time.time()
-        rm = rb._RESET_MIN[0] * 60
+        rm = rb.reset_min() * 60
         reset_at = ((now - rm) // 86400 + 1) * 86400 + rm
         state = (rb.load_duty_state().get(serial) or {})
         day = rb._game_day()
@@ -1579,7 +1579,7 @@ class Api:
             row = state.get(d["id"]) or {}
             st, txt = rb.duty_status(serial, d["id"], cfg)
             last_ok = row.get("last_ok", 0)
-            ok_today = bool(last_ok) and time.strftime("%Y-%m-%d", time.gmtime(last_ok - rb._RESET_MIN[0] * 60)) == day
+            ok_today = bool(last_ok) and time.strftime("%Y-%m-%d", time.gmtime(last_ok - rb.reset_min() * 60)) == day
             done_n += ok_today
             queue.append({"id": d["id"], "title": d["title"], "group": d["group"], "status": st, "text": txt,
                           "last_ok": last_ok if ok_today else 0, "msg": row.get("msg", "") if row.get("day") == day else "",
@@ -1609,7 +1609,7 @@ class Api:
             if not ((self._eff(d["id"]).get("duties") or {}).get("crazy_eggs") or {}).get("on"):
                 ce_off.append(t["name"])
         now = time.time()
-        rm = rb._RESET_MIN[0] * 60
+        rm = rb.reset_min() * 60
         return {"now": now, "reset_at": ((now - rm) // 86400 + 1) * 86400 + rm, "rows": rows,
                 "crazy_eggs": {"total": len(rows), "off": ce_off}}
 
