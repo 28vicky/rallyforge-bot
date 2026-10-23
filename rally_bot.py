@@ -7840,6 +7840,9 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "view_reset_test":
         run_view_reset_test(dev, cfg, log, stop)
         return
+    if cmd == "map_city":
+        run_map_city(dev, cfg, log, stop)
+        return
     if cmd == "text":
         dev.text(arg)
         _nap(stop, 0.8, 1.2)
@@ -10022,8 +10025,16 @@ def learn_building(dev, shot, bname, x, y):
             return
         p = _learn_path(dev, bname)
         p.parent.mkdir(parents=True, exist_ok=True)
+        meta = {}
+        try:                                               # keep the map place learned earlier (and the last picture)
+            meta = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
+            if p.exists():
+                p.replace(p.with_name(p.stem + "_prev.png"))
+        except Exception:
+            meta = {}
         cv2.imwrite(str(p), crop)
-        (p.with_suffix(".json")).write_text(json.dumps({"dx": x - x0, "dy": y - y0, "at": time.strftime("%Y-%m-%d %H:%M")}), encoding="utf-8")
+        meta.update({"dx": x - x0, "dy": y - y0, "at": time.strftime("%Y-%m-%d %H:%M")})
+        (p.with_suffix(".json")).write_text(json.dumps(meta), encoding="utf-8")
     except Exception:
         pass
 
@@ -10058,6 +10069,10 @@ def find_learned_building(dev, cfg, log, stop, bname):
     except Exception:
         return False
     tag = "learn_" + re.sub(r"[^a-z]+", "_", bname.lower())
+    r = find_on_map(dev, cfg, log, stop, bname, tpl, meta, p)   # the own city map: a few measured drags (owner 23 Oct)
+    if r:
+        return True
+    cmap = city_map(dev)
     scores = []
     nav = None
 
@@ -10078,14 +10093,19 @@ def find_learned_building(dev, cfg, log, stop, bname):
         x, y = ml[0] + int(meta["dx"] * f), ml[1] + int(meta["dy"] * f)
         if not (60 <= x <= 470 and 150 <= y <= 820):
             return False
-        if nav is not None:                                # remember the spot (map pixels from the top-left corner)
-            meta["map"] = [round(nav.cx + x), round(nav.cy + y)]
+        loc = cmap.locate(shot) if cmap is not None else None
+        if loc:                                            # remember the spot on the own map (reused by find_on_map)
+            meta["map"] = [round(loc[0] + x), round(loc[1] + y)]
+        else:
+            meta.pop("map", None)
         if open_building_here(dev, cfg, log, stop, bname, spots=[(x, y)], how=f"its learned picture (match {mv:.2f}, {where})"):
-            if nav is not None:
-                try:
-                    p.with_suffix(".json").write_text(json.dumps(meta), encoding="utf-8")
-                except Exception:
-                    pass
+            try:                                           # open_building_here saved the fresh picture; add the map place
+                m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
+                if meta.get("map"):
+                    m2["map"] = meta["map"]
+                p.with_suffix(".json").write_text(json.dumps(m2), encoding="utf-8")
+            except Exception:
+                pass
             return True
         return False
 
@@ -10135,6 +10155,255 @@ def find_learned_building(dev, cfg, log, stop, bname):
                 todo.append(n)
     rd_snap(dev.screenshot(), tag + "_last")
     log(f"[i]   {bname}: its learned picture was not found on the city ({' '.join(scores)})")
+    return False
+
+
+# --- the instance's own city map (owner 23 Oct): every city is stitched once from its own views; after that any screenshot
+#     tells where the camera is, and a building is reached in a few measured drags instead of a 7-minute exploration -----------
+_CITY_MAPS = {}                                            # serial -> CityMap (features computed once)
+MAP_CELL = (200, 300)                                      # one mapping cell: views overlap by ~45% so each one is placed by the picture (a 300 px step left 60 px - too little, Kiravik 23 Oct)
+
+
+def _map_dir(dev):
+    return LEARN_DIR / re.sub(r"[^\w.-]+", "_", str(getattr(dev, "serial", "default")))
+
+
+class CityMap:
+    """The stitched map of one city. Map coordinates = pixels of map.png; a 'camera place' is the map coordinate of
+    screen point (0, 0), so screen (sx, sy) = map (cx + sx, cy + sy)."""
+
+    def __init__(self, path):
+        self.path = path
+        self.img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+        try:
+            self.meta = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+        except Exception:
+            self.meta = {}
+        self.kp = self.des = None
+
+    def ok(self):
+        return self.img is not None and self.img.shape[0] > 400 and self.img.shape[1] > 300
+
+    def _features(self):
+        if self.kp is None:
+            orb = cv2.ORB_create(40000)
+            self.kp, self.des = orb.detectAndCompute(self.img, None)
+        return self.kp, self.des
+
+    def locate(self, shot, min_pts=35):
+        """Camera place from any city screenshot: its map-area feature points matched against the map, the shift most of
+        them agree on wins (same consensus as feat_shift). -> (cx, cy, agreeing points) or None."""
+        try:
+            x, y, w, h = CITY_VIEW
+            kp, des = self._features()
+            if des is None or len(kp) < 100:
+                return None
+            g = cv2.cvtColor(shot[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+            if float(g.std()) < 12:
+                return None
+            ks, ds = cv2.ORB_create(2500).detectAndCompute(g, None)
+            if ds is None or len(ks) < 30:
+                return None
+            m = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(ds, des)
+            if len(m) < 30:
+                return None
+            d = np.float32([kp[q.trainIdx].pt for q in m]) - np.float32([ks[q.queryIdx].pt for q in m])
+            best_n, best = 0, None
+            for i in range(0, len(d), max(1, len(d) // 600)):
+                n = int(np.sum(np.all(np.abs(d - d[i]) < 6, axis=1)))
+                if n > best_n:
+                    best_n, best = n, d[i]
+            if best_n < min_pts:
+                return None
+            inl = d[np.all(np.abs(d - best) < 6, axis=1)]
+            return float(inl[:, 0].mean()) - x, float(inl[:, 1].mean()) - y, best_n
+        except Exception:
+            return None
+
+
+def city_map(dev):
+    """The instance's own map, or None when 'Map my city' has not been run yet."""
+    key = str(getattr(dev, "serial", "default"))
+    m = _CITY_MAPS.get(key)
+    p = _map_dir(dev) / "map.png"
+    if m is None or (p.exists() and m.path.stat().st_mtime != m.meta.get("_mtime")):
+        if not p.exists():
+            return None
+        m = CityMap(p)
+        m.meta["_mtime"] = p.stat().st_mtime
+        _CITY_MAPS[key] = m
+    return m if m.ok() else None
+
+
+def run_map_city(dev, cfg, log, stop):
+    """Duty 'Map my city': explore every cell of the city once (flood fill, like the learned-picture search but it does
+    not stop) and stitch the map area of every view into city_learn/<serial>/map.png. Each view's place comes from the
+    picture itself (feature-point shift against the views already placed), never from the finger, so a view is placed
+    where it really is; a view that did not move the camera marks the cell as outside the city."""
+    if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
+        zoom_out_city(dev, stop, log)
+    leave_to_city(dev, cfg, stop, log)
+    nav = CityNav(dev, stop, log)
+    x, y, w, h = CITY_VIEW
+    SX, SY = MAP_CELL
+    views = []                                             # [(mapx, mapy, crop, feats)] placed views
+    t0 = time.time()
+
+    def clean_shot():
+        shot = dev.screenshot()
+        if view_of(shot, cfg) != "city":
+            leave_to_city(dev, cfg, stop, log)
+            shot = nav._settled()
+        if find_detail_icon(shot):
+            close_ring(dev, stop, (270, 490))
+            shot = nav._settled()
+        return shot
+
+    def place(shot):
+        """Where is this view? Measured against the placed views it overlaps (best agreement wins). -> (mx, my) or None."""
+        est = (nav.cx, nav.cy)
+        best = None
+        for mx, my, crop, _ in views:
+            if abs(mx - est[0]) > w * 0.9 or abs(my - est[1]) > h * 0.9:
+                continue                                   # no overlap expected
+            f = feat_shift(_full(crop), shot)
+            if f and (best is None or f[2] > best[2]):
+                best = (mx - f[0], my - f[1], f[2])
+        return (best[0], best[1]) if best else None
+
+    def _full(crop):                                       # a stored crop back at its screen place, for feat_shift
+        full = np.zeros((960, 540, 3), np.uint8)
+        full[y:y + h, x:x + w] = crop
+        return full
+
+    def keep(shot, mx, my):
+        views.append((mx, my, shot[y:y + h, x:x + w].copy(), None))
+        rd_snap(shot, f"map_v{len(views):02d}")
+
+    shot = clean_shot()
+    keep(shot, 0.0, 0.0)
+    nav.cx = nav.cy = 0.0
+    seen, todo, dead = {(0, 0)}, [(1, 0), (0, 1), (0, -1), (-1, 0)], set()
+    while todo and len(seen) < 90:
+        if stop.is_set():
+            return
+        cur = (round(nav.cx / SX), round(nav.cy / SY))
+        todo.sort(key=lambda c: abs(c[0] - cur[0]) + abs(c[1] - cur[1]))
+        c = todo.pop(0)
+        if c in seen or c in dead:
+            continue
+        nav.pan(c[0] * SX - nav.cx, c[1] * SY - nav.cy)
+        shot = clean_shot()
+        p = place(shot)
+        if p is not None:
+            nav.cx, nav.cy = p                             # the picture says where we are (the finger only estimated it)
+        else:
+            log(f"[i]   map view at {round(nav.cx)},{round(nav.cy)} overlaps no placed view - placed by the measured drags")
+        got = (round(nav.cx / SX), round(nav.cy / SY))
+        near = min((abs(mx - nav.cx) + abs(my - nav.cy) for mx, my, _, _ in views), default=9e9)
+        if near < 60:                                      # the camera did not move (or barely): that cell is off the city
+            dead.add(c)
+            continue
+        if got != c:
+            dead.add(c)
+            if got in seen:
+                continue
+            c = got
+        seen.add(c)
+        keep(shot, nav.cx, nav.cy)
+        for n in ((c[0] + 1, c[1]), (c[0], c[1] + 1), (c[0] - 1, c[1]), (c[0], c[1] - 1)):
+            if n not in seen and n not in dead and n not in todo:
+                todo.append(n)
+    # stitch
+    xs = [v[0] for v in views]
+    ys = [v[1] for v in views]
+    ox, oy = -min(xs), -min(ys)
+    W, H = int(max(xs) + ox) + w + 1, int(max(ys) + oy) + h + 1
+    canvas = np.zeros((H, W, 3), np.uint8)
+    for mx, my, crop, _ in views:                          # later views on top (fresher)
+        X, Y = int(round(mx + ox)), int(round(my + oy))
+        canvas[Y:Y + h, X:X + w] = crop
+    d = _map_dir(dev)
+    d.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(d / "map.png"), canvas)
+    meta = {"at": time.strftime("%Y-%m-%d %H:%M"), "views": len(views), "cells": sorted(seen), "size": [W, H],
+            "origin": [ox, oy], "zoomed_out": bool(getattr(dev, "zoomed_out", False))}
+    (d / "map.json").write_text(json.dumps(meta), encoding="utf-8")
+    _CITY_MAPS.pop(str(getattr(dev, "serial", "default")), None)
+    # the learned buildings' map places were relative to the old map (or none): they are re-learned on the next find
+    for p in d.glob("*.json"):
+        if p.stem not in ("map",) and not p.stem.endswith("_prev"):
+            try:
+                m = json.loads(p.read_text(encoding="utf-8"))
+                if "map" in m:
+                    m.pop("map", None)
+                    p.write_text(json.dumps(m), encoding="utf-8")
+            except Exception:
+                pass
+    log(f"[+]  City map built: {len(views)} views, {W}x{H} px, {len(dead)} cells off the city, {round(time.time() - t0)} s")
+
+
+def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
+    """Closed loop on the own map: locate -> drag the difference -> locate again, until map point (mapx, mapy) is near
+    the middle of the view. -> the point's screen place (sx, sy), or None."""
+    x, y, w, h = CITY_VIEW
+    mid_x, mid_y = x + w / 2, y + h / 2
+    lost = 0
+    for i in range(8):
+        if stop.is_set():
+            return None
+        shot = nav._settled() if i else dev.screenshot()
+        if find_detail_icon(shot):
+            close_ring(dev, stop, (270, 490))
+            shot = nav._settled()
+        r = cmap.locate(shot)
+        if not r:
+            lost += 1
+            if lost >= 3:
+                log("[i]   the screen is not found on the city map (zoomed differently, window in the way, or the city changed?)")
+                return None
+            leave_to_city(dev, cfg, stop, log)
+            continue
+        lost = 0
+        nav.cx, nav.cy = r[0], r[1]
+        sx, sy = mapx - nav.cx, mapy - nav.cy
+        if abs(sx - mid_x) <= tol and abs(sy - mid_y) <= tol:
+            log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} on the map ({r[2]} points), target on screen at {round(sx)},{round(sy)}")
+            return sx, sy
+        nav.pan(sx - mid_x, sy - mid_y)                    # measured drags (the diamond's edge stops them safely)
+    return None
+
+
+def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
+    """Building with a known map place: go there on the own map, check its learned picture near the expected spot, tap.
+    -> True (ring open), False (went there but not it), None (no map / place / camera lost: explore instead)."""
+    cmap = city_map(dev)
+    if cmap is None or not meta.get("map"):
+        return None
+    nav = CityNav(dev, stop, log)
+    at = goto_on_map(dev, cfg, log, stop, nav, cmap, float(meta["map"][0]), float(meta["map"][1]))
+    if at is None:
+        return None
+    shot = dev.screenshot()
+    mv, ml, f = _learn_match(shot, tpl)
+    ex, ey = at
+    if ml:
+        x, y = ml[0] + int(meta["dx"] * f), ml[1] + int(meta["dy"] * f)
+    if ml and mv >= 0.6 and abs(x - ex) < 90 and abs(y - ey) < 90:
+        spot = (x, y)
+    else:
+        spot = (int(ex), int(ey))                          # trust the map place (the picture may have changed: upgrade, decoration)
+        log(f"[i]   {bname}: picture match {mv:.2f} near the map place - tapping the map place")
+    if not (60 <= spot[0] <= 470 and 150 <= spot[1] <= 820):
+        return None
+    if open_building_here(dev, cfg, log, stop, bname, spots=[spot], how=f"the city map (match {mv:.2f})"):
+        try:                                               # refresh the place and the picture (open_building_here learned it)
+            m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
+            m2["map"] = [round(nav.cx + spot[0]), round(nav.cy + spot[1])]
+            p.with_suffix(".json").write_text(json.dumps(m2), encoding="utf-8")
+        except Exception:
+            pass
+        return True
     return False
 
 # --- Alliance page ------------------------------------------------------------------------------------------------
@@ -11167,6 +11436,9 @@ DUTY_LIBRARY = [
     {"id": "reach_embassy", "group": "Common tasks", "title": "Test: go to Embassy", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Embassy and opens its menu (nothing is pressed).",
      "target": "building:Embassy", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Embassy"]},
+    {"id": "map_city", "group": "Common tasks", "title": "Map my city", "every_min": 0, "verified": False,
+     "note": "Explores the whole city once (about 5 minutes) and stitches its own map, so buildings are reached in seconds afterwards. Run it again after moving buildings. Nothing is pressed in the city.",
+     "target": "self:", "steps": ["map_city"]},
     {"id": "test_learned_keep", "group": "Common tasks", "title": "Test: find the Keep without its tile", "every_min": 60, "verified": False,
      "note": "Test only: Gold Levy tile (gone once done) -> learned Keep picture -> Keep menu. Nothing else is pressed.",
      "target": "learned:Keep", "tap_dy": 0, "steps": ["wait 1.2", "ring_name Keep"]},
