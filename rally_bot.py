@@ -6622,12 +6622,12 @@ class CityNav:
     def _settled(self):
         """Screenshot taken once the map has stopped moving (it glides after a swipe and springs back at the city's
         edge - measuring 1 s after the swipe saw the map 480 px from where it ended, Kiravik 23 Oct)."""
-        x, y, w, h = CITY_VIEW
         last = self.dev.screenshot()
-        for _ in range(8):
-            _nap(self.stop, 0.35, 0.45)
+        for _ in range(4):                                 # animated water / troops never give an identical picture:
+            _nap(self.stop, 0.3, 0.4)                      # settled = the map itself has not shifted between two frames
             cur = self.dev.screenshot()
-            if float(cv2.absdiff(last[y:y + h, x:x + w], cur[y:y + h, x:x + w]).mean()) < 1.5:
+            f = feat_shift(last, cur)
+            if f is None or (abs(f[0]) < 4 and abs(f[1]) < 4):
                 return cur
             last = cur
         return last
@@ -6659,7 +6659,7 @@ class CityNav:
     def pan(self, want_dx, want_dy):
         """Move the camera by about (want_dx, want_dy) map pixels. -> the camera movement achieved."""
         mx = my = 0.0
-        for _ in range(30):
+        for _ in range(6):                                 # a few measured drags; the city edge (springs back) ends it
             rx, ry = want_dx - mx, want_dy - my
             if abs(rx) < 25 and abs(ry) < 25:
                 break
@@ -6677,7 +6677,9 @@ class CityNav:
                 dx, dy = d1x + d2x, d1y + d2y
             else:
                 dx, dy, _ = self._drag(270 + sx / 2, 440 + sy / 2, 270 - sx / 2, 440 - sy / 2)
-            if abs(dx) < 3 and abs(dy) < 3:
+            if abs(dx) + abs(dy) < 0.25 * (abs(sx) + abs(sy)):   # moved much less than the finger: the edge
+                mx -= dx
+                my -= dy
                 break
             mx -= dx
             my -= dy
