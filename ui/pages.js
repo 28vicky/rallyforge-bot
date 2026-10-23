@@ -1408,8 +1408,41 @@ PAGES.duties = function (fixed, only, compact) {
       return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
         h("input", { type: "number", min: o.min, max: o.max, value: o.val, style: { width: "110px" }, onchange: (e) => save(e.target.value) }));
     }));
+  // (ui-simple) a duty's settings: in the Routines page they sit in its settings card; on the Duties list they open in a side panel
+  const SET_IDS = ["crazy_eggs", "champions", "wheel"];
+  const hasSet = (r) => r.on && ((r.opts && r.opts.length) || SET_IDS.includes(r.id));
+  const setBody = (r) => r.on ? [(r.opts && r.opts.length) ? dutyOpts(r) : null,
+    r.id === "crazy_eggs" ? ce : null, r.id === "champions" ? ch : null, r.id === "wheel" ? wh : null].filter(Boolean) : null;
+  let sideId = null;
+  const side = h("div", { class: "sideov", onclick: (e) => { if (e.target === side) closeSide(); } });
+  if (window.watchNotes) window.watchNotes(side);
+  const sideKey = (e) => { if (e.key === "Escape") closeSide(); };
+  const closeSide = () => {
+    const was = sideId; sideId = null; side.remove(); document.removeEventListener("keydown", sideKey);
+    const b = was && root.querySelector('.dset[data-id="' + was + '"]'); if (b) { b.classList.remove("on"); b.focus(); }
+  };
+  const drawSide = () => {
+    const r = rows.find((x) => x.id === sideId);
+    if (!r || !hasSet(r) || !root.isConnected) { closeSide(); return; }
+    const BADGE = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad" };
+    side.innerHTML = "";
+    side.appendChild(h("aside", { class: "sidep", role: "dialog", "aria-modal": "true", "aria-label": r.title + " settings" },
+      h("div", { class: "sph" },
+        h("div", { class: "spt" }, h("h3", {}, r.title), h("small", {}, (serial ? "This instance" : "All instances") + (r.schedule ? " · " + r.schedule : ""))),
+        r.status_text ? h("span", { class: "dbadge " + (BADGE[r.status] || "") }, r.status_text) : null,
+        h("button", { class: "spx", type: "button", "aria-label": "Close", title: "Close (Esc)", onclick: closeSide }, "×")),
+      h("div", { class: "spb" }, setBody(r)),
+      h("div", { class: "spf" }, h("span", { class: "hint" }, "Changes save as you make them."), h("button", { class: "btn pri", type: "button", onclick: closeSide }, "Done"))));
+  };
+  const openSide = (id) => {
+    sideId = id;
+    root.querySelectorAll(".dset").forEach((b) => b.classList.toggle("on", b.dataset.id === id));
+    drawSide();
+    if (sideId && !side.isConnected) { document.body.appendChild(side); document.addEventListener("keydown", sideKey); const x = side.querySelector(".spx"); if (x) x.focus(); }
+  };
   const draw = () => {
     root.innerHTML = "";
+    if (sideId) setTimeout(drawSide, 0);             // keep the side panel in step (duty switched off, own-settings opts saved)
     const pick = h("select", { onchange: (e) => { serial = e.target.value; load(); loadCe(); loadCh(); loadWh(); loadRn(); } },
       [h("option", { value: "", selected: serial === "" }, "All instances (default)")].concat(S.devices.map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || short(d.id)))));
     if (compact) {
@@ -1443,9 +1476,10 @@ PAGES.duties = function (fixed, only, compact) {
         h("div", { class: "dtx", title: r.note || "" }, only ? null : h("b", {}, r.title), h("small", {}, r.schedule || r.note || "")),
         S.dev && !r.verified ? h("span", { class: "dbadge", title: "Developer: steps not yet watched on a real instance" }, "untested") : null,
         r.on && r.status_text ? h("span", { class: "dbadge " + (BADGE[r.status] || "") }, r.status_text) : null,
-        r.status === "gaveup" ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("duty_retry", { serial, id: r.id })); if (j) { rows = j.duties; own = j.own || {}; draw(); toast("It runs again shortly.", "ok"); } } }, "Retry") : null),
-        (r.on && r.opts && r.opts.length) ? dutyOpts(r) : null,
-        (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null, (r.on && r.id === "wheel") ? wh : null,
+        r.status === "gaveup" ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("duty_retry", { serial, id: r.id })); if (j) { rows = j.duties; own = j.own || {}; draw(); toast("It runs again shortly.", "ok"); } } }, "Retry") : null,
+        // (ui-simple) settings open in the side panel instead of under the row (half columns were too narrow)
+        (!only && hasSet(r)) ? h("button", { class: "btn sm dset" + (sideId === r.id ? " on" : ""), type: "button", "data-id": r.id, "aria-label": r.title + " settings", onclick: () => openSide(r.id) }, "Settings") : null),
+        only ? setBody(r) : null,
         (only && !r.on) ? note("Switch it on at the top and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean);
     if (only) {                                   // one duty inside the Routines page: its switch and name are in that page's header, so just the settings here
       const list = rows.filter((r) => r.id === only);
@@ -1509,20 +1543,23 @@ PAGES.duties = function (fixed, only, compact) {
       j.costs.map((k) => {
         const e = c.eggs[k] || { on: true, daily: 0 };
         const lucky = c.lucky === k || (c.lucky === "max" && k === j.costs[j.costs.length - 1]);
-        return h("div", { class: "row", style: { justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid var(--line)" } },
-          h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: e.on, onchange: (ev) => set({ egg: k, on: ev.target.checked }) }), h("span", { class: "sw" }), h("b", {}, k + " hammers")),
-          h("span", { class: "hint", style: { flex: "1", margin: "0 14px" } }, "wait after a miss about " + EGG_TIME[k] + (j.smashes && j.smashes[k] ? " · smashed today: " + j.smashes[k] : "")),
-          h("span", { class: "lab" }, "Max per day"),
-          h("input", { type: "number", class: "short", min: 0, max: 99, value: e.daily || "", placeholder: "no limit", title: "Empty = no limit", onchange: (ev) => set({ egg: k, daily: ev.target.value }) }),
-          h("button", { class: "btn" + (lucky ? " primary" : ""), title: "Use the daily Lucky Hammer on this egg", onclick: () => set({ lucky: lucky ? "" : k }) }, lucky ? "Lucky Hammer \u2713" : "Lucky Hammer"));
+        return h("div", { class: "eggrow" + (e.on ? "" : " off") },
+          h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: e.on, "aria-label": k + " hammers egg", onchange: (ev) => set({ egg: k, on: ev.target.checked }) }), h("span", { class: "sw" })),
+          h("div", { class: "eggtx" }, h("b", {}, k + " hammers"),
+            h("small", {}, "Waits about " + EGG_TIME[k] + " after a miss" + (j.smashes && j.smashes[k] ? " \u00b7 smashed today: " + j.smashes[k] : ""))),
+          h("label", { class: "eggmax", title: "Empty = no limit" }, h("span", {}, "Max a day"),
+            h("input", { type: "number", min: 0, max: 99, value: e.daily || "", placeholder: "\u221e", onchange: (ev) => set({ egg: k, daily: ev.target.value }) })),
+          h("button", { class: "luckyb" + (lucky ? " on" : ""), type: "button", "aria-pressed": lucky ? "true" : "false", title: lucky ? "The daily Lucky Hammer goes to this egg (click to switch it off)" : "Give the daily Lucky Hammer to this egg", onclick: () => set({ lucky: lucky ? "" : k }) }, lucky ? "\u2605 Lucky" : "\u2606 Lucky"));
       }),
-      h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Visit at most every"),
-        h("input", { type: "number", class: "short", min: 0, max: 600, value: c.min_gap == null ? 30 : c.min_gap, onchange: (ev) => set({ min_gap: ev.target.value }) }),
-        h("span", { class: "hint" }, "minutes. The bot goes back after this long and smashes every ready egg together. 0 = as soon as an egg is ready. When all four eggs are activated it stops for the day.")),
-      h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Hammers to keep"),
-        h("input", { type: "number", class: "short", min: 0, value: c.min_hammers || "", placeholder: "0", onchange: (ev) => set({ min_hammers: ev.target.value }) }),
-        h("span", { class: "hint" }, "never smash if it would leave fewer hammers than this"),
-        h("span", { class: "chip" }, j.lucky_used ? "Lucky Hammer used today" : (c.lucky ? "Lucky Hammer ready" : "Lucky Hammer off")))));
+      h("div", { class: "fgrid eggf" },
+        h("label", {}, h("span", { class: "lab" }, "Visit at most every"),
+          h("div", { class: "unit" }, h("input", { type: "number", min: 0, max: 600, value: c.min_gap == null ? 30 : c.min_gap, onchange: (ev) => set({ min_gap: ev.target.value }) }), h("span", {}, "min")),
+          h("small", { class: "hint" }, "Ready eggs are smashed together. 0 = as soon as one is ready.")),
+        h("label", {}, h("span", { class: "lab" }, "Hammers to keep"),
+          h("input", { type: "number", min: 0, value: c.min_hammers || "", placeholder: "0", onchange: (ev) => set({ min_hammers: ev.target.value }) }),
+          h("small", { class: "hint" }, "Never go below this many."))),
+      h("div", { class: "row", style: { marginTop: "4px" } }, h("span", { class: "chip" }, j.lucky_used ? "Lucky Hammer used today" : (c.lucky ? "Lucky Hammer ready" : "Lucky Hammer off")),
+        h("span", { class: "hint" }, "When all four eggs are done, it stops for the day."))));
   };
   const loadCe = async () => { const j = await act(api("crazy_eggs", { serial })); if (j) drawCe(j); };
   // Run a task now: the bot does the picked task first, before everything else, on this instance (or on all)
@@ -1560,17 +1597,18 @@ PAGES.duties = function (fixed, only, compact) {
       serial && j.own && j.own.wheel ? h("div", { class: "row" }, h("span", { class: "chip own" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "wheel" })); loadWh(); } }, "Use the universal setting")) : null,
       note("Tavern > Wheel of Fortune. Each spin costs coins. The bot presses only the Spin buttons and closes the reward panel after every spin. With a big button it still finishes with smaller ones so the number of spins is exact."),
-      h("div", { class: "row", style: { gap: "8px" } }, h("span", { class: "lab" }, "Spin button"),
-        [1, 10, 100].map((b) => h("button", { class: "btn" + (c.button === b ? " primary" : ""), onclick: () => set({ button: b }) }, "Spin " + (b === 1 ? "once" : "\u00d7" + b)))),
-      h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Number of spins"),
-        h("input", { type: "number", class: "short", min: 0, value: c.spins || "", placeholder: "until out", onchange: (ev) => set({ spins: ev.target.value }) }),
-        h("span", { class: "hint" }, "e.g. 100, 1000 or 999999. Empty / 0 = spin until the coins are used up.")),
-      h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Coins to keep"),
-        h("input", { type: "number", class: "short", min: 0, value: c.reserve || "", placeholder: "0", onchange: (ev) => set({ reserve: ev.target.value }) }),
-        h("span", { class: "hint" }, "never spin if it would leave fewer coins than this")),
-      h("div", { class: "row", style: { gap: "8px", marginTop: "8px" } }, h("span", { class: "lab" }, "Add chips first"),
-        [["off", "Off"], ["needed", "Only what's needed"], ["all", "All owned"]].map(([v, t]) => h("button", { class: "btn" + ((c.chips || "off") === v ? " primary" : ""), onclick: () => set({ chips: v }) }, t))),
-      note("Uses chip items you already own (100 / 500 / 1K Chips) before spinning. Items sold for gems are never bought.")));
+      h("div", { class: "fgrid eggf" },
+        h("div", { class: "wide" }, h("span", { class: "lab" }, "Spin button"),
+          h("div", { class: "seg small" }, [1, 10, 100].map((b) => h("button", { class: "segb" + (c.button === b ? " on" : ""), type: "button", onclick: () => set({ button: b }) }, "Spin " + (b === 1 ? "once" : "\u00d7" + b))))),
+        h("label", {}, h("span", { class: "lab" }, "Number of spins"),
+          h("input", { type: "number", min: 0, value: c.spins || "", placeholder: "Until out of coins", onchange: (ev) => set({ spins: ev.target.value }) }),
+          h("small", { class: "hint" }, "Empty or 0 = until the coins run out.")),
+        h("label", {}, h("span", { class: "lab" }, "Coins to keep"),
+          h("input", { type: "number", min: 0, value: c.reserve || "", placeholder: "0", onchange: (ev) => set({ reserve: ev.target.value }) }),
+          h("small", { class: "hint" }, "Never go below this many.")),
+        h("div", { class: "wide" }, h("span", { class: "lab" }, "Add chips first"),
+          h("div", { class: "seg small" }, [["off", "Off"], ["needed", "Only what's needed"], ["all", "All owned"]].map(([v, t]) => h("button", { class: "segb" + ((c.chips || "off") === v ? " on" : ""), type: "button", onclick: () => set({ chips: v }) }, t))),
+          h("small", { class: "hint" }, "Uses 100 / 500 / 1K chip items you own before spinning. Never buys with gems.")))));
   };
   const loadWh = async () => { const j = await act(api("wheel", { serial })); if (j) drawWh(j); };
   // Champions: how many of the daily 15 taps and 10 greetings each champion gets (this instance or all)
@@ -1589,18 +1627,17 @@ PAGES.duties = function (fixed, only, compact) {
         h("span", { class: "chip " + (sumG > j.max_greets ? "pill-bad" : "") }, "greets planned " + sumG + " / " + j.max_greets),
         h("span", { class: "chip" }, "done today: " + usedT + " taps, " + usedG + " greets"),
         Object.keys(j.plan).length ? h("button", { class: "btn sm", onclick: () => set({ clear: true }) }, "Clear all") : null),
+      h("div", { class: "chrow chhead" }, h("span", {}, "Main"), h("span", {}, "Champion"), h("span", {}, "Taps"), h("span", {}, "Greets")),
       j.names.map((n) => {
         const e = j.plan[n] || {};
         const full = (e.taps || 0) >= j.max_taps && (e.greets || 0) >= j.max_greets;
-        const mainSw = h("input", { type: "checkbox", checked: full, title: "Main champion: gets all " + j.max_taps + " taps and " + j.max_greets + " greetings every day (you can still change the numbers)", onchange: (ev) => set({ name: n, main: ev.target.checked }) });
-        return h("div", { class: "row", style: { justifyContent: "space-between", padding: "6px 0", borderTop: "1px solid var(--line)", gap: "10px" } },
-          h("label", { class: "tgl", title: "Main champion: one click gives this champion all the daily taps and greetings" }, mainSw, h("span", { class: "sw" }), ""),
-          h("b", { style: { flex: "1" } }, n),
-          h("span", { class: "hint" }, (j.taps && j.taps[n] ? "tapped " + j.taps[n] + " " : "") + (j.greets && j.greets[n] ? "greeted " + j.greets[n] : "")),
-          h("span", { class: "lab" }, "Taps"),
-          h("input", { type: "number", class: "short", min: 0, max: j.max_taps, value: e.taps || "", placeholder: "0", onchange: (ev) => set({ name: n, taps: ev.target.value }) }),
-          h("span", { class: "lab" }, "Greets"),
-          h("input", { type: "number", class: "short", min: 0, max: j.max_greets, value: e.greets || "", placeholder: "0", onchange: (ev) => set({ name: n, greets: ev.target.value }) }));
+        const done = (j.taps && j.taps[n] ? "tapped " + j.taps[n] : "") + (j.greets && j.greets[n] ? (j.taps && j.taps[n] ? " \u00b7 " : "") + "greeted " + j.greets[n] : "");
+        return h("div", { class: "chrow" + ((e.taps || e.greets) ? " set" : "") },
+          h("label", { class: "tgl", title: "Main champion: one click gives this champion all " + j.max_taps + " taps and " + j.max_greets + " greetings every day (the numbers can still be changed)" },
+            h("input", { type: "checkbox", checked: full, "aria-label": n + " main champion", onchange: (ev) => set({ name: n, main: ev.target.checked }) }), h("span", { class: "sw" })),
+          h("div", { class: "eggtx" }, h("b", {}, n), done ? h("small", {}, done + " today") : null),
+          h("input", { type: "number", min: 0, max: j.max_taps, value: e.taps || "", placeholder: "0", "aria-label": n + " taps", onchange: (ev) => set({ name: n, taps: ev.target.value }) }),
+          h("input", { type: "number", min: 0, max: j.max_greets, value: e.greets || "", placeholder: "0", "aria-label": n + " greets", onchange: (ev) => set({ name: n, greets: ev.target.value }) }));
       })));
   };
   const loadCh = async () => { const j = await act(api("champions", { serial })); if (j) drawCh(j); };

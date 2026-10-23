@@ -1345,3 +1345,45 @@ details.adv[open]>summary::before{transform:rotate(90deg)}
 .evv{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
 .evv.next{color:#1d4ed8}.evv.due{color:#92400e}.evv.bad{color:var(--bad)}
 .evcards[hidden]{display:none}
+
+/* ---------- (ui-simple) duty settings side panel: Crazy Eggs / Champions / Wheel / duty options open here, not under the row */
+.dline .btn.dset{flex:none}
+.dline .btn.dset.on{border-color:var(--accent);color:var(--accent)}
+.sideov{position:fixed;inset:0;z-index:50;background:var(--overlay);display:flex;justify-content:flex-end;animation:fade .15s}
+.sidep{width:min(480px,94vw);height:100%;display:flex;flex-direction:column;background:var(--card);background-color:var(--bgc);border-left:var(--bd);box-shadow:var(--appsh);animation:spin .2s ease-out}
+@keyframes spin{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}
+.sph{display:flex;align-items:flex-start;gap:10px;padding:18px 20px 12px;border-bottom:1px solid var(--line)}
+.sph .spt{flex:1;min-width:0}
+.sph h3{margin:0;font-family:var(--serif,inherit);font-size:19px;font-weight:600}
+.sph small{color:var(--mute);font-size:12.5px}
+.sph .dbadge{margin-top:3px}
+.spx{flex:none;width:32px;height:32px;border-radius:8px;border:0;background:transparent;color:var(--mute);font-size:22px;line-height:1;cursor:pointer}
+.spx:hover{background:var(--field);color:var(--fg)}
+.spb{flex:1;min-height:0;overflow:auto;padding:14px 20px 20px}
+.spb>.row{padding:0 0 12px !important;gap:12px 18px !important}
+.spb .subset{margin:0 0 14px;padding:0;border:0;background:none;animation:none}
+.spb .subset .subtitle{display:none}
+.spf{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:12px 20px 16px;border-top:1px solid var(--line)}
+.dline .btn.dset.on{background:var(--btn);color:var(--accent);border-color:var(--accent)}
+/* Crazy Eggs rows: switch, name + wait line, max a day, lucky hammer chip */
+.eggrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.eggrow.off .eggtx b{color:var(--mute);font-weight:500}
+.eggtx{display:flex;flex-direction:column;gap:1px;min-width:0}
+.eggtx b{font-weight:600;font-size:14px}.eggtx small{color:var(--mute);font-size:12.5px}
+.eggmax{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mute)}
+.eggmax input{width:62px;text-align:center}
+.luckyb{border:1px solid var(--line);background:transparent;color:var(--mute);border-radius:999px;padding:5px 11px;font:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.luckyb:hover{color:var(--fg);border-color:var(--off)}
+.luckyb.on{background:#fef3c7;border-color:#f59e0b;color:#92400e;font-weight:600}
+.fgrid.eggf{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));align-items:start;margin:14px 0 8px}
+.fgrid.eggf label{display:flex;flex-direction:column;gap:5px}
+.fgrid.eggf input{width:100%}
+.fgrid.eggf .unit{display:flex;align-items:center;gap:6px}.fgrid.eggf .unit span{color:var(--mute);font-size:13px}
+.fgrid.eggf small{font-size:12px;line-height:1.35}
+/* Champions rows: main switch, name (+ done today), taps, greets - labels once in a header line */
+.chrow{display:grid;grid-template-columns:52px minmax(0,1fr) 76px 76px;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.chrow input[type=number]{width:100%;text-align:center}
+.chrow:not(.set):not(.chhead) .eggtx b{font-weight:500}
+.chhead{border-top:0;padding:10px 0 4px;font-size:12px;color:var(--mute)}
+.chhead span:nth-child(n+3){text-align:center}
+.fgrid.eggf .wide{grid-column:1/-1;display:flex;flex-direction:column;gap:6px;align-items:flex-start}

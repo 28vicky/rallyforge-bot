@@ -959,6 +959,7 @@ setInterval(async () => {
     n.onclick = flip;
   };
   const scan = (root) => (root || document).querySelectorAll(".pages .note").forEach(fold);
+  window.watchNotes = (el) => new MutationObserver(() => el.querySelectorAll(".note").forEach(fold)).observe(el, { childList: true, subtree: true });   // panels outside #pages (duty side panel)
   const start = () => {
     const p = document.getElementById("pages"); if (!p) return setTimeout(start, 300);
     new MutationObserver(() => scan(p)).observe(p, { childList: true, subtree: true });
