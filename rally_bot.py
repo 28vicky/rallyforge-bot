@@ -10011,6 +10011,8 @@ def mr_targets(cfg, tried):
         seen.add(key)
         if now - float(it.get("t") or 0) > age:
             continue
+        if str(it.get("name") or "").lower().strip() in NEVER_JOIN:      # world bosses: nobody can rally them
+            continue
         i, r = mr_rule_for(rules, it.get("name"), it.get("level") or 0)
         if r is None:
             continue
