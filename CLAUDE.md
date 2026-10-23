@@ -11,6 +11,9 @@ Owner: Vicky. Evony rally automation, Windows app. Repo 28vicky/rallyforge-bot. 
 - Do not read big files whole: grep, then read only the lines needed.
 - Do not restart the owner's app while instances run without asking.
 
+## UI rule 0 (owner, 23 Oct) - no old design, ever
+- Never use old / legacy UI patterns (e.g. dual-listbox Add/Remove/Up/Down button rows). Follow current design trends and UX principles: direct manipulation (click / drag to add, drag handle to reorder, x on the row to remove), empty states, inline actions, disabled buttons when they cannot act, cards that fill the page height. Replace old patterns on any screen you touch. Details + reference: project doc claude/ui_design_rules.md (Rule 0).
+
 ## Clean-room rule (other bots)
 - Never copy code, text, pictures, icons, layouts or design from Ragebot, Evonex or any other bot. Feature ideas only; write our own code, wording and look.
 - Do not open, extract or decompile another bot's program files (DLLs, exe, encrypted data). Evonex's licence forbids reverse engineering and using it to build a competing product - do not use the installed Evonex at all for research; only its public website/guide, in our own words.

@@ -1,9 +1,9 @@
 {
-  "version": "2.5.0",
-  "notes": "Generals: every general picture listed, names fixed, region and troop type in the grid, faces in the grid, tidier picker",
+  "version": "2.5.1",
+  "notes": "New generals picker: click or drag to add, drag to reorder, x to remove",
   "files": {
     "rally_bot.py": {
-      "sha256": "e58785dd5454f506da94d9f3cf072b060ee9cc005b5e4d10000fedef089dfb46"
+      "sha256": "48c27f04834042c74e81e1986594421295f90a075aae4211d3eaa45bcd7ff102"
     },
     "web_app.py": {
       "sha256": "9beebb007720de5c4451e07f1b1a3b4acd46d5ea63c13587561c7f1eb1224539"
@@ -12,16 +12,16 @@
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "9141eb1bace721d90c5af02bd2b301c5a6ccda8ec27633a5131d3ff275598c1c"
+      "sha256": "dc80166c0e9e11691a84616153d10fb133cace8cb666c6ea8c1113921310800b"
     },
     "ui/app.js": {
       "sha256": "ca28fd3c881c7cde7fb0afd004ce50a1a27826f0a8edeebf612c5ec614c28b3a"
     },
     "ui/changelog.js": {
-      "sha256": "7a818dcaad5310df7c40a7ba132841afb559f6e52ae2eb3ea387b9a4fff72b72"
+      "sha256": "1036f4637788e2ca35c3e8b5b4fe81e71eeea465bc796ca99154481e556472f8"
     },
     "ui/dialogs.js": {
-      "sha256": "c5805ac9174dcf3cb991f857d3726ce6c10ebb368e66a96b43318cfcbdba110c"
+      "sha256": "407675636f1221859dd7e1fa2b8eeacb241c1d05de7a2471bf81cc3ac5e1e68b"
     },
     "ui/fonts.css": {
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
@@ -1629,5 +1629,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "1d2ca98120c0cc91ba85c9ff8e202e042cdf04162be541f058b696b237184d1d"
+  "sig": "42efeab41f001aef8a978681bec141f2e9c171dc47667d524c511aa1b9394f45"
 }
