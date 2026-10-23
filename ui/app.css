@@ -977,30 +977,53 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .dbadge.ok{color:#047857;background:#ecfdf5;border-color:transparent}
 .dbadge.bad{color:#b91c1c;background:#fef2f2;border-color:transparent}
 .ovduties .manageall{width:100%;justify-content:center;margin-top:14px;background:var(--bg);font-weight:600}
-/* ---- Routines tab: filter pills + search, one card per group ---- */
-/* the filter bar stays pinned under the tabs; only the cards scroll under it */
-.rtnbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 -24px 18px;padding:10px 24px 12px;position:sticky;top:var(--shh,0px);z-index:15;background:var(--bgc);border-bottom:1px solid var(--line)}
-.rtnpills{display:flex;gap:8px}
+/* ---- Routines tab: activity list on the left, the picked activity's settings on the right ---- */
+.rtnpills{display:flex;gap:8px;flex-wrap:wrap}
 .rtnpill{padding:6px 12px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;background:var(--card);border:1px solid var(--line);color:var(--fg);cursor:pointer}
 .rtnpill.on{background:#111827;border-color:#111827;color:#fff}
-.rtnsearch{width:256px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);font:inherit;font-size:13px}
-.rtngrid{display:flex;gap:20px;align-items:flex-start}
-.rtncol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:20px}
-.rtncard{overflow:hidden;margin:0!important}
-.rtncard .cardhead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}
-.rtncard .cardhead h3{margin:0!important}
-.rtncard .sub{display:block;font-size:12.5px;color:var(--mute);margin:2px 0 0;padding:0}
-.rtncard .cnt{font-size:12px;font-weight:600;color:var(--mute);background:var(--bg);padding:2px 8px;border-radius:6px;white-space:nowrap}
-.rtnrow{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
-.rtnrow:first-of-type{border-top:0}
-.rtnrow .dname{display:flex;align-items:center;gap:8px;margin-bottom:2px;flex-wrap:wrap}
-.rtnrow .dname a,.rtnrow .dname b{font-size:13.5px;font-weight:600;color:var(--fg);text-decoration:none}
-.rtnrow .dname a:hover{color:var(--accent1);text-decoration:underline}
-.rtnrow .dtx small{font-size:12px;color:var(--mute);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.rtnrow.soon{opacity:.6}
-.rtnrow .tgl.dis{opacity:.5;cursor:not-allowed}
 .dbadge.spend{color:#6d28d9;background:#f5f3ff;border-color:transparent}
-.rtnback{margin-bottom:14px}
+.rtnmd{display:grid;grid-template-columns:minmax(340px,420px) minmax(0,1fr);gap:20px;align-items:stretch;--rtnh:calc(100vh - var(--shh,0px) - 64px)}
+.rtnleft{margin:0!important;position:sticky;top:calc(var(--shh,0px) + 8px);height:var(--rtnh);min-height:420px;display:flex;flex-direction:column;padding-bottom:6px!important}
+.rtnhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+.rtnhead h3{margin:0!important}
+.rtnhead .sub,.rtntop .sub{display:block;font-size:12.5px;color:var(--mute);margin:2px 0 0}
+.rtnpts{font-size:12.5px;color:var(--mute);white-space:nowrap;padding-top:2px}
+.rtnpts b{font-size:18px;color:var(--fg);font-weight:700}
+.rtnleft .rtnpills{margin-bottom:10px}
+.rtnleft .rtnpill{padding:4px 10px;font-size:12.5px}
+.rtnlist{overflow-y:auto;margin:0 -12px;padding:0 12px;flex:1 1 auto;min-height:0}
+.rtngrp{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);padding:12px 2px 6px}
+.rtngrp .cnt{font-weight:600;text-transform:none;letter-spacing:0}
+.rtnitem{display:grid;grid-template-columns:auto minmax(0,1fr) auto 30px 12px;align-items:center;gap:10px;padding:8px 10px;margin:0 -10px;border-radius:9px;border-left:3px solid transparent;cursor:pointer;transition:background .15s,border-color .15s}
+.rtnitem:hover{background:rgba(127,127,127,.08)}
+.rtnitem.sel{background:color-mix(in srgb,var(--accent1) 16%,transparent);border-left-color:var(--accent1)}
+.rtnitem:focus{outline:none}
+.rtnitem:focus-visible{box-shadow:0 0 0 2px var(--accent1)}
+.rtnitem.soon{opacity:.5;cursor:default}
+.rtnitem.soon:hover{background:none}
+.rtnitem .tgl.dis{cursor:not-allowed}
+.rtntx b{display:block;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rtntx small{display:block;font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rtnst{font-size:12px;font-weight:600;color:var(--mute);white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
+.rtnst.ok{color:var(--good)}.rtnst.next,.rtnst.due{color:var(--warn)}.rtnst.bad{color:var(--bad)}.rtnst.run{color:var(--accent1)}
+.rtnpt{font-size:12px;font-weight:700;color:var(--mute);text-align:right}
+.rtnchev{color:var(--mute);font-size:16px;line-height:1}
+.rtndetail{min-width:0;display:flex;flex-direction:column;position:sticky;top:calc(var(--shh,0px) + 8px);height:var(--rtnh);min-height:420px;margin:0!important;padding:0!important;overflow:hidden}   /* one card, page height: settings scroll, Run now / Save stay at the bottom */
+.rtndetail>.rtnbody{flex:1 1 auto;min-height:0;overflow-y:auto;padding:16px 18px 4px}
+.rtndetail>.panel{margin:16px}
+.rtnbody>.panel,.rtnbody>div>.panel{margin:0 0 16px}
+.rtntop{display:flex;align-items:center;gap:14px;margin:4px 0 14px}
+.rtntop h2{margin:0;font-size:20px}
+.rtntop .sub.run{color:var(--accent1)}
+.rtntop .dbadge{margin-left:auto}
+.rtntiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.rtntiles .stile{background:var(--card);border:1px solid var(--line);border-radius:var(--r2,10px);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.rtntiles .stile b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rtntiles .stile span{font-size:12px;color:var(--mute)}
+.rtntiles .stile.ok b{color:var(--good)}.rtntiles .stile.next b,.rtntiles .stile.due b{color:var(--warn)}.rtntiles .stile.bad b{color:var(--bad)}.rtntiles .stile.run b{color:var(--accent1)}
+/* Save and Run now stay pinned at the bottom while the settings scroll */
+.rtnbar2{flex:none;display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:12px 18px;margin:0;background:inherit;border-top:1px solid var(--line)}
+.rtnbar2 .hint{margin-right:auto}
 
 .note.foldable{cursor:pointer}
 

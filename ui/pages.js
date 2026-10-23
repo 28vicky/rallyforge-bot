@@ -1335,15 +1335,16 @@ PAGES.duties = function (fixed, only, compact) {
     for (const g of GROUPS) {
       const list = rows.filter((r) => r.group === g && (!only || r.id === only));
       if (!list.length) continue;
-      root.appendChild(panel(only ? list[0].title || g : g, list.flatMap((r) => [h("div", { class: "row", style: { justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid var(--line)" } },
-        h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" }), h("b", {}, r.title)),
-        h("span", { class: "hint", style: { flex: "1", margin: "0 14px" } }, r.note, " · ", r.schedule),
+      // only = one duty inside the Routines page: its switch and name are in that page's header, so just the settings here
+      root.appendChild(panel(only ? "Settings" : g, list.flatMap((r) => [h("div", { class: "row", style: { justifyContent: "space-between", padding: "8px 0", borderTop: only ? "0" : "1px solid var(--line)" } },
+        only ? null : h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" }), h("b", {}, r.title)),
+        h("span", { class: "hint", style: { flex: "1", margin: only ? "0 14px 0 0" : "0 14px" } }, r.note, " · ", r.schedule),
         r.verified ? null : h("span", { class: "chip", title: "Steps are a first guess and have not been watched on a real instance yet" }, "untested"),
         h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text),
         r.status === "gaveup" ? h("button", { class: "btn sm", style: { marginLeft: "8px" }, onclick: async () => { const j = await act(api("duty_retry", { serial, id: r.id })); if (j) { rows = j.duties; own = j.own || {}; draw(); toast("It runs again shortly.", "ok"); } } }, "Retry") : null),
         (r.on && r.opts && r.opts.length) ? dutyOpts(r) : null,
         (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null, (r.on && r.id === "wheel") ? wh : null,
-        (only && !r.on) ? note("Switch it on above and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean))));
+        (only && !r.on) ? note("Switch it on at the top and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean))));
     }
   };
   // what the bot did: today's state per instance + the latest task events
@@ -1482,120 +1483,176 @@ PAGES.duties = function (fixed, only, compact) {
 };
 
 
-// ====================================================================== routines (instance tab): one card per group, a switch per routine
-// Real switches: rally joining, the game's Auto-Join and every duty. "Soon" rows are planned features (switch disabled).
-// Clicking a routine's name opens its full settings; "All routines" goes back.
-const ROUTINE_GROUPS = [
-  ["rally", "Rally", "Join alliance monster rallies"],
-  ["daily", "Daily duties", "Run once a day on a schedule"],
-  ["alliance", "Alliance", "Help, gifts and donations"],
-  ["city", "City round", "Daily city chores"],
-  ["shops", "Shops", "Behind the spend guard"],
-  ["protect", "Protection", "Keep the account safe"],
+// ====================================================================== routines (instance tab): master-detail around the game's daily activities
+// Left: one row per activity of Tavern > Activity (points it gives, today's state, a switch). Right: the picked activity's own settings.
+// UI only: every switch and setting is the same one as before (duty_set / the instance's own values), just shown per activity.
+const ACT_GROUPS = ["City", "Market & Tavern", "Alliance", "Army", "Events"];
+// [group, title, points, duty id | special, coming soon]
+const ACTIVITIES = [
+  ["City", "Troop Training", 3, "train_troops"], ["City", "Troop Healing", 2, "troop_healing"], ["City", "Trap Building", 2, "build_traps"],
+  ["City", "Labor", 3, "labor"], ["City", "Resource Collecting", 1, "collect_resources"], ["City", "Gold Levy", 1, "gold_levy"],
+  ["City", "Resource Tax", 1, "resource_tax"], ["City", "Offering", 3, "offering_tributes"], ["City", "City tasks", 0, "@tasks"],
+  ["City", "Construction", 8, null, true], ["City", "Research", 8, null, true], ["City", "Material Composing", 1, null, true], ["City", "General Enhancing", 3, null, true],
+  ["Market & Tavern", "Black Market", 4, "black_market"], ["Market & Tavern", "Wheel of Fortune", 3, "wheel"], ["Market & Tavern", "Trade Carriage", 3, "trade_carriage"],
+  ["Market & Tavern", "Greet Champions", 2, "champions"], ["Market & Tavern", "Ranger Knight Order", 3, "ranger_knight"],
+  ["Alliance", "Alliance Help", 1, "alliance_help"], ["Alliance", "Alliance Donation", 1, "alliance_science"],
+  ["Army", "Monster Killing", 3, "@rally"], ["Army", "Stamina", 3, "@stamina"], ["Army", "Use the game's Auto-Join", 0, "@aj"],
+  ["Army", "Patrol", 1, null, true], ["Army", "Relic Exploration", 5, null, true], ["Army", "Resource Gathering", 1, null, true],
+  ["Events", "Crazy Eggs", 0, "crazy_eggs"], ["Events", "Wisdom Dome tokens", 0, "wisdom_dome_tokens"],
 ];
-const DUTY_GROUP = { champions: "daily", crazy_eggs: "daily", wheel: "daily", login_gifts: "daily", mail: "daily",
-  alliance_help: "alliance", alliance_gift: "alliance", alliance_science: "alliance", alliance_treasure: "alliance",
-  collect_resources: "city", black_market: "shops",
-  gold_levy: "city", resource_tax: "city", labor: "city", troop_healing: "city", train_troops: "city", build_traps: "city",
-  offering_tributes: "city", trade_carriage: "city", gate_visitors: "city",
-  general_chest: "daily", vip_claim: "daily", recruit_citizens: "daily", civilization_card: "daily", empire_depot: "daily",
-  lucky_raffle: "daily", refining_card: "daily", ranger_knight: "daily", activity_chests: "daily",
-  wisdom_dome_tokens: "shops" };
-const DUTY_OPEN = { black_market: "market", collect_resources: "map" };
-const ROUTINE_SOON = [
-  ["rally", "Stamina limit + top-up", "Stop joining below a stamina floor"],
-  ["rally", "Recall stuck marches", "Pull back marches that hang"],
-  ["shops", "Daily store items", "Free and cheap daily packs", "spend"],
-  ["protect", "Shield keep", "Renew before it expires"], ["protect", "Attack alert", "Telegram message on incoming attack"],
-];
+const ACT_MAX = 145;                   // the game's last Activity chest
+const ACT_HIDDEN = new Set(["reach_keep_tavern", "market_capture", "tavern_catalog", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy"]);   // test duties: full duty list only
 function routinesCards(serial, ov, details) {
-  const root = h("div", { class: "rtn" });
-  let filter = "all", query = "", duties = [];
+  const root = h("div", { class: "rtn rtnmd" });
+  let filter = "all", sel = null, duties = [];
   const eff = (k) => (ov && ov[k] !== undefined ? ov[k] : S.cfg[k]);
-  const setCfg = (k, v) => { ov[k] = v; draw(); };      // the page's autosave writes it within 2 s
-  // opening a card shows its settings at the top of the page (and jumps to that routine inside a long page, e.g. Crazy Eggs
-  // in the Duties page); "All routines" comes back to the same place in the list
-  let backTop = 0;
-  const pg = () => $("#pages");
-  const below = (el) => { const p = pg(); if (!p || !el) return; const sh = p.querySelector(".stickyhead");
-    p.scrollTop += el.getBoundingClientRect().top - p.getBoundingClientRect().top - (sh ? sh.offsetHeight : 0) - 8; };
-  const find = (title) => {
-    const want = String(title || "").toLowerCase();
-    if (!want) return null;
-    const by = (sel) => [...root.querySelectorAll(sel)].find((x) => x.textContent.trim().toLowerCase() === want)
-      || [...root.querySelectorAll(sel)].find((x) => x.textContent.trim().toLowerCase().startsWith(want));
-    const hit = by(".subtitle,h3,h4,legend,summary") || by(".dname,b");      // its own settings first, else its row in the list
-    return hit ? (hit.closest(".drow,.row,.subset,details,.panel,.card") || hit) : null;
-  };
-  const open = (key, title) => {
-    const els = details[key] && details[key]();
-    if (!els) return;
-    backTop = pg() ? pg().scrollTop : 0;
-    root.innerHTML = "";
-    root.appendChild(h("button", { class: "btn sm rtnback", onclick: () => { draw(); requestAnimationFrame(() => { if (pg()) pg().scrollTop = backTop; }); } }, "\u2190 All routines"));
-    for (const e of els) if (e) root.appendChild(e);
-    below(root);
-    // the page may fill in after a server call: look for the routine a few times
-    let n = 0;
-    const jump = () => { const el = find(title); if (el) { below(el); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600); } else if (++n < 30) setTimeout(jump, 150); };
-    if (title && key === "duties") jump();
-  };
-  const badge = { done: ["ok", null], due: ["due", null], waiting: ["next", null], retry: ["next", null], gaveup: ["bad", null] };
-  const rows = () => {
+  const setCfg = (k, v) => { ov[k] = v; paintList(); };     // the page's autosave writes it within 2 s
+  const byId = (id) => duties.find((d) => d.id === id);
+  const nowText = () => (((S.now && S.now[serial]) || {}).text || "").toLowerCase();
+  const STC = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad" };
+  // one item per row: activities first, then reward claims / other duties that are not an activity
+  const items = () => {
     const d = S.devStatus.find((x) => x.id === serial) || {};
-    const out = [
-      { g: "rally", t: "Rally joiner", n: "Monster list, presets, generals" + (d.joins ? " \u00b7 " + d.joins + " joined today" : ""), on: eff("rally_enabled") !== false,
-        set: (v) => setCfg("rally_enabled", v), open: "rally" },
-      { g: "rally", t: "Use the game's Auto-Join", n: "Needs the Rally Monthly Card \u00b7 renew when under " + (eff("auto_join_renew_min") || 120) + " min",
-        on: !!eff("game_auto_join"), set: (v) => setCfg("game_auto_join", v), open: "aj" },
-    ];
-    for (const r of duties) {
-      const g = DUTY_GROUP[r.id];
-      if (!g) continue;                                  // test / developer duties stay on the full duty list only
-      out.push({ g, t: r.title, n: r.note, on: r.on, st: r.on ? r.status_text : null, stc: (badge[r.status] || [""])[0], spend: r.id === "black_market" || !!r.gems,
-        set: async (v) => { const j = await act(api("duty_set", { serial, id: r.id, on: v })); if (j) { duties = j.duties; draw(); } }, open: DUTY_OPEN[r.id] || "duties" });
+    const used = new Set(), out = [];
+    for (const [g, t, pts, ref, soon] of ACTIVITIES) {
+      const it = { key: "a:" + t, g, t, pts, soon: !!soon };
+      if (soon) { it.n = "Coming soon"; out.push(it); continue; }
+      if (ref === "@rally" || ref === "@stamina") {
+        Object.assign(it, { on: eff("rally_enabled") !== false, set: (v) => setCfg("rally_enabled", v), open: ref === "@rally" ? "mon" : "sta",
+          n: ref === "@rally" ? "Done by joining monster rallies" + (d.joins ? " · " + d.joins + " joined today" : "") : "Used by joining rallies",
+          st: "by rallies", stc: "" });
+      } else if (ref === "@aj") {
+        Object.assign(it, { on: !!eff("game_auto_join"), set: (v) => setCfg("game_auto_join", v), open: "aj",
+          n: "Needs the Rally Monthly Card · renew under " + (eff("auto_join_renew_min") || 120) + " min" });
+      } else if (ref === "@tasks") {
+        Object.assign(it, { on: eff("city_enabled") !== false, set: (v) => setCfg("city_enabled", v), open: "tasks", n: "Your own tap lists, run when no rally is waiting" });
+      } else {
+        const r = byId(ref);
+        if (!r) continue;
+        used.add(ref);
+        Object.assign(it, dutyBits(r));
+      }
+      out.push(it);
     }
-    out.push({ g: "city", t: "City tasks", n: "Your own tap lists, run when no rally is waiting", on: eff("city_enabled") !== false, set: (v) => setCfg("city_enabled", v), open: "tasks" });
-    for (const [g, t, n, sp] of ROUTINE_SOON) out.push({ g, t, n, soon: true, spend: sp === "spend" });
+    for (const r of duties) {
+      if (used.has(r.id) || ACT_HIDDEN.has(r.id)) continue;
+      out.push(Object.assign({ key: "d:" + r.id, g: r.group === "Reward claims" ? "Reward claims" : "Other duties", t: r.title, pts: 0, claim: true }, dutyBits(r)));
+    }
     return out;
   };
-  const tog = (r) => h("label", { class: "tgl" + (r.soon ? " dis" : "") }, h("input", { type: "checkbox", checked: !!r.on, disabled: !!r.soon, onchange: (e) => r.set(e.target.checked) }), h("span", { class: "sw" }));
-  const tag = (r) => r.soon ? h("span", { class: "dbadge" }, "Soon") : r.spend ? h("span", { class: "dbadge spend" }, "Spend guard")
-    : r.st ? h("span", { class: "dbadge " + r.stc }, r.st) : h("span", { class: "dbadge" + (r.on ? " ok" : "") }, r.on ? "On" : "off");
-  const draw = () => {
-    root.innerHTML = "";
-    const pills = h("div", { class: "rtnpills" }, [["all", "All"], ["on", "On"], ["off", "Off"], ["soon", "Coming soon"]].map(([k, l]) =>
-      h("button", { class: "rtnpill" + (filter === k ? " on" : ""), onclick: () => { filter = k; draw(); } }, l)));
-    const search = h("input", { class: "rtnsearch", placeholder: "Search routines", "aria-label": "Search routines", value: query,
-      oninput: (e) => { query = e.target.value; paint(); } });
-    const grid = h("div", { class: "rtngrid" });
-    root.append(h("div", { class: "rtnbar" }, pills, search), grid);
-    requestAnimationFrame(() => { const sh = document.querySelector(".stickyhead"); if (sh) root.style.setProperty("--shh", sh.offsetHeight + "px"); });
-    const paint = () => {
-      grid.innerHTML = "";
-      const ncol = window.innerWidth < 1180 ? 2 : 3;          // cards stack in columns (no gaps under short cards), left-to-right order kept
-      const cols = Array.from({ length: ncol }, () => grid.appendChild(h("div", { class: "rtncol" })));
-      let ci = 0;
-      const q = query.trim().toLowerCase(), all = rows();
-      for (const [g, title, sub] of ROUTINE_GROUPS) {
-        const mine = all.filter((r) => r.g === g);
-        const shown = mine.filter((r) => (filter === "all" || (filter === "on" && r.on && !r.soon) || (filter === "off" && !r.on && !r.soon) || (filter === "soon" && r.soon))
-          && (!q || (r.t + " " + (r.n || "")).toLowerCase().includes(q)));
-        if (!shown.length) continue;
-        cols[ci++ % ncol].appendChild(h("div", { class: "panel rtncard" },
-          h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, title), h("small", { class: "sub" }, sub)), h("span", { class: "cnt" }, mine.filter((r) => r.on && !r.soon).length + " on")),
-          shown.map((r) => h("div", { class: "rtnrow" + (r.soon ? " soon" : "") },
-            h("div", { class: "dtx" }, h("div", { class: "dname" },
-              r.open ? h("a", { href: "#", title: "Open the settings", onclick: (e) => { e.preventDefault(); open(r.open, r.t); } }, r.t) : h("b", {}, r.t), tag(r)),
-              h("small", { title: r.n || "" }, r.n || "")),
-            tog(r)))));
-      }
-      if (!ci) { grid.innerHTML = ""; grid.appendChild(note("No routine matches.")); }
-    };
-    paint();
+  const dutyBits = (r) => {
+    const running = r.on && nowText() && nowText().includes(r.title.toLowerCase());
+    const sum = (r.opts || []).filter((o) => o.val !== undefined && o.val !== null && o.val !== "").slice(0, 2)
+      .map((o) => o.label + ": " + (o.type === "bool" ? (o.val ? "on" : "off") : o.val)).join(" · ");
+    return { id: r.id, on: r.on, n: sum || r.note || r.schedule, st: !r.on ? "" : running ? "running now" : r.status_text, stc: running ? "run" : STC[r.status] || "",
+      done: r.status === "done", gems: !!r.gems || r.id === "black_market", sched: r.schedule, status: r.status,
+      set: async (v) => { const j = await act(api("duty_set", { serial, id: r.id, on: v })); if (j) { duties = j.duties; paintList(); } } };
   };
-  draw();
-  act(api("duties", { serial })).then((j) => { if (j) { duties = j.duties; if (root.querySelector(".rtngrid")) draw(); } });
+  const pass = (it) => filter === "all" ? !it.claim : filter === "on" ? !it.claim && it.on && !it.soon
+    : filter === "todo" ? !it.claim && it.on && !it.soon && !it.done && it.st !== "by rallies" : filter === "soon" ? it.soon : filter === "claims" ? it.claim : true;
+  const pills = h("div", { class: "rtnpills" });
+  const listEl = h("div", { class: "rtnlist" });
+  const head = h("div", { class: "rtnhead" });
+  const detail = h("div", { class: "rtndetail panel" });
+  root.append(h("div", { class: "rtnleft panel" }, head, pills, listEl), detail);
+  const visible = () => items().filter(pass);
+  const paintHead = (all) => {
+    const pts = all.filter((i) => i.pts && (i.done)).reduce((t, i) => t + i.pts, 0);
+    head.innerHTML = "";
+    head.append(h("div", {}, h("h3", {}, "Dailies"), h("small", { class: "sub" }, "Tavern › Activity")),
+      h("div", { class: "rtnpts", title: "Points from activities the bot finished today (rally kills not counted)" }, h("b", {}, String(pts)), " / " + ACT_MAX + " points today"));
+    pills.innerHTML = "";
+    const nClaims = all.filter((i) => i.claim).length;
+    for (const [k, l] of [["all", "All"], ["on", "On"], ["todo", "Not done"], ["soon", "Coming soon"], ["claims", "Reward claims (" + nClaims + ")"]])
+      pills.appendChild(h("button", { class: "rtnpill" + (filter === k ? " on" : ""), onclick: () => { filter = k; sel = null; paintList(true); } }, l));
+  };
+  const statusEl = (it) => it.soon ? h("span", { class: "rtnst" }, "soon")
+    : !it.on ? h("span", { class: "rtnst" }, "off") : it.st ? h("span", { class: "rtnst " + it.stc }, it.st) : h("span", { class: "rtnst ok" }, "on");
+  const paintList = (pickFirst) => {
+    const all = items(), shown = all.filter(pass);
+    paintHead(all);
+    if (pickFirst || !shown.some((i) => i.key === sel)) { const f = shown.find((i) => !i.soon); sel = f ? f.key : null; }
+    listEl.innerHTML = "";
+    const groups = filter === "claims" ? ["Reward claims", "Other duties"] : ACT_GROUPS;
+    for (const g of groups) {
+      const mine = all.filter((i) => i.g === g), rows = shown.filter((i) => i.g === g);
+      if (!rows.length) continue;
+      listEl.appendChild(h("div", { class: "rtngrp" }, h("span", {}, g), h("span", { class: "cnt" }, mine.filter((i) => i.on && !i.soon).length + "/" + mine.filter((i) => !i.soon).length + " on")));
+      for (const it of rows) {
+        const row = h("div", { class: "rtnitem" + (it.soon ? " soon" : "") + (it.key === sel ? " sel" : ""), tabindex: it.soon ? null : "0", "data-key": it.key,
+          onclick: (e) => { if (it.soon || e.target.closest(".tgl")) return; pick(it.key); } },
+          h("label", { class: "tgl" + (it.soon ? " dis" : "") }, h("input", { type: "checkbox", checked: !!it.on, disabled: it.soon, onchange: (e) => it.set(e.target.checked) }), h("span", { class: "sw" })),
+          h("div", { class: "rtntx" }, h("b", {}, it.t), h("small", { title: it.n || "" }, it.n || "")),
+          statusEl(it), h("span", { class: "rtnpt" }, it.pts ? "+" + it.pts : ""), h("span", { class: "rtnchev" }, it.soon ? "" : "›"));
+        listEl.appendChild(row);
+      }
+    }
+    if (!shown.length) listEl.appendChild(note(filter === "todo" ? "Everything switched on is done for today." : "Nothing here."));
+    paintDetail();
+  };
+  const pick = (key) => {
+    if (key === sel) return;
+    sel = key;
+    listEl.querySelectorAll(".rtnitem").forEach((x) => x.classList.toggle("sel", x.dataset.key === key));
+    paintDetail();
+  };
+  // keyboard: up / down moves the selection through the rows that can be opened
+  root.addEventListener("keydown", (e) => {
+    if ((e.key !== "ArrowDown" && e.key !== "ArrowUp") || !e.target.closest(".rtnlist")) return;
+    const keys = [...listEl.querySelectorAll(".rtnitem:not(.soon)")].map((x) => x.dataset.key);
+    const i = keys.indexOf(sel), n = keys[Math.max(0, Math.min(keys.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
+    if (!n) return;
+    e.preventDefault(); pick(n);
+    const el = listEl.querySelector('[data-key="' + CSS.escape(n) + '"]'); if (el) { el.focus(); el.scrollIntoView({ block: "nearest" }); }
+  });
+  const tile = (v, l, c) => h("div", { class: "stile" + (c ? " " + c : "") }, h("b", {}, v), h("span", {}, l));
+  const paintDetail = () => {
+    detail.innerHTML = "";
+    if (filter === "soon") { detail.appendChild(panel(null, h("h3", {}, "Coming soon"), note("These activities are not done by the bot yet. They will get their own settings here when they are added."))); return; }
+    const it = items().find((i) => i.key === sel);
+    if (!it) { detail.appendChild(panel(null, note("Pick an activity on the left to see its settings."))); return; }
+    const body = h("div", { class: "rtnbody" });
+    const sub = [it.g, it.pts ? "+" + it.pts + " activity points" : null, it.st || null].filter(Boolean).join(" · ");
+    body.appendChild(h("div", { class: "rtntop" },
+      h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!it.on, onchange: (e) => it.set(e.target.checked) }), h("span", { class: "sw" })),
+      h("div", {}, h("h2", {}, it.t), h("small", { class: "sub" + (it.stc === "run" ? " run" : "") }, sub)),
+      it.gems ? h("span", { class: "dbadge spend" }, "Spend guard") : null));
+    if (it.id) body.appendChild(h("div", { class: "rtntiles" }, tile(it.on ? (it.st || "on") : "off", "Today", it.stc), tile(it.sched || "-", "Schedule"), tile(it.pts ? "+" + it.pts : "-", "Activity points")));
+    // the activity's own settings, exactly as they were before
+    const parts = [];
+    if (it.id) {
+      if (it.id === "black_market") parts.push(PAGES.duties(serial, "black_market"), ...details.market());
+      else if (it.id === "collect_resources") parts.push(PAGES.duties(serial, it.id), ...details.map());
+      else parts.push(PAGES.duties(serial, it.id));
+    } else if (it.open === "mon" || it.open === "sta") {
+      parts.push(panel(null, note(it.open === "mon" ? "Monster Killing points come from the rallies the bot joins. Pick the monsters, presets and generals on the Rally setup tab." : "Stamina points come from the stamina spent on rallies. The stamina floor and top-up are on the Rally setup tab."),
+        btn("Open Rally setup →", () => { S.sec = S.sec || {}; S.sec.rally = it.open; if (S.gotoInstTab) S.gotoInstTab("rally"); }, "sm")));
+    } else if (it.open === "aj") parts.push(...details.aj());
+    else if (it.open === "tasks") parts.push(...details.tasks());
+    for (const p of parts) if (p) body.appendChild(p);
+    const runBtn = it.id ? h("button", { class: "btn", onclick: async () => { if (await act(api("run_now_add", { serial, id: "duty:" + it.id }))) toast(it.t + " runs next on this instance.", "ok"); } }, "Run now") : null;
+    detail.append(body, h("div", { class: "rtnbar2" }, h("small", { class: "hint" }, "Switches save at once; other changes save within 2 s."), runBtn,
+      h("button", { class: "btn primary", onclick: () => saveAll() }, "Save")));
+  };
+  let touched = false;                     // the owner clicked a row: keep it selected when the duties arrive
+  root.addEventListener("click", (e) => { if (e.target.closest(".rtnitem,.rtnpill")) touched = true; }, true);
+  paintList(true);
+  requestAnimationFrame(() => { const sh = document.querySelector(".stickyhead"); if (sh) root.style.setProperty("--shh", sh.offsetHeight + "px"); });
+  act(api("duties", { serial })).then((j) => { if (j) { duties = j.duties; paintList(!touched); } });
+  // keep today's states fresh (every 20 s) without rebuilding the open settings
+  const paintStates = () => {
+    const all = items(); paintHead(all);
+    for (const el of listEl.querySelectorAll(".rtnitem")) {
+      const it = all.find((i) => i.key === el.dataset.key); if (!it) continue;
+      const old = el.querySelector(".rtnst"); if (old) old.replaceWith(statusEl(it));
+      const cb = el.querySelector("input"); if (cb) cb.checked = !!it.on;
+    }
+  };
+  const tick = setInterval(async () => {
+    if (!root.isConnected) { clearInterval(tick); return; }
+    const j = await api("duties", { serial }, { quiet: true }).catch(() => null);
+    if (j && j.duties) { duties = j.duties; paintStates(); }
+  }, 20000);
   return root;
 }
 

@@ -5385,16 +5385,39 @@ def _bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
 
 
 _HEAVY_LOCK = threading.RLock()            # only one emulator restart / game restart at a time: they are the PC's heaviest moments
+_HEAVY_QUEUE = []                          # serials waiting for _HEAVY_LOCK, first come first served
+_HEAVY_QLOCK = threading.Lock()
+
+
+def heavy_acquire(serial, stop, log=None):
+    """Take _HEAVY_LOCK in the order the instances asked for it (a plain lock let late instances jump the line,
+    so one instance could wait for ever). -> False when stopped while waiting."""
+    with _HEAVY_QLOCK:
+        if not _HEAVY_QUEUE and _HEAVY_LOCK.acquire(blocking=False):   # nobody waiting: no line to keep
+            return True
+        _HEAVY_QUEUE.append(serial)
+    if log:
+        log("[*] Another emulator is restarting - waiting for my turn (keeps the PC from overloading)")
+    try:
+        while not stop.is_set():
+            with _HEAVY_QLOCK:
+                first = bool(_HEAVY_QUEUE) and _HEAVY_QUEUE[0] == serial
+            if first and _HEAVY_LOCK.acquire(timeout=2):
+                return True
+            if not first:
+                stop.wait(1)
+        return False
+    finally:
+        with _HEAVY_QLOCK:
+            if serial in _HEAVY_QUEUE:
+                _HEAVY_QUEUE.remove(serial)
 
 
 def restart_emulator(dev, cfg, log, stop, why=""):
     """Close a stuck emulator (nicely first, then by force), start it again and wait until Evony is loaded."""
     pause_gate()                                                  # never restart an emulator while it is paused
-    if not _HEAVY_LOCK.acquire(blocking=False):
-        log("[*] Another emulator is restarting - waiting for my turn (keeps the PC from overloading)")
-        while not _HEAVY_LOCK.acquire(timeout=2):
-            if stop.is_set():
-                return False
+    if not heavy_acquire(dev.serial, stop, log):
+        return False
     try:
         return _restart_emulator(dev, cfg, log, stop, why)
     finally:
@@ -5500,13 +5523,14 @@ def force_restart_game(dev, cfg, log, stop):
     LOADING[dev.serial] = ("restart", time.time())
     _adb(dev.adb, dev.serial, "shell", "am", "force-stop", pkg)
     _nap(stop, 3, 4)
-    while not _HEAVY_LOCK.acquire(timeout=2):             # loading Evony is heavy: one at a time
-        if stop.is_set():
-            return False
+    if not heavy_acquire(dev.serial, stop, log):           # loading Evony is heavy: one at a time, in turn
+        return False
     try:
         start_app(dev.adb, dev.serial, pkg)
         _nap(stop, 8)
-        return wait_stable(dev, cfg, log, stop, pkg, allow_emu_restart=False)
+        if wait_stable(dev, cfg, log, stop, pkg, allow_emu_restart=False) or stop.is_set():
+            return not stop.is_set()
+        return _restart_emulator(dev, cfg, log, stop, "Evony did not load after a game restart")  # the lock is already ours
     finally:
         _HEAVY_LOCK.release()
 
@@ -8281,7 +8305,15 @@ def run_crazy_eggs(dev, cfg, log, stop):
         ce_save(serial, next_at=time.time() + max(min(waits) + 15, gap))
         log(f"[i]   Crazy Eggs: next egg ready in {min(waits) // 60} min" + (f"; next visit in {max(min(waits) + 15, gap) // 60} min (visit gap {conf['min_gap']} min)" if gap > min(waits) + 15 else ""))
     else:
-        ce_save(serial, next_at=time.time() + 1800)
+        row = ce_row(serial)
+        blank = int(row.get("blank", 0)) + 1 if row.get("blank_day") == day else 1
+        if blank >= 2:                                      # 2 visits in a row with no egg ready or on a timer: all hatched / event over
+            ce_save(serial, all_done_day=day, next_at=0, blank=0, blank_day=day)
+            log("[+]  Crazy Eggs: no egg left to smash today - done until the next reset")
+        else:
+            ce_save(serial, next_at=time.time() + 1800, blank=blank, blank_day=day)
+    if eggs and any(e and e[0] in ("ready", "wait") for e in eggs):
+        ce_save(serial, blank=0)
 
 
 # ------------------------------------------------------------ Champions (Keep > Champions)
@@ -8740,6 +8772,11 @@ def run_champions(dev, cfg, log, stop):
     if not ch_open_page(dev, stop, log):
         ch_snap(dev.screenshot(), "1_failed")
         raise RuntimeError("the Champion page did not open")
+    shot = dev.screenshot()
+    t_used, g_used = ch_taps_used(shot), ch_greet_label(shot).get("n")
+    if t_used is not None and t_used >= CH_TAPS and g_used is not None and g_used >= CH_GREETS:
+        log(f"[+]  Champions: today's taps ({t_used}/{CH_TAPS}) and greets ({g_used}/{CH_GREETS}) are all used - nothing to do")
+        return
     plan = ch_conf(cfg)["plan"]
     row = ch_row(serial)
     taps_used = row.get("taps") or {} if row.get("taps_day") == day else {}
@@ -8927,6 +8964,7 @@ def run_alliance_science(dev, cfg, log, stop):
     log(f"[i]   Alliance Science: donations left {left}/{top}")
     if left == 0:
         log("[+]  Alliance Science: all donations already done today")
+        rd_nothing()
         return
     if not btn:
         raise RuntimeError("no Donate button on the recommended science")
@@ -8965,6 +9003,12 @@ def run_alliance_science(dev, cfg, log, stop):
 # - a line that mentions gems / Instant / Buy / Purchase / Clear / Refresh / Enter / packages is never pressed.
 RD_DANGER = ("gem", "instant", "buy", "purchase", "clear", "refresh", "enter", "package", "recharge", "$", "x10", "10 pack")
 RD_SPEEDUP_WORDS = ["Finish All", "Finish all"]
+
+
+def rd_nothing():
+    """A duty step found nothing left to do in the game (all claimed / daily limit reached). Two such runs in a row
+    = the duty is done until the daily reset (duty_record)."""
+    _TL.rd_nothing = True
 
 
 def rd_snap(img, tag):
@@ -9131,6 +9175,7 @@ def run_gold_levy(dev, cfg, log, stop):
         raise RuntimeError("the Levy window did not open")
     if not rd_tap(dev, stop, ["Free Levy All"], region=(180, 690, 360, 120), shot=shot, wait=(2.0, 2.6)):
         log("[+]  Gold Levy: no free levies left today")
+        rd_nothing()
         return
     rd_close_reward(dev, stop)
     rd_snap(dev.screenshot(), "levy_2")
@@ -9154,6 +9199,7 @@ def run_resource_tax(dev, cfg, log, stop):
     btn = rd_find(shot, ["Tax"], region=box, cutoff=0.8)
     if not btn or rd_numbers(txt):                          # out of free taxes: the button shows a gem price
         log(f"[+]  Resource Tax: no free tax left today ({res})")
+        rd_nothing()
         return
     dev.tap(btn[0], btn[1])
     _nap(stop, 1.8, 2.3)
@@ -9212,6 +9258,7 @@ def run_vip_claim(dev, cfg, log, stop):
         raise RuntimeError("the VIP page did not open")
     if not rd_tap(dev, stop, ["Claim"], region=(330, 560, 210, 120), whole=True, wait=(2.0, 2.5), shot=shot):
         log("[+]  VIP: daily chest already claimed")
+        rd_nothing()
         return
     rd_close_reward(dev, stop)
     log("[+]  VIP: daily chest claimed")
@@ -9294,6 +9341,7 @@ def svr_claimable(dev, stop, log, title):
     rd_snap(shot, "svr_" + title.split()[0].lower())
     if not rd_tap(dev, stop, ["Claimable"], region=(0, 220, 230, 110), wait=(2.2, 2.8), shot=shot):
         log(f"[+]  {title}: nothing to claim")
+        rd_nothing()
         return
     rd_close_reward(dev, stop)
     log(f"[+]  {title}: claimed")
@@ -9339,6 +9387,7 @@ def run_alliance_gift(dev, cfg, log, stop):
     if not rd_tap(dev, stop, ["Open All"], region=(130, 860, 280, 100), wait=(2.2, 2.8)):
         rd_snap(dev.screenshot(), "agift_1")
         log("[+]  Alliance Gift: nothing to open")
+        rd_nothing()
         return
     rd_close_reward(dev, stop, spot=(270, 120))
     log("[+]  Alliance Gift: all gifts opened")
@@ -9353,6 +9402,7 @@ def run_alliance_treasure(dev, cfg, log, stop):
     rd_snap(shot, "atreasure_1")
     if not rd_tap(dev, stop, ["Open All"], region=(240, 860, 300, 100), wait=(2.2, 2.8), shot=shot):
         log("[+]  Alliance Treasure: nothing to open")
+        rd_nothing()
         return
     rd_close_reward(dev, stop, spot=(270, 120))
     log("[+]  Alliance Treasure: Open All pressed")
@@ -9380,6 +9430,7 @@ def run_ranger_knight(dev, cfg, log, stop):
     rd_snap(shot, "rko_1")
     if not rd_tap(dev, stop, ["Quick Dispatch"], region=(300, 830, 240, 110), wait=(1.8, 2.3), shot=shot):
         log("[+]  Ranger Knight Order: nothing to dispatch")
+        rd_nothing()
         return
     if not rd_tap(dev, stop, ["Send"], region=(140, 700, 280, 110), whole=True, wait=(1.8, 2.3)):
         rd_snap(dev.screenshot(), "rko_2")
@@ -9405,6 +9456,13 @@ def rd_finish_with_speedups(dev, stop, log, what):
     return True
 
 
+def rd_clear_field(dev, stop, n=12):
+    """Empty the text box that has the keyboard: cursor to the end, then delete backwards (and forwards, in case
+    the cursor stayed at the start)."""
+    dev._run("shell", "input", "keyevent", "123", *(["67"] * n), *(["112"] * n), timeout=15)
+    _nap(stop, 0.4, 0.6)
+
+
 def rd_train(dev, cfg, log, stop, duty_id, ring_word, qty_xy, what):
     """Barracks / Trap Factory ring menu is open: type the amount, check it was taken, press Train."""
     amount = max(1, min(int(float(rd_opt(cfg, duty_id, "amount", 500) or 500)), 9999999))
@@ -9421,6 +9479,7 @@ def rd_train(dev, cfg, log, stop, duty_id, ring_word, qty_xy, what):
         raise RuntimeError("the training page did not open")
     dev.tap(*qty_xy)
     _nap(stop, 1.4, 1.8)
+    rd_clear_field(dev, stop)                                # the box already holds a number: typing would add to it
     dev.text(str(amount))
     _nap(stop, 0.6, 0.9)
     rd_keyboard_ok(dev, stop)
@@ -9641,6 +9700,7 @@ def run_wisdom_dome_tokens(dev, cfg, log, stop):
                 n = rd_numbers(t)
                 if len(n) >= 2 and n[-2] >= n[-1]:
                     log(f"[+]  Wisdom Dome: today's {n[-1]} gem purchases are used")
+                    rd_nothing()
                     want = bought
                 break
         if bought >= want:
@@ -9682,6 +9742,175 @@ def offer_with_gems(dev, cfg, log, stop):
     log(f"[+]  Offering: {count} gem offer(s) made (no tributes left)")
 
 
+# ------------------------------------------------------------ Royal Thief (owner's recording 22 Oct 21:38, project doc claude/flow_royal_thief.md)
+# A thief only appears when an alliance member invites you (Invite icon on the left of the city / map).
+# Invite > Royal Thief row > Go > tap a thief that is not killed > map flies there > tap it > Attack > Attack >
+# troops (Power First or a preset) > March. No free march: wait for the soonest march to come back, then try again.
+RT_POLL_MIN = 15                         # look for an Invite icon this often
+RT_RECHECK_MIN = 5                       # after marching / when something got in the way: look again this soon
+RT_THIEF_SPOTS = {"left": (120, 600), "mid": (288, 392), "right": (410, 600)}
+RT_PRESETS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
+
+
+def rt_save(serial, **kw):
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        row = data.setdefault(serial or "default", {}).setdefault("royal_thief", {})
+        row.update(kw)
+        try:
+            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def rt_row(serial):
+    return (load_duty_state().get(serial or "default") or {}).get("royal_thief") or {}
+
+
+def rt_col(x):
+    return "left" if x < 190 else ("mid" if x < 350 else "right")
+
+
+def rt_marches(img):
+    """World map March panel (top left): -> (busy, total, soonest_seconds or None), or None when not read."""
+    busy = total = None
+    for t, _ in rd_lines(img, (0, 125, 300, 45)):
+        m = re.search(r"(\d)\s*/\s*(\d)", t)
+        if "arch" in t.lower() and m:
+            busy, total = int(m.group(1)), int(m.group(2))
+            break
+    if busy is None:
+        return None
+    waits = []
+    txt = " ".join(t for t, _ in rd_lines(img, (40, 165, 240, 60 * max(1, busy)))).replace(";", ":")
+    for h, mi, s in re.findall(r"(\d{1,2})\s*[:.]\s*(\d{2})\s*[:.]\s*(\d{2})", txt):
+        waits.append(int(h) * 3600 + int(mi) * 60 + int(s))
+    return busy, total, (min(waits) if waits else None)
+
+
+def run_royal_thief(dev, cfg, log, stop):
+    serial = getattr(dev, "serial", "")
+    day = _game_day()
+    row = rt_row(serial)
+    done = row.get("done", []) if row.get("day") == day else []
+    rt_save(serial, day=day, done=done, next_at=time.time() + RT_POLL_MIN * 60)
+
+    def later(minutes, why):
+        rt_save(serial, next_at=time.time() + minutes * 60)
+        log(f"[*]  Royal Thief: {why} - again at {time.strftime('%H:%M', time.localtime(time.time() + minutes * 60))}")
+
+    shot = dev.screenshot()
+    p = rd_find(shot, ["Invite"], region=(0, 220, 130, 560), cutoff=0.75, whole=True)
+    if not p:
+        return                                              # no invite = no thief to kill
+    dev.tap(p[0], max(100, p[1] - 18))
+    _nap(stop, 2.0, 2.5)
+    shot = dev.screenshot()
+    rd_snap(shot, "thief_1")
+    if not rd_seen(shot, ["Invitation"], region=(0, 0, 540, 80)):
+        dev.back()
+        return later(RT_RECHECK_MIN, "the Invitation list did not open")
+    rows = []
+    for t, ws in rd_lines(shot, (0, 90, 540, 760)):
+        if "thief" in t.lower():
+            rows.append(int(sum(s[2] for s in ws) / len(ws)))
+    target = None
+    for y in rows:                                          # the inviter's name sits on the line above "Royal Thief"
+        who = " ".join(t for t, _ in rd_lines(shot, (60, max(0, y - 40), 300, 30))).strip() or f"row{y}"
+        if who not in done:
+            target = (y, who)
+            break
+    if not target:
+        dev.back()
+        return
+    y, who = target
+    dev.tap(438, max(100, y - 8))                           # green Go on that row
+    _nap(stop, 2.5, 3.0)
+    shot = dev.screenshot()
+    rd_snap(shot, "thief_2")
+    if not rd_seen(shot, ["Royal Thief", "Help kill"], region=(0, 0, 540, 160)):
+        leave_to_city(dev, cfg, stop, log)
+        return later(RT_RECHECK_MIN, "the Royal Thief page did not open")
+    alive, killed = [], set()
+    for t, ws in rd_lines(shot, (0, 200, 540, 300)):
+        x = int(sum(s[1] for s in ws) / len(ws))
+        if "killed" in t.lower():
+            killed.add(rt_col(x))
+        elif re.search(r"x\s*[:.]?\s*\d{3}", t.lower()):
+            alive.append(rt_col(x))
+    if row.get("who") == who and row.get("col") in killed:   # the thief we attacked is dead: this invite is done
+        done.append(who)
+        rt_save(serial, done=done, who="", col="")
+        leave_to_city(dev, cfg, stop, log)
+        log(f"[+]  Royal Thief: {who}'s thief killed")
+        return
+    cols = [c for c in ("mid", "left", "right") if c not in killed and (c in alive or not alive)]
+    if row.get("who") == who and row.get("col") in cols:     # keep on the same thief until it is killed
+        cols.remove(row["col"])
+        cols.insert(0, row["col"])
+    if not cols:
+        done.append(who)
+        rt_save(serial, done=done)
+        leave_to_city(dev, cfg, stop, log)
+        log(f"[+]  Royal Thief: all 3 of {who}'s thieves are killed")
+        return
+    col = cols[0]
+    dev.tap(*RT_THIEF_SPOTS[col])
+    shot = _wait_view(dev, cfg, stop, "landscape", 60)     # the map flies to the thief
+    if shot is None:
+        leave_to_city(dev, cfg, stop, log)
+        return later(RT_RECHECK_MIN, "the map did not open")
+    _nap(stop, 2.0, 2.5)
+    shot = dev.screenshot()
+    rd_snap(shot, "thief_3")
+    mk = rt_marches(shot)
+    if mk and mk[0] >= mk[1]:
+        wait = (mk[2] or 120) + 20
+        leave_to_city(dev, cfg, stop, log)
+        return later(max(1, round(wait / 60)), f"all {mk[1]} marches are out")
+    dev.tap(274, 477)                                      # the thief sits in the middle of the screen
+    _nap(stop, 1.5, 2.0)
+    if not rd_ring(dev, stop, ["Attack"]):
+        leave_to_city(dev, cfg, stop, log)
+        return later(RT_RECHECK_MIN, "no Attack on the thief")
+    shot = dev.screenshot()
+    rd_snap(shot, "thief_4")
+    if not rd_tap(dev, stop, ["Attack"], region=(150, 680, 260, 130), whole=True, wait=(2.0, 2.5), shot=shot):
+        leave_to_city(dev, cfg, stop, log)
+        return later(RT_RECHECK_MIN, "no Attack button on the thief's page")
+    shot = dev.screenshot()
+    if not rd_seen(shot, ["Select a Preset", "March"], region=(0, 0, 540, 180)):
+        rd_snap(shot, "thief_5")
+        leave_to_city(dev, cfg, stop, log)
+        return later(RT_RECHECK_MIN, "the March page did not open (no free march?)")
+    troops = str(rd_opt(cfg, "royal_thief", "troops", "Power First"))
+    if troops.startswith("Preset"):
+        n = RT_PRESETS.index(troops.split()[-1]) if troops.split()[-1] in RT_PRESETS else 0
+        for _ in range(2):                                  # the first tap on a preset is sometimes lost
+            dev.tap(62 + n * 61, 115)
+            _nap(stop, 1.4, 1.8)
+    else:
+        dev.tap(57, 928)                                    # small button bottom left -> Power First
+        _nap(stop, 1.2, 1.5)
+        if not rd_tap(dev, stop, ["Power First"], region=(90, 885, 230, 75), wait=(1.4, 1.8)):
+            dev.tap(57, 928)
+            _nap(stop, 1.2, 1.5)
+            rd_tap(dev, stop, ["Power First"], region=(90, 885, 230, 75), wait=(1.4, 1.8))
+    shot = dev.screenshot()
+    rd_snap(shot, "thief_6")
+    if not rd_tap(dev, stop, ["March"], region=(330, 880, 210, 75), wait=(2.0, 2.5), shot=shot):
+        leave_to_city(dev, cfg, stop, log)
+        return later(RT_RECHECK_MIN, "no March button")
+    shot = dev.screenshot()
+    if rd_seen(shot, ["Select a Preset"], region=(0, 120, 540, 60)):
+        rd_snap(shot, "thief_7")
+        leave_to_city(dev, cfg, stop, log)
+        return later(RT_RECHECK_MIN, "the march did not leave (no troops?)")
+    rt_save(serial, who=who, col=col)
+    later(RT_RECHECK_MIN, f"marched on {who}'s thief ({troops})")
+    leave_to_city(dev, cfg, stop, log)
+
+
 RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
             "general_chest": run_general_chest, "vip_claim": run_vip_claim, "recruit_citizens": run_recruit_citizens,
             "civilization_card": run_civilization_card, "empire_depot": run_empire_depot, "lucky_raffle": run_lucky_raffle,
@@ -9689,7 +9918,7 @@ RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor
             "ranger_knight": run_ranger_knight, "train_troops": run_train_troops, "build_traps": run_build_traps,
             "troop_healing": run_troop_healing, "activity_chests": run_activity_chests, "gate_visitors": run_gate_visitors,
             "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes,
-            "wisdom_dome_tokens": run_wisdom_dome_tokens}
+            "wisdom_dome_tokens": run_wisdom_dome_tokens, "royal_thief": run_royal_thief}
 
 
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
@@ -9824,6 +10053,11 @@ DUTY_LIBRARY = [
     {"id": "activity_chests", "group": "Reward claims", "title": "Activity chests", "every_min": 180, "verified": False,
      "note": "Tavern > Activity: opens every ready task chest and milestone chest. Runs every 3 hours so the later chests are caught too. Needs the city map (Tavern).",
      "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.2", "activity_chests"]},
+    {"id": "royal_thief", "group": "Daily activities", "title": "Royal Thief", "every_min": 15, "verified": False,
+     "note": "When an alliance member invites you (Invite icon): opens the invite, picks a thief that is not killed and attacks it. Keeps trying until it is killed; when all marches are out it waits for one to come back.",
+     "target": "self:", "steps": ["royal_thief"],
+     "opts": [{"k": "troops", "label": "Troops", "type": "select", "def": "Power First",
+               "choices": ["Power First"] + ["Preset " + n for n in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")]}]},
 ]
 DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
 
@@ -9839,7 +10073,7 @@ def load_duty_state():
         return {}
 
 
-def duty_record(serial, duty_id, ok, msg=""):
+def duty_record(serial, duty_id, ok, msg="", nothing=False):
     with _DUTY_LOCK:
         data = load_duty_state()
         row = data.setdefault(serial or "default", {}).setdefault(duty_id, {})
@@ -9852,6 +10086,13 @@ def duty_record(serial, duty_id, ok, msg=""):
         if ok:
             row["last_ok"], row["status"] = time.time(), "done"
             row["tries"] = 0                                     # fulfilled: failures start counting again from 0
+            if nothing:                                          # the game had nothing left: once more to be sure, then done until the reset
+                row["empty"] = int(row.get("empty", 0)) + 1 if row.get("empty_day") == day else 1
+                row["empty_day"] = day
+                if row["empty"] >= 2:
+                    row["done_day"] = day
+            else:
+                row["empty"] = 0
         else:
             row["status"] = "retry"
             if row["tries"] == DUTY_MAX_TRIES:                   # the 3rd failure today: alert + report once (it keeps trying every hour)
@@ -9914,7 +10155,9 @@ def duty_status(serial, duty_id, cfg):
     row = (load_duty_state().get(serial or "default") or {}).get(duty_id) or {}
     day, now = _game_day(), time.time()
     tries = int(row.get("tries", 0)) if row.get("day") == day else 0
-    if duty_id == "crazy_eggs":                             # timer driven: comes back when the next egg is ready
+    if row.get("done_day") == day:                          # checked twice: nothing left in the game until the reset
+        return "done", "Done for today"
+    if duty_id in ("crazy_eggs", "royal_thief"):           # timer driven: comes back when the next egg is ready
         if row.get("all_done_day") == day:
             return "done", "All eggs done"
         fs = _duty_fail_state(row, tries, now)
@@ -10641,6 +10884,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                     ok = city_task_target(dev, cfg, log, stop, t, nav_state)
                 if ok:
                     _nap(stop, 1.2, 1.8)
+                    _TL.rd_nothing = False
                     for st in t.get("steps", []):
                         run_step(dev, cfg, log, stop, st)
                     leave_to_city(dev, cfg, stop, log)
@@ -10656,7 +10900,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         if result is not None and not stop.is_set():
             task_event(getattr(dev, "serial", ""), shown, *result)
         if duty_id and result is not None and not stop.is_set():
-            if duty_record(getattr(dev, "serial", ""), duty_id, *result) == "gaveup":
+            if duty_record(getattr(dev, "serial", ""), duty_id, *result, nothing=bool(result[0] and getattr(_TL, "rd_nothing", False))) == "gaveup":
                 duty_failed_report(dev, cfg, log, shown, result[1])
         leave_to_city(dev, cfg, stop, log)
     log("@act " + json.dumps({"k": "step", "text": "Idle - tasks done, back to the rallies"}))   # the instance list stops showing the task
