@@ -9698,11 +9698,16 @@ def activity_go(dev, cfg, log, stop, tile, probe=False):
     key = max(tile.split(), key=len)                     # the game cuts tile labels ("eet Champion", "rade Carriage"): match the main word
     words = [tile, key] + ([key.rstrip("s")] if key.endswith("s") else [])
     hit = None
+    tpl = "act_" + re.sub(r"[^a-z]+", "_", tile.lower()).strip("_")    # the tile's picture (labels are cut and hard to read)
     for i in range(8):                                   # 3 tiles a row, the grid scrolls
         shot = dev.screenshot()
-        if i == 0:
-            rd_snap(shot, "ago_2_activity")
-        hit = rd_find(shot, words, region=(0, 260, 540, 700), cutoff=0.75)
+        rd_snap(shot, "ago_2_activity" if i == 0 else f"ago_scroll_{i}")
+        if has_template(tpl):
+            h = find(shot, tpl, 0.8, (0, 260, 540, 700))
+            if h:
+                hit = (h[0], h[1] - 45)                  # tapped 45 px lower below
+        if not hit:
+            hit = rd_find(shot, words, region=(0, 260, 540, 700), cutoff=0.75)
         if hit or stop.is_set():
             break
         dev.swipe(270, 820, 270, 520, 600)
