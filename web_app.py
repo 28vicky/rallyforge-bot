@@ -2010,6 +2010,13 @@ class Api:
             rb.GAME_RESTART_REQ.add(x)
         return {}
 
+    def restart_emulator(self, p):
+        """Close and start the emulator of one instance (or all) at its next loop."""
+        s = p.get("serial")
+        for x in ([s] if s and s != "all" else [d.get("id") for d in self.c.devices if d.get("id")]):
+            rb.EMU_RESTART_REQ.add(x)
+        return {}
+
     def takeback(self, p):
         s = p.get("serial")
         evs = [rb.TAKEBACK[s]] if s in rb.TAKEBACK else ([] if s and s != "all" else list(rb.TAKEBACK.values()))
