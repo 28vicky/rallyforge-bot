@@ -2024,20 +2024,30 @@ def _refill_once(dev, cfg, log, stop, needed):
     if not sizes:
         return False
     before = read_stamina(dev.screenshot())
-    opened = False
-    for xy in (tuple(cfg["stamina_xy"]), (478, 853), (345, 853)):      # the saved spot, then the round "+" button, then the number
-        dev.tap(*xy)
-        nap(1.0, 1.5)
-        shot = dev.screenshot()
-        if find_text(shot, ["Use Item"], region=(120, 20, 300, 90)):
-            opened = True
-            break
-        if screen_state(shot, cfg) != "march":                 # something else opened: back to the march screen, then try the next spot
+
+    def _open_use_item():
+        for xy in (tuple(cfg["stamina_xy"]), (478, 853), (345, 853)):  # the saved spot, then the round "+" button, then the number
+            dev.tap(*xy)
+            nap(1.0, 1.5)
+            sh = dev.screenshot()
+            if find_text(sh, ["Use Item"], region=(120, 20, 300, 90)):
+                return True
+            if screen_state(sh, cfg) != "march":             # something else opened: back to the march screen, then try the next spot
+                dev.back()
+                nap(0.8, 1.2)
+        return False
+
+    def _to_march():
+        for _ in range(3):
+            if screen_state(dev.screenshot(), cfg) == "march":
+                return
             dev.back()
             nap(0.8, 1.2)
-    if not opened:
+
+    if not _open_use_item():
         log("[!] Stamina: the Use Item screen did not open")
         return False
+    on_items = True
     used_any = False
     ROW_Y = {10: 442, 50: 604, 100: 766}                     # the title line of each item row on the Use Item screen (the Use button is ~49 px lower)
 
@@ -2065,22 +2075,30 @@ def _refill_once(dev, cfg, log, stop, needed):
         return bool(find_text(shot, ["Own:", "Own"], region=(60, 310, 300, 80), cutoff=0.6)) and \
             bool(find_text(shot, ["Max", "Minimum"], region=(60, 650, 420, 70), cutoff=0.8))
 
-    for size in sizes:
+    for size in sizes:                                       # every size in the chosen order until the march has enough
         if stop.is_set():
             break
+        if not on_items:
+            if not _open_use_item():
+                log("[!] Stamina: the Use Item screen did not open again")
+                break
+            on_items = True
         shot = dev.screenshot()
         ry = _row_y(shot, size)
         if not ry:
             continue                                        # the account has none of this size / not a size we know
         use = find_text(shot, ["Use"], region=(330, ry + 10, 200, 80))
-        dev.tap(*(use if use else (426, ry + 49)))
+        if not use:                                         # no 'Use' = none owned; the button shows a gem price - never tap it
+            log(f"[i] Stamina: no {size}-stamina items (only a gem price) - next size")
+            continue
+        dev.tap(*use)
         nap(1.0, 1.4)
         shot = dev.screenshot()
         if not _dialog_open(shot):                          # slow emulator: look again, then tap Use once more before giving up
             nap(1.0, 1.4)
             shot = dev.screenshot()
         if not _dialog_open(shot) and screen_state(shot, cfg) != "march" and _row_y(shot, size):
-            dev.tap(*(use if use else (426, ry + 49)))
+            dev.tap(*use)
             nap(1.2, 1.6)
             shot = dev.screenshot()
         if not _dialog_open(shot):
@@ -2133,27 +2151,33 @@ def _refill_once(dev, cfg, log, stop, needed):
                 nap(0.25, 0.4)
                 cnt = _count(dev.screenshot())
             log(f"[i] Stamina: using {cnt[0] if cnt else '?'} item(s) (wanted {want})")
+        used = False
         for attempt in range(3):                            # the slider already sits at 2 items; press the green Use inside the window
             dev.tap(383 + random.randint(-12, 12), 685 + random.randint(-6, 6))
             nap(1.2, 1.7)
             shot = dev.screenshot()
             if not _dialog_open(shot):
-                used_any = True
+                used = True
                 break
             log(f"[i] Stamina: the amount window is still open - pressing Use again ({attempt + 2})")
         _stamina_snap(shot, "after_use")
-        if used_any:
-            log(f"[+] Stamina: used {size}-stamina items")
-        else:
-            log("[!] Stamina: the Use button did not close the window")
+        if not used:
+            log("[!] Stamina: the Use button did not close the window - next size")
             dev.tap(502, 273)                               # the red X of the amount window
             nap(0.8, 1.2)
-        break
-    for _ in range(3):                                      # back to the march screen
-        if screen_state(dev.screenshot(), cfg) == "march":
+            continue
+        used_any = True
+        log(f"[+] Stamina: used {size}-stamina items")
+        _to_march()                                         # check the march screen: enough now? else open Use Item again for the next size
+        on_items = False
+        nap(0.6, 0.9)
+        st_now = read_stamina(dev.screenshot())
+        if st_now and st_now[0] >= needed:
             break
-        dev.back()
-        nap(0.8, 1.2)
+        if st_now:
+            log(f"[i] Stamina: {st_now[0]:,} still under {needed:,} - trying the next size")
+    if on_items:
+        _to_march()
     nap(0.8, 1.2)
     shot_end = dev.screenshot()
     st = read_stamina(shot_end)
