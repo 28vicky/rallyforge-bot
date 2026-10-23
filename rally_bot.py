@@ -12062,6 +12062,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         at_bottom[0] = False                  # the list reopens at the top: the next sweep jumps to the bottom first
         outside_taps = [0]
         back_taps = [0]
+        mail_backs = [0]
         war_row_taps = [0]
         view_toggles = [0]
         last_toggle = [0.0]
@@ -12108,6 +12109,17 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     dev.tap(int(_row[0]), int(_row[1]))
                     log(f"[*] On the Alliance page - tapped the 'Alliance War' row ({int(_row[0])},{int(_row[1])})")
                     nap(1.5, 2.2)
+                    continue
+            if st == "unknown" and mail_backs[0] < 4:
+                try:
+                    in_mail = find_text(screen, ["Mail", "Inbox", "System", "Reports"], region=(60, 0, 420, 130), cutoff=0.8)
+                except Exception:
+                    in_mail = None
+                if in_mail:                                   # Mail (or a mail opened from it): device Back, not taps that open more mails (owner 23 Oct)
+                    mail_backs[0] += 1
+                    dev.back()
+                    log("[*] Recovery: on the Mail page - pressed Back")
+                    nap(1.0, 1.5)
                     continue
             if st == "unknown" and back_taps[0] < 2:          # a full page (event, Royal Thief, ...) has the gold Back arrow top left: use it first
                 try:
