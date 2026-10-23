@@ -9383,9 +9383,13 @@ def rd_keyboard_ok(dev, stop):
 def rd_alliance_page(dev, cfg, stop):
     """From the city: open the Alliance page (same way as Alliance Science)."""
     shot = dev.screenshot()
-    h = find(shot, "rally_icon", 0.8) if has_template("rally_icon") else None
-    pos = (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
+    ab = find_text(shot, ["Alliance"], region=(400, 200, 140, 740), cutoff=0.7)   # the word under the button: its place moves with the icons above
+    h = find(shot, "rally_icon", 0.8) if not ab and has_template("rally_icon") else None
+    pos = (int(ab[0]), max(int(ab[1]) - 38, 0)) if ab else (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
     for attempt in range(2):
+        if attempt and rd_seen(shot, ["Mail"], region=(0, 0, 540, 140)):    # the fixed spot hit Mail (owner 23 Oct): back out first
+            dev.back()
+            _nap(stop, 1.0, 1.3)
         dev.tap(*pos)
         _nap(stop, 1.8, 2.4)
         shot = dev.screenshot()
