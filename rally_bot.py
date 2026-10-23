@@ -3433,6 +3433,9 @@ def daily_checkin(dev, shot, log, stop):
     return True
 
 
+CITY_POPUP_WORDS = ["Event starts in", "Truce Agreement", "Server War is about to begin"]   # event pop-ups that sit over the city (the city is still recognised behind them)
+
+
 def clear_popups(dev, cfg, log, stop, rounds=5):
     """Close whatever covers the game (offers, event pop-ups, full-screen sales, dialogs) so the bot can carry on with
     what it was doing. Uses your popup_* pictures first; on a screen it does not know it presses Back, but only when it
@@ -3466,6 +3469,18 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         if tab_row(shot) is not None:                      # a Generals screen: nothing in the way
             break
         st = screen_state(shot, cfg)
+        if st == "city" and find_text(shot, CITY_POPUP_WORDS, region=(30, 90, 480, 720), cutoff=0.8):
+            cx = find_close_x(shot[90:810, 30:510])        # an event pop-up over the city (e.g. Server War): its X if it has one, else tap outside it
+            if cx:
+                dev.tap(cx[0][0] + 30, cx[0][1] + 90)
+                log("[*] Closed an event pop-up over the city with its X button")
+            else:
+                ox, oy = cfg.get("popup_outside_tap") or (8, 480)
+                dev.tap(int(ox), int(oy))
+                log(f"[*] Event pop-up over the city has no X - tapped outside it ({ox},{oy})")
+            closed += 1
+            _nap(stop, 1.0, 1.5)
+            continue
         if st != "unknown" or not has_template("city_screen"):
             break
         if daily_checkin(dev, shot, log, stop):            # the game's Daily Rewards window: claim today's sign-in reward first
