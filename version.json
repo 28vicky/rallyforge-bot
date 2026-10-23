@@ -1,24 +1,24 @@
 {
-  "version": "2.5.5",
-  "notes": "Reports also shows joins from before the update",
+  "version": "2.5.6",
+  "notes": "Monster rallies, Pumpkin Monster, alliance fixes",
   "files": {
     "rally_bot.py": {
-      "sha256": "771414a329335087c63492df9388439f1d6fc4b3263aec25d12cce4cd2430bb7"
+      "sha256": "f4af3a0538ccae526ffa4016198fbb135e59fd5d053b6ee10c9388195fbf36ff"
     },
     "web_app.py": {
-      "sha256": "69ff7ed172042bc7cfe009b1e8776e847d5c97e6bae3578402ab872a4afb9500"
+      "sha256": "f0b4ef9abfdbb0f3c2d56615eb40776bc82af59e56f0e21a023ee61976873f17"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "6546be54c8e26753eb94c5e353b2e66835755afe1a63dd2818eb6996ff5d7703"
+      "sha256": "d918f6b0078f19ceb382aa8221673d2aafce1712331b1120b4b1c8e817a7b9ad"
     },
     "ui/app.js": {
-      "sha256": "528fe7f3acd2e0f82ad6d4c384b434f6e5a24f4b5343ecbacef954f6376417d6"
+      "sha256": "786f766dc89f230e15fcc2610972a5f9ddb5a162efd81f0acd62c2f3ab7c6f16"
     },
     "ui/changelog.js": {
-      "sha256": "c894b276aad290f9f399fbda7cdc237bee20d72ce6d101887ceea83516c2e909"
+      "sha256": "09ee7451d9acfca4d4193d3b33f67c4c43c8f26fe7d85418a4d1e87250bc2cbe"
     },
     "ui/dialogs.js": {
       "sha256": "407675636f1221859dd7e1fa2b8eeacb241c1d05de7a2471bf81cc3ac5e1e68b"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "a99939c3d2b204ac63938382a52c66847e0cf7573ee99f37f64e58adf9bfbbcd"
+      "sha256": "6d649ba9ca24859ed489048bd182bfa2de13f8cf7fe355e101a9ef08400407be"
     },
     "ui/tour.js": {
       "sha256": "97832158ac492e07b26ebeedf630bcd55ce7e70353d19df386aa183616bcac2a"
@@ -1441,6 +1441,10 @@
       "sha256": "aeeaac12b1864c0d969457a13194d65fe1f91242868451b537c3153fe843dea5",
       "url": "monsters/Kraken.png"
     },
+    "Lava Turtle.png": {
+      "sha256": "fa562f9092e46735c38db3071f415f6f322f3d42e2e85903b3e35c368404abf5",
+      "url": "monsters/Lava%20Turtle.png"
+    },
     "Leviathan.png": {
       "sha256": "10d3e6face039ab4db69577b405f27a8900819647e1d52f59881ff7afd33f341",
       "url": "monsters/Leviathan.png"
@@ -1452,6 +1456,10 @@
     "Phoenix.png": {
       "sha256": "4ad9ff94e3889c26f99f0058bdff35ea4ba1a2d0f1930e6bdd8711e1af46013a",
       "url": "monsters/Phoenix.png"
+    },
+    "Pumpkin Monster.png": {
+      "sha256": "67c48539b30bc9cb31e751415f190924396730a12c41de0c24e908d46925485d",
+      "url": "monsters/Pumpkin%20Monster.png"
     },
     "Serpopard.png": {
       "sha256": "b8a060f0c5fbfd1f3621a212b2273274673e36fbea3165af7552db3bc7790903",
@@ -1627,7 +1635,10 @@
     },
     "war_button.png": {
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
+    },
+    "world_map_btn.png": {
+      "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "4d8af933da8651ee49d38fb0cd6a9e2708e59af0382f67bab96b7c5277bcf835"
+  "sig": "a22c0f588374820566aecb3ad1fd35bed42d5286b860692f632f71069b502248"
 }
