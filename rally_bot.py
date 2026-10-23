@@ -682,10 +682,10 @@ def candidate_ports():
             ports |= {int(p) for p in re.findall(r'adb_port="(\d+)"', Path(conf).read_text(errors="ignore"))}
         except Exception:
             pass
-    ports |= {5555, 5565, 5575, 5585, 5595}               # BlueStacks / generic
+    ports |= {5555 + 10 * i for i in range(12)}            # BlueStacks / generic (12 instances)
     ports |= {62001, 62025, 62026, 62027}                 # Nox
-    ports |= {21503 + 10 * i for i in range(6)}           # MEmu
-    ports |= {7555} | {16384 + 32 * i for i in range(8)}  # MuMu
+    ports |= {21503 + 10 * i for i in range(12)}          # MEmu
+    ports |= {7555} | {16384 + 32 * i for i in range(16)}  # MuMu (16 instances - 8 was too few for big farms)
     # LDPlayer registers itself as emulator-5554, 5556... and shows up in `adb devices` by itself.
     return sorted(ports)
 
