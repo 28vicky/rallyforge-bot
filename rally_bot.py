@@ -10099,11 +10099,12 @@ def mr_search(dev, stop, x, y):
     got = [mr_box_number(shot, (110, 500, 150, 45)), mr_box_number(shot, (315, 500, 150, 45))]   # the X and Y boxes
     if None in got:                                          # digits-only read missed: the old whole-line read
         got = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (30, 505, 480, 70))))
-    if x not in got or y not in got:
+    if x not in got and y not in got:                       # neither number read back: the typing went wrong
         rd_snap(shot, "mrally_xy")
         dev.back()
         _nap(stop, 0.8, 1.1)
         raise RuntimeError(f"the search box does not show X {x} Y {y} (read {got[:4]})")
+    # one number misread (Y 444 read as 40404): go anyway - the monster check on the tile catches a wrong spot
     if not rd_tap(dev, stop, ["Go"], region=(180, 575, 200, 75), whole=True, wait=(2.5, 3.0), shot=shot):
         dev.tap(333, 610)
         _nap(stop, 2.5, 3.0)
