@@ -1317,3 +1317,31 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .ajline[hidden]{display:none}
 .ajline{cursor:pointer}.ajline:hover{border-color:var(--accent1)}
 :root .stile.txt b{font-size:15px;line-height:1.9}
+/* ---- Duties (ui-simple): On / All + group pills, two columns ---- */
+.dfilter{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.dfilter .rtnpill .pc{margin-left:6px;opacity:.6;font-weight:500}
+.dgrouph{font-size:12.5px;font-weight:600;color:var(--mute);margin:14px 0 2px}
+.dgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:28px;align-items:start}
+@media (max-width:1100px){.dgrid{grid-template-columns:minmax(0,1fr)}}
+.dcell{min-width:0;border-top:1px solid var(--line)}
+.dcell .dline{border-top:0}
+/* ---- Settings (ui-simple): plain groups, Advanced folded ---- */
+.sgroup{padding:14px 0;border-top:1px solid var(--line)}
+.sgroup:first-of-type{border-top:0;padding-top:4px}
+.sgroup>h4{margin:0 0 10px;font-size:14px;font-weight:600;color:var(--fg)}
+.tgls{display:flex;flex-direction:column;gap:10px}
+details.adv{border-top:1px solid var(--line);padding-top:12px}
+details.adv>summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--mute);list-style:none}
+details.adv>summary::before{content:"\25B8";display:inline-block;margin-right:8px;transition:transform .15s}
+details.adv[open]>summary::before{transform:rotate(90deg)}
+/* ---- Dashboard event cards (ui-simple) ---- */
+.evcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:16px}
+.evcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.evh{display:flex;flex-direction:column;margin-bottom:4px}
+.evh b{font-weight:600;font-size:14.5px}
+.evh small{color:var(--mute);font-size:12.5px}
+.evrow{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.evrow>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.evv{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
+.evv.next{color:#1d4ed8}.evv.due{color:#92400e}.evv.bad{color:var(--bad)}
+.evcards[hidden]{display:none}

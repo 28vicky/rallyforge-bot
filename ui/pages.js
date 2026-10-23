@@ -182,9 +182,9 @@ PAGES.dashboard = function () {
     avail.length > 1 ? h("div", { class: "row", style: { marginTop: "8px" } }, btn("Add all " + avail.length, () => addFound(avail.map((a) => a.id)), "sm")) : null) : null;
   const ctl = h("div", { class: "row", style: { marginBottom: "16px" } },
     // Start / Pause / Resume / Stop all live only in the page header (ui-simple: one place)
-    btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
+    btn("Save settings", saveAll));                               // Save / Load profile are in Tools
   const log = panel(null, activityBox(null, "Activity - all instances"));
-  return none ? h("div", {}, first, found, S.devices.length ? dev : null) : h("div", {}, renderTodayAll(), found, dev, ctl, log);
+  return none ? h("div", {}, first, found, S.devices.length ? dev : null) : h("div", {}, renderEventCards(), renderTodayAll(), found, dev, ctl, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
@@ -721,31 +721,46 @@ function staminaPanel(store, base) {
     note("Full = slides the bar to the very end, so stamina fills up to the game's limit (9,999) - the default. The game's own Max button is not used (it stops at 100). Game default = the amount the game suggests (2 items). Exact number = the number of items you type."));
 }
 PAGES.settings = function () {
-  const r = PAGES.settings0(); r.insertBefore(panel("Tour", note("A short walkthrough of where to click and how to set up your presets and start the bot."), h("div", { class: "row" }, btn("Take the tour", () => startTour()))), r.firstChild); return r;                  // themes live on their own Themes tab only
+  const r = PAGES.settings0(); r.appendChild(panel("Tour", note("A short walkthrough of where to click and how to set up your presets and start the bot."), h("div", { class: "row" }, btn("Take the tour", () => startTour())))); return r;                  // themes live on their own Themes tab only
 };
 PAGES.settings0 = function () {
   const c = S.cfg;
-  const g = panel("Universal settings (every instance, unless it has its own)",
-    grid2(
-      fld("ADB path (auto)", inp(c, "adb_path")), fld("Evony package name", inp(c, "evony_package")), fld("Pause lasts (minutes, 0 = until I press Pause again)", inp(c, "pause_minutes", { type: "int", cls: "short", get: (v) => (v === undefined ? 15 : v) })),
-      fld("Presets if bot presets unused (1-8)", inp(c, "presets", { get: (v) => (v || []).join(","), set: (t) => parsePresets(t) || [1] })), fld("Preset mode", sel(c, "preset_mode", ["rotate", "random", "fixed"])),
-      fld("Join if spare time >= (s)", inp(c, "safety_margin", { type: "int", cls: "short" })), fld("March time if not read (s)", inp(c, "march_guess", { type: "int", cls: "short", get: (v) => (v === undefined ? 10 : v) })), fld("Skip if rally has more than (s, 0 = any)", inp(c, "max_rally_seconds", { type: "int", cls: "short" })),
-      fld("Rally countdown read from", sel(c, "rally_timer_source", ["progress_bar", "join_button"])), fld("March time read from", sel(c, "march_timer_source", ["join_button", "progress_bar", "none"], { get: (v) => v || "none", set: (v) => (v === "none" ? "" : v) })),
-      fld("Max joins per device (0 = no limit)", inp(c, "max_joins", { type: "int", cls: "short" })), fld("Buttons to tap to reach the rally list", inp(c, "rally_nav_steps", { get: (v) => (v || []).join(", "), set: (t) => parseNames(t) })),
-      fld("Click delay (ms): lower = faster, higher = slower", inp(c, "click_delay_ms", { type: "int", cls: "short" })),
-      fld("Load on the PC / instance", sel(c, "cpu_level", [[1, "1 - fastest"], [2, "2 - balanced"], [3, "3 - light"], [4, "4 - lightest"]], { num: true, get: (v) => v || 2 })),
-      fld("Screenshot method", sel(c, "screenshot_mode", ["auto", "png"]))),
-    h("div", { class: "row", style: { marginTop: "14px", gap: "26px" } }, tog(c, "log_timers", "Log the timers it reads"), tog(c, "auto_launch_emulator", "Start the instance if it is closed"),
-      tog(c, "auto_launch_game", "Start Evony if it is not open and wait until it is loaded")),
-    note("Spare time = rally countdown minus your march time. 'Buttons to tap' are template names (default rally_icon); add more, e.g. alliance_button, war_button, if the rally list needs several taps. Any template named popup_something is tapped whenever it appears. Click delay scales every pause after a click; below ~500 ms the bot may click before a screen has loaded. A lighter load level scans less often."));
-  const lr = panel("Low RAM / weak PC", h("div", { id: "ramInfo", class: "hint", style: { marginBottom: "10px" } }, "PC memory: ..."),
-    tog(c, "low_memory", "Low-memory mode (no live picture, shorter logs, one text reading at a time, lower priority, slower instance start-up)"),
-    h("div", { style: { marginBottom: "8px" } }, tog(c, "keep_running_on_close", "Keep the bots running in the background when I close this window (off = closing the window stops everything)")),
-    h("div", { style: { marginBottom: "12px" } }, tog(c, "auto_start", "Start all instances by itself whenever the app opens (default for every instance - each one can override it on its own page)")),
-    grid2(fld("Gap between starting one instance and the next (seconds)", inp(c, "start_gap_seconds", { type: "int", cls: "short" })),
-      fld("Run at most this many instances at once (0 = no limit)", inp(c, "max_running_emulators", { type: "int", cls: "short" })),
-      fld("Wait for this much free RAM before starting an instance (MB, 0 = off)", inp(c, "min_free_ram_mb", { type: "int", cls: "short" }))),
-    h("div", { style: { marginTop: "12px" } }, tog(c, "close_emulator_on_stop", "Close an instance when its instance is stopped (frees its RAM; needs MuMu / LDPlayer or a stop command)")),
+  // (ui-simple) plain groups; same settings keys and saved values - only the labels, order and choice names changed
+  const sec = (title, ...kids) => h("div", { class: "sgroup" }, h("h4", {}, title), ...kids);
+  const g = panel("Settings for every instance",
+    h("p", { class: "hint", style: { margin: "-4px 0 6px" } }, "An instance with its own settings (on its page) keeps those."),
+    sec("Joining rallies",
+      h("div", { class: "fgrid" },
+        fld("Join only with this much time to spare (s)", inp(c, "safety_margin", { type: "int" })),
+        fld("Skip rallies longer than (s, 0 = any)", inp(c, "max_rally_seconds", { type: "int" })),
+        fld("Most joins per instance (0 = no limit)", inp(c, "max_joins", { type: "int" })),
+        fld("My march time if it can't be read (s)", inp(c, "march_guess", { type: "int", get: (v) => (v === undefined ? 10 : v) })),
+        fld("Read the rally countdown from", sel(c, "rally_timer_source", [["progress_bar", "Progress bar"], ["join_button", "Join button"]])),
+        fld("Read my march time from", sel(c, "march_timer_source", [["join_button", "Join button"], ["progress_bar", "Progress bar"], ["none", "Don't read it"]], { get: (v) => v || "none", set: (v) => (v === "none" ? "" : v) })))),
+    sec("Speed",
+      h("div", { class: "fgrid" },
+        fld("Load on the PC", sel(c, "cpu_level", [[1, "Fastest"], [2, "Balanced"], [3, "Light"], [4, "Lightest"]], { num: true, get: (v) => v || 2 })),
+        fld("Wait after each tap (ms)", inp(c, "click_delay_ms", { type: "int" })),
+        fld("Pause lasts (min, 0 = until I resume)", inp(c, "pause_minutes", { type: "int", get: (v) => (v === undefined ? 15 : v) })))),
+    sec("Starting up",
+      h("div", { class: "tgls" }, tog(c, "auto_launch_emulator", "Start the emulator if it is closed"), tog(c, "auto_launch_game", "Open Evony and wait until it has loaded"))),
+    h("details", { class: "adv" }, h("summary", {}, "Advanced"),
+      h("div", { class: "fgrid", style: { marginTop: "12px" } },
+        fld("ADB path", inp(c, "adb_path")), fld("Evony package name", inp(c, "evony_package")),
+        fld("Presets when no join presets are set (1-8)", inp(c, "presets", { get: (v) => (v || []).join(","), set: (t) => parsePresets(t) || [1] })),
+        fld("Preset order", sel(c, "preset_mode", [["fixed", "Start from first"], ["rotate", "Rotate presets"], ["random", "Random"]])),
+        fld("Buttons to tap to reach the rally list", inp(c, "rally_nav_steps", { get: (v) => (v || []).join(", "), set: (t) => parseNames(t) })),
+        fld("Screenshot method", sel(c, "screenshot_mode", [["auto", "Automatic"], ["png", "PNG (slower, safer)"]]))),
+      h("div", { class: "tgls", style: { marginTop: "12px" } }, tog(c, "log_timers", "Write the timers it reads to the log")),
+      note("Spare time = rally countdown minus your march time. 'Buttons to tap' are template names (default rally_icon); add more, e.g. alliance_button, war_button, if the rally list needs several taps. Any template named popup_something is tapped whenever it appears. Click delay scales every pause after a click; below ~500 ms the bot may click before a screen has loaded. A lighter load level scans less often.")));
+  const lr = panel("Running many instances", h("div", { id: "ramInfo", class: "hint", style: { marginBottom: "10px" } }, "PC memory: ..."),
+    tog(c, "low_memory", "Low-memory mode for a weak PC"),
+    h("div", { style: { marginBottom: "8px" } }, tog(c, "keep_running_on_close", "Keep the bots running when I close this window")),
+    h("div", { style: { marginBottom: "12px" } }, tog(c, "auto_start", "Start all instances when the app opens")),
+    h("div", { class: "fgrid" }, fld("Wait between instance starts (s)", inp(c, "start_gap_seconds", { type: "int", cls: "short" })),
+      fld("Most instances at once (0 = no limit)", inp(c, "max_running_emulators", { type: "int", cls: "short" })),
+      fld("Free RAM needed to start one (MB, 0 = off)", inp(c, "min_free_ram_mb", { type: "int", cls: "short" }))),
+    h("div", { style: { marginTop: "12px" } }, tog(c, "close_emulator_on_stop", "Close the emulator when its instance stops (frees RAM)")),
     note("The bot itself needs roughly 100 MB; the instances are what fill the RAM (about 1.5-4 GB each). Extra instances beyond the limit wait in a queue and start when another one stops. Set the instances to 540x960, 2 GB or less of memory and 1-2 CPU cores in their own settings. Closing this window frees even more memory: the bots keep running."));
   // Beta: every user can record a task (taps, swipes + pictures) and send it, so new duties can be built from it
   const rec = panel("Record a task (beta)", h("div", { class: "hint", style: { marginBottom: "10px" } },
@@ -1287,6 +1302,38 @@ function renderTodayCard(serial) {
 }
 
 // ====================================================================== Today - all instances (Dashboard, nothing selected)
+// ---- event cards on the Dashboard (ui-simple, plan claude/event_calendar_plan_22oct.md): Monarch, SvS / KE, Bubble, Ending soon.
+// Look only for now: the data comes from the bot's daily Event Center scan ("events" request), which is not built yet -
+// until it answers, nothing is shown. Times are absolute (unix seconds) so the countdowns run on their own.
+function renderEventCards() {
+  const wrap = h("div", { class: "evcards", hidden: true });
+  const left = (t) => { const s = Math.max(0, t - Date.now() / 1000), d = Math.floor(s / 86400), hh = Math.floor(s % 86400 / 3600), mm = Math.floor(s % 3600 / 60);
+    return d ? `${d}d ${hh}h` : hh ? `${hh}h ${String(mm).padStart(2, "0")}m` : `${mm}m`; };
+  const card = (title, sub, ...rows) => h("div", { class: "evcard" }, h("div", { class: "evh" }, h("b", {}, title), sub ? h("small", {}, sub) : null), ...rows);
+  const line = (name, val, k) => h("div", { class: "evrow" }, h("span", {}, name), h("span", { class: "evv " + (k || "") }, val));
+  let data = null;
+  const paint = () => {
+    wrap.innerHTML = "";
+    const cards = (data && data.cards) || [];
+    if (!cards.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    for (const c of cards) {
+      if (c.kind === "monarch") wrap.appendChild(card(c.title || "Monarch", c.stage || "", line("Ends in", left(c.ends_at), "next")));
+      else if (c.kind === "svs") wrap.appendChild(card(c.title || "SvS / KE", c.text || "", line(c.label || "Begins in", left(c.at), "next")));
+      else if (c.kind === "bubble") {
+        const off = (c.rows || []).filter((r) => !r.ends_at || r.ends_at < Date.now() / 1000).length;
+        wrap.appendChild(card("Bubble", off ? off + " without a shield" : "All shielded",
+          ...(c.rows || []).slice(0, 5).map((r) => r.ends_at && r.ends_at > Date.now() / 1000 ? line(r.name, left(r.ends_at)) : line(r.name, "No shield", "bad"))));
+      } else if (c.kind === "ending") wrap.appendChild(card("Ending soon", "before the next reset",
+          ...(c.items || []).slice(0, 5).map((it) => line(it.name, left(it.ends_at), "due"))));
+    }
+  };
+  const load = async () => { if (!wrap.isConnected && data) return; const j = await api("events", {}, { quiet: true }).catch(() => null); data = j && j.ok !== false ? j : null; paint(); };
+  load();
+  const t = setInterval(() => { if (!wrap.isConnected) clearInterval(t); else paint(); }, 30000);
+  const t2 = setInterval(() => { if (!wrap.isConnected) clearInterval(t2); else load(); }, 300000);
+  return wrap;
+}
 function renderTodayAll() {
   const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {});
   const card = h("div", { class: "panel today" },
@@ -1363,7 +1410,6 @@ PAGES.duties = function (fixed, only, compact) {
     }));
   const draw = () => {
     root.innerHTML = "";
-    if (fixed === undefined) root.appendChild(hist);
     const pick = h("select", { onchange: (e) => { serial = e.target.value; load(); loadCe(); loadCh(); loadWh(); loadRn(); } },
       [h("option", { value: "", selected: serial === "" }, "All instances (default)")].concat(S.devices.map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || short(d.id)))));
     if (compact) {
@@ -1391,12 +1437,8 @@ PAGES.duties = function (fixed, only, compact) {
         serial ? infoTip("This instance only", "Changes here apply to this instance only. Pick 'All instances' to change the default for every instance without its own settings.") : null),
     ));
     if (!only) root.appendChild(rn);
-    for (const g of GROUPS) {
-      const list = rows.filter((r) => r.group === g && (!only || r.id === only));
-      if (!list.length) continue;
-      // only = one duty inside the Routines page: its switch and name are in that page's header, so just the settings here
-      const BADGE = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad" };
-      root.appendChild(panel(only ? "Settings" : g, list.flatMap((r) => [h("div", { class: "dline" + (only ? " only" : "") + (r.on ? "" : " off") },
+    const BADGE = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad" };
+    const item = (r) => [h("div", { class: "dline" + (only ? " only" : "") + (r.on ? "" : " off") },
         only ? null : h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, "aria-label": r.title, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" })),
         h("div", { class: "dtx", title: r.note || "" }, only ? null : h("b", {}, r.title), h("small", {}, r.schedule || r.note || "")),
         S.dev && !r.verified ? h("span", { class: "dbadge", title: "Developer: steps not yet watched on a real instance" }, "untested") : null,
@@ -1404,8 +1446,32 @@ PAGES.duties = function (fixed, only, compact) {
         r.status === "gaveup" ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("duty_retry", { serial, id: r.id })); if (j) { rows = j.duties; own = j.own || {}; draw(); toast("It runs again shortly.", "ok"); } } }, "Retry") : null),
         (r.on && r.opts && r.opts.length) ? dutyOpts(r) : null,
         (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null, (r.on && r.id === "wheel") ? wh : null,
-        (only && !r.on) ? note("Switch it on at the top and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean))));
+        (only && !r.on) ? note("Switch it on at the top and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean);
+    if (only) {                                   // one duty inside the Routines page: its switch and name are in that page's header, so just the settings here
+      const list = rows.filter((r) => r.id === only);
+      if (list.length) root.appendChild(panel("Settings", list.flatMap(item)));
+      return;
     }
+    // (ui-simple) one card: On / All + group pills on top, duties in two columns - no long scroll, no empty middle
+    const onCount = rows.filter((r) => r.on).length;
+    if (!S.dutyView && rows.length) S.dutyView = { show: onCount ? "on" : "all", group: "" };   // decided once the list has loaded
+    const v = S.dutyView || { show: "all", group: "" };
+    if (v.show === "on" && !onCount) v.show = "all";
+    const segBtn = (lab, on, fn) => h("button", { class: "segb" + (on ? " on" : ""), type: "button", onclick: fn }, lab);
+    const pills = h("div", { class: "dfilter" },
+      h("div", { class: "seg small" }, segBtn("On (" + onCount + ")", v.show === "on", () => { v.show = "on"; draw(); }), segBtn("All (" + rows.length + ")", v.show === "all", () => { v.show = "all"; draw(); })),
+      h("div", { class: "rtnpills" }, [["", "All groups"]].concat(GROUPS.map((g) => [g, g])).map(([g, l]) =>
+        h("button", { class: "rtnpill" + (v.group === g ? " on" : ""), type: "button", onclick: () => { v.group = g; draw(); } }, l, h("span", { class: "pc" }, String(rows.filter((r) => (!g || r.group === g) && (v.show === "all" || r.on)).length))))));
+    const shown = rows.filter((r) => (v.show === "all" || r.on) && (!v.group || r.group === v.group));
+    const body = [];
+    for (const g of GROUPS) {
+      const list = shown.filter((r) => r.group === g);
+      if (!list.length) continue;
+      if (!v.group) body.push(h("div", { class: "dgrouph" }, g));
+      body.push(h("div", { class: "dgrid" }, list.map((r) => h("div", { class: "dcell" + (r.on ? " on" : "") }, item(r)))));
+    }
+    root.appendChild(panel(null, pills, body.length ? body : h("div", { class: "empty" }, v.show === "on" ? "No duty is on here yet. Pick All to switch some on." : "No duties in this group.")));
+    if (fixed === undefined) root.appendChild(hist);           // what the bot did: below the list, not above it
   };
   // what the bot did: today's state per instance + the latest task events
   const hist = h("div", {});
