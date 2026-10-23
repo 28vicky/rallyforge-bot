@@ -7718,6 +7718,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             px_, py_ = tx - nav.cx, ty - nav.cy
             return (px_, py_) if (x0 <= px_ <= x0 + w and y0 <= py_ <= y0 + h) else None
 
+        if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
+            zoom_out_city(dev, stop, log)                   # buildings are found at the zoomed-out size (owner 23 Oct)
         for k in pkeys:
             tx, ty = pitems[k]
             log(f"[*] Going to {k}")
