@@ -7819,6 +7819,23 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         return True
     if kind == "self":                                     # the step finds its own way from the city (e.g. alliance_science)
         return True
+    if kind in ("go", "via"):                              # Activity > tile > Go walks to the building (any city layout); map as fallback
+        tile, _, bname = name.partition("|")
+        try:
+            r = activity_go(dev, cfg, log, stop, tile.strip(), route=(kind == "via"))
+        except Exception as e:
+            log(f"[i]   Activity route to {bname or tile}: {e} - using the city map instead")
+            leave_to_city(dev, cfg, stop, log)
+            r = None
+        if r == "complete":
+            rd_nothing()
+            return None                                    # this daily is already complete today: nothing to open
+        if r and (not bname or open_building_here(dev, cfg, log, stop, bname.strip())):
+            return True
+        if not bname:
+            return False
+        leave_to_city(dev, cfg, stop, log)
+        return city_task_target(dev, cfg, log, stop, {**task, "target": "building:" + bname.strip()}, nav_state)
     if kind == "xy":
         x, y = [float(v) for v in name.split(",")[:2]]
         dev.tap(x, y)
@@ -9687,16 +9704,16 @@ def open_more_menu(dev, cfg, stop, log):
     return None
 
 
-def activity_go(dev, cfg, log, stop, tile, probe=False):
+def activity_go(dev, cfg, log, stop, tile, probe=False, route=False):
     was = getattr(dev, "_guard_busy", False)
     dev._guard_busy = True                               # the pop-up closer would shut the tile's Go card (seen 23 Oct)
     try:
-        return _activity_go(dev, cfg, log, stop, tile, probe)
+        return _activity_go(dev, cfg, log, stop, tile, probe, route)
     finally:
         dev._guard_busy = was
 
 
-def _activity_go(dev, cfg, log, stop, tile, probe=False):
+def _activity_go(dev, cfg, log, stop, tile, probe=False, route=False):
     """More > Activity > tap the daily's tile > Go. The game moves the camera to the building (any culture, any city
     layout). probe=True saves a picture at every step (debug/duty_ago_*.png) and logs what is read. -> True when Go was pressed."""
     shot = open_more_menu(dev, cfg, stop, log)
@@ -9735,7 +9752,7 @@ def _activity_go(dev, cfg, log, stop, tile, probe=False):
     prog = re.search(r"progress[^0-9]*(\d+)\s*/\s*(\d+)", " ".join(t for t, _ in rd_lines(shot, (40, 380, 460, 200))).lower())
     if prog:
         log(f"[i]   {tile}: progress {prog.group(1)}/{prog.group(2)}")
-        if int(prog.group(1)) >= int(prog.group(2)) > 0:
+        if not route and int(prog.group(1)) >= int(prog.group(2)) > 0:
             log(f"[+]   {tile}: already complete today")
             dev.back()
             _nap(stop, 0.8, 1.0)
@@ -9759,6 +9776,31 @@ def _activity_go(dev, cfg, log, stop, tile, probe=False):
             + " | ".join(t for t, _ in rd_lines(later, (0, 100, 540, 760)))[:300])
     return True
 
+
+
+def open_building_here(dev, cfg, log, stop, bname):
+    """After Go the building sits in the middle of the view: tap it and check its ring menu carries the right name.
+    -> True when that building's ring menu is open."""
+    import difflib
+    want = bname.lower()
+    for x, y in [(300, 460), (270, 490), (330, 430), (270, 420)]:
+        if stop.is_set():
+            return False
+        dev.tap(x, y)
+        _nap(stop, 1.2, 1.5)
+        shot = dev.screenshot()
+        if want == "keep" and ch_on_page(shot):            # the champion's heart can open the Champion page itself
+            return True
+        if not find_detail_icon(shot):
+            continue
+        nm = (ring_building_name(shot) or ("",))[0].lower()
+        if want in nm or any(difflib.SequenceMatcher(None, want, w).ratio() >= 0.8 for w in re.findall(r"[a-z ]+", nm)):
+            log(f"[i]   {bname} reached by the Activity route ({x},{y})")
+            return True
+        log(f"[i]   after Go the menu at ({x},{y}) is '{nm or '?'}', not {bname}")
+        close_ring(dev, stop, (x, y + 60))
+    rd_snap(dev.screenshot(), "ago_6_nobuilding")
+    return False
 
 # --- Alliance page ------------------------------------------------------------------------------------------------
 def run_alliance_gift(dev, cfg, log, stop):
@@ -10745,10 +10787,10 @@ DUTY_LIBRARY = [
      "target": "self:", "steps": ["alliance_help"]},
     {"id": "champions", "group": "Daily activities", "title": "Champions", "every_min": 0, "verified": False,
      "note": "Keep > Champions: 15 taps and 10 greetings a day on the champions you pick (only active ones). Needs the city map (Keep).",
-     "target": "building:Keep", "tap_dy": 0, "steps": ["wait 1.2", "champions"]},
+     "target": "go:Greet Champion|Keep", "tap_dy": 0, "steps": ["wait 1.2", "champions"]},
     {"id": "wheel", "group": "Daily activities", "title": "Wheel of Fortune", "every_min": 0, "verified": False,
      "note": "Tavern > Wheel of Fortune: spins with the button you pick (1 / 10 / 100) for the number of spins you set, or until the coins are used up. Needs the city map (Tavern).",
-     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "wheel"]},
+     "target": "go:Wheel of Fortune|Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "wheel"]},
     {"id": "crazy_eggs", "group": "Common tasks", "title": "Crazy Eggs", "every_min": 1, "verified": False,
      "note": "Smashes the ready eggs, closes the reward panel, comes back when each timer ends; Lucky Hammer once a day on the egg you pick.",
      "target": "tpl:event_center_icon|Center",
@@ -10776,7 +10818,7 @@ DUTY_LIBRARY = [
      "target": "self:", "every_min": 240, "steps": ["alliance_science"]},
     {"id": "black_market", "group": "Daily activities", "title": "Black Market", "every_min": 0, "verified": False,
      "note": "Market > Black Market: buys the goods on the Market tab, refreshes as set there, keeps the gem and gold floors. Finds the Market by trying the building plots once, then remembers it.",
-     "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market", "market"]},
+     "target": "go:Black Market|Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market", "market"]},
     {"id": "view_reset_test", "group": "Common tasks", "title": "Test: city camera reset (globe)", "every_min": 1440, "verified": False,
      "note": "Moves the camera, goes to the world map and back three times and saves the city picture each time - checks the city always opens at the same place. Nothing is pressed in the city.",
      "target": "self:", "steps": ["view_reset_test"]},
@@ -10789,17 +10831,17 @@ DUTY_LIBRARY = [
     # recorded duties (tester flows 22 Oct 2026, project docs claude/flow_*.md). "opts" = the duty's own settings on the Duties page.
     {"id": "gold_levy", "group": "Daily activities", "title": "Gold Levy", "every_min": 0, "verified": False,
      "note": "Keep > Levy > Free Levy All. Gems Levy is never pressed. Needs the city map (Keep).",
-     "target": "building:Keep", "tap_dy": 0, "steps": ["wait 1.2", "gold_levy"]},
+     "target": "go:Gold Levy|Keep", "tap_dy": 0, "steps": ["wait 1.2", "gold_levy"]},
     {"id": "resource_tax", "group": "Daily activities", "title": "Resource Tax", "every_min": 0, "verified": False,
      "note": "Market > Tax: uses all free taxes on the resource you pick. Stops when the button shows a gem price. Needs the city map (Market).",
-     "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.2", "resource_tax"],
+     "target": "go:Resource Tax|Market", "tap_dy": 0, "steps": ["wait 1.2", "resource_tax"],
      "opts": [{"k": "resource", "label": "Resource", "type": "select", "choices": ["Food", "Lumber", "Stone", "Ore"], "def": "Lumber"}]},
     {"id": "labor", "group": "Daily activities", "title": "Labor (Prison)", "every_min": 360, "verified": False,
      "note": "Prison > Captives > Labor: 4 hours of production from your captives, every 6 hours. Clear Labor CD is never pressed. Needs the city map (Prison).",
-     "target": "building:Prison", "tap_dy": 0, "steps": ["wait 1.2", "labor"]},
+     "target": "go:Labor|Prison", "tap_dy": 0, "steps": ["wait 1.2", "labor"]},
     {"id": "general_chest", "group": "Reward claims", "title": "Great General Chest (free)", "every_min": 0, "verified": False,
      "note": "Tavern > Great General Chest: opens the free chest when it is ready. Needs the city map (Tavern).",
-     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.2", "general_chest"]},
+     "target": "via:Wheel of Fortune|Tavern", "tap_dy": 0, "steps": ["wait 1.2", "general_chest"]},
     {"id": "vip_claim", "group": "Reward claims", "title": "VIP daily chest", "every_min": 0, "verified": False,
      "note": "VIP badge (top left) > Claim. VIP packages are never bought.",
      "target": "self:", "steps": ["vip_claim"]},
@@ -10826,16 +10868,16 @@ DUTY_LIBRARY = [
      "target": "tpl:event_center_icon|Center", "steps": ["wait 2", "ranger_knight"]},
     {"id": "troop_healing", "group": "Daily activities", "title": "Heal troops", "every_min": 120, "verified": False,
      "note": "Hospital > Heal > Heal (costs resources). Instant Heal (gems) is never pressed. Needs the city map (Hospital).",
-     "target": "building:Hospital", "tap_dy": 0, "steps": ["wait 1.2", "troop_healing"],
+     "target": "go:Troop Healing|Hospital", "tap_dy": 0, "steps": ["wait 1.2", "troop_healing"],
      "opts": [{"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
     {"id": "train_troops", "group": "Daily activities", "title": "Train troops", "every_min": 240, "verified": False,
      "note": "Barracks > Train: trains the amount you set of the troop the page has selected. Instant Train (gems) is never pressed. Needs the city map (Barracks).",
-     "target": "building:Barracks", "tap_dy": 0, "steps": ["wait 1.2", "train_troops"],
+     "target": "go:Troop Training|Barracks", "tap_dy": 0, "steps": ["wait 1.2", "train_troops"],
      "opts": [{"k": "amount", "label": "Troops per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
               {"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
     {"id": "build_traps", "group": "Daily activities", "title": "Build traps", "every_min": 240, "verified": False,
      "note": "Trap Factory > Build: builds the amount you set of the trap the page has selected. Instant Train (gems) is never pressed. Needs the city map (Trap Factory).",
-     "target": "building:Trap Factory", "tap_dy": 0, "steps": ["wait 1.2", "build_traps"],
+     "target": "go:Trap Building|Trap Factory", "tap_dy": 0, "steps": ["wait 1.2", "build_traps"],
      "opts": [{"k": "amount", "label": "Traps per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
               {"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
     {"id": "gate_visitors", "group": "Reward claims", "title": "Gate visitors", "every_min": 120, "verified": False,
@@ -10846,7 +10888,7 @@ DUTY_LIBRARY = [
      "target": "self:", "steps": ["trade_carriage"]},
     {"id": "offering_tributes", "group": "Daily activities", "title": "Shrine offering", "every_min": 0, "verified": False,
      "note": "Shrine > Offer > Offer Tribute at the most allowed (50), using Tribute items. When no tributes are left it can offer with gems instead (your choice below, off by default). Needs the city map (Shrine).",
-     "target": "building:Shrine", "tap_dy": 0, "steps": ["wait 1.2", "offering_tributes"],
+     "target": "go:Offering|Shrine", "tap_dy": 0, "steps": ["wait 1.2", "offering_tributes"],
      "opts": [{"k": "times", "label": "Tribute offers per day", "type": "number", "min": 1, "max": 20, "def": 1},
               {"k": "gems", "label": "No tributes left: offer with gems", "type": "bool", "def": False},
               {"k": "gem_count", "label": "Gem offers (25 gems first, then more)", "type": "number", "min": 1, "max": 50, "def": 3}]},
@@ -10856,7 +10898,7 @@ DUTY_LIBRARY = [
      "opts": [{"k": "times", "label": "Tokens to buy per day (500 gems each)", "type": "number", "min": 1, "max": 5, "def": 5}]},
     {"id": "activity_chests", "group": "Reward claims", "title": "Activity chests", "every_min": 180, "verified": False,
      "note": "Tavern > Activity: opens every ready task chest and milestone chest. Runs every 3 hours so the later chests are caught too. Needs the city map (Tavern).",
-     "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.2", "activity_chests"]},
+     "target": "via:Wheel of Fortune|Tavern", "tap_dy": 0, "steps": ["wait 1.2", "activity_chests"]},
     {"id": "royal_thief", "group": "Daily activities", "title": "Royal Thief", "every_min": 15, "verified": False,
      "note": "When an alliance member invites you (Invite icon): opens the invite, picks a thief that is not killed and attacks it. Keeps trying until it is killed; when all marches are out it waits for one to come back.",
      "target": "self:", "steps": ["royal_thief"],
@@ -11628,6 +11670,8 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
 def task_needs_city_map(t):
     tgt = str(t.get("target", "")).lower()
     steps = [str(x).strip().lower() for x in t.get("steps", [])]
+    if tgt.startswith(("go:", "via:")):                    # reached through Activity > Go: no city map needed
+        return False
     return tgt.startswith("building:") or any(x.startswith("market") for x in steps)
 
 
