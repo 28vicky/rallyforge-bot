@@ -504,6 +504,7 @@ function instancePage(serial) {
       ["mon", "Monsters", () => [PAGES.monsters(serial)]],
       ["gen", "March presets & generals", () => ownP],
       ["sta", "Stamina", () => [staminaPanel(ov, S.cfg)]]])],
+    ["mrally", "Monster rallies", () => [monsterRallyTab(serial)]],
     ["logs", "Itinerary & Logs", () => [h("div", { class: "loggrid" }, instItinerary(serial), instHistory(serial))]],
     ["settings", "Settings", settingsTab],
   ];
@@ -1303,12 +1304,11 @@ PAGES.duties = function (fixed, only, compact) {
   // a duty's own settings (Resource Tax resource, training amount, speed-ups ...), saved with the duty
   const dutyOpts = (r) => h("div", { class: "row", style: { flexWrap: "wrap", gap: "14px", padding: "4px 0 10px 46px" } },
     r.opts.map((o) => {
+      if (o.type === "rules") return h("a", { href: "#", class: "lab", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab && serial) S.gotoInstTab("mrally"); } }, serial ? "Monsters and presets: Monster rallies tab \u2192" : "Monsters and presets: on each instance's Monster rallies tab");
       const save = async (v) => { const j = await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } })); if (j) { rows = j.duties; own = j.own || {}; draw(); } };
       if (o.type === "bool") return h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label));
       if (o.type === "select") return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
         h("select", { onchange: (e) => save(e.target.value) }, o.choices.map((c) => h("option", { value: c, selected: c === o.val }, c))));
-      if (o.type === "text") return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
-        h("input", { type: "text", value: o.val || "", placeholder: "any", style: { width: "220px" }, onchange: (e) => save(e.target.value) }));
       return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
         h("input", { type: "number", min: o.min, max: o.max, value: o.val, style: { width: "110px" }, onchange: (e) => save(e.target.value) }));
     }));
@@ -1490,6 +1490,136 @@ PAGES.duties = function (fixed, only, compact) {
 };
 
 
+// ====================================================================== monster rallies (instance tab): start Alliance War rallies on Telegram coordinates
+// One row per monster: levels, the preset (I-VIII) that attacks it and the rally time. Top row = first choice (drag to reorder).
+// Below: the rules (waiting, free marches, stamina) and the coordinates Telegram has right now, with what the bot would do.
+const MR_PRESETS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+const MR_TIMES = ["5", "10", "30", "60"];
+function monsterRallyTab(serial) {
+  const root = h("div", { class: "mr" });
+  let duty = null, rules = [], coords = { items: [], now: Date.now() / 1000 };
+  const ruleFor = (name, lvl) => {
+    const low = String(name || "").toLowerCase().trim();
+    if (!low) return -1;
+    return rules.findIndex((r) => r.on !== false && r.name && (low.includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(low)) && (!lvl || (lvl >= (r.min || 1) && lvl <= (r.max || 99))));
+  };
+  const optVal = (k, d) => { const o = duty && (duty.opts || []).find((x) => x.k === k); return o && o.val !== undefined && o.val !== null ? o.val : d; };
+  const setOpt = async (opt) => { const j = await act(api("duty_set", { serial, id: "monster_rally", opt })); if (j) take(j, false); };
+  let saveT = 0;
+  const saveRules = (now) => { clearTimeout(saveT); saveT = setTimeout(() => setOpt({ rules }), now ? 0 : 500); };
+  const take = (j, redraw = true) => {
+    duty = (j.duties || []).find((d) => d.id === "monster_rally") || null;
+    const v = optVal("rules", null);
+    if (redraw || !rules.length) rules = Array.isArray(v) ? v.map((r) => ({ ...r })) : [{ name: "Ymir", min: 1, max: 99, preset: "I", time: "5", on: true }];
+    if (redraw) draw(); else paintHead();
+  };
+  // ---- head: switch, state, Run now
+  const head = h("div", { class: "panel mrhead" });
+  const paintHead = () => {
+    head.innerHTML = "";
+    if (!duty) return;
+    const st = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad" }[duty.status] || "";
+    head.append(
+      h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: duty.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: "monster_rally", on: e.target.checked })); if (j) take(j, false); } }), h("span", { class: "sw" })),
+      h("div", { class: "mrtitle" }, h("h2", {}, "Monster rallies"),
+        h("small", { class: "sub" }, "Starts an Alliance War rally on monsters from the Telegram section, with the preset you set for each monster. Not tested in the game yet.")),
+      duty.on ? h("span", { class: "rtnst " + st }, duty.status_text) : h("span", { class: "rtnst" }, "off"),
+      h("button", { class: "btn", disabled: !duty.on, title: duty.on ? "" : "Switch it on first", onclick: async () => { if (await act(api("run_now_add", { serial, id: "duty:monster_rally" }))) toast("Monster rallies run next on this instance.", "ok"); } }, "Run now"));
+  };
+  // ---- monster list
+  const list = h("div", { class: "mrlist" });
+  const names = () => [...new Set([...(S.monsters || []), ...(coords.items || []).map((c) => c.name).filter(Boolean)])].sort();
+  const seg = (vals, cur, fmt, set, label) => h("div", { class: "mrseg", role: "group", "aria-label": label },
+    vals.map((v) => h("button", { class: "mrsegb" + (v === cur ? " on" : ""), "aria-pressed": v === cur ? "true" : "false", onclick: () => set(v) }, fmt(v))));
+  let dragFrom = -1;
+  const paintList = () => {
+    list.innerHTML = "";
+    const dl = h("datalist", { id: "mrnames" }, names().map((n) => h("option", { value: n })));
+    list.appendChild(dl);
+    if (!rules.length) list.appendChild(h("div", { class: "mrempty" }, h("b", {}, "No monster yet"), h("span", {}, "Add the monsters this instance should rally, and the preset that attacks each one.")));
+    rules.forEach((r, i) => {
+      const row = h("div", { class: "mrrow" + (r.on === false ? " off" : ""), "data-i": String(i) },
+        h("span", { class: "mrgrip", title: "Drag to change the order (top = first choice)", "aria-label": "Drag to reorder",
+          onpointerdown: () => { row.draggable = true; } }, "⋮⋮"),
+        h("div", { class: "mrbody" },
+          h("div", { class: "mrline" },
+            h("input", { class: "mrname", type: "text", list: "mrnames", value: r.name || "", placeholder: "Monster, e.g. Ymir", "aria-label": "Monster name",
+              onchange: (e) => { r.name = e.target.value.trim(); saveRules(true); paintCoords(); } }),
+            h("label", { class: "mrlv" }, h("span", {}, "Level"),
+              h("input", { type: "number", min: 1, max: 99, value: r.min || 1, "aria-label": "Lowest level", onchange: (e) => { r.min = Math.max(1, Math.min(99, +e.target.value || 1)); saveRules(true); paintCoords(); } }),
+              h("span", {}, "to"),
+              h("input", { type: "number", min: 1, max: 99, value: r.max || 99, "aria-label": "Highest level", onchange: (e) => { r.max = Math.max(1, Math.min(99, +e.target.value || 99)); saveRules(true); paintCoords(); } }))),
+          h("div", { class: "mrline" },
+            h("span", { class: "mrk" }, "Preset"),
+            seg(MR_PRESETS, r.preset || "I", (v) => v, (v) => { r.preset = v; saveRules(true); paintList(); paintCoords(); }, "Preset"),
+            h("label", { class: "mrlv" }, h("span", {}, "Rally"),
+              h("select", { class: "mrtime", "aria-label": "Rally time", onchange: (e) => { r.time = e.target.value; saveRules(true); paintCoords(); } },
+                MR_TIMES.map((v) => h("option", { value: v, selected: v === String(r.time || "5") }, v + " min")))))),
+        h("label", { class: "tgl", title: r.on === false ? "Off: this monster is not rallied" : "On" }, h("input", { type: "checkbox", checked: r.on !== false, onchange: (e) => { r.on = e.target.checked; saveRules(true); paintList(); paintCoords(); } }), h("span", { class: "sw" })),
+        h("button", { class: "mrx", title: "Remove", "aria-label": "Remove " + (r.name || "row"), onclick: () => { rules.splice(i, 1); saveRules(true); paintList(); paintCoords(); } }, "×"));
+      row.addEventListener("dragstart", (e) => { dragFrom = i; row.classList.add("drag"); try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); } catch (x) {} });
+      row.addEventListener("dragend", () => { row.draggable = false; row.classList.remove("drag"); dragFrom = -1; list.querySelectorAll(".mrrow").forEach((x) => x.classList.remove("over")); });
+      row.addEventListener("dragover", (e) => { if (dragFrom < 0) return; e.preventDefault(); list.querySelectorAll(".mrrow").forEach((x) => x.classList.toggle("over", x === row)); });
+      row.addEventListener("drop", (e) => { e.preventDefault(); if (dragFrom < 0 || dragFrom === i) return; const [m] = rules.splice(dragFrom, 1); rules.splice(i, 0, m); saveRules(true); paintList(); paintCoords(); });
+      list.appendChild(row);
+    });
+    list.appendChild(h("button", { class: "mradd", onclick: () => { rules.push({ name: "", min: 1, max: 99, preset: "I", time: "5", on: true }); paintList(); const ins = list.querySelectorAll(".mrname"); if (ins.length) ins[ins.length - 1].focus(); } }, "+ Add monster"));
+  };
+  // ---- rules
+  const num = (k, label, hint, d, max) => h("label", { class: "mrfield" }, h("span", { class: "lab" }, label),
+    h("input", { type: "number", min: 0, max, value: optVal(k, d), onchange: (e) => setOpt({ [k]: e.target.value }) }), h("small", { class: "hint" }, hint));
+  const rulesCard = () => panel(null, h("div", { class: "cardhead" }, h("h3", {}, "Rules")),
+    h("div", { class: "mrfields" },
+      num("max_wait", "Wait on a monster", "minutes for a free march, then the next coordinate", 5, 30),
+      num("keep_free", "Marches kept free", "for joining other rallies", 0, 5),
+      num("keep_stamina", "Keep stamina", "never start a rally under this", 100, 9999),
+      num("max_age", "Coordinates up to", "minutes old", 30, 600)),
+    h("label", { class: "tgl", style: { marginTop: "12px" } }, h("input", { type: "checkbox", checked: optVal("skip_busy", true) !== false, onchange: (e) => setOpt({ skip_busy: e.target.checked }) }), h("span", { class: "sw" }),
+      h("span", {}, "Skip a monster that a march is already going to")));
+  // ---- coordinates Telegram has now
+  const cbox = h("div", { class: "mrcoords" });
+  const ago = (t) => { const s = Math.max(0, Math.round(coords.now - t)); return s < 60 ? s + " s" : s < 3600 ? Math.round(s / 60) + " min" : Math.round(s / 3600) + " h"; };
+  const paintCoords = () => {
+    cbox.innerHTML = "";
+    const maxAge = (+optVal("max_age", 30) || 30) * 60;
+    const items = (coords.items || []).slice(0, 40);
+    if (!items.length) {
+      cbox.appendChild(h("div", { class: "mrempty" }, h("b", {}, "No coordinates from Telegram yet"),
+        h("span", {}, "Link Telegram and pick the chats to watch, then monsters show up here."),
+        h("button", { class: "btn sm", onclick: () => { S.sel = "control"; S.tab = "telegram"; renderSide(); renderTabs(); renderPage(); } }, "Open Telegram settings")));
+      return;
+    }
+    for (const c of items) {
+      const i = ruleFor(c.name, c.level), r = rules[i], old = coords.now - c.t > maxAge;
+      cbox.appendChild(h("div", { class: "mrc" + (i < 0 || old ? " dim" : "") },
+        h("b", {}, (c.level ? "Lv" + c.level + " " : "") + (c.name || "?")),
+        h("span", { class: "mrxy" }, "X " + c.x + "  Y " + c.y + " \u00b7 " + ago(c.t) + " ago" + (c.km != null ? " \u00b7 " + c.km + " km" : "")),
+        i >= 0 && !old ? h("span", { class: "rtnst ok" }, "Preset " + r.preset + " · " + r.time + " min")
+          : old ? h("span", { class: "rtnst" }, "too old")
+          : rules.some((x) => x.on === false && x.name && String(c.name || "").toLowerCase().includes(x.name.toLowerCase())) ? h("span", { class: "rtnst" }, "off in your list")
+          : h("button", { class: "btn sm", title: "Add this monster to the list", onclick: () => { rules.push({ name: c.name, min: 1, max: 99, preset: "I", time: "5", on: true }); saveRules(true); paintList(); paintCoords(); } }, "+ Add")));
+    }
+  };
+  const loadCoords = async () => { const j = await api("coords", {}, { quiet: true }).catch(() => null); if (j) { coords = j; paintCoords(); } };
+  const draw = () => {
+    root.innerHTML = "";
+    paintHead(); paintList(); paintCoords();
+    root.append(head, h("div", { class: "mrgrid" },
+      h("div", { class: "mrcol" }, panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "Monsters and presets"), h("small", { class: "sub" }, "Top row = first choice. Drag ⋮⋮ to change the order."))), list), rulesCard()),
+      h("div", { class: "mrcol" }, panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "From Telegram now"), h("small", { class: "sub" }, "What the bot would do with each coordinate"))), cbox))));
+  };
+  act(api("duties", { serial })).then((j) => { if (j) take(j); });
+  loadCoords();
+  const tick = setInterval(async () => {
+    if (!root.isConnected) { clearInterval(tick); return; }
+    loadCoords();
+    const j = await api("duties", { serial }, { quiet: true }).catch(() => null);
+    if (j) take(j, false);
+  }, 20000);
+  return root;
+}
+
+
 // ====================================================================== routines (instance tab): master-detail around the game's daily activities
 // Left: one row per activity of Tavern > Activity (points it gives, today's state, a switch). Right: the picked activity's own settings.
 // UI only: every switch and setting is the same one as before (duty_set / the instance's own values), just shown per activity.
@@ -1504,12 +1634,11 @@ const ACTIVITIES = [
   ["Market & Tavern", "Greet Champions", 2, "champions"], ["Market & Tavern", "Ranger Knight Order", 3, "ranger_knight"],
   ["Alliance", "Alliance Help", 1, "alliance_help"], ["Alliance", "Alliance Donation", 1, "alliance_science"],
   ["Army", "Monster Killing", 3, "@rally"], ["Army", "Stamina", 3, "@stamina"], ["Army", "Use the game's Auto-Join", 0, "@aj"],
-  ["Army", "Start monster rallies", 0, "monster_rally"],
   ["Army", "Patrol", 1, null, true], ["Army", "Relic Exploration", 5, null, true], ["Army", "Resource Gathering", 1, null, true],
   ["Events", "Crazy Eggs", 0, "crazy_eggs"], ["Events", "Wisdom Dome tokens", 0, "wisdom_dome_tokens"],
 ];
 const ACT_MAX = 145;                   // the game's last Activity chest
-const ACT_HIDDEN = new Set(["reach_keep_tavern", "market_capture", "tavern_catalog", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy"]);   // test duties: full duty list only
+const ACT_HIDDEN = new Set(["monster_rally", "reach_keep_tavern", "market_capture", "tavern_catalog", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy"]);   // test duties: full duty list only; Monster rallies has its own tab
 function routinesCards(serial, ov, details) {
   const root = h("div", { class: "rtn rtnmd" });
   let filter = "all", sel = null, duties = [];

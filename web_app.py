@@ -1724,8 +1724,22 @@ class Api:
                     raise ApiError(f"{o['label']}: enter a number.")
             elif o["type"] == "select" and v not in o["choices"]:
                 raise ApiError(f"{o['label']}: pick one of the list.")
-            elif o["type"] == "text":
-                v = str(v or "").strip()[:200]
+            elif o["type"] == "rules":                     # Monster rallies list: monster, levels, preset, rally time
+                if not isinstance(v, list):
+                    raise ApiError("Monster list: wrong format.")
+                clean = []
+                for r in v[:40]:
+                    if not isinstance(r, dict):
+                        continue
+                    try:
+                        lo, hi = max(1, min(int(r.get("min") or 1), 99)), max(1, min(int(r.get("max") or 99), 99))
+                    except (TypeError, ValueError):
+                        raise ApiError("Monster list: levels must be numbers.")
+                    clean.append({"name": str(r.get("name") or "").strip()[:40], "min": min(lo, hi), "max": max(lo, hi),
+                                  "preset": r.get("preset") if r.get("preset") in rb.RT_PRESETS else "I",
+                                  "time": str(r.get("time")) if str(r.get("time")) in rb.MR_TIMES else "5",
+                                  "on": r.get("on") is not False})
+                v = clean
             row[o["k"]] = v
         self._save_scoped(scope, "duties", duties)
         return self.duties(p)

@@ -9962,11 +9962,38 @@ def mr_row(serial):
     return (load_duty_state().get(serial or "default") or {}).get("monster_rally") or {}
 
 
+MR_DEFAULT_RULES = [{"name": "Ymir", "min": 1, "max": 99, "preset": "I", "time": "5", "on": True}]
+
+
+def mr_rules(cfg):
+    """The Monster rallies tab's list: which monster (and levels) gets which preset and rally time; first row = first choice."""
+    rules = rd_opt(cfg, "monster_rally", "rules", None)
+    out = []
+    for r in (rules if isinstance(rules, list) else MR_DEFAULT_RULES):
+        if not isinstance(r, dict) or not str(r.get("name") or "").strip() or r.get("on") is False:
+            continue
+        out.append({"name": str(r["name"]).strip(), "min": int(r.get("min") or 1), "max": int(r.get("max") or 99),
+                    "preset": r.get("preset") if r.get("preset") in RT_PRESETS else "I",
+                    "time": str(r.get("time")) if str(r.get("time")) in MR_TIMES else "5"})
+    return out
+
+
+def mr_rule_for(rules, name, level):
+    """-> (index, rule) of the first row that fits this monster, or (None, None)."""
+    low = str(name or "").lower().strip()
+    if not low:
+        return None, None
+    for i, r in enumerate(rules):
+        rn = r["name"].lower()
+        if (rn in low or low in rn) and (not level or r["min"] <= level <= r["max"]):
+            return i, r
+    return None, None
+
+
 def mr_targets(cfg, tried):
-    """Telegram coordinates that fit the settings, best first (newest, then nearest). -> [{name, level, x, y, km, t}]"""
-    names = [n.strip().lower() for n in str(rd_opt(cfg, "monster_rally", "monsters", "") or "").split(",") if n.strip()]
-    lo = int(float(rd_opt(cfg, "monster_rally", "min_level", 1) or 0))
-    hi = int(float(rd_opt(cfg, "monster_rally", "max_level", 99) or 99))
+    """Telegram coordinates that fit a row of the monster list, best first (row order, newest, nearest).
+    -> [{name, level, x, y, km, t, rule, rank}]"""
+    rules = mr_rules(cfg)
     age = float(rd_opt(cfg, "monster_rally", "max_age", 30) or 30) * 60
     now = time.time()
     feed, _ = feed_get(_feed_keep[0] if _feed_keep[0] is not None else int(cfg.get("tg_keep_min", 60) or 0))
@@ -9981,16 +10008,14 @@ def mr_targets(cfg, tried):
         if key in seen or now - float(tried.get(key, 0)) < MR_FORGET_MIN * 60:
             continue
         seen.add(key)
-        name, lvl = str(it.get("name") or ""), it.get("level") or 0
-        if names and not any(n in name.lower() for n in names):
-            continue
-        if lvl and not lo <= lvl <= hi:
-            continue
         if now - float(it.get("t") or 0) > age:
             continue
-        out.append(it)
+        i, r = mr_rule_for(rules, it.get("name"), it.get("level") or 0)
+        if r is None:
+            continue
+        out.append(dict(it, rule=r, rank=i))
     km = lambda it: it.get("km") if it.get("km") is not None else 1e9
-    out.sort(key=lambda it: (-round(float(it.get("t") or 0) / 60), km(it)))     # newest minute first, then nearest
+    out.sort(key=lambda it: (it["rank"], -round(float(it.get("t") or 0) / 60), km(it)))
     return out
 
 
@@ -10096,9 +10121,7 @@ def run_monster_rally(dev, cfg, log, stop):
 
     targets = mr_targets(cfg, tried)
     if not targets:
-        return later(MR_POLL_MIN, "no Telegram coordinate fits the settings")
-    mode = str(rd_opt(cfg, "monster_rally", "rally_time", "5 minutes")).split()[0]
-    preset = str(rd_opt(cfg, "monster_rally", "preset", "Preset I")).split()[-1]
+        return later(MR_POLL_MIN, "no Telegram coordinate matches the monster list")
     keep_free = int(float(rd_opt(cfg, "monster_rally", "keep_free", 0) or 0))
     max_wait = float(rd_opt(cfg, "monster_rally", "max_wait", 5) or 0) * 60
     keep_sta = int(float(rd_opt(cfg, "monster_rally", "keep_stamina", 100) or 0))
@@ -10111,6 +10134,7 @@ def run_monster_rally(dev, cfg, log, stop):
     for tgt in targets[:3]:                                 # a gone / busy monster: try the next coordinate
         if stop.is_set():
             return
+        mode, preset = tgt["rule"]["time"], tgt["rule"]["preset"]   # this monster's own preset and rally time
         key, label = f"{tgt['x']},{tgt['y']}", f"{('Lv' + str(tgt['level']) + ' ') if tgt.get('level') else ''}{tgt.get('name') or 'monster'} ({tgt['x']},{tgt['y']})"
         tried[key] = time.time()
         mr_save(serial, tried=tried)
@@ -10345,16 +10369,10 @@ DUTY_LIBRARY = [
      "opts": [{"k": "troops", "label": "Troops", "type": "select", "def": "Power First",
                "choices": ["Power First"] + ["Preset " + n for n in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")]}]},
     {"id": "monster_rally", "group": "Daily activities", "title": "Start monster rallies", "every_min": 5, "verified": False,
-     "note": "Takes monster coordinates from the Telegram section, flies there with the map search and starts an Alliance War rally. "
+     "note": "Takes monster coordinates from the Telegram section, flies there with the map search and starts an Alliance War rally with the preset set for that monster. "
              "No free march: waits on the monster. Skips a monster that is gone or that a march is already going to.",
      "target": "self:", "steps": ["monster_rally"],
-     "opts": [{"k": "monsters", "label": "Monsters (comma separated, empty = any)", "type": "text", "def": "Ymir"},
-              {"k": "min_level", "label": "Lowest level", "type": "number", "min": 1, "max": 99, "def": 1},
-              {"k": "max_level", "label": "Highest level", "type": "number", "min": 1, "max": 99, "def": 99},
-              {"k": "rally_time", "label": "Rally time", "type": "select", "def": "5 minutes",
-               "choices": ["5 minutes", "10 minutes", "30 minutes", "60 minutes"]},
-              {"k": "preset", "label": "Troops", "type": "select", "def": "Preset I",
-               "choices": ["Preset " + n for n in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")]},
+     "opts": [{"k": "rules", "label": "Monsters", "type": "rules", "def": None},
               {"k": "max_wait", "label": "Wait on a monster for a free march (min)", "type": "number", "min": 0, "max": 30, "def": 5},
               {"k": "keep_free", "label": "Marches to keep free for joining", "type": "number", "min": 0, "max": 5, "def": 0},
               {"k": "keep_stamina", "label": "Keep at least this much stamina", "type": "number", "min": 0, "max": 9999, "def": 100},
