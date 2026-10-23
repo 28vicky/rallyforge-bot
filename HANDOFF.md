@@ -92,7 +92,7 @@ Starter prompt for any chat: "Read CLAUDE.md and HANDOFF.md (section PARALLEL WO
 6. Owner's PC is shared: only ONE chat deploys / reopens the app at a time, and only after asking the owner. Write "PC: <task id> testing" in the PC line below while testing, clear it after.
 7. Low effort by default. Ask the owner before anything costly (live tests, screenshots, long reads, subagents, high-effort debugging).
 
-PC: T55 testing (dev copy app\v2.4.99 = 2.5.6 + feat/city-go) - was: T54 testing (23 Oct, chat on kiravik) - dev copy app\v2.4.99 = 2.5.5 + feat/monster-rally (many live fixes, see project docs claude/t54_live_test_23oct.md + _part2.md)
+PC: NEXT in queue after T55: test/combined-23oct (= feat/city-go + T56-T58, T60, T61, T63, T64; compiles) - the T56+ chat deploys it when T55 frees the PC. NOW: T55 testing (dev copy app\v2.4.99 = 2.5.6 + feat/city-go) - was: T54 testing (23 Oct, chat on kiravik) - dev copy app\v2.4.99 = 2.5.5 + feat/monster-rally (many live fixes, see project docs claude/t54_live_test_23oct.md + _part2.md)
 
 PUBLISHED 2.4.76 (T8 update-restart) on 21 Oct 12:20 IST; check_release OK. Not yet tested live. main = origin/main.
 
