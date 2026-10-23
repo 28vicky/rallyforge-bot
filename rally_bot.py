@@ -10474,9 +10474,11 @@ def run_map_city(dev, cfg, log, stop):
         """Where the pictures say the camera is: median of the places implied by picture links to the kept views nearby
         (by the running estimate). -> (x, y) or None when no nearby view links. The drag estimates drift (24 Oct 02:44:
         164 moves put 3 'new' views on one edge spot and lost the west half as a separate group), the pictures do not."""
-        for rng in (1.5, None):                            # nearby first; then ALL views (a drag read as 0 by the static HUD
-            px_, py_ = [], []                              # pixels leaves the estimate a whole step off - 24 Oct 03:28)
-            for _, g2, f2, ex, ey in views:
+        order = sorted(range(len(views)), key=lambda i: abs(views[i][3] - nav.cx) / w + abs(views[i][4] - nav.cy) / h)
+        for rng in (1.5, None):                            # the 4 nearest first; then ALL views (a drag read as 0 by the static
+            px_, py_ = [], []                              # HUD pixels leaves the estimate a whole step off - 24 Oct 03:28)
+            for i in (order[:4] if rng else order):
+                _, g2, f2, ex, ey = views[i]
                 if rng and not (abs(ex - nav.cx) < w * rng and abs(ey - nav.cy) < h * rng):
                     continue
                 s = _kf_link(f2, (k, d), g2, g)
@@ -10490,6 +10492,9 @@ def run_map_city(dev, cfg, log, stop):
                 return ax, ay
         return None
 
+    last = [None]                                          # the settled picture the camera is on now (reused: one
+                                                           # screenshot round per move instead of three)
+
     def clean_shot(shot=None):
         shot = dev.screenshot() if shot is None else shot
         if view_of(shot, cfg) != "city":
@@ -10498,6 +10503,7 @@ def run_map_city(dev, cfg, log, stop):
         if find_detail_icon(shot):
             close_ring(dev, stop, (270, 490))
             shot = nav._settled()
+        last[0] = shot
         return shot
 
     def keep(shot):
@@ -10529,7 +10535,8 @@ def run_map_city(dev, cfg, log, stop):
         Wherever the camera lands is fine - the places come from the pictures, not from the steps."""
         fx = max(-300.0, min(300.0, dx / gain[0]))         # finger px for the wanted game px (kept inside the map area)
         fy = max(-560.0, min(560.0, dy / gain[1]))
-        ddx, ddy, _ = nav._drag(270 + fx / 2, 440 + fy / 2, 270 - fx / 2, 440 - fy / 2)
+        ddx, ddy, after = nav._drag(270 + fx / 2, 440 + fy / 2, 270 - fx / 2, 440 - fy / 2, before=last[0])
+        last[0] = after
         drags[0] += 1
         nav.cx -= ddx
         nav.cy -= ddy
@@ -10585,7 +10592,7 @@ def run_map_city(dev, cfg, log, stop):
         sx, sy = max(left, key=lambda d: (d[0] / STEPX * (nav.cx - cx0) + d[1] / STEPY * (nav.cy - cy0), abs(d[0]) > 0))
         tried[at].add((sx, sy))
         move(sx, sy)
-        if keep(clean_shot()):
+        if keep(clean_shot(last[0])):
             tried.append(set())
             at = len(views) - 1
         else:                                              # old ground (the edge: did not move, slid, or sprang back)
