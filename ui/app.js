@@ -277,6 +277,10 @@ function buildRibbon() {
       btn("Start", () => { if (S.sel === "control" && allPaused()) return act(api("resume")); if (S.sel === "control") { S.startingAt = Date.now(); paintRunState(); } collectAndRun("start", { serial: target() }); }, "pri", "play"),
       btn("Pause", () => act(api("pause", { serial: target() })), "", "pause"),
       btn("Stop", async () => { if (S.sel === "control" && !(await confirmStopAll())) return; S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop")),
+    grp("Auto-Join",                                  // the game's Auto-Join for every instance at once (own switch, not part of presets)
+      h("label", { class: "tgl ajsw", id: "ajAll", title: "Switch the game's Auto-Join on or off for every instance (needs the Rally Monthly Card)" },
+        (() => { const i = h("input", { type: "checkbox", "aria-label": "Auto-Join for all instances" }); i.addEventListener("change", () => { ajSetAll(i.checked); rerender(); }); return i; })(),
+        h("span", { class: "sw" }), h("span", { class: "ajcnt" }))),
     grp("Tools",
       btn("Tools ▾", (e) => menu(e.currentTarget, [
         { label: "Generals", icon: "users", run: () => openGeneralManager() },
@@ -687,6 +691,7 @@ function renderPage() {
   } else {
     p.appendChild(instancePage(S.sel));
   }
+  paintAjAll();
   lastPageSel = S.sel;
   if (keep) { p.scrollTop = keep; requestAnimationFrame(() => { p.scrollTop = keep; }); setTimeout(() => { p.scrollTop = keep; }, 250); }
   paintRunState();

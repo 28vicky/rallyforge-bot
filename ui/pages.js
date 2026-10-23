@@ -78,6 +78,26 @@ function tog(obj, key, label, o) {
   i.addEventListener("change", () => { obj[key] = i.checked; if (o.after) o.after(i.checked); });
   return h("label", { class: "tgl" }, i, h("span", { class: "sw" }), label);
 }
+// ---- Auto-Join (the game's own, needs the Rally Monthly Card): its own top-level switch per instance, never part of presets (owner 24 Oct).
+// Per instance it is per_device[serial].game_auto_join; the global switch (Control bar, next to Start all) sets every instance at once.
+function ajIsOn(serial) { const o = ((S.cfg.per_device || {})[serial]) || {}; return !!(o.game_auto_join !== undefined ? o.game_auto_join : S.cfg.game_auto_join); }
+function ajSetOne(serial, v) { S.cfg.per_device = S.cfg.per_device || {}; (S.cfg.per_device[serial] = S.cfg.per_device[serial] || {}).game_auto_join = !!v; paintAjAll(); }
+const AJ_TIP = "The game's own Auto-Join (needs the Rally Monthly Card). On: the game joins rallies by itself and the bot keeps it running. No presets needed.";
+function ajSwitch(serial, o) {
+  o = o || {};
+  const i = h("input", { type: "checkbox", checked: ajIsOn(serial), "aria-label": "Auto-Join" });
+  i.addEventListener("change", () => { ajSetOne(serial, i.checked); if (o.after) o.after(i.checked); });
+  return h("label", { class: "tgl ajsw" + (o.small ? " sm" : ""), title: AJ_TIP, onclick: (e) => e.stopPropagation() }, i, h("span", { class: "sw" }), o.label === undefined ? "Auto-Join" : o.label);
+}
+function ajSetAll(v) { S.cfg.game_auto_join = !!v; S.devices.forEach((d) => { if (d.id) ajSetOne(d.id, v); }); paintAjAll(); }
+function paintAjAll() {
+  const g = document.getElementById("ajAll");
+  if (!g) return;
+  const ids = S.devices.filter((d) => d.id).map((d) => d.id), n = ids.length, on = ids.filter(ajIsOn).length;
+  const i = g.querySelector("input"); i.checked = n > 0 && on === n; i.disabled = !n;
+  g.classList.toggle("greyed", !n);
+  g.querySelector(".ajcnt").textContent = !n ? "" : on === n ? "on for all" : on ? on + " of " + n + " on" : "off";
+}
 // pick-one choice as a segmented control (rule 15). opts = [[value, label, hint?], ...]; values compare as text, the saved type is kept
 function segPick(obj, key, opts, o) {
   o = o || {};
@@ -248,7 +268,7 @@ PAGES.dashboard = function () {
       step(1, "Find your emulators", "Open them with Evony on screen.", h("div", { class: "row", style: { gap: "12px" } },
         h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.devices.push({ id: "", name: "" }); rerender(); } }, "Add by address"),
         btn("Detect emulators", detectDevices, "pri sm")), false),
-      step(2, "Pick your presets", "Which game presets the bot may use.", btn("Open presets", () => pickTab("presets"), "sm"), false),
+      step(2, "Auto-Join", "Have the Rally Monthly Card? Switch Auto-Join on at the top of each instance - no presets needed. Otherwise the bot joins with your presets.", null, false),
       step(3, "Start", "The bot joins rallies and does your duties.", h("button", { class: "btn sm", disabled: true, title: "Add an instance first" }, "Start all"), false)),
     S.devices.length ? firstRows : null) : null;
   if (none && S.devices.length) instRows(firstRows);       // an address row the user just added: typed in place, under the steps
@@ -413,7 +433,7 @@ function instancePage(serial) {
     stBtn("Start", () => collectAndRun("start", { serial }), "pri"), stBtn("Pause", () => act(api("pause", { serial })), "warnb"), stBtn("Stop", () => act(api("stop", { serial })), "bad"), moreBtn);
   const head = h("div", { class: "row insthead", style: { margin: "0 0 12px", gap: "14px", alignItems: "center" } },
     sideBtn(), h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx),
-    status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial), h("span", { style: { flex: "1" } }), saveStEl(), bar);
+    status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial), h("span", { style: { flex: "1" } }), saveStEl(), ajSwitch(serial, { after: () => rerender() }), bar);
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
@@ -599,7 +619,14 @@ function instancePage(serial) {
       R.querySelector("h3").replaceWith(h("div", { class: "cardhead" },
         h("div", {}, h("h3", {}, "Monster joins"), h("small", { class: "sub" }, "Live rally history log")),
         h("a", { href: "#", class: "viewall", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("logs"); } }, "View all \u2192")));
-      return [renderTodayCard(serial), h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
+      // a new instance (no own settings yet) leads with Auto-Join: one question, one click; nothing is written until the user picks
+      const how = { m: "" };
+      const lead = Object.keys(ov).length ? null : panel(null,
+        h("div", { class: "cardhead" }, h("h3", {}, "How should " + (dev.name || "this instance") + " join rallies?")),
+        segPick(how, "m", [["game", "The game's Auto-Join", AJ_TIP], ["bot", "The bot joins with your presets", "The bot opens each rally and marches with your presets."]],
+          { label: "How it joins", after: (v) => { ajSetOne(serial, v === "game"); rerender(); } }),
+        h("p", { class: "hint", style: { marginTop: "8px" } }, "Have the Rally Monthly Card? Pick Auto-Join - no presets needed. You can change it any time with the Auto-Join switch at the top."));
+      return [lead, renderTodayCard(serial), h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, PAGES.duties(serial, null, true)))];
     }],
     ["routines", "Routines", () => [routinesCards(serial, ov, {
       duties: () => [PAGES.duties(serial)], tasks: () => [PAGES.tasks(serial)], market: () => [PAGES.market()],
@@ -743,11 +770,6 @@ function presetPanels(c, inst) {
   const PRESET_HELP = "The bot marches with these game presets. 'Start from first' always tries the lowest preset that is on first; 'Rotate' takes them in turn; 'Random' picks any. 'Game's generals' marches with the generals saved in the game preset; 'My list' searches for the generals you list (if the preset already holds one of them it just marches). 'Skip if a general slot is empty' moves on to the next preset.";
   const bp = panel(null,
     h("div", { class: "cardhead" }, h("h3", {}, "Join presets"), infoTip("Presets", PRESET_HELP), h("span", { style: { flex: "1" } }), h("span", { class: "armed" }, `${armed} of 8 on`)),
-    h("div", { class: "dhead", style: { marginBottom: "10px" } }, tog(c, "game_auto_join", "Use the game's Auto-Join", { after: () => rerender() }),
-      infoTip("Game's Auto-Join", "Needs the Rally Monthly Card. When on, the bot stops joining rallies itself: it opens Alliance War > Auto-Join, reads the time left and presses Start again when it falls under your limit (Start resets it to 8 hours). Only some accounts have the card? Switch it on per instance on that instance's own page.")),
-    c.game_auto_join ? h("div", { class: "fgrid", style: { marginBottom: "14px" } },
-      fld("Renew when less than (min) is left", inp(c, "auto_join_renew_min", { type: "int" })),
-      fld("Check every (min)", inp(c, "auto_join_check_min", { type: "int" }))) : null,
     h("div", { class: "dhead", style: { marginBottom: "12px" } }, h("span", { class: "lab" }, "Order"),
       segPick(c, "preset_mode", [["fixed", "Start from first"], ["rotate", "Rotate"], ["random", "Random"]], { def: "rotate", label: "Preset order" })),
     armed ? h("div", { class: "pgrid" }, c.bot_presets.filter((b) => b.enabled).map(card))
@@ -1458,7 +1480,7 @@ function renderTodayAll() {
   const paint = () => {
     if (!j) return;
     const st = {}; (S.devStatus || []).forEach((d) => (st[d.id] = d.state));
-    const key = JSON.stringify([j.rows, j.crazy_eggs, st]);
+    const key = JSON.stringify([j.rows, j.crazy_eggs, st, j.rows.map((r) => ajIsOn(r.serial))]);
     if (key === last) return;                                               // nothing changed: no flicker
     last = key;
     const c = j.crazy_eggs || { total: 0, off: [] };
@@ -1471,7 +1493,7 @@ function renderTodayAll() {
       h("a", { href: "#", class: "lnk", title: "Switch the Crazy Eggs duty on for every instance", onclick: turnOn }, "turn on"));
     // Shield / Buff appear only once the bot reads them from the game (a row carries shield / buff)
     const sb = j.rows.some((r) => r.shield != null || r.buff != null);
-    const want = ["Instance"].concat(sb ? ["Shield", "Buff"] : [], ["Duties", "Joins", "Skipped (late)"]);
+    const want = ["Instance"].concat(sb ? ["Shield", "Buff"] : [], ["Auto-Join", "Duties", "Joins", "Skipped (late)"]);
     if (cols !== want.join()) { cols = want.join(); hrow.innerHTML = ""; want.forEach((c) => hrow.appendChild(h("th", {}, c))); }
     body.innerHTML = "";
     if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: String(want.length), class: "mute" }, "No instances in your list yet.")));
@@ -1483,6 +1505,7 @@ function renderTodayAll() {
       body.appendChild(h("tr", { class: off ? "off" : "", title: "Open " + r.name, onclick: () => open(r.serial) },
         h("td", {}, h("b", {}, r.name), off ? h("small", { class: st[r.serial] === "error" ? "bad" : "" }, " " + (WORD[st[r.serial]] || "stopped")) : null),
         sb ? h("td", {}, tx(r.shield)) : null, sb ? h("td", {}, tx(r.buff)) : null,
+        h("td", {}, ajSwitch(r.serial, { label: "", small: true, after: () => { last = ""; paint(); } })),
         h("td", { class: all ? "ok" : "" }, r.duties_total ? `${r.duties_done}/${r.duties_total}` + (all ? " \u2713" : "") : "-"),
         h("td", {}, String(r.joins)), h("td", {}, String(r.late))));
     });
