@@ -9536,6 +9536,9 @@ def run_gold_levy(dev, cfg, log, stop):
     log(f"[+]  Gold Levy: free levies used" + (f" ({left} -> {now})" if left is not None and now is not None else ""))
 
 
+TAX_ROWS_Y = (382, 518, 655, 790)           # Food, Lumber, Stone, Iron rows on the Market's Tax page
+
+
 def run_resource_tax(dev, cfg, log, stop):
     """Market's ring menu is open: Tax -> Tax on the resource the user picked -> Tax (only while the popup costs 0)."""
     res = str(rd_opt(cfg, "resource_tax", "resource", "Lumber"))
@@ -9546,11 +9549,16 @@ def run_resource_tax(dev, cfg, log, stop):
     if not rd_seen(shot, ["Revenue", "Free"], region=(0, 80, 540, 600)):
         raise RuntimeError("the Tax page did not open")
     row = find_text(shot, [res + " Revenue", res], region=(60, 300, 300, 420), cutoff=0.72)
-    if not row:
-        raise RuntimeError(f"no {res} row on the Tax page")
+    if not row:                                             # the rows are pictures only (no names): always Food, Lumber, Stone, Iron
+        order = ["food", "lumber", "stone", "iron"]
+        if res.lower() not in order:
+            raise RuntimeError(f"no {res} row on the Tax page")
+        row = (420, TAX_ROWS_Y[order.index(res.lower())])
     box = (340, row[1] - 40, 200, 80)
     txt = " ".join(t for t, _ in rd_lines(shot, box))
     btn = rd_find(shot, ["Tax"], region=box, cutoff=0.8)
+    if not btn and not rd_numbers(txt) and rd_seen(shot, ["Free"], region=(0, 150, 540, 150)):
+        btn = (420, row[1])                                 # green Tax button, white text not read: its place in the row
     if not btn or rd_numbers(txt):                          # out of free taxes: the button shows a gem price
         log(f"[+]  Resource Tax: no free tax left today ({res})")
         rd_nothing()
@@ -9570,14 +9578,21 @@ def run_resource_tax(dev, cfg, log, stop):
     log(f"[+]  Resource Tax: free taxes used on {res}")
 
 
+LABOR_BTN = (433, 918)                      # orange Labor button, bottom right of the Prison page
+
+
 def run_labor(dev, cfg, log, stop):
     """Prison's ring menu is open: Captives -> Labor -> Labor. Clear Labor CD (gems) is never pressed."""
     if not rd_ring(dev, stop, ["Captives"]):
         raise RuntimeError("no Captives button in the Prison menu")
     if not rd_tap(dev, stop, ["Labor"], region=(300, 870, 240, 90), whole=True, wait=(1.8, 2.3)):
-        rd_snap(dev.screenshot(), "labor_1")
-        log("[+]  Labor: no Labor button (no captives?)")
-        return
+        shot = dev.screenshot()
+        rd_snap(shot, "labor_1")
+        if not rd_seen(shot, ["Prison", "Release", "Reset"], region=(0, 0, 540, 960)):
+            log("[+]  Labor: no Labor button (no captives?)")
+            return
+        dev.tap(*LABOR_BTN)                                 # the Prison page is open: orange Labor button, text not read
+        _nap(stop, 1.8, 2.3)
     shot = dev.screenshot()
     rd_snap(shot, "labor_2")
     if rd_seen(shot, ["Cooldown"], region=(0, 300, 540, 450)):
