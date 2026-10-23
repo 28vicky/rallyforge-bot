@@ -1,24 +1,24 @@
 {
-  "version": "2.5.1",
-  "notes": "New generals picker: click or drag to add, drag to reorder, x to remove",
+  "version": "2.5.2",
+  "notes": "Reports page, monster joins kept across restarts, world bosses never joined",
   "files": {
     "rally_bot.py": {
-      "sha256": "48c27f04834042c74e81e1986594421295f90a075aae4211d3eaa45bcd7ff102"
+      "sha256": "c2bd380e3446a669f98053ccde672f1b1fd71e2031e8713bd252e6bba3922fa9"
     },
     "web_app.py": {
-      "sha256": "9beebb007720de5c4451e07f1b1a3b4acd46d5ea63c13587561c7f1eb1224539"
+      "sha256": "67833abc6dcd4887ec5b57a446c6923f67b757c15e8220a4a5ceb0493c1459e2"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "dc80166c0e9e11691a84616153d10fb133cace8cb666c6ea8c1113921310800b"
+      "sha256": "3f62f261dabf0519f3e28122ccf447320721de29865e7d70d23bb917c1233429"
     },
     "ui/app.js": {
-      "sha256": "ca28fd3c881c7cde7fb0afd004ce50a1a27826f0a8edeebf612c5ec614c28b3a"
+      "sha256": "528fe7f3acd2e0f82ad6d4c384b434f6e5a24f4b5343ecbacef954f6376417d6"
     },
     "ui/changelog.js": {
-      "sha256": "1036f4637788e2ca35c3e8b5b4fe81e71eeea465bc796ca99154481e556472f8"
+      "sha256": "c9c0f3e3deee2fe1a871371683e9c48ac69f7cadf8579aba043d2aa2f0ae9bd7"
     },
     "ui/dialogs.js": {
       "sha256": "407675636f1221859dd7e1fa2b8eeacb241c1d05de7a2471bf81cc3ac5e1e68b"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "7cd5431f9ff9995cdaa4bfc9abc648141d77d676e9c16f48a74706382093e1a8"
+      "sha256": "d38693852b52cdbfec7d5c3982ee9a9e6142efadfe340ce862e5199081868d04"
     },
     "ui/tour.js": {
       "sha256": "97832158ac492e07b26ebeedf630bcd55ce7e70353d19df386aa183616bcac2a"
@@ -1629,5 +1629,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "42efeab41f001aef8a978681bec141f2e9c171dc47667d524c511aa1b9394f45"
+  "sig": "e91dba515fbb30147005fcf9216e216be5b9b4be92160357fb7f0686ee047a45"
 }
