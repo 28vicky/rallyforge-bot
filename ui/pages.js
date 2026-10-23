@@ -1491,13 +1491,16 @@ PAGES.duties = function (fixed, only, compact) {
 
 
 // ====================================================================== monster rallies (instance tab): start Alliance War rallies on Telegram coordinates
-// One row per monster: levels, the preset (I-VIII) that attacks it and the rally time. Top row = first choice (drag to reorder).
+// The game has 8 fixed presets and many monsters, so the page is built around the presets: one lane per preset (I-VIII)
+// with its rally time, holding the monsters that preset attacks. Monsters come from the library on the right: drag one
+// onto a lane, or pick a lane and click the monster. A monster can sit in two lanes with different levels (Ymir 1-4 -> II, 5-6 -> III).
 // Below: the rules (waiting, free marches, stamina) and the coordinates Telegram has right now, with what the bot would do.
 const MR_PRESETS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 const MR_TIMES = ["5", "10", "30", "60"];
 function monsterRallyTab(serial) {
   const root = h("div", { class: "mr" });
   let duty = null, rules = [], coords = { items: [], now: Date.now() / 1000 };
+  let lane = "I", q = "", editing = -1, drag = null;           // picked lane, library search, chip whose levels are open, what is dragged
   const ruleFor = (name, lvl) => {
     const low = String(name || "").toLowerCase().trim();
     if (!low) return -1;
@@ -1505,14 +1508,23 @@ function monsterRallyTab(serial) {
   };
   const optVal = (k, d) => { const o = duty && (duty.opts || []).find((x) => x.k === k); return o && o.val !== undefined && o.val !== null ? o.val : d; };
   const setOpt = async (opt) => { const j = await act(api("duty_set", { serial, id: "monster_rally", opt })); if (j) take(j, false); };
-  let saveT = 0;
-  const saveRules = (now) => { clearTimeout(saveT); saveT = setTimeout(() => setOpt({ rules }), now ? 0 : 500); };
+  const saveRules = () => setOpt({ rules });
+  const changed = () => { saveRules(); paintLanes(); paintPool(); paintCoords(); };
   const take = (j, redraw = true) => {
     duty = (j.duties || []).find((d) => d.id === "monster_rally") || null;
     const v = optVal("rules", null);
-    if (redraw || !rules.length) rules = Array.isArray(v) ? v.map((r) => ({ ...r })) : [{ name: "Ymir", min: 1, max: 99, preset: "I", time: "5", on: true }];
+    if (redraw) rules = Array.isArray(v) ? v.map((r) => ({ ...r })) : [{ name: "Ymir", min: 1, max: 99, preset: "I", time: "5", on: true }];
     if (redraw) draw(); else paintHead();
   };
+  const laneTime = (p) => String((rules.find((r) => r.preset === p) || {}).time || "5");
+  const add = (name, p) => {
+    p = p || lane;
+    if (rules.some((r) => r.preset === p && r.name.toLowerCase() === name.toLowerCase())) { toast(name + " is already on preset " + p + ".", "ok"); return; }
+    rules.push({ name, min: 1, max: 99, preset: p, time: laneTime(p), on: true });
+    changed();
+  };
+  const move = (i, p) => { if (rules[i].preset === p) return; rules[i].preset = p; rules[i].time = laneTime(p); changed(); };
+  const lvTxt = (r) => (r.min || 1) <= 1 && (r.max || 99) >= 99 ? "all levels" : (r.min === r.max ? "Lv" + r.min : "Lv" + (r.min || 1) + "–" + (r.max || 99));
   // ---- head: switch, state, Run now
   const head = h("div", { class: "panel mrhead" });
   const paintHead = () => {
@@ -1522,48 +1534,67 @@ function monsterRallyTab(serial) {
     head.append(
       h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: duty.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: "monster_rally", on: e.target.checked })); if (j) take(j, false); } }), h("span", { class: "sw" })),
       h("div", { class: "mrtitle" }, h("h2", {}, "Monster rallies"),
-        h("small", { class: "sub" }, "Starts an Alliance War rally on monsters from the Telegram section, with the preset you set for each monster. Not tested in the game yet.")),
+        h("small", { class: "sub" }, "Starts an Alliance War rally on monsters from the Telegram section, with the preset each monster sits on. Not tested in the game yet.")),
       duty.on ? h("span", { class: "rtnst " + st }, duty.status_text) : h("span", { class: "rtnst" }, "off"),
       h("button", { class: "btn", disabled: !duty.on, title: duty.on ? "" : "Switch it on first", onclick: async () => { if (await act(api("run_now_add", { serial, id: "duty:monster_rally" }))) toast("Monster rallies run next on this instance.", "ok"); } }, "Run now"));
   };
-  // ---- monster list
-  const list = h("div", { class: "mrlist" });
-  const names = () => [...new Set([...(S.monsters || []), ...(coords.items || []).map((c) => c.name).filter(Boolean)])].sort();
-  const seg = (vals, cur, fmt, set, label) => h("div", { class: "mrseg", role: "group", "aria-label": label },
-    vals.map((v) => h("button", { class: "mrsegb" + (v === cur ? " on" : ""), "aria-pressed": v === cur ? "true" : "false", onclick: () => set(v) }, fmt(v))));
-  let dragFrom = -1;
-  const paintList = () => {
-    list.innerHTML = "";
-    const dl = h("datalist", { id: "mrnames" }, names().map((n) => h("option", { value: n })));
-    list.appendChild(dl);
-    if (!rules.length) list.appendChild(h("div", { class: "mrempty" }, h("b", {}, "No monster yet"), h("span", {}, "Add the monsters this instance should rally, and the preset that attacks each one.")));
-    rules.forEach((r, i) => {
-      const row = h("div", { class: "mrrow" + (r.on === false ? " off" : ""), "data-i": String(i) },
-        h("span", { class: "mrgrip", title: "Drag to change the order (top = first choice)", "aria-label": "Drag to reorder",
-          onpointerdown: () => { row.draggable = true; } }, "⋮⋮"),
-        h("div", { class: "mrbody" },
-          h("div", { class: "mrline" },
-            h("input", { class: "mrname", type: "text", list: "mrnames", value: r.name || "", placeholder: "Monster, e.g. Ymir", "aria-label": "Monster name",
-              onchange: (e) => { r.name = e.target.value.trim(); saveRules(true); paintCoords(); } }),
-            h("label", { class: "mrlv" }, h("span", {}, "Level"),
-              h("input", { type: "number", min: 1, max: 99, value: r.min || 1, "aria-label": "Lowest level", onchange: (e) => { r.min = Math.max(1, Math.min(99, +e.target.value || 1)); saveRules(true); paintCoords(); } }),
-              h("span", {}, "to"),
-              h("input", { type: "number", min: 1, max: 99, value: r.max || 99, "aria-label": "Highest level", onchange: (e) => { r.max = Math.max(1, Math.min(99, +e.target.value || 99)); saveRules(true); paintCoords(); } }))),
-          h("div", { class: "mrline" },
-            h("span", { class: "mrk" }, "Preset"),
-            seg(MR_PRESETS, r.preset || "I", (v) => v, (v) => { r.preset = v; saveRules(true); paintList(); paintCoords(); }, "Preset"),
-            h("label", { class: "mrlv" }, h("span", {}, "Rally"),
-              h("select", { class: "mrtime", "aria-label": "Rally time", onchange: (e) => { r.time = e.target.value; saveRules(true); paintCoords(); } },
-                MR_TIMES.map((v) => h("option", { value: v, selected: v === String(r.time || "5") }, v + " min")))))),
-        h("label", { class: "tgl", title: r.on === false ? "Off: this monster is not rallied" : "On" }, h("input", { type: "checkbox", checked: r.on !== false, onchange: (e) => { r.on = e.target.checked; saveRules(true); paintList(); paintCoords(); } }), h("span", { class: "sw" })),
-        h("button", { class: "mrx", title: "Remove", "aria-label": "Remove " + (r.name || "row"), onclick: () => { rules.splice(i, 1); saveRules(true); paintList(); paintCoords(); } }, "×"));
-      row.addEventListener("dragstart", (e) => { dragFrom = i; row.classList.add("drag"); try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); } catch (x) {} });
-      row.addEventListener("dragend", () => { row.draggable = false; row.classList.remove("drag"); dragFrom = -1; list.querySelectorAll(".mrrow").forEach((x) => x.classList.remove("over")); });
-      row.addEventListener("dragover", (e) => { if (dragFrom < 0) return; e.preventDefault(); list.querySelectorAll(".mrrow").forEach((x) => x.classList.toggle("over", x === row)); });
-      row.addEventListener("drop", (e) => { e.preventDefault(); if (dragFrom < 0 || dragFrom === i) return; const [m] = rules.splice(dragFrom, 1); rules.splice(i, 0, m); saveRules(true); paintList(); paintCoords(); });
-      list.appendChild(row);
-    });
-    list.appendChild(h("button", { class: "mradd", onclick: () => { rules.push({ name: "", min: 1, max: 99, preset: "I", time: "5", on: true }); paintList(); const ins = list.querySelectorAll(".mrname"); if (ins.length) ins[ins.length - 1].focus(); } }, "+ Add monster"));
+  // ---- preset lanes
+  const lanes = h("div", { class: "mrlanes" });
+  const dropOn = (el, p) => {
+    el.addEventListener("dragover", (e) => { if (!drag) return; e.preventDefault(); el.classList.add("over"); });
+    el.addEventListener("dragleave", () => el.classList.remove("over"));
+    el.addEventListener("drop", (e) => { e.preventDefault(); el.classList.remove("over"); if (!drag) return;
+      if (drag.i !== undefined) move(drag.i, p); else add(drag.name, p); drag = null; });
+  };
+  const paintLanes = () => {
+    lanes.innerHTML = "";
+    for (const p of MR_PRESETS) {
+      const mine = rules.map((r, i) => [r, i]).filter(([r]) => r.preset === p);
+      const box = h("div", { class: "mrlane" + (p === lane ? " sel" : "") + (mine.length ? "" : " empty"), onclick: (e) => { if (e.target.closest("button,input,select,.mrchip")) return; lane = p; paintLanes(); paintPool(); } },
+        h("div", { class: "mrlhead" }, h("b", {}, "Preset " + p),
+          mine.length ? h("select", { class: "mrtime", "aria-label": "Rally time for preset " + p, title: "Rally time",
+            onchange: (e) => { mine.forEach(([r]) => (r.time = e.target.value)); saveRules(); paintCoords(); } },
+            MR_TIMES.map((v) => h("option", { value: v, selected: v === laneTime(p) }, v + " min"))) : null),
+        h("div", { class: "mrchips" },
+          mine.length ? mine.map(([r, i]) => {
+            const chip = h("span", { class: "mrchip" + (editing === i ? " edit" : ""), draggable: "true", title: "Drag to another preset · click to set levels" },
+              h("button", { class: "mrcl", onclick: () => { editing = editing === i ? -1 : i; paintLanes(); } }, r.name, h("small", {}, lvTxt(r))),
+              editing === i ? h("span", { class: "mrlvl" }, "Lv",
+                h("input", { type: "number", min: 1, max: 99, value: r.min || 1, "aria-label": r.name + " lowest level", onchange: (e) => { r.min = Math.max(1, Math.min(99, +e.target.value || 1)); if (r.min > (r.max || 99)) r.max = r.min; saveRules(); paintCoords(); } }), "–",
+                h("input", { type: "number", min: 1, max: 99, value: r.max || 99, "aria-label": r.name + " highest level", onchange: (e) => { r.max = Math.max(1, Math.min(99, +e.target.value || 99)); if (r.max < (r.min || 1)) r.min = r.max; saveRules(); paintCoords(); } }),
+                h("button", { class: "mrok", onclick: () => { editing = -1; paintLanes(); } }, "Done")) : null,
+              h("button", { class: "mrx", "aria-label": "Remove " + r.name + " from preset " + p, title: "Remove", onclick: () => { rules.splice(i, 1); editing = -1; changed(); } }, "×"));
+            chip.addEventListener("dragstart", (e) => { drag = { i }; try { e.dataTransfer.setData("text/plain", r.name); } catch (x) {} });
+            chip.addEventListener("dragend", () => { drag = null; });
+            return chip;
+          }) : h("span", { class: "mrdrop" }, p === lane ? "Click monsters on the right to add them here" : "Drop monsters here")));
+      dropOn(box, p);
+      lanes.appendChild(box);
+    }
+  };
+  // ---- monster library (pick from it)
+  const pool = h("div", { class: "mrpool" });
+  const poolHead = h("div", { class: "mrpoolhead" });
+  const names = () => [...new Set([...(S.monsters || []), ...(coords.items || []).map((c) => c.name).filter(Boolean)])].sort((a, b) => a.localeCompare(b));
+  const paintPool = () => {
+    poolHead.innerHTML = "";
+    poolHead.append(h("input", { type: "search", class: "mrsearch", placeholder: "Search monsters", "aria-label": "Search monsters", value: q,
+      oninput: (e) => { q = e.target.value; paintChips(); } }),
+      h("small", { class: "hint" }, "Click adds to ", h("b", {}, "Preset " + lane), " · or drag onto any preset"));
+    paintChips();
+  };
+  const paintChips = () => {
+    pool.innerHTML = "";
+    const list = names().filter((n) => !q || n.toLowerCase().includes(q.toLowerCase()));
+    if (!list.length) { pool.appendChild(h("div", { class: "mrempty" }, h("b", {}, q ? "No monster matches" : "No monsters known yet"), q ? h("button", { class: "btn sm", onclick: () => add(q.trim()) }, "Add “" + q.trim() + "” to Preset " + lane) : null)); return; }
+    for (const n of list) {
+      const on = rules.filter((r) => r.name.toLowerCase() === n.toLowerCase()).map((r) => r.preset);
+      const chip = h("button", { class: "mrpchip" + (on.length ? " used" : ""), draggable: "true", title: on.length ? "On preset " + on.join(", ") + " · click to add to Preset " + lane : "Add to Preset " + lane, onclick: () => add(n) },
+        n, on.length ? h("span", { class: "mrtag" }, on.join(" ")) : null);
+      chip.addEventListener("dragstart", (e) => { drag = { name: n }; try { e.dataTransfer.setData("text/plain", n); } catch (x) {} });
+      chip.addEventListener("dragend", () => { drag = null; });
+      pool.appendChild(chip);
+    }
   };
   // ---- rules
   const num = (k, label, hint, d, max) => h("label", { class: "mrfield" }, h("span", { class: "lab" }, label),
@@ -1597,16 +1628,20 @@ function monsterRallyTab(serial) {
         i >= 0 && !old ? h("span", { class: "rtnst ok" }, "Preset " + r.preset + " · " + r.time + " min")
           : old ? h("span", { class: "rtnst" }, "too old")
           : rules.some((x) => x.on === false && x.name && String(c.name || "").toLowerCase().includes(x.name.toLowerCase())) ? h("span", { class: "rtnst" }, "off in your list")
-          : h("button", { class: "btn sm", title: "Add this monster to the list", onclick: () => { rules.push({ name: c.name, min: 1, max: 99, preset: "I", time: "5", on: true }); saveRules(true); paintList(); paintCoords(); } }, "+ Add")));
+          : h("button", { class: "btn sm", title: "Add this monster to Preset " + lane, onclick: () => add(c.name) }, "+ Preset " + lane)));
     }
   };
   const loadCoords = async () => { const j = await api("coords", {}, { quiet: true }).catch(() => null); if (j) { coords = j; paintCoords(); } };
   const draw = () => {
     root.innerHTML = "";
-    paintHead(); paintList(); paintCoords();
+    paintHead(); paintLanes(); paintPool(); paintCoords();
     root.append(head, h("div", { class: "mrgrid" },
-      h("div", { class: "mrcol" }, panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "Monsters and presets"), h("small", { class: "sub" }, "Top row = first choice. Drag ⋮⋮ to change the order."))), list), rulesCard()),
-      h("div", { class: "mrcol" }, panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "From Telegram now"), h("small", { class: "sub" }, "What the bot would do with each coordinate"))), cbox))));
+      h("div", { class: "mrcol" },
+        panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "Presets"), h("small", { class: "sub" }, "Each preset attacks the monsters on it. A monster can be on two presets with different levels."))), lanes),
+        rulesCard()),
+      h("div", { class: "mrcol" },
+        panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "Monsters"), h("small", { class: "sub" }, "Your monster library and the names Telegram sends"))), poolHead, pool),
+        panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "From Telegram now"), h("small", { class: "sub" }, "What the bot would do with each coordinate"))), cbox))));
   };
   act(api("duties", { serial })).then((j) => { if (j) take(j); });
   loadCoords();

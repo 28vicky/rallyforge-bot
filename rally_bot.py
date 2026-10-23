@@ -9966,7 +9966,7 @@ MR_DEFAULT_RULES = [{"name": "Ymir", "min": 1, "max": 99, "preset": "I", "time":
 
 
 def mr_rules(cfg):
-    """The Monster rallies tab's list: which monster (and levels) gets which preset and rally time; first row = first choice."""
+    """The Monster rallies tab: which monster (and levels) each preset attacks, and that preset's rally time."""
     rules = rd_opt(cfg, "monster_rally", "rules", None)
     out = []
     for r in (rules if isinstance(rules, list) else MR_DEFAULT_RULES):
@@ -9991,7 +9991,7 @@ def mr_rule_for(rules, name, level):
 
 
 def mr_targets(cfg, tried):
-    """Telegram coordinates that fit a row of the monster list, best first (row order, newest, nearest).
+    """Telegram coordinates of monsters that sit on a preset (Monster rallies tab), best first (newest, then nearest).
     -> [{name, level, x, y, km, t, rule, rank}]"""
     rules = mr_rules(cfg)
     age = float(rd_opt(cfg, "monster_rally", "max_age", 30) or 30) * 60
@@ -10015,7 +10015,7 @@ def mr_targets(cfg, tried):
             continue
         out.append(dict(it, rule=r, rank=i))
     km = lambda it: it.get("km") if it.get("km") is not None else 1e9
-    out.sort(key=lambda it: (it["rank"], -round(float(it.get("t") or 0) / 60), km(it)))
+    out.sort(key=lambda it: (-round(float(it.get("t") or 0) / 60), km(it)))     # newest minute first, then nearest
     return out
 
 
