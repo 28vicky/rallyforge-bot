@@ -9988,7 +9988,9 @@ def find_learned_building(dev, cfg, log, stop, bname):
             leave_to_city(dev, cfg, stop, log)
             shot = dev.screenshot()
         mv, ml, f = _learn_match(shot, tpl)
-        scores.append(f"{where}:{mv:.2f}")
+        cam = f"@{round(nav.cx)},{round(nav.cy)}" if nav is not None else ""
+        scores.append(f"{where}{cam}:{mv:.2f}")
+        rd_snap(shot, f"{tag}_v{len(scores):02d}")         # every view (debug for the sweep, 23 Oct)
         if mv < 0.78:
             return False
         x, y = ml[0] + int(meta["dx"] * f), ml[1] + int(meta["dy"] * f)
@@ -10009,9 +10011,16 @@ def find_learned_building(dev, cfg, log, stop, bname):
         return True
     rd_snap(dev.screenshot(), tag + "_0")
     nav = CityNav(dev, stop, log)
-    nav.to_origin()
-    if stop.is_set():
-        return False
+    moved = []
+    for _ in range(30):                                    # to the top-left corner (like to_origin, but each move is logged)
+        if stop.is_set():
+            return False
+        dx, dy, _ = nav._drag(210, 300, 330, 540)
+        moved.append(f"{round(dx)},{round(dy)}")
+        if abs(dx) < 4 and abs(dy) < 4:
+            break
+    nav.cx = nav.cy = 0.0
+    log(f"[i]   {bname}: to the corner, map moved per drag: {' '.join(moved)}")
     if meta.get("map"):                                    # found there before: straight to it
         nav.goto(*meta["map"])
         if look("saved spot"):
