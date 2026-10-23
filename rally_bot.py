@@ -10931,6 +10931,13 @@ def _run_monster_rally(dev, cfg, log, stop):
         if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)):
             dev.back()
             raise RuntimeError("no March button (the troop page is gone)")
+        st_ = read_stamina(shot) if cfg.get("stamina_auto", True) else None
+        if st_ and st_[0] < st_[1]:                          # not enough stamina for the rally: use stamina items like the joiner (owner 23 Oct)
+            log(f"[!]  Monster rally: not enough stamina ({st_[0]:,} of {st_[1]:,}) - using stamina items")
+            if not refill_stamina(dev, cfg, log, stop, st_[1]):
+                dev.back()
+                return later(30, "not enough stamina (and no stamina items)")
+            shot = dev.screenshot()
         dev.tap(*MR_MARCH)                                   # fixed spot (the gold label is rarely read, PC 23 Oct); checked below
         _nap(stop, 1.5, 1.8)
         shot = dev.screenshot()
