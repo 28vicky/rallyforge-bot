@@ -7821,6 +7821,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         return True
     if kind in ("go", "via"):                              # Activity > tile > Go walks to the building (any city layout); map as fallback
         tile, _, bname = name.partition("|")
+        if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
+            zoom_out_city(dev, stop, log)                   # learned pictures are taken / searched at the widest zoom
         try:
             r = activity_go(dev, cfg, log, stop, tile.strip(), route=(kind == "via"))
         except Exception as e:
@@ -9970,10 +9972,20 @@ def find_learned_building(dev, cfg, log, stop, bname):
         if view_of(shot, cfg) != "city":
             leave_to_city(dev, cfg, stop, log)
             shot = dev.screenshot()
-        r = cv2.matchTemplate(shot[90:860, 0:470], tpl, cv2.TM_CCOEFF_NORMED)
-        _, mv, _, ml = cv2.minMaxLoc(r)
+        best = (0.0, None, 1.0)
+        for f in (1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 0.8):     # the city may be zoomed in (seen after a game restart, 23 Oct)
+            t = tpl if f == 1.0 else cv2.resize(tpl, None, fx=f, fy=f, interpolation=cv2.INTER_LINEAR)
+            if t.shape[0] >= 760 or t.shape[1] >= 460:
+                continue
+            r = cv2.matchTemplate(shot[90:860, 0:470], t, cv2.TM_CCOEFF_NORMED)
+            _, v, _, l = cv2.minMaxLoc(r)
+            if v > best[0]:
+                best = (v, l, f)
+            if v >= 0.85:
+                break
+        mv, ml, f = best
         if mv >= 0.78:
-            x, y = ml[0] + int(meta["dx"]), ml[1] + 90 + int(meta["dy"])
+            x, y = ml[0] + int(meta["dx"] * f), ml[1] + 90 + int(meta["dy"] * f)
             if 60 <= x <= 470 and 150 <= y <= 820 and open_building_here(dev, cfg, log, stop, bname, spots=[(x, y)], how=f"its learned picture (match {mv:.2f})"):
                 return True
     log(f"[i]   {bname}: its learned picture was not found on the city")
