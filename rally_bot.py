@@ -218,6 +218,8 @@ DEFAULTS = {
     "game_reset_utc": "auto",                # when the game's daily reset happens: auto = Evony's own (midnight US Pacific, follows daylight saving), or HH:MM UTC
     "tasks_first": True,                    # a task/duty that is due goes before waiting for new rallies (a rally already on screen is always joined first)
     "city_enabled": False,                  # run the tasks (Tasks tab) while no rally is waiting
+    "zoom_out": False,                      # zoom the city out (once per game start) before going to a building
+    "zoom_foreground": False,               # zoom fallback: real Ctrl+wheel over the emulator window (moves the mouse ~2 s)
     "city_tasks": [],                       # [{name, enabled, target, steps, every_min}], see run_step()
     "duties": {},                           # {duty_id: {on, every_min}} - ready-made duties, see DUTY_LIBRARY
     "wheel": {"button": 1, "spins": 10, "reserve": 0, "chips": "off"},   # Tavern > Wheel of Fortune: biggest button (1/10/100), spins to do (0 = until the coins are used up), coins to keep
@@ -6236,8 +6238,15 @@ def real_wheel_zoom_out(dev, log, name=None, notches=6):
         u32.SetForegroundWindow(top)
         u32.SetWindowPos(top, -1, 0, 0, 0, 0, 0x0043)     # HWND_TOPMOST for the scroll: other windows may cover it (PC 23 Oct)
         time.sleep(0.4)
-        if u32.WindowFromPoint(wintypes.POINT(cx, cy)) not in (h, top) and not u32.IsChild(top, u32.WindowFromPoint(wintypes.POINT(cx, cy))):
-            log("[i] Zoom out: another window still covers the emulator - scrolling anyway")
+        cov = u32.WindowFromPoint(wintypes.POINT(cx, cy))
+        if cov not in (h, top) and not u32.IsChild(top, cov):
+            def _wn(w):
+                b, c = ctypes.create_unicode_buffer(200), ctypes.create_unicode_buffer(200)
+                u32.GetWindowTextW(w, b, 200)
+                u32.GetClassNameW(w, c, 200)
+                return f"{b.value!r}/{c.value}"
+            ct = u32.GetAncestor(cov, 2) or cov
+            log(f"[i] Zoom out: window {_wn(top)} rect {rc.left},{rc.top},{rc.right},{rc.bottom} is covered by {_wn(ct)} - scrolling anyway")
         u32.SetCursorPos(cx, cy)
         time.sleep(0.15)
         send(key(0x11))
@@ -6290,7 +6299,7 @@ def zoom_out_city(dev, stop, log, max_tries=3):
             ok_any = True
         elif sc and sc >= 0.97:
             break
-    if not ok_any:                                        # window messages ignored: real mouse + keyboard over the window
+    if not ok_any and load_config().get("zoom_foreground", False):     # window messages ignored: real mouse + keyboard (opt-in)
         for i in range(2):
             before = dev.screenshot()
             if not real_wheel_zoom_out(dev, log, name):
@@ -9130,20 +9139,21 @@ def as_snap(img, tag):
 def run_alliance_science(dev, cfg, log, stop):
     """From the city: Alliance button -> Alliance Science row -> tap Donate on the recommended science until the day's
     donations are used up. Only the free daily donations; nothing that costs gems is pressed."""
-    shot = dev.screenshot()
-    h = find(shot, "rally_icon", 0.8) if has_template("rally_icon") else None
-    pos = (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
-    dev.tap(*pos)
-    _nap(stop, 1.8, 2.4)
+    rd_alliance_page(dev, cfg, stop)
     row = None
-    for i in range(4):                                     # the Science row is below the fold: scroll the menu up
+    words = ["Alliance Science", "Science", "Alliance Tech", "Technology", "Research"]
+    moves = [(316, 778, 303, 548)] * 5 + [(303, 400, 316, 760)] * 7      # up past the fold first, then back down
+    for i in range(len(moves) + 1):
         shot = dev.screenshot()
         if i == 0:
             as_snap(shot, "1_alliance")
-        row = find_text(shot, ["Alliance Science", "Science"], region=(60, 420, 360, 470), cutoff=0.75)
-        if row or stop.is_set():
+        row = find_text(shot, words, region=(40, 200, 460, 740), cutoff=0.72)
+        if not row:
+            r = rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.72)
+            row = (r[0], r[1]) if r else None
+        if row or stop.is_set() or i == len(moves):
             break
-        dev.swipe(316, 778, 303, 548, 450)
+        dev.swipe(*moves[i], 450)
         _nap(stop, 1.0, 1.4)
     if not row:
         as_snap(dev.screenshot(), "2_failed")
@@ -9352,8 +9362,14 @@ def rd_alliance_page(dev, cfg, stop):
     shot = dev.screenshot()
     h = find(shot, "rally_icon", 0.8) if has_template("rally_icon") else None
     pos = (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
-    dev.tap(*pos)
-    _nap(stop, 1.8, 2.4)
+    for attempt in range(2):
+        dev.tap(*pos)
+        _nap(stop, 1.8, 2.4)
+        shot = dev.screenshot()
+        if rd_seen(shot, ["Alliance"], region=(0, 0, 540, 140)) or rd_seen(shot, ["Alliance Gift", "Alliance Help", "Alliance Science", "Alliance War", "Alliance Treasure", "Alliance Shop", "Members"], region=(40, 200, 460, 760)):
+            return shot
+    rd_snap(shot, "alliance_page_failed")
+    raise RuntimeError("the Alliance page did not open (screen not found)")
 
 
 def rd_alliance_row(dev, stop, words):
@@ -9589,17 +9605,36 @@ def run_refining_card(dev, cfg, log, stop):
 
 # --- Alliance page ------------------------------------------------------------------------------------------------
 def run_alliance_gift(dev, cfg, log, stop):
-    """Alliance > Alliance Gift > Open All."""
+    """Alliance > Alliance Gift > Open All. Gifts keep coming all day: this runs every hour, and 'nothing to open'
+    counts only when the gift page itself was seen (owner 23 Oct: never Done without checking the screen)."""
     rd_alliance_page(dev, cfg, stop)
     if not rd_alliance_row(dev, stop, ["Alliance Gift"]):
-        raise RuntimeError("no Alliance Gift row on the Alliance page")
-    if not rd_tap(dev, stop, ["Open All"], region=(130, 860, 280, 100), wait=(2.2, 2.8)):
-        rd_snap(dev.screenshot(), "agift_1")
-        log("[+]  Alliance Gift: nothing to open")
-        rd_nothing()
+        raise RuntimeError("no Alliance Gift row on the Alliance page (screen not found)")
+    shot = dev.screenshot()
+    if not rd_tap(dev, stop, ["Open All"], region=(130, 860, 280, 100), wait=(2.2, 2.8), shot=shot):
+        rd_snap(shot, "agift_1")
+        if not rd_seen(shot, ["Alliance Gift", "Gift"], region=(0, 0, 540, 160)):
+            raise RuntimeError("the Alliance Gift page did not open (screen not found)")
+        log("[+]  Alliance Gift: gift page checked - nothing to open right now")
         return
     rd_close_reward(dev, stop, spot=(270, 120))
     log("[+]  Alliance Gift: all gifts opened")
+
+
+def run_alliance_help(dev, cfg, log, stop):
+    """Alliance > Help > Help All. Help requests come and go all day: runs every hour; 'nothing to help' counts only when
+    the help page itself was seen."""
+    rd_alliance_page(dev, cfg, stop)
+    if not rd_alliance_row(dev, stop, ["Alliance Help", "Help"]):
+        raise RuntimeError("no Help row on the Alliance page (screen not found)")
+    shot = dev.screenshot()
+    rd_snap(shot, "ahelp_1")
+    if rd_tap(dev, stop, ["Help All", "Help all"], region=(0, 760, 540, 200), wait=(1.8, 2.3), shot=shot):
+        log("[+]  Alliance Help: Help All pressed")
+        return
+    if not rd_seen(shot, ["Help"], region=(0, 0, 540, 160)):
+        raise RuntimeError("the Alliance Help page did not open (screen not found)")
+    log("[+]  Alliance Help: help page checked - nobody needs help right now")
 
 
 def run_alliance_treasure(dev, cfg, log, stop):
@@ -10520,7 +10555,7 @@ def _run_monster_rally(dev, cfg, log, stop):
 RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
             "general_chest": run_general_chest, "vip_claim": run_vip_claim, "recruit_citizens": run_recruit_citizens,
             "civilization_card": run_civilization_card, "empire_depot": run_empire_depot, "lucky_raffle": run_lucky_raffle,
-            "refining_card": run_refining_card, "alliance_gift": run_alliance_gift, "alliance_treasure": run_alliance_treasure,
+            "refining_card": run_refining_card, "alliance_gift": run_alliance_gift, "alliance_help": run_alliance_help, "alliance_treasure": run_alliance_treasure,
             "ranger_knight": run_ranger_knight, "train_troops": run_train_troops, "build_traps": run_build_traps,
             "troop_healing": run_troop_healing, "activity_chests": run_activity_chests, "gate_visitors": run_gate_visitors,
             "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes,
@@ -10543,12 +10578,12 @@ DUTY_LIBRARY = [
     {"id": "mail", "group": "Reward claims", "title": "Mail rewards", "every_min": 180, "verified": False,
      "note": "Opens Mail and taps Claim all.",
      "target": "icon:Mail", "steps": ["wait 1.5", "tap_text Claim All|Read All|Claim"]},
-    {"id": "alliance_gift", "group": "Reward claims", "title": "Alliance gift", "every_min": 0, "verified": False,
+    {"id": "alliance_gift", "group": "Reward claims", "title": "Alliance gift", "every_min": 60, "verified": False,
      "note": "Alliance > Alliance Gift > Open All.",
      "target": "self:", "steps": ["alliance_gift"]},
     {"id": "alliance_help", "group": "Daily activities", "title": "Alliance help", "every_min": 60, "verified": False,
      "note": "Alliance > Help > Help all.",
-     "target": "icon:Alliance", "steps": ["wait 1.5", "tap_text Help", "wait 1.2", "tap_text Help All|Help all", "wait 1"]},
+     "target": "self:", "steps": ["alliance_help"]},
     {"id": "champions", "group": "Daily activities", "title": "Champions", "every_min": 0, "verified": False,
      "note": "Keep > Champions: 15 taps and 10 greetings a day on the champions you pick (only active ones). Needs the city map (Keep).",
      "target": "building:Keep", "tap_dy": 0, "steps": ["wait 1.2", "champions"]},
