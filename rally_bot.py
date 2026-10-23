@@ -9072,8 +9072,16 @@ def run_champions(dev, cfg, log, stop):
     taps_used = row.get("taps") or {} if row.get("taps_day") == day else {}
     greets_used = row.get("greets") or {} if row.get("greets_day") == day else {}
     if not plan:                                           # default: everything on the champion shown, or the first active one
-        cur = ch_name(dev.screenshot())
-        plan = {cur: {"taps": CH_TAPS, "greets": CH_GREETS}} if cur else {}
+        cur = None
+        for _ in range(4):                                 # the name read is flaky: try a few pictures
+            cur = ch_name(dev.screenshot())
+            if cur or stop.is_set():
+                break
+            _nap(stop, 0.6, 0.9)
+        if not cur:
+            ch_snap(dev.screenshot(), "1_noname")
+            raise RuntimeError("the champion's name could not be read (nothing was done)")
+        plan = {cur: {"taps": CH_TAPS, "greets": CH_GREETS}}
     order = sorted(plan, key=lambda n: CHAMPIONS.index(n))
     if len(order) > 1 and ch_name(dev.screenshot()) in order and CHAMPIONS.index(ch_name(dev.screenshot())) > (CHAMPIONS.index(order[0]) + CHAMPIONS.index(order[-1])) / 2:
         order.reverse()                                    # start from the end that is nearer
