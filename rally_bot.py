@@ -13386,6 +13386,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     slower("The march screen did not open")
                     continue
 
+            t_open = time.time()                               # join speed: the march screen is open
             # Take the next preset in the rotation. A preset that has no general (or does not march) is
             # skipped and the next preset is tried straight away, on the same march screen.
             preset, plain_fails, gave_up = None, [], False
@@ -13511,6 +13512,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
 
             log(f"[+] Preset {preset} marched")
+            if t_march:                                        # join speed: where the seconds went (to find the slow step)
+                _o, _m = t_open - t_join, t_march - t_open
+                log(f"[i] Join timing: march screen {_o:.1f}s + preset/checks {_m:.1f}s = {t_march - t_join:.1f}s")
             mt = last_march[0] or 0
             back_at[preset] = time.time() + max(left, 0) + 2 * (mt if mt else 90) + 60   # march time unknown: count 90 s each way
             if t_march:
