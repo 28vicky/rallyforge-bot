@@ -163,6 +163,12 @@ function genFilter(onchange) {
 // ---- general lists: pictured generals first, search box, grid / list switch (remembered on this PC)
 function genViewGet() { try { return localStorage.getItem("rf_genview") === "grid" ? "grid" : "list"; } catch (e) { return "list"; } }
 function genViewSet(v) { try { localStorage.setItem("rf_genview", v); } catch (e) {} }
+function genSearch(onTerm) {
+  const inp = h("input", { type: "text", placeholder: "Type to search generals (works in List and Grid)", oninput: () => { clr.hidden = !inp.value; onTerm(inp.value.trim().toLowerCase()); } });
+  const clr = h("button", { type: "button", class: "gsclr", title: "Clear the search", onclick: () => { inp.value = ""; clr.hidden = true; onTerm(""); inp.focus(); } }, "\u2715");
+  clr.hidden = true;
+  return h("div", { class: "gsearch" }, h("span", { class: "gsico", "aria-hidden": "true" }), inp, clr);
+}
 function genSorted(arr) { return arr.slice().sort((a, b) => (b.pic !== false) - (a.pic !== false) || a.name.toLowerCase().localeCompare(b.name.toLowerCase())); }
 function genViewBar(onchange) {
   const mk = (v, label) => h("button", { class: "btn sm gv" + (genViewGet() === v ? " pri" : ""), title: v === "grid" ? "Only generals that have a picture, shown as thumbnails" : "Every general, one per line", onclick: () => { genViewSet(v); box.querySelectorAll("button").forEach((b) => b.classList.toggle("pri", b.dataset.v === genViewGet())); onchange(); } }, label);
@@ -177,7 +183,7 @@ function chooseGenerals(title, current) {
     const A = h("div", { class: "lst" }), C = h("div", { class: "lst" });
     const flt = genFilter(() => draw());
     let term = "";
-    const search = h("input", { type: "text", placeholder: "\uD83D\uDD0D  Type to search generals (works in List and Grid)", oninput: (e) => { term = e.target.value.trim().toLowerCase(); draw(); } });
+    const search = genSearch((t) => { term = t; draw(); });
     const viewBar = genViewBar(() => draw());
     const gimg = (n) => h("img", { src: `/api/general_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, onerror: (e) => (e.target.style.display = "none") });
     const draw = () => {
@@ -191,7 +197,13 @@ function chooseGenerals(title, current) {
       if (term && !A.querySelector(".li")) A.appendChild(h("div", { class: "empty" }, "No general matches '" + term + "'."));
       if (!S.generals.length) A.appendChild(h("div", { class: "empty" }, "No saved generals yet. Use 'Scan generals' or 'Add general from screenshot'."));
       if (!chosen.length) C.appendChild(h("div", { class: "empty gempty" }, "No generals added yet. Click a general and tap Add, or double-click (or drag) it here."));
-      chosen.forEach((n, i) => C.appendChild(h("div", { class: "li" + (selC.has(n) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selC.has(n) ? selC.delete(n) : selC.add(n); else { selC = new Set([n]); } draw(); } }, h("span", { class: "chip" }, i + 1), n.startsWith("@") ? null : gimg(n), n.startsWith("@") ? "Category: " + n.slice(1) : n)));
+      chosen.forEach((n, i) => C.appendChild(h("div", { class: "li gord" + (selC.has(n) ? " sel" : ""), draggable: "true", title: "Drag to change the order - double-click to remove",
+        ondragstart: (e) => { e.dataTransfer.setData("text/x-rf-order", String(i)); e.dataTransfer.effectAllowed = "move"; },
+        ondragover: (e) => { if (e.dataTransfer.types.includes("text/x-rf-order")) { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add("dropat"); } },
+        ondragleave: (e) => e.currentTarget.classList.remove("dropat"),
+        ondrop: (e) => { const f = e.dataTransfer.getData("text/x-rf-order"); if (f === "") return; e.preventDefault(); e.stopPropagation(); const k = chosen.splice(+f, 1)[0]; chosen.splice(i, 0, k); selC = new Set([k]); draw(); },
+        ondblclick: () => { chosen = chosen.filter((x) => x !== n); selC.delete(n); draw(); },
+        onclick: (e) => { if (e.ctrlKey || e.shiftKey) selC.has(n) ? selC.delete(n) : selC.add(n); else { selC = new Set([n]); } draw(); } }, h("span", { class: "chip" }, i + 1), n.startsWith("@") ? null : gimg(n), n.startsWith("@") ? "Category: " + n.slice(1) : n)));
       paintBtns();
       A.scrollTop = keepA; C.scrollTop = keepC;
     };
@@ -210,9 +222,9 @@ function chooseGenerals(title, current) {
     const bClr = h("button", { class: "btn sm", onclick: () => { chosen = []; selC.clear(); draw(); } }, "Clear all");
     const left = h("div", { class: "row gacts" }, bAdd);
     const right = h("div", { class: "row gacts" }, bRem, bUp, bDown, bClr);
-    C.addEventListener("dragover", (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; C.classList.add("drop"); });
+    C.addEventListener("dragover", (e) => { if (e.dataTransfer.types.includes("text/x-rf-order")) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; C.classList.add("drop"); });
     C.addEventListener("dragleave", () => C.classList.remove("drop"));
-    C.addEventListener("drop", (e) => { e.preventDefault(); C.classList.remove("drop"); const n = e.dataTransfer.getData("text/plain"); if (n && !selA.has(n)) selA = new Set([n]); add(); });
+    C.addEventListener("drop", (e) => { if (e.dataTransfer.types.includes("text/x-rf-order")) return; e.preventDefault(); C.classList.remove("drop"); const n = e.dataTransfer.getData("text/plain"); if (n && !selA.has(n)) selA = new Set([n]); add(); });
     draw();
     modal({ title, wide: true, oncancel: () => res(null), focus: false, buttons: [{ label: "Cancel", onclick: () => res(null) }, { label: "OK", cls: "pri", onclick: () => res(chosen) }],
       body: h("div", {}, h("div", { class: "two" }, h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "All generals"), viewBar), h("div", { class: "gbox" }, search, flt.el, A), left), h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "Tried in this order (top first)")), h("div", { class: "gbox" }, C), right))) });
@@ -236,7 +248,7 @@ function openGeneralManager() {
   const COPIES = ["Any (best match)", "Most stars", "1st on screen", "2nd on screen", "3rd on screen", "4th on screen", "5th on screen", "6th on screen"];
   let cur = null, term = "";
   const list = h("div", { class: "lst", style: { maxHeight: "430px", minHeight: "430px" } });
-  const search = h("input", { type: "text", placeholder: "\uD83D\uDD0D  Type to search generals (works in List and Grid)", oninput: (e) => { term = e.target.value.trim().toLowerCase(); drawList(); } });
+  const search = genSearch((t) => { term = t; drawList(); });
   const name = h("input", { type: "text" });
   const tab = h("select", {}, TABS_.map((t) => h("option", {}, t)));
   const fav = h("select", {}, FAVS.map((t) => h("option", {}, t)));
