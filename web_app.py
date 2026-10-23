@@ -1610,7 +1610,10 @@ class Api:
         for d in rb.DUTY_LIBRARY:
             conf = (cfg.get("duties") or {}).get(d["id"]) or {}
             st, txt = rb.duty_status(serial, d["id"], cfg)
-            rows.append({"id": d["id"], "group": d["group"], "title": d["title"], "note": d["note"],
+            _r = (rb.load_duty_state().get(serial or "default") or {}).get(d["id"]) or {}
+            _h = list((_r.get("hist") or {}).values())
+            week = {"ok": sum(int(x[0]) for x in _h), "fail": sum(int(x[1]) for x in _h), "last_error": _r.get("last_error", "")}
+            rows.append({"id": d["id"], "week": week, "group": d["group"], "title": d["title"], "note": d["note"],
                          "on": bool(conf.get("on")), "every_min": int(conf.get("every_min", d["every_min"]) or 0),
                          "default_every": d["every_min"], "verified": bool(d.get("verified")),
                          "status": st, "status_text": txt,
