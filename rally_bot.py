@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.4.99"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.5.0"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -4279,6 +4279,24 @@ def sync_monster_pack(log=print):
 _NAME_CAT = re.compile(r"^(catalog\.json|art/[^/\\:*?\"<>|]{1,80}\.png)$")
 
 
+def clean_catalog_junk(log=print):
+    """Delete catalogue pictures that are not a real general: junk names from early scans ("a ae", "Unknown 45") and
+    second copies ("Washington 2"). Only USER/catalog/art - the user's own captured pictures (USER/generals) stay."""
+    n = 0
+    for p in (USER / "catalog" / "art").glob("*.png"):
+        try:
+            if not is_known_general(p.stem):
+                p.unlink()
+                n += 1
+        except OSError:
+            pass
+    if n:
+        with _cache_lock:
+            _gen_cache.clear()
+        log(f"[i] General catalogue: {n} junk / duplicate picture(s) removed")
+    return n
+
+
 def sync_catalog_pack(log=print):
     """The published list can carry the general catalogue (catalog.json + a picture of every general), so testers who
     only update (no reinstall) get the full Listed generals picker too. Only missing or changed files are fetched."""
@@ -4292,6 +4310,7 @@ def sync_catalog_pack(log=print):
         return 0
     root = USER / "catalog"
     (root / "art").mkdir(parents=True, exist_ok=True)
+    clean_catalog_junk(log)
     n = 0
     for name, meta in pack.items():
         try:

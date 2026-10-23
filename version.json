@@ -1,27 +1,27 @@
 {
-  "version": "2.4.99",
-  "notes": "Today card, recorded duties, live settings, hourly duty retry, Black Market all day, emulator start and Crazy Eggs fixes",
+  "version": "2.5.0",
+  "notes": "Generals: every general picture listed, names fixed, region and troop type in the grid, faces in the grid, tidier picker",
   "files": {
     "rally_bot.py": {
-      "sha256": "539ec3faeb43567a3fab3af18ec9b4472b514c63237e434fd6350a4963ea1fb4"
+      "sha256": "e58785dd5454f506da94d9f3cf072b060ee9cc005b5e4d10000fedef089dfb46"
     },
     "web_app.py": {
-      "sha256": "ef8c3d8f73423dd27d1752a78b69a7a756988550d7071a51ab64fed51191c42e"
+      "sha256": "9beebb007720de5c4451e07f1b1a3b4acd46d5ea63c13587561c7f1eb1224539"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "c41af95aa2ca9cfdc9d769a35151e5a8ce28846837d945d4962242a938f658dc"
+      "sha256": "9141eb1bace721d90c5af02bd2b301c5a6ccda8ec27633a5131d3ff275598c1c"
     },
     "ui/app.js": {
       "sha256": "ca28fd3c881c7cde7fb0afd004ce50a1a27826f0a8edeebf612c5ec614c28b3a"
     },
     "ui/changelog.js": {
-      "sha256": "108487e303bfcea235cf720193b34454d9f7fc2cc9268506f2effdc83e2568b7"
+      "sha256": "7a818dcaad5310df7c40a7ba132841afb559f6e52ae2eb3ea387b9a4fff72b72"
     },
     "ui/dialogs.js": {
-      "sha256": "cb14dbc570d46555e6f7212fd8779681fbeb828e781a7ea85381b6f2fb1b2da6"
+      "sha256": "c5805ac9174dcf3cb991f857d3726ce6c10ebb368e66a96b43318cfcbdba110c"
     },
     "ui/fonts.css": {
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
@@ -38,6 +38,10 @@
   },
   "mode": "ask",
   "catalog": {
+    "catalog.json": {
+      "sha256": "256899393fed654b7ebe3019f3c1437f2ab631a3c8346045fa298ca14d33fc4e",
+      "url": "catalog/catalog.json"
+    },
     "art/Abd al-Rahman I.png": {
       "sha256": "4d70a564e3382b6998790c7d961b095bef82a1561c0acd90a8a5257c9efcc2df",
       "url": "catalog/art/Abd%20al-Rahman%20I.png"
@@ -1073,9 +1077,9 @@
       "sha256": "510258b605d151d5e6d72082b26e9910696e4e31c0bce3aeaffd3a514b2f74d8",
       "url": "catalog/art/Saladin.png"
     },
-    "art/Sanada.png": {
+    "art/Sanada Yukimura.png": {
       "sha256": "f1777eca1e9c84d24571efc499b03aed49d758699b81b02c484072514a5dfc48",
-      "url": "catalog/art/Sanada.png"
+      "url": "catalog/art/Sanada%20Yukimura.png"
     },
     "art/Sappho.png": {
       "sha256": "ef92d3b38fb878e632d969af698a073df3ae2b40646da66d9f0611ef16e4038e",
@@ -1330,6 +1334,10 @@
     "art/Yeon Gaesomun.png": {
       "sha256": "4d7fb1f0cd586109bbe931db203f252c2916741931ea7e7920925e6fa063d30a",
       "url": "catalog/art/Yeon%20Gaesomun.png"
+    },
+    "art/Yi Song-gye.png": {
+      "sha256": "f6979cf3cd894b9c2ce4582c197d45aba22394923a3bf1853971c7d2059d9e3f",
+      "url": "catalog/art/Yi%20Song-gye.png"
     },
     "art/Yi Sun-sin.png": {
       "sha256": "e4a3dc75f275e17253f9a9cf2f0c2e132ecffe57d5de274a6748dbf1cdc2ba9f",
@@ -1621,5 +1629,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "266bc26b131e155f7f3109da69db551c364ef185c4ce091784cb80f5c2d0097a"
+  "sig": "1d2ca98120c0cc91ba85c9ff8e202e042cdf04162be541f058b696b237184d1d"
 }

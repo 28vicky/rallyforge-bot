@@ -1,5 +1,11 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.0", date: "2026-10-23",
+    new: ["The generals list now shows every general the game has a picture for (over 300), and the grid shows region and troop type for the generals the catalogue knows."],
+    fixed: ["Sanada Yukimura, Askia Muhammad I and Eulji Mundeok show with their pictures and correct names.",
+      "General pictures in the grid show the face instead of a cut-off middle.",
+      "Choosing generals: troop type and region filters sit side by side, and the Add / Remove buttons sit under their own list.",
+      "Leftover junk and duplicate general pictures are cleaned out of your catalogue folder."] },
   { v: "2.4.99", date: "2026-10-22",
     new: ["Today card: your game day at a glance - on the Dashboard for all instances and on each instance's Overview (daily reset countdown, duties done, joins, late skips).",
       "New duties on the Duties page, each with its own settings: Gold Levy, Resource Tax, Labor, Great General Chest, VIP chest, Recruit Citizens, Civilization card, Empire Depot, Lucky Raffle, Refining Weekly Card, Alliance Gift, Alliance Treasure, Ranger Knight Order, Heal troops, Train troops, Build traps, Activity chests, Gate visitors, Trade Carriage, Shrine tributes and Wisdom Dome. They are new - please tell us if one does not work.",
