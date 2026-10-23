@@ -10109,6 +10109,7 @@ def mr_open_monster(dev, stop, want):
         dev.tap(MR_CENTER[0] + dx, MR_CENTER[1] + dy)
         _nap(stop, 1.3, 1.7)
         shot = dev.screenshot()
+        rd_snap(shot, f"mrally_ring{MR_NEAR.index((dx, dy))}")   # what the tap opened (test pictures)
         p = rd_find(shot, ["Attack"], region=(0, 250, 540, 450), cutoff=0.75)
         if not p:
             dev.tap(40, 640)                                # empty map: close whatever ring opened
@@ -10180,6 +10181,8 @@ def run_monster_rally(dev, cfg, log, stop):
                 break
             mk = rt_marches(shot)
             free = (mk[1] - mk[0]) if mk else None
+            if not said and not mk:
+                log(f"[i]  Monster rally: {label} - march count not read")
             if free is None or free > keep_free:
                 break
             if not said:
