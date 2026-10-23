@@ -204,7 +204,7 @@ function chooseGenerals(title, current) {
         C.insertBefore(row, rows[k] || null);
         const n = chosen.splice(from, 1)[0]; chosen.splice(k > from ? k - 1 : k, 0, n); renumber();
       };
-      row.onpointerup = row.onpointercancel = () => { row.onpointermove = row.onpointerup = row.onpointercancel = null; drag = null; draw(); };
+      row.onpointerup = row.onpointercancel = row.onlostpointercapture = () => { if (!drag) return; row.onpointermove = row.onpointerup = row.onpointercancel = row.onlostpointercapture = null; drag = null; draw(); };
     };
     const draw = () => {
       if (drag) return;
