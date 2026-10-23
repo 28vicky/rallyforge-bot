@@ -10103,20 +10103,8 @@ def find_learned_building(dev, cfg, log, stop, bname):
             break
     nav.cx = nav.cy = 0.0
     log(f"[i]   {bname}: to the corner, map moved per drag: {' '.join(moved)}")
-    if meta.get("map"):                                    # found there before: go there in steps (a long jump drifts), looking on the way
-        mx, my = meta["map"][0] - 235, meta["map"][1] - 445          # camera place that puts the spot mid-view
-        for _ in range(8):
-            if stop.is_set():
-                return False
-            rx, ry = mx - nav.cx, my - nav.cy
-            if abs(rx) < 60 and abs(ry) < 60:
-                break
-            nav.pan(max(-300, min(300, rx)), max(-420, min(420, ry)))
-            if look("saved spot"):
-                return True
-        if look("saved spot"):
-            return True
-        nav.to_origin()
+    # (A saved spot from an earlier run is not used yet: "to the corner" does not end at the same place every time on a
+    #  diamond-shaped city, so corner-relative coordinates differ between runs. Needs the instance's own stitched map.)
     # The city is a diamond, not a rectangle: a row sweep stops at its slanted edges (Kiravik 18:32 saw a third of it).
     # Explore it cell by cell instead (flood fill): try every neighbouring cell, keep those the camera really reaches.
     SX, SY = 300, 420                                      # one cell = a bit less than one view (CITY_VIEW 360 x 690)
