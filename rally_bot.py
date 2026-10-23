@@ -6178,6 +6178,78 @@ def wheel_zoom_out(dev, log, name=None, notches=6):
     return True
 
 
+_INPUT_LOCK = threading.Lock()
+
+
+def real_wheel_zoom_out(dev, log, name=None, notches=6):
+    """Real Ctrl + wheel down over the emulator window (SendInput): brings the window to the front for ~2 s, moves the
+    mouse over it, scrolls, puts the mouse back. Used when window messages are ignored (MuMu, 23 Oct). -> True when sent."""
+    h = emu_window(dev, name)
+    if not h:
+        return False
+    import ctypes
+    from ctypes import wintypes
+    u32 = ctypes.windll.user32
+    top = h
+    for _ in range(4):                                    # the render window is a child: bring its top window forward
+        p = u32.GetParent(top)
+        if not p:
+            break
+        top = p
+
+    class MI(ctypes.Structure):
+        _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG), ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
+                    ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
+
+    class KI(ctypes.Structure):
+        _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD), ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
+                    ("dwExtraInfo", ctypes.c_size_t)]
+
+    class U(ctypes.Union):
+        _fields_ = [("mi", MI), ("ki", KI), ("pad", ctypes.c_byte * 32)]
+
+    class INP(ctypes.Structure):
+        _fields_ = [("type", wintypes.DWORD), ("u", U)]
+
+    def send(*items):
+        arr = (INP * len(items))(*items)
+        u32.SendInput(len(items), arr, ctypes.sizeof(INP))
+
+    def key(vk, up=False):
+        i = INP(type=1)
+        i.u.ki = KI(vk, 0, 2 if up else 0, 0, 0)
+        return i
+
+    def wheel(d):
+        i = INP(type=0)
+        i.u.mi = MI(0, 0, d & 0xFFFFFFFF, 0x0800, 0, 0)
+        return i
+    with _INPUT_LOCK:                                     # one emulator at a time: the mouse is shared
+        rc = wintypes.RECT()
+        u32.GetWindowRect(h, ctypes.byref(rc))
+        cx, cy = (rc.left + rc.right) // 2, (rc.top + rc.bottom) // 2
+        old = wintypes.POINT()
+        u32.GetCursorPos(ctypes.byref(old))
+        prev = u32.GetForegroundWindow()
+        u32.ShowWindow(top, 9)                            # SW_RESTORE (does nothing when not minimised)
+        send(key(0x12), key(0x12, True))                  # Alt tap: Windows then allows SetForegroundWindow
+        u32.SetForegroundWindow(top)
+        time.sleep(0.4)
+        u32.SetCursorPos(cx, cy)
+        time.sleep(0.15)
+        send(key(0x11))
+        for _ in range(notches):
+            send(wheel(-120))
+            time.sleep(0.12)
+        send(key(0x11, True))
+        time.sleep(0.3)
+        u32.SetCursorPos(old.x, old.y)
+        if prev:
+            u32.SetForegroundWindow(prev)
+    log(f"[i] Zoom out: real Ctrl+wheel x{notches} over the emulator window ({cx},{cy})")
+    return True
+
+
 def zoom_out_city(dev, stop, log, max_tries=3):
     """Zoom the city view out with a two-finger pinch (done once per emulator session). -> True when the view got wider."""
     if getattr(dev, "zoomed_out", False):
@@ -6188,14 +6260,14 @@ def zoom_out_city(dev, stop, log, max_tries=3):
         lab = json.loads((USER / "pinch_lab.json").read_text(encoding="utf-8"))
     except Exception:
         lab = {}
-    if lab.get("shell"):
+    if lab.get("shell") and lab.get("on"):
         for c in ([lab["shell"]] if isinstance(lab["shell"], str) else lab["shell"]):
             r = dev._run("shell", "sh", "-c", "'" + c + "'", timeout=40)
             out = ((r.stdout or b"") + (r.stderr or b"")).decode("utf-8", "ignore")
             for i in range(0, min(len(out), 3000), 300):
                 log(f"[i] lab> {out[i:i + 300]!r}")
     kw = lab.get("params") or {}
-    for vi, var in enumerate(lab.get("variants") or []):
+    for vi, var in enumerate((lab.get("variants") if lab.get("on") else None) or []):
         b = dev.screenshot()
         ok = dev.pinch_in(**var)
         _nap(stop, 1.5, 1.8)
@@ -6214,6 +6286,18 @@ def zoom_out_city(dev, stop, log, max_tries=3):
             ok_any = True
         elif sc and sc >= 0.97:
             break
+    if not ok_any:                                        # window messages ignored: real mouse + keyboard over the window
+        for i in range(2):
+            before = dev.screenshot()
+            if not real_wheel_zoom_out(dev, log, name):
+                break
+            _nap(stop, 1.2, 1.5)
+            sc = _view_scale(before, dev.screenshot())
+            log(f"[i] Zoom out (real Ctrl+wheel) {i + 1}: view scale {sc:.2f}" if sc else f"[i] Zoom out (real Ctrl+wheel) {i + 1}: scale not measurable")
+            if sc and sc < 0.93:
+                ok_any = True
+            elif sc and sc >= 0.97:
+                break
     if ok_any:
         dev.zoomed_out = True
         return True
