@@ -9539,6 +9539,21 @@ def run_gold_levy(dev, cfg, log, stop):
 TAX_ROWS_Y = (382, 518, 655, 790)           # Food, Lumber, Stone, Iron rows on the Market's Tax page
 
 
+def tax_cost_digit(shot):
+    """The small green number after 'Cost' in the Tax popup (green = affordable). -> its digits as text, or None."""
+    try:
+        hsv = cv2.cvtColor(shot[495:545, 260:400], cv2.COLOR_BGR2HSV)
+        m = cv2.inRange(hsv, (35, 80, 80), (90, 255, 255))
+        if cv2.countNonZero(m) < 30:
+            return None
+        b = cv2.copyMakeBorder(cv2.resize(255 - m, None, fx=4, fy=4, interpolation=cv2.INTER_NEAREST), 20, 20, 20, 20,
+                               cv2.BORDER_CONSTANT, value=255)
+        d = pytesseract.image_to_string(b, config="--psm 7 -c tessedit_char_whitelist=0123456789").strip()
+        return d or None
+    except Exception:
+        return None
+
+
 def run_resource_tax(dev, cfg, log, stop):
     """Market's ring menu is open: Tax -> Tax on the resource the user picked -> Tax (only while the popup costs 0)."""
     res = str(rd_opt(cfg, "resource_tax", "resource", "Lumber"))
@@ -9568,7 +9583,8 @@ def run_resource_tax(dev, cfg, log, stop):
     shot = dev.screenshot()
     rd_snap(shot, "tax_2")
     cost = next((t for t, _ in rd_lines(shot, (30, 380, 480, 300)) if "cost" in t.lower()), None)
-    if cost is None or any(rd_numbers(cost)):
+    free = (cost is not None and not any(rd_numbers(cost))) or tax_cost_digit(shot) == "0"
+    if not free:
         dev.back()
         raise RuntimeError("the Tax popup does not show a cost of 0 - not pressed")
     if not rd_tap(dev, stop, ["Tax"], region=(160, 570, 240, 80), whole=True, wait=(2.0, 2.6), shot=shot):
