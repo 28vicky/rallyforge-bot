@@ -196,7 +196,9 @@ function layout() {
       h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }),
         h("div", { class: "bt" }, h("b", {}, "RallyForge"), h("small", {}, "Automation Hub"))),
       h("h4", {}, h("span", {}, "Instances"), h("span", { class: "cnt", id: "instCnt" })),
+      h("div", { class: "instfilter", id: "instFilter" }),
       h("div", { class: "inst-list", id: "instList" }),
+      h("div", { class: "install", id: "instAll" }),
       h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }),
         // (ui-simple) Pause all / Stop all live only in the page header - one place for run controls
         h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
@@ -381,33 +383,120 @@ function devTag(d) {
 function renderSide() {
   const L = $("#instList");
   if (!L || S.dragging) return;          // do not redraw under the mouse while an instance is being dragged
+  closeSideMenu();
   L.innerHTML = "";
-  const item = (key, label, dot, extra) => h("div", { class: "inst st-" + (dot || "run") + (S.sel === key ? " sel" : ""), onclick: () => { S.sel = key; renderSide(); renderTabs(); renderPage(); } },
-    dot ? h("span", { class: "dot " + dot }) : h("span", { class: "dot run", style: { background: "var(--accent1)" } }),
-    h("span", { class: "nm", title: label }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
-  const ic = $("#instCnt"); if (ic) ic.textContent = S.devStatus.length + " total";
-  if (!S.devStatus.length) L.appendChild(h("div", { class: "sideempty" }, "No instances yet.", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.sel = "control"; pickTab("dashboard"); renderSide(); } }, "Add your emulators")));
-  for (const d of S.devStatus) {
-    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", "Paused", "Problem", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
-    // chip timer: counts down (kicked wait, turn in Start all) or up (emulator starting / game loading)
-    const tm = d.state === "run" && d.kicked_at ? { "data-at": String(d.kicked_at) } : d.state === "run" && d.loading ? { "data-since": String(d.loading_since) }
-      : d.state !== "run" && d.start_at ? { "data-at": String(d.start_at) } : null;
-    const chip = d.state === "run" && d.kicked_at ? ["kicked", "warn"] : d.state === "run" && d.loading ? [d.loading, "warn"] : d.state === "run" && d.no_stamina ? ["no stamina", "warn"]
-      : d.state === "run" ? (busyTask(d.id) ? [busyTask(d.id), "ok"] : ["idle", ""]) : d.start_at ? ["start", "off"] : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : null;     // offline: the grey dot says it, the name keeps the room
-    if (!chip) { L.lastChild.title = "Offline"; sideDrag(L.lastChild, d.id); continue; }
-    L.lastChild.querySelector(".nm").after(h("span", { class: "ichip " + chip[1], title: d.state === "run" ? (d.loading ? "Emulator / game starting" : ((S.now[d.id] || {}).text || "Idle") + (d.joins ? " \u2022 " + d.joins + " joins" : "")) : d.start_at ? "Waiting for its turn in Start all" : "" },
-      chip[0], tm ? h("span", Object.assign({ class: "ctimer" }, tm)) : null));      // status at a glance on the right; Start/Pause/Stop live in the page header
-    sideDrag(L.lastChild, d.id);
-    if (d.state === "pause" && d.resume_at) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.resume_at) })); }   // kicked wait: timer sits in the chip
+  const devs = S.devStatus || [];
+  const nRun = devs.filter((d) => d.state === "run").length, nPause = devs.filter((d) => d.state === "pause").length;
+  const ic = $("#instCnt"); if (ic) ic.textContent = devs.length ? (nRun ? nRun + " of " + devs.length + " running" : devs.length + " total") : "";
+  // (ui-simple) All / Running / Problems filter once the list gets long
+  const isProb = (d) => d.state === "error" || (d.state === "run" && (d.kicked_at || d.no_stamina));
+  const nProb = devs.filter(isProb).length;
+  const F = $("#instFilter");
+  if (F) {
+    F.innerHTML = "";
+    if (devs.length >= 5) {
+      if (S.sideFilter === "prob" && !nProb) S.sideFilter = "";
+      const seg = (k, lab) => h("button", { class: "segb" + ((S.sideFilter || "") === k ? " on" : ""), type: "button", disabled: k === "prob" && !nProb, onclick: () => { S.sideFilter = k; renderSide(); } }, lab);
+      F.appendChild(h("div", { class: "seg small" }, seg("", "All"), seg("run", "Running " + nRun), seg("prob", "Problems " + nProb)));
+    }
+  }
+  if (!devs.length) L.appendChild(h("div", { class: "sideempty" }, "No instances yet.", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.sel = "control"; pickTab("dashboard"); renderSide(); } }, "Add your emulators")));
+  const shown = devs.filter((d) => !S.sideFilter || (S.sideFilter === "run" ? d.state === "run" : isProb(d)));
+  if (devs.length && !shown.length) L.appendChild(h("div", { class: "sideempty" }, S.sideFilter === "run" ? "Nothing is running." : "No problems right now."));
+  for (const d of shown) L.appendChild(sideRow(d));
+  // Pause all / Stop all: one quiet line under the list, only when 2 or more are active
+  const A = $("#instAll");
+  if (A) {
+    A.innerHTML = "";
+    if (nRun + nPause >= 2) A.append(
+      h("button", { class: "lnkb", type: "button", onclick: pauseOrResumeAll }, allPaused() ? "Resume all" : "Pause all"), h("span", { class: "sep" }, "·"),
+      h("button", { class: "lnkb bad", type: "button", onclick: async () => { if (await confirmBox("Stop all instances?", "Stop " + (nRun + nPause) + " instances? They stop joining rallies and doing duties until you start them again.", "Stop all")) { S.startingAt = 0; act(api("stop", { serial: "all" })); } } }, "Stop all"));
   }
   tickPauseTimers();
 }
+// one instance row: dot, full name, full status line (task / timer / joins), play-pause on the row
+function sideStatus(d) {
+  const T = (k, v) => ({ [k]: String(v) });
+  if (S.cityJobs && S.cityJobs[d.id] && S.cityJobs[d.id].running) return ["mapping the city", "ok"];
+  if (d.state === "run" && d.kicked_at) return ["kicked · back in", "warn", T("data-at", d.kicked_at)];
+  if (d.state === "run" && d.loading) return [d.loading, "warn", T("data-since", d.loading_since)];
+  if (d.state === "run" && d.no_stamina) return ["no stamina", "warn"];
+  if (d.state === "run") return [busyTask(d.id, true) || "idle", busyTask(d.id) ? "ok" : ""];
+  if (d.start_at) return ["starts in", "", T("data-at", d.start_at)];
+  if (d.queued) return ["queued", ""];
+  if (d.state === "pause") return d.resume_at ? ["paused · resumes in", "warn", T("data-at", d.resume_at)] : ["paused", "warn"];
+  if (d.state === "error") return ["problem · see the log", "bad"];
+  return ["stopped", "off"];
+}
+function sideRunAct(d) {      // what the row's button does now: [icon, label, fn] or a greyed spinner while it cannot act
+  const serial = d.id;
+  if (d.start_at || (d.state === "run" && d.loading)) return ["spin", d.start_at ? "Waiting its turn to start" : "Starting - wait a moment", null];
+  if (d.state === "run") return ["pause", "Pause " + (d.name || ""), () => act(api("pause", { serial }))];
+  if (d.state === "pause") return ["play", "Resume " + (d.name || ""), () => act(api("pause", { serial }))];
+  return ["play", "Start " + (d.name || ""), () => collectAndRun("start", { serial })];
+}
+function sideRow(d) {
+  const [txt, tone, tm] = sideStatus(d);
+  const [icon, lab, fn] = sideRunAct(d);
+  const joins = d.state === "run" && d.joins ? " · " + d.joins + " joins" : "";
+  const dot = (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state;
+  const full = ((S.now && S.now[d.id]) || {}).text || "";
+  const row = h("div", { class: "inst st-" + (dot || "run") + (S.sel === d.id ? " sel" : ""), tabindex: "0", role: "button", "aria-current": S.sel === d.id ? "true" : null,
+      onclick: () => { S.sel = d.id; renderSide(); renderTabs(); renderPage(); const r = document.querySelector('.inst[data-id="' + CSS.escape(d.id) + '"]'); if (r) r.focus(); },
+      oncontextmenu: (e) => { e.preventDefault(); openSideMenu(e, d); } },
+    h("span", { class: "grip", "aria-hidden": "true" }, "⋮⋮"),
+    h("span", { class: "dot " + dot }),
+    h("div", { class: "itx" }, h("span", { class: "nm" }, d.name || short(d.id)),
+      h("span", { class: "ist " + tone }, txt, tm ? h("span", Object.assign({ class: "ctimer" }, tm)) : null, joins)),
+    h("button", { class: "irun" + (fn ? "" : " wait"), type: "button", title: lab, "aria-label": lab, disabled: !fn, onclick: (e) => { e.stopPropagation(); if (fn) fn(); } },
+      icon === "spin" ? h("span", { class: "ispin" }) : ico(icon)));
+  row.dataset.tip = (d.name || short(d.id)) + " - " + (d.state === "run" && full ? full : txt) + (d.joins ? "\n" + d.joins + " joins today" : "");
+  sideDrag(row, d.id);
+  return row;
+}
+// right-click menu on an instance row: Start / Resume, Pause, Stop (Stop never sits on the row itself)
+function closeSideMenu() { const m = document.getElementById("sidemenu"); if (m) m.remove(); document.removeEventListener("mousedown", sideMenuOutside, true); document.removeEventListener("keydown", sideMenuKey, true); }
+function sideMenuOutside(e) { const m = document.getElementById("sidemenu"); if (m && !m.contains(e.target)) closeSideMenu(); }
+function sideMenuKey(e) { if (e.key === "Escape") closeSideMenu(); }
+function openSideMenu(e, d) {
+  closeSideMenu();
+  const serial = d.id, run = d.state === "run", pause = d.state === "pause", busy = d.start_at || (run && d.loading);
+  const item = (icon, lab, fn, off, cls) => h("button", { class: "tmi" + (cls ? " " + cls : ""), role: "menuitem", disabled: !!off, onclick: () => { closeSideMenu(); fn(); } }, ico(icon), lab);
+  const m = h("div", { id: "sidemenu", class: "tabmenu", role: "menu" },
+    h("div", { class: "tmh", role: "presentation" }, d.name || short(d.id)),
+    item("play", pause ? "Resume" : "Start", () => pause ? act(api("pause", { serial })) : collectAndRun("start", { serial }), run || busy),
+    item("pause", "Pause", () => act(api("pause", { serial })), !run || busy),
+    item("stop", "Stop", () => { act(api("stop", { serial })); }, !(run || pause || d.start_at), "bad"),
+    item("grid", "Open", () => { S.sel = serial; renderSide(); renderTabs(); renderPage(); }));
+  m.style.left = Math.min(e.clientX, innerWidth - 230) + "px";
+  m.style.top = Math.min(e.clientY, innerHeight - 200) + "px";
+  document.body.appendChild(m);
+  document.addEventListener("mousedown", sideMenuOutside, true);
+  document.addEventListener("keydown", sideMenuKey, true);
+}
+// keyboard in the instance list: up / down moves, Space plays or pauses the selected one
+document.addEventListener("keydown", (e) => {
+  const L = $("#instList");
+  if (!L || !L.contains(document.activeElement) || e.ctrlKey || e.altKey || e.metaKey) return;
+  const rows = [...L.querySelectorAll(".inst[data-id]")];
+  const i = rows.indexOf(document.activeElement.closest(".inst"));
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    const n = rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
+    if (n) n.click();
+  } else if ((e.key === " " || e.key === "Enter") && document.activeElement.classList.contains("inst")) {
+    e.preventDefault();
+    if (e.key === "Enter") return document.activeElement.click();
+    const d = S.devStatus.find((x) => x.id === document.activeElement.dataset.id);
+    const fn = d && sideRunAct(d)[2]; if (fn) fn();
+  }
+});
 // Drag an instance up or down in the left list to change the order (saved at once, kept after a restart)
 function sideDrag(el, id) {
   el.draggable = true;
   el.dataset.id = id;
-  el.title = "Drag to change the order";
+  el.title = (el.dataset.tip ? el.dataset.tip + "\n" : "") + "Drag to change the order";
   el.addEventListener("dragstart", (e) => { S.dragging = id; el.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", id); } catch (x) {} });
   el.addEventListener("dragover", (e) => {
     if (!S.dragging || S.dragging === id) return;
@@ -631,9 +720,9 @@ function logBox(serial, tall) {
 S.acts = []; S.now = {};
 const esc = (t) => String(t == null ? "" : t);
 // what an instance is doing right now (from its latest step), in a few words for the instance list; "" = nothing (idle)
-function busyTask(serial) {
+function busyTask(serial, long) {
   const t = ((S.now && S.now[serial]) || {}).text || "";
-  const cut = (x) => (x.length > 16 ? x.slice(0, 15) + "\u2026" : x);
+  const cut = (x) => { const n = long ? 34 : 16; return x.length > n ? x.slice(0, n - 1) + "\u2026" : x; };   // the sidebar status line has the full width (long)
   let m;
   if (!t || /^(Looking|Idle|Auto-Join is on)/.test(t)) return "";
   if ((m = /^(?:Duty|City task): (.+)$/.exec(t))) return cut(m[1]);

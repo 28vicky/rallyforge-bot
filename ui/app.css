@@ -1387,3 +1387,36 @@ details.adv[open]>summary::before{transform:rotate(90deg)}
 .chhead{border-top:0;padding:10px 0 4px;font-size:12px;color:var(--mute)}
 .chhead span:nth-child(n+3){text-align:center}
 .fgrid.eggf .wide{grid-column:1/-1;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+
+/* ---------- (ui-simple) sidebar rows: name + full status line, play/pause on the row, grip on hover */
+.inst{position:relative;flex-wrap:nowrap!important;align-items:flex-start!important;gap:10px!important;padding:9px 8px 9px 14px!important}
+.inst .dot{margin-top:6px}
+.inst .itx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.inst .itx .nm{font-weight:500;line-height:1.3}
+.inst .ist{font-size:12.5px;line-height:1.35;color:var(--mute);overflow-wrap:anywhere}
+.inst .ist.ok{color:#047857}.inst .ist.warn{color:#b45309}.inst .ist.bad{color:#b91c1c}.inst .ist.off{opacity:.8}
+.inst .ist .ctimer{font-variant-numeric:tabular-nums}
+.inst .grip{position:absolute;left:1px;top:50%;transform:translateY(-50%);font-size:11px;letter-spacing:-3px;color:var(--mute);opacity:0;cursor:grab;transition:opacity .12s}
+.inst:hover .grip{opacity:.6}
+.inst .irun{flex:none;width:28px;height:28px;margin-top:-1px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--fg);display:grid;place-items:center;cursor:pointer;opacity:0;transition:opacity .12s,background .12s}
+.inst .irun .ico svg{width:15px;height:15px}
+.inst:hover .irun,.inst.sel .irun,.inst:focus-visible .irun,.inst .irun:focus-visible{opacity:1}
+.inst .irun:hover{background:var(--card);border-color:var(--line)}
+.inst .irun.wait{cursor:default;opacity:.55}
+.inst:not(:hover):not(.sel) .irun.wait{opacity:0}
+.ispin{width:13px;height:13px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--mute);animation:ispin .9s linear infinite}
+@keyframes ispin{to{transform:rotate(360deg)}}
+.inst:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.instfilter{padding:0 6px 8px 2px}.instfilter:empty{display:none}
+.instfilter .seg{display:flex;width:100%}.instfilter .segb{flex:1;padding-inline:4px;font-size:12px;white-space:nowrap}
+.instfilter .segb:disabled{opacity:.45;cursor:default}
+.install{display:flex;align-items:center;gap:6px;padding:4px 10px 8px;font-size:12.5px}.install:empty{display:none}
+.lnkb{border:0;background:none;padding:2px 0;font:inherit;color:var(--mute);cursor:pointer}
+.lnkb:hover{color:var(--fg);text-decoration:underline}.lnkb.bad:hover{color:var(--bad)}
+.install .sep{color:var(--mute)}
+#sidemenu .tmi:disabled{opacity:.4;cursor:default}
+#sidemenu .tmi.bad:not(:disabled){color:var(--bad)}
+/* the play/pause icon sits beside the name only; the status line below gets the full row width */
+.inst .irun{position:absolute;right:6px;top:6px;margin:0}
+.inst .itx .nm{padding-right:30px}
+.inst .itx{margin-right:2px}
