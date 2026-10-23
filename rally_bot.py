@@ -9833,9 +9833,12 @@ def _activity_go(dev, cfg, log, stop, tile, probe=False, route=False):
     words = [tile, key] + ([key.rstrip("s")] if key.endswith("s") else [])
     hit = None
     tpl = "act_" + re.sub(r"[^a-z]+", "_", tile.lower()).strip("_")    # the tile's picture (labels are cut and hard to read)
+    saw_chest = False
     for i in range(8):                                   # 3 tiles a row, the grid scrolls
         shot = dev.screenshot()
         rd_snap(shot, "ago_2_activity" if i == 0 else f"ago_scroll_{i}")
+        if not saw_chest and has_template("act_done_chest") and find(shot, "act_done_chest", 0.85, (0, 260, 540, 700)):
+            saw_chest = True
         if has_template(tpl):
             h = find(shot, tpl, 0.85, (0, 260, 540, 700))
             if h and 330 <= h[1] <= 885:                 # the whole picture on screen (a 76 px picture centred lower is cut off)
@@ -9849,6 +9852,11 @@ def _activity_go(dev, cfg, log, stop, tile, probe=False, route=False):
         _nap(stop, 1.0, 1.2)
     if not hit:
         rd_snap(dev.screenshot(), "ago_2_notile")
+        if not route and saw_chest:                       # a completed daily's tile turns into a reward chest (its picture is gone)
+            log(f"[+]   {tile}: its tile is not on the Activity page but reward chests are - complete today")
+            dev.back()
+            _nap(stop, 0.8, 1.0)
+            return "complete"
         raise RuntimeError(f"no '{tile}' tile on the Activity page")
     dev.tap(int(hit[0]), min(int(hit[1]) + 45, 900))      # the tile picture under its label
     _nap(stop, 1.4, 1.8)
