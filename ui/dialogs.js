@@ -181,25 +181,39 @@ function chooseGenerals(title, current) {
     const viewBar = genViewBar(() => draw());
     const gimg = (n) => h("img", { src: `/api/general_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, onerror: (e) => (e.target.style.display = "none") });
     const draw = () => {
+      const keepA = A.scrollTop, keepC = C.scrollTop;          // clicking a card must not jump the list back to the top
       A.innerHTML = ""; C.innerHTML = "";
       A.className = "lst" + (genViewGet() === "grid" ? " grid" : "");
       const cnt = {};
       S.generals.forEach((g) => { if (g.cat) cnt[g.cat] = (cnt[g.cat] || 0) + 1; });
       Object.keys(cnt).sort().forEach((c) => { const k = "@" + c; A.appendChild(h("div", { class: "li" + (selA.has(k) ? " sel" : ""), title: "Every general in this category is tried (the first free one is used)", onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(k) ? selA.delete(k) : selA.add(k); else { selA = new Set([k]); } draw(); }, ondblclick: () => add() }, h("b", {}, "Category: " + c), h("span", { class: "hint", style: { marginLeft: "8px" } }, cnt[c] + (cnt[c] === 1 ? " general" : " generals")))); });
-      genSorted(S.generals.filter((g) => flt.ok(g) && (!term || g.name.toLowerCase().includes(term)) && (genViewGet() === "list" || g.pic !== false))).forEach((g) => A.appendChild(h("div", { class: "li" + (selA.has(g.name) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(g.name) ? selA.delete(g.name) : selA.add(g.name); else { selA = new Set([g.name]); } draw(); }, ondblclick: () => add(), title: g.pic === false ? "No picture yet: the bot finds this general by its name (list view)" : "" }, genViewGet() === "grid" ? gimg(g.name) : null, h("span", { class: "gname" }, g.name), g.pic === false ? h("span", { class: "hint", style: { marginLeft: "6px" } }, "(by name)") : null)));
+      genSorted(S.generals.filter((g) => flt.ok(g) && (!term || g.name.toLowerCase().includes(term)) && (genViewGet() === "list" || g.pic !== false))).forEach((g) => A.appendChild(h("div", { class: "li" + (selA.has(g.name) ? " sel" : "") + (chosen.includes(g.name) ? " added" : ""), draggable: "true", ondragstart: (e) => { if (!selA.has(g.name)) { selA = new Set([g.name]); } e.dataTransfer.setData("text/plain", g.name); e.dataTransfer.effectAllowed = "copy"; }, onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(g.name) ? selA.delete(g.name) : selA.add(g.name); else { selA = new Set([g.name]); } draw(); }, ondblclick: () => add(), title: (chosen.includes(g.name) ? "Already in the order list. " : "") + (g.pic === false ? "No picture yet: the bot finds this general by its name (list view)" : "Double-click or drag to the right to add") }, chosen.includes(g.name) ? h("span", { class: "gadded" }, "\u2713") : null, genViewGet() === "grid" ? gimg(g.name) : null, h("span", { class: "gname" }, g.name), g.pic === false ? h("span", { class: "hint", style: { marginLeft: "6px" } }, "(by name)") : null)));
       if (term && !A.querySelector(".li")) A.appendChild(h("div", { class: "empty" }, "No general matches '" + term + "'."));
       if (!S.generals.length) A.appendChild(h("div", { class: "empty" }, "No saved generals yet. Use 'Scan generals' or 'Add general from screenshot'."));
+      if (!chosen.length) C.appendChild(h("div", { class: "empty gempty" }, "No generals added yet. Click a general and tap Add, or double-click (or drag) it here."));
       chosen.forEach((n, i) => C.appendChild(h("div", { class: "li" + (selC.has(n) ? " sel" : ""), onclick: (e) => { if (e.ctrlKey || e.shiftKey) selC.has(n) ? selC.delete(n) : selC.add(n); else { selC = new Set([n]); } draw(); } }, h("span", { class: "chip" }, i + 1), n.startsWith("@") ? null : gimg(n), n.startsWith("@") ? "Category: " + n.slice(1) : n)));
+      paintBtns();
+      A.scrollTop = keepA; C.scrollTop = keepC;
+    };
+    const paintBtns = () => {
+      const has = selC.size > 0;
+      bRem.disabled = !has; bUp.disabled = selC.size !== 1 || chosen.indexOf([...selC][0]) <= 0;
+      bDown.disabled = selC.size !== 1 || chosen.indexOf([...selC][0]) >= chosen.length - 1;
+      bClr.disabled = !chosen.length; bAdd.disabled = ![...selA].some((n) => !chosen.includes(n));
     };
     const add = () => { selA.forEach((n) => { if (!chosen.includes(n)) chosen.push(n); }); draw(); };
     const remove = () => { chosen = chosen.filter((n) => !selC.has(n)); selC.clear(); draw(); };
     const move = (d) => { if (selC.size !== 1) return; const n = [...selC][0], i = chosen.indexOf(n), j = i + d; if (j < 0 || j >= chosen.length) return; chosen.splice(i, 1); chosen.splice(j, 0, n); draw(); };
+    const bAdd = h("button", { class: "btn sm", onclick: add, title: "Add the picked general(s) to the right (or double-click / drag one)" }, "Add ›");
+    const bRem = h("button", { class: "btn sm", onclick: remove }, "‹ Remove");
+    const bUp = h("button", { class: "btn sm", onclick: () => move(-1) }, "Up"), bDown = h("button", { class: "btn sm", onclick: () => move(1) }, "Down");
+    const bClr = h("button", { class: "btn sm", onclick: () => { chosen = []; selC.clear(); draw(); } }, "Clear all");
+    const left = h("div", { class: "row gacts" }, bAdd);
+    const right = h("div", { class: "row gacts" }, bRem, bUp, bDown, bClr);
+    C.addEventListener("dragover", (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; C.classList.add("drop"); });
+    C.addEventListener("dragleave", () => C.classList.remove("drop"));
+    C.addEventListener("drop", (e) => { e.preventDefault(); C.classList.remove("drop"); const n = e.dataTransfer.getData("text/plain"); if (n && !selA.has(n)) selA = new Set([n]); add(); });
     draw();
-    const left = h("div", { class: "row gacts" }, h("button", { class: "btn sm", onclick: add, title: "Add the picked general(s) to the right (or double-click one)" }, "Add ›"));
-    const right = h("div", { class: "row gacts" },
-      h("button", { class: "btn sm", onclick: remove }, "‹ Remove"),
-      h("button", { class: "btn sm", onclick: () => move(-1) }, "Up"), h("button", { class: "btn sm", onclick: () => move(1) }, "Down"),
-      h("button", { class: "btn sm", onclick: () => { chosen = []; draw(); } }, "Clear all"));
     modal({ title, wide: true, oncancel: () => res(null), focus: false, buttons: [{ label: "Cancel", onclick: () => res(null) }, { label: "OK", cls: "pri", onclick: () => res(chosen) }],
       body: h("div", {}, h("div", { class: "two" }, h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "All generals"), viewBar), h("div", { class: "gbox" }, search, flt.el, A), left), h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "Tried in this order (top first)")), h("div", { class: "gbox" }, C), right))) });
   });
