@@ -849,9 +849,13 @@ class Controller:
             k = key(n)
             return len(k) >= 4 and (rb.is_known_general(rb.snap_name(n, [])) or any(x.startswith(k) or k in x for x in known))
         pictured = set()
-        for n in rb.list_generals(refresh=True):
+        allpics = rb.list_generals(refresh=True)
+        full = [key(m) for m in allpics if rb.is_known_general(m)]
+        for n in allpics:
             if not real(n):
                 continue
+            if not rb.is_known_general(n) and any(k != key(n) and k.startswith(key(n)) for k in full):
+                continue                                      # "Sanada" when "Sanada Yukimura" has a picture too: show the full name only
             pictured.add(key(n))
             m = rb.get_general_meta(n)
             c = cat.get(n) or {}
