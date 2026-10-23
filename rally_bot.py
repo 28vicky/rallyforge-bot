@@ -10164,6 +10164,16 @@ def mr_open_monster(dev, stop, want):
 
 
 def run_monster_rally(dev, cfg, log, stop):
+    """The universal pop-up closer is held off meanwhile: it closed the rally time window by its X (Kiravik 23 Oct)."""
+    was = getattr(dev, "_guard_busy", False)
+    dev._guard_busy = True
+    try:
+        return _run_monster_rally(dev, cfg, log, stop)
+    finally:
+        dev._guard_busy = was
+
+
+def _run_monster_rally(dev, cfg, log, stop):
     serial = getattr(dev, "serial", "")
     row = mr_row(serial)
     now = time.time()
