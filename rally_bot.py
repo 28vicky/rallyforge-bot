@@ -9732,10 +9732,11 @@ def open_more_menu(dev, cfg, stop, log):
     spots = ([mb] if mb else []) + ([(int(ab[0]) - 7, int(ab[1]) - 110)] if ab else []) + [MORE_BTN]
     for x, y in spots:
         dev.tap(x, y)
-        _nap(stop, 1.2, 1.5)
-        shot = dev.screenshot()
-        if rd_seen(shot, ["Activity"], region=(0, 100, 540, 800)):
-            return shot
+        for _ in range(4):                               # the menu can take a moment to open (animations, lag)
+            _nap(stop, 0.9, 1.2)
+            shot = dev.screenshot()
+            if rd_seen(shot, ["Activity"], region=(0, 100, 540, 800)):
+                return shot
         rd_snap(shot, "ago_more_miss")
         if view_of(shot, cfg) != "city":                 # something else opened: close it; on the bare city Back would ask to quit
             dev.back()
