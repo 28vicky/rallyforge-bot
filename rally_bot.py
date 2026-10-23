@@ -7835,6 +7835,9 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         if not bname:
             return False
         leave_to_city(dev, cfg, stop, log)
+        if find_learned_building(dev, cfg, log, stop, bname.strip()):     # learned from an earlier Go (tile gone today)
+            return True
+        leave_to_city(dev, cfg, stop, log)
         return city_task_target(dev, cfg, log, stop, {**task, "target": "building:" + bname.strip()}, nav_state)
     if kind == "xy":
         x, y = [float(v) for v in name.split(",")[:2]]
@@ -9893,12 +9896,14 @@ def _activity_go(dev, cfg, log, stop, tile, probe=False, route=False):
 
 
 
-def open_building_here(dev, cfg, log, stop, bname):
-    """After Go the building sits in the middle of the view: tap it and check its ring menu carries the right name.
+def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity route"):
+    """The building is on screen (after Go: in the middle): tap it and check its ring menu carries the right name.
+    A building reached this way is remembered by its picture (learn_building) for the days its tile is gone.
     -> True when that building's ring menu is open."""
     import difflib
     want = bname.lower()
-    for x, y in [(300, 460), (270, 490), (330, 430), (270, 420)]:
+    before = dev.screenshot()
+    for x, y in (spots or [(300, 460), (270, 490), (330, 430), (270, 420)]):
         if stop.is_set():
             return False
         dev.tap(x, y)
@@ -9910,11 +9915,68 @@ def open_building_here(dev, cfg, log, stop, bname):
             continue
         nm = (ring_building_name(shot) or ("",))[0].lower()
         if want in nm or any(difflib.SequenceMatcher(None, want, w).ratio() >= 0.8 for w in re.findall(r"[a-z ]+", nm)):
-            log(f"[i]   {bname} reached by the Activity route ({x},{y})")
+            log(f"[i]   {bname} reached by {how} ({x},{y})")
+            learn_building(dev, before, bname, x, y)
             return True
         log(f"[i]   after Go the menu at ({x},{y}) is '{nm or '?'}', not {bname}")
         close_ring(dev, stop, (x, y + 60))
     rd_snap(dev.screenshot(), "ago_6_nobuilding")
+    return False
+
+
+# --- learned building pictures: Activity Go teaches the bot where a building is (per instance, any city style) ----------
+LEARN_DIR = USER / "city_learn"
+
+
+def _learn_path(dev, bname):
+    return LEARN_DIR / re.sub(r"[^\w.-]+", "_", str(getattr(dev, "serial", "default"))) / (re.sub(r"[^a-z]+", "_", bname.lower()).strip("_") + ".png")
+
+
+def learn_building(dev, shot, bname, x, y):
+    """Save the building's own picture (around the spot that opened it, a little below so bubbles above it are left out)."""
+    try:
+        x0, y0 = max(0, x - 70), max(0, y - 45)
+        crop = shot[y0:y0 + 130, x0:x0 + 140]
+        if crop.shape[0] < 100 or crop.shape[1] < 100:
+            return
+        p = _learn_path(dev, bname)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(p), crop)
+        (p.with_suffix(".json")).write_text(json.dumps({"dx": x - x0, "dy": y - y0, "at": time.strftime("%Y-%m-%d %H:%M")}), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def find_learned_building(dev, cfg, log, stop, bname):
+    """No Go route today: look for the building's learned picture on screen, panning the city in a small spiral.
+    -> True when its ring menu is open (name checked)."""
+    p = _learn_path(dev, bname)
+    if not p.exists():
+        return False
+    try:
+        tpl = cv2.imread(str(p))
+        meta = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    moves = [(0, 0), (260, 0), (0, 300), (-260, 0), (-260, 0), (0, -300), (0, -300), (260, 0), (260, 0),
+             (260, 0), (0, 300), (0, 300), (0, 300), (-260, 0), (-260, 0), (-260, 0), (-260, 0)]
+    for i, (mx, my) in enumerate(moves):
+        if stop.is_set():
+            return False
+        if mx or my:                                     # finger moves the other way: the map follows the finger
+            dev.swipe(270 + mx / 2, 460 + my / 2, 270 - mx / 2, 460 - my / 2, 500)
+            _nap(stop, 1.0, 1.3)
+        shot = dev.screenshot()
+        if view_of(shot, cfg) != "city":
+            leave_to_city(dev, cfg, stop, log)
+            shot = dev.screenshot()
+        r = cv2.matchTemplate(shot[90:860, 0:470], tpl, cv2.TM_CCOEFF_NORMED)
+        _, mv, _, ml = cv2.minMaxLoc(r)
+        if mv >= 0.78:
+            x, y = ml[0] + int(meta["dx"]), ml[1] + 90 + int(meta["dy"])
+            if 60 <= x <= 470 and 150 <= y <= 820 and open_building_here(dev, cfg, log, stop, bname, spots=[(x, y)], how=f"its learned picture (match {mv:.2f})"):
+                return True
+    log(f"[i]   {bname}: its learned picture was not found on the city")
     return False
 
 # --- Alliance page ------------------------------------------------------------------------------------------------
