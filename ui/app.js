@@ -280,7 +280,7 @@ function buildRibbon() {
     grp("Auto-Join",                                  // the game's Auto-Join for every instance at once (own switch, not part of presets)
       h("label", { class: "tgl ajsw", id: "ajAll", title: "Switch the game's Auto-Join on or off for every instance (needs the Rally Monthly Card)" },
         (() => { const i = h("input", { type: "checkbox", "aria-label": "Auto-Join for all instances" }); i.addEventListener("change", () => { ajSetAll(i.checked); rerender(); }); return i; })(),
-        h("span", { class: "sw" }), h("span", { class: "ajcnt" }))),
+        h("span", { class: "sw" }), "Auto-Join", h("span", { class: "ajcnt" }))),
     grp("Tools",
       btn("Tools ▾", (e) => menu(e.currentTarget, [
         { label: "Generals", icon: "users", run: () => openGeneralManager() },
