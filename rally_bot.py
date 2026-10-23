@@ -4356,7 +4356,7 @@ def check_update(cfg):
     try:
         manifest = json.loads(_download(url, 1_000_000).decode("utf-8"))
     except (OSError, ValueError) as e:
-        raise ValueError(f"Could not read {url}: {e}")
+        raise ValueError(f"Could not reach the update server ({type(e).__name__}) - check the internet connection and try again later.")
     key = (cfg.get("update_key") or "").strip()
     if key and not hmac.compare_digest(str(manifest.get("sig", "")), sign_manifest(manifest, key)):
         raise ValueError("The published update is not signed with your update key - ignored.")
