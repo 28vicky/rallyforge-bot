@@ -1250,3 +1250,19 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .mrc>.mrxy{grid-area:xy;font-size:12.5px;color:var(--mute)}
 .mrc>.rtnst,.mrc>.btn{grid-area:s}
 .mrc.dim>b{color:var(--mute)}
+/* ---- Duties page (ui-simple): short header with "i", slim duty rows ---- */
+.dhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.infow{position:relative;display:inline-flex}
+.infoi{width:18px;height:18px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--mute);font:600 11px/1 var(--font);font-style:italic;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.infoi:hover,.infow.open .infoi{color:var(--accent2);border-color:var(--accent1)}
+.infopop{display:none;position:absolute;top:24px;left:-8px;z-index:30;width:300px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;font-size:13px;line-height:1.45;color:var(--fg)}
+.infopop b{display:block;font-weight:600;margin-bottom:4px}
+.infow.open .infopop{display:block}
+.dline{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.panel .dline:first-of-type,.dline.only{border-top:0}
+.dline .tgl{flex:none}
+.dline .dtx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.dline .dtx b{font-weight:600;font-size:14px}
+.dline .dtx small{color:var(--mute);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dline.off .dtx b{color:var(--mute);font-weight:500}
+.dline .btn.sm{margin-left:2px}

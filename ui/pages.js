@@ -31,6 +31,15 @@ function parseXY(t, def) {
 function panel(title, ...kids) { return h("div", { class: "panel" }, title ? h("h3", {}, title) : null, kids); }
 function subset(title, ...kids) { return h("div", { class: "subset" }, h("div", { class: "subtitle" }, title), kids); }   // settings that belong to a switched-on row: shown inside the same card
 function note(t) { return h("p", { class: "note" }, t); }
+// small round "i": hover shows the text, click pins it open (details out of the way, one place)
+function infoTip(title, text) {
+  const b = h("button", { type: "button", class: "infoi", "aria-label": title, title: text }, "i");
+  const pop = h("span", { class: "infopop", role: "tooltip" }, h("b", {}, title), text);
+  const w = h("span", { class: "infow" }, b, pop);
+  b.onclick = (e) => { e.stopPropagation(); document.querySelectorAll(".infow.open").forEach((o) => { if (o !== w) o.classList.remove("open"); }); w.classList.toggle("open"); };
+  if (!infoTip.bound) { infoTip.bound = true; document.addEventListener("click", (e) => { if (!e.target.closest(".infow")) document.querySelectorAll(".infow.open").forEach((o) => o.classList.remove("open")); }); }
+  return w;
+}
 function fld(label, control, hint) { return h("div", { class: "field" }, h("label", {}, label), control, hint ? h("div", { class: "hint" }, hint) : null); }
 
 function inp(obj, key, o) {
@@ -1334,23 +1343,27 @@ PAGES.duties = function (fixed, only, compact) {
       return;
     }
     if (!only) root.appendChild(panel("Duties",
-      note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes. If it fails, the bot goes back to the rallies and tries again every hour until it is done; after 3 failures you get an alert and a report is saved. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
-      h("div", { class: "row" }, fixed !== undefined ? null : h("span", { class: "lab" }, "Settings for"), fixed !== undefined ? null : pick,
+      h("div", { class: "dhead" },
+        h("span", { class: "hint" }, "What the bot does between rallies."),
+        infoTip("How duties work", "Each duty runs once per game day (reset 00:00 UTC) or every few minutes. If one fails, the bot goes back to rallies and tries again every hour until it is done. After 3 failures you get an alert and a report is saved."),
+        h("span", { style: { flex: "1" } }),
+        fixed !== undefined ? null : pick,
         serial && own.duties ? h("span", { class: "chip own" }, "own settings") : null,
-        serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the universal setting") : null),
-      note(serial ? "Changes here apply to this instance only and replace the universal list for it. Pick 'All instances' to change the default for every instance that has no own settings." : "These are the defaults for every instance. Pick one instance to give it different settings."),
+        serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the universal setting") : null,
+        serial ? infoTip("This instance only", "Changes here apply to this instance only. Pick 'All instances' to change the default for every instance without its own settings.") : null),
     ));
     if (!only) root.appendChild(rn);
     for (const g of GROUPS) {
       const list = rows.filter((r) => r.group === g && (!only || r.id === only));
       if (!list.length) continue;
       // only = one duty inside the Routines page: its switch and name are in that page's header, so just the settings here
-      root.appendChild(panel(only ? "Settings" : g, list.flatMap((r) => [h("div", { class: "row", style: { justifyContent: "space-between", padding: "8px 0", borderTop: only ? "0" : "1px solid var(--line)" } },
-        only ? null : h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" }), h("b", {}, r.title)),
-        h("span", { class: "hint", style: { flex: "1", margin: only ? "0 14px 0 0" : "0 14px" } }, r.note, " · ", r.schedule),
-        r.verified ? null : h("span", { class: "chip", title: "Steps are a first guess and have not been watched on a real instance yet" }, "untested"),
-        h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text),
-        r.status === "gaveup" ? h("button", { class: "btn sm", style: { marginLeft: "8px" }, onclick: async () => { const j = await act(api("duty_retry", { serial, id: r.id })); if (j) { rows = j.duties; own = j.own || {}; draw(); toast("It runs again shortly.", "ok"); } } }, "Retry") : null),
+      const BADGE = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad" };
+      root.appendChild(panel(only ? "Settings" : g, list.flatMap((r) => [h("div", { class: "dline" + (only ? " only" : "") + (r.on ? "" : " off") },
+        only ? null : h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, "aria-label": r.title, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" })),
+        h("div", { class: "dtx", title: r.note || "" }, only ? null : h("b", {}, r.title), h("small", {}, r.schedule || r.note || "")),
+        S.dev && !r.verified ? h("span", { class: "dbadge", title: "Developer: steps not yet watched on a real instance" }, "untested") : null,
+        r.on && r.status_text ? h("span", { class: "dbadge " + (BADGE[r.status] || "") }, r.status_text) : null,
+        r.status === "gaveup" ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("duty_retry", { serial, id: r.id })); if (j) { rows = j.duties; own = j.own || {}; draw(); toast("It runs again shortly.", "ok"); } } }, "Retry") : null),
         (r.on && r.opts && r.opts.length) ? dutyOpts(r) : null,
         (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null, (r.on && r.id === "wheel") ? wh : null,
         (only && !r.on) ? note("Switch it on at the top and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean))));
