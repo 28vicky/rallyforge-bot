@@ -10406,8 +10406,8 @@ def zoom_out_full(dev, cfg, stop, log):
 
 
 def run_map_city(dev, cfg, log, stop):
-    """Duty 'Map my city': at the widest zoom, walk the city in rows from the top (each row left to its edge, then right
-    to the other edge; views ~75 % of a screen apart), keep every view that shows buildings, then solve all the
+    """Duty 'Map my city': at the widest zoom, explore the city from the current view (each direction once from every
+    view, one measured drag per step), keep every view that shows buildings and is new ground, then solve all the
     views' places from their picture links at once and save them as keyframes. The finger only chooses the next drag."""
     leave_to_city(dev, cfg, stop, log)
     zoom_out_full(dev, cfg, stop, log)
@@ -10436,7 +10436,7 @@ def run_map_city(dev, cfg, log, stop):
             log(f"[i]   view at {round(nav.cx)},{round(nav.cy)}: {0 if d is None else len(k)} points - countryside, not kept")
             return False
         for _, _, _, ex, ey in views:                       # the same ground again (the edge slid the camera back)
-            if abs(ex - nav.cx) < 100 and abs(ey - nav.cy) < 100:
+            if abs(ex - nav.cx) < 120 and abs(ey - nav.cy) < 120:
                 return False
         views.append((shot[y:y + h, x:x + w].copy(), g, (k, d), nav.cx, nav.cy))
         rd_snap(shot, f"map_v{len(views):02d}")
@@ -10458,34 +10458,40 @@ def run_map_city(dev, cfg, log, stop):
             return True
         return False
 
-    for _ in range(20):                                    # to the top (the city is a diamond: its top is a point, so a
-        if stop.is_set():                                  # row there is one view wide and rows widen going down)
-            return
-        dx, dy, _ = nav._drag(270, 300, 270, 640)
-        drags[0] += 1
-        if abs(dy) < 4:
-            break
-    nav.cx = nav.cy = 0.0
     keep(clean_shot())
-    sign = -1                                              # first row: left to the edge, then right across; after that
-    for row in range(14):                                  # each row starts at an edge, so one sweep the other way (serpentine)
-        if timed_out():
-            break
-        for leg in ((-1, 1) if row == 0 else (sign,)):
-            for _ in range(16):
-                if timed_out():
+    # The frontier is the VIEWS, not rows: the city is a diamond and its slanted edges slide the camera sideways, so a
+    # row sweep ends early (00:22 run: 9 views) while from every view each of the 4 directions is tried once and
+    # wherever the camera lands is a new view when it is new ground (the 21:45 run reached all 60 views this way).
+    STEP = ((STEPX, 0), (0, STEPY), (-STEPX, 0), (0, -STEPY))
+    tried = [set()]                                        # per view: directions already tried from it
+    at = 0                                                 # the view the camera is on (or nearest to)
+    idle = 0                                               # moves in a row that found no new ground
+
+    def nearest():
+        return min(range(len(views)), key=lambda i: abs(views[i][3] - nav.cx) + abs(views[i][4] - nav.cy))
+
+    while len(views) < 40 and idle < 8 and not timed_out():
+        if len(tried[at]) == 4:                            # this view is done: go to the nearest view with directions left
+            cand = [i for i in range(len(views)) if len(tried[i]) < 4]
+            if not cand:
+                break
+            at = min(cand, key=lambda i: abs(views[i][3] - nav.cx) + abs(views[i][4] - nav.cy))
+            for _ in range(4):
+                rx, ry = views[at][3] - nav.cx, views[at][4] - nav.cy
+                if abs(rx) < 80 and abs(ry) < 80 or timed_out():
                     break
-                mx, my = move(leg * STEPX, 0)
-                if abs(mx) < STEPX * 0.3:                  # the edge: the camera did not follow the finger
-                    break
-                keep(clean_shot())
-            sign = -leg
-        if timed_out():
-            break
-        mx, my = move(0, STEPY)                            # next row
-        if abs(my) < STEPY * 0.3:
-            break                                          # the bottom
-        keep(clean_shot())
+                move(max(-STEPX, min(STEPX, rx)), max(-STEPY, min(STEPY, ry)))
+            continue
+        sx, sy = min(STEP, key=lambda d: (d in tried[at], abs(d[0]) == 0))   # sideways first (the diamond is wider than tall)
+        tried[at].add((sx, sy))
+        mx, my = move(sx, sy)
+        if keep(clean_shot()):
+            idle = 0
+            tried.append(set())
+            at = len(views) - 1
+        else:                                              # old ground (the edge: did not move, slid, or sprang back)
+            idle += 1
+            at = nearest()
     if len(views) < 2:
         log("[!]  Map my city: fewer than 2 views with buildings - nothing saved")
         return
