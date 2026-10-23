@@ -1601,7 +1601,7 @@ function monsterRallyTab(serial) {
     h("input", { type: "number", min: 0, max, value: optVal(k, d), onchange: (e) => setOpt({ [k]: e.target.value }) }), h("small", { class: "hint" }, hint));
   const rulesCard = () => panel(null, h("div", { class: "cardhead" }, h("h3", {}, "Rules")),
     h("div", { class: "mrfields" },
-      num("max_wait", "Wait on a monster", "minutes for a free march, then the next coordinate", 5, 30),
+      num("max_wait", "Give up on a monster after", "minutes without a free march \u00b7 0 = stay until it is rallied", 0, 120),
       num("keep_free", "Marches kept free", "for joining other rallies", 0, 5),
       num("keep_stamina", "Keep stamina", "never start a rally under this", 100, 9999),
       num("max_age", "Coordinates up to", "minutes old", 30, 600)),

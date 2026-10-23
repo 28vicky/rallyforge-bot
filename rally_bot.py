@@ -9938,7 +9938,8 @@ def run_royal_thief(dev, cfg, log, stop):
 # ------------------------------------------------------------ Monster rally starter (owner's recording 23 Oct 07:44, project doc claude/flow_rally_monsters.md)
 # Coordinates come from the Telegram section (live feed + boss finder). Map > coordinate search (Server / X / Y / Go) >
 # tap the monster in the middle > Attack > monster page (name, level) > Alliance War > rally time > preset > March.
-# No free march: stay on the monster and attack as soon as one is free (up to 'max_wait' minutes).
+# No free march: stay on the monster until it is rallied (owner 23 Oct 08:20) - only a march line to it or the monster
+# disappearing makes the bot move on. 'max_wait' minutes > 0 sets a limit (0 = no limit, the default).
 # Skipped: a monster that is gone (no Attack / other name on its page) or that a march line is already going to.
 MR_POLL_MIN = 5                          # look for a new target this often
 MR_FORGET_MIN = 30                       # a target that was started / skipped is not tried again for this long
@@ -10077,6 +10078,21 @@ def mr_search(dev, stop, x, y):
     return True
 
 
+def mr_still_there(dev, stop):
+    """While waiting for a march: tap the monster in the middle; True when its ring shows Attack (the ring is closed again)."""
+    for dx, dy in MR_NEAR[:3]:
+        if stop.is_set():
+            return True
+        dev.tap(MR_CENTER[0] + dx, MR_CENTER[1] + dy)
+        _nap(stop, 1.2, 1.5)
+        hit = rd_find(dev.screenshot(), ["Attack"], region=(0, 250, 540, 450), cutoff=0.75)
+        dev.tap(40, 640)                                    # close the ring on empty map
+        _nap(stop, 0.7, 0.9)
+        if hit:
+            return True
+    return False
+
+
 def mr_open_monster(dev, stop, want):
     """Tap the monster in the middle; its ring menu must have Attack, its page must show the wanted name.
     -> ('ok', page_shot) | ('gone', None) | ('other', name_read)"""
@@ -10123,7 +10139,7 @@ def run_monster_rally(dev, cfg, log, stop):
     if not targets:
         return later(MR_POLL_MIN, "no Telegram coordinate matches the monster list")
     keep_free = int(float(rd_opt(cfg, "monster_rally", "keep_free", 0) or 0))
-    max_wait = float(rd_opt(cfg, "monster_rally", "max_wait", 5) or 0) * 60
+    max_wait = float(rd_opt(cfg, "monster_rally", "max_wait", 0) or 0) * 60          # 0 = stay until it is rallied
     keep_sta = int(float(rd_opt(cfg, "monster_rally", "keep_stamina", 100) or 0))
     skip_lines = rd_opt(cfg, "monster_rally", "skip_busy", True) in (True, "true", "1", 1)
     if not ensure_view(dev, cfg, stop, log, "landscape"):
@@ -10142,11 +10158,15 @@ def run_monster_rally(dev, cfg, log, stop):
             return later(MR_POLL_MIN, "the coordinate search did not open")
         _nap(stop, 1.0, 1.4)
         t0 = time.time()
-        while True:                                          # stay on this monster until a march is free (or max_wait)
+        gone, checked, said = False, time.time(), False
+        while True:                                          # stay on this monster until a march is free
             if stop.is_set():
                 return
             shot = dev.screenshot()
             rd_snap(shot, "mrally_map")
+            if view_of(shot, cfg) not in ("landscape", "world"):        # a popup / restart took the map away
+                tried.pop(key, None)
+                return later(1, "the map was closed while waiting")
             line = mr_march_line(shot) if skip_lines else None
             if line:
                 log(f"[*]  Monster rally: {label} - a {line} march line is already going to it, skipped")
@@ -10155,15 +10175,24 @@ def run_monster_rally(dev, cfg, log, stop):
             free = (mk[1] - mk[0]) if mk else None
             if free is None or free > keep_free:
                 break
-            if time.time() - t0 >= max_wait:
+            if not said:
+                log(f"[*]  Monster rally: {label} - all marches busy, waiting on the monster")
+                said = True
+            if time.time() - checked > 60:                   # still there? (tap it: the ring must have Attack, then close it)
+                checked = time.time()
+                if not mr_still_there(dev, stop):
+                    gone = True
+                    log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
+                    break
+            if max_wait and time.time() - t0 >= max_wait:
                 log(f"[*]  Monster rally: {label} - no free march for {round(max_wait / 60)} min")
                 tried.pop(key, None)                         # not the monster's fault: it may be tried again next time
                 return later(max(1, round(((mk[2] if mk else None) or 120) / 60)), "all marches are busy")
             wait = min(20, max(5, (mk[2] or 20) + 2))
             _nap(stop, wait, wait + 1)
-        if line:
+        if line or gone:
             continue
-        while True:                                          # the march count was not read / was wrong: keep trying here until max_wait
+        while True:                                          # the march count was not read / was wrong: keep trying here
             got, page = mr_open_monster(dev, stop, tgt.get("name") or "")
             if got != "ok":
                 break
@@ -10184,7 +10213,7 @@ def run_monster_rally(dev, cfg, log, stop):
                 rd_snap(shot, "mrally_nomarch")
                 dev.tap(504, 352)                                # X of the rally time popup
                 _nap(stop, 1.0, 1.3)
-                if time.time() - t0 < max_wait and not (skip_lines and mr_march_line(dev.screenshot())):
+                if (not max_wait or time.time() - t0 < max_wait) and not (skip_lines and mr_march_line(dev.screenshot())):
                     log(f"[*]  Monster rally: {label} - no free march yet, waiting on the monster")
                     _nap(stop, 20, 22)
                     continue
@@ -10373,7 +10402,7 @@ DUTY_LIBRARY = [
              "No free march: waits on the monster. Skips a monster that is gone or that a march is already going to.",
      "target": "self:", "steps": ["monster_rally"],
      "opts": [{"k": "rules", "label": "Monsters", "type": "rules", "def": None},
-              {"k": "max_wait", "label": "Wait on a monster for a free march (min)", "type": "number", "min": 0, "max": 30, "def": 5},
+              {"k": "max_wait", "label": "Give up on a monster after (min, 0 = wait until it is rallied)", "type": "number", "min": 0, "max": 120, "def": 0},
               {"k": "keep_free", "label": "Marches to keep free for joining", "type": "number", "min": 0, "max": 5, "def": 0},
               {"k": "keep_stamina", "label": "Keep at least this much stamina", "type": "number", "min": 0, "max": 9999, "def": 100},
               {"k": "max_age", "label": "Ignore coordinates older than (min)", "type": "number", "min": 1, "max": 600, "def": 30},
