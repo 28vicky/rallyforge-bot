@@ -1534,4 +1534,4 @@ a.lnk,.lnkb,.viewall,.vlink{display:inline-flex;align-items:center;min-height:28
 .tdall td .ajsw{vertical-align:middle}
 .ajsw .ajcnt::before{content:"\00b7\00a0"}
 .ajsw .ajcnt:empty{display:none}
-@media (max-width:1400px){.insthead .iserial{display:none}}   /* narrow windows: the address moves into the name's tooltip so the header stays on one line */
+@media (max-width:1600px){.insthead .iserial{display:none}}   /* narrow windows: the address moves into the name's tooltip so the header stays on one line */
