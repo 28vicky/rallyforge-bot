@@ -58,7 +58,15 @@ function inp(obj, key, o) {
 }
 function sel(obj, key, opts, o) {
   o = o || {};
-  const el = h("select", {}, opts.map((x) => { const [v, l] = Array.isArray(x) ? x : [x, x]; return h("option", { value: String(v) }, l); }));
+  const pairs = opts.map((x) => (Array.isArray(x) ? x : [x, x]));
+  const cap = (l) => (typeof l === "string" && /^[a-z]/.test(l) ? l[0].toUpperCase() + l.slice(1) : l);   // never show a raw lowercase value
+  if (!o.dropdown && pairs.length >= 2 && pairs.length <= 5 && pairs.every(([, l]) => String(l).length <= 22)) {
+    // a short pick-one list is a segmented control (rule 15); same value conversions as the dropdown
+    const st = { v: String(o.get ? o.get(obj[key]) : obj[key] ?? pairs[0][0]) };
+    return segPick(st, "v", pairs.map(([v, l]) => [String(v), cap(l)]), { small: true, label: o.label || key,
+      after: (v) => { obj[key] = o.set ? o.set(v) : o.num ? Number(v) : v; if (o.after) o.after(); } });
+  }
+  const el = h("select", {}, pairs.map(([v, l]) => h("option", { value: String(v) }, cap(l))));
   const cur = o.get ? o.get(obj[key]) : obj[key];
   el.value = String(cur ?? (Array.isArray(opts[0]) ? opts[0][0] : opts[0]));
   el.addEventListener("change", () => { obj[key] = o.set ? o.set(el.value) : o.num ? Number(el.value) : el.value; if (o.after) o.after(); });
@@ -350,7 +358,7 @@ function instancePage(serial) {
         const list = h("div", {});
         const draw = () => { list.innerHTML = ""; names.forEach((n) => list.appendChild(h("div", { class: "li" + (n === chosen ? " sel" : ""), onclick: () => { chosen = n; draw(); } }, n))); };
         draw();
-        modal({ title: "Load profile into this instance", body: h("div", {}, h("p", { class: "note" }, "This replaces the settings of THIS instance with the saved ones (its generals, presets and own settings). Other instances are not changed."), list), buttons: [
+        modal({ title: "Load profile into this instance", body: h("div", {}, h("p", { class: "note" }, "This replaces the settings of this instance with the saved ones (its generals, presets and own settings). Other instances are not changed."), list), buttons: [
           { label: "Delete", onclick: async () => { if (await confirmBox("Delete profile", `Delete profile '${chosen}'?`)) await act(api("inst_profile_delete", { name: chosen })); } },
           { label: "Cancel" },
           { label: "Load", cls: "pri", onclick: async () => {
@@ -362,7 +370,7 @@ function instancePage(serial) {
   };
   const stBtn = (t, fn, cls) => h("button", { class: "btn" + (cls ? " " + cls : ""), "data-act": t.toLowerCase(), onclick: fn }, t);
   const moreBtn = btn("More \u25BE", (e) => menu(e.currentTarget, [
-    { label: "Save profile...", run: saveInstProfile }, { label: "Load profile...", run: loadInstProfile }]), "");
+    { label: "Save profile\u2026", run: saveInstProfile }, { label: "Load profile\u2026", run: loadInstProfile }]), "");
   const bar = h("div", { class: "row instbar" },
     btn("Take game back now", () => act(api("takeback", { serial }))),
     stBtn("Start", () => collectAndRun("start", { serial }), "pri"), stBtn("Pause", () => act(api("pause", { serial })), "warnb"), stBtn("Stop", () => act(api("stop", { serial })), "bad"), moreBtn);
@@ -450,7 +458,7 @@ function instancePage(serial) {
     menu(e.currentTarget, others.map((o) => ({ label: o.name || o.id, run: () => { S.cfg.per_device[serial] = clone(S.cfg.per_device[o.id] || {}); rerender(); } })));
   };
   const panelEl = panel("Instance settings", note("Blank or (universal) = use the universal setting from Control settings."), fields,
-    h("div", { class: "row", style: { marginTop: "14px" } }, btn("Copy settings from...", copyMenu, "sm"),
+    h("div", { class: "row", style: { marginTop: "14px" } }, btn("Copy settings from\u2026", copyMenu, "sm"),
       btn("Use these on ALL instances", () => { for (const x of S.devices) if (x.id && x.id !== serial) S.cfg.per_device[x.id] = clone(S.cfg.per_device[serial] || {}); toast("Copied to all other instances.", "ok"); }, "sm"),
       btn("Clear (use universal)", () => { S.cfg.per_device[serial] = {}; rerender(); }, "sm")));
   // ---- own presets & generals (stored in this instance's overrides; blank = the universal ones)
@@ -615,7 +623,7 @@ function instItinerary(serial) {
       row && !row.tasks ? h("div", { class: "chip pill-bad", style: { margin: "6px 0" } }, "Tasks are off for this instance") : null,
       ...(parts.length ? parts : [note("Nothing is switched on yet. Turn duties on under Duties and they appear here.")])));
   };
-  root.appendChild(note("Loading..."));
+  root.appendChild(note("Loading\u2026"));
   setTimeout(load, 0);
   const t = setInterval(() => { if (!root.isConnected) clearInterval(t); else load(); }, 10000);
   return root;
@@ -735,7 +743,7 @@ async function captureTemplate() {
   if (!shot) return;
   const rect = await pickOnShot(shot, "Drag a box tightly around the button or the pop-up's close button, then let go.", "region");
   if (!rect) return;
-  const name = await promptBox("Template name", "Name for this picture.\n\npopup_anything  = a pop-up button the bot taps whenever it sees it (e.g. popup_ok)\nrally_icon, alliance_button, war_button = steps to reach the rally list\nassistant_card = the Assistant General slot on the march screen\nmarch_screen, city_screen, rally_screen = screens the bot can recognise\nfav_off = the heart filter when it is OFF\nno_general = the EMPTY general slot (presets showing it are skipped)\npopup_exit_cancel = Cancel on the 'quit game' dialog", "");
+  const name = await promptBox("Template name", "Name for this picture.\n\npopup_anything  = a pop-up button the bot taps whenever it sees it (e.g. popup_ok)\nrally_icon, alliance_button, war_button = steps to reach the rally list\nassistant_card = the Assistant General slot on the march screen\nmarch_screen, city_screen, rally_screen = screens the bot can recognise\nfav_off = the heart filter when it is off\nno_general = the empty general slot (presets showing it are skipped)\npopup_exit_cancel = Cancel on the 'quit game' dialog", "");
   if (!name) return;
   const j = await act(api("template_add", { token: shot.token, rect, name }));
   if (j) toast(`Saved template '${j.name}'`, "ok");
@@ -747,7 +755,7 @@ function staminaPanel(store, base) {
   const g = (k, d) => (store[k] !== undefined ? store[k] : base[k] !== undefined ? base[k] : d);
   const S_ = (k, opts, d) => sel(store, k, opts, { get: () => g(k, d) });
   return panel("Stamina (when a march needs more than you have)",
-    h("div", { class: "hint", style: { marginBottom: "10px" } }, "The bot uses stamina ITEMS only (never gems). Choose which items it may use, in which order, and how many."),
+    h("div", { class: "hint", style: { marginBottom: "10px" } }, "The bot uses stamina items only (never gems). Choose which items it may use, in which order, and how many."),
     h("div", { style: { marginBottom: "10px" } }, tog({ stamina_auto: g("stamina_auto", true) }, "stamina_auto", "Use stamina items automatically", { after: (v) => { store.stamina_auto = v; } })),
     (() => {
       const cntFld = fld("Exact number of items", inp(store, "stamina_count", { type: "int", cls: "short", get: (v) => g("stamina_count", 2) }));
@@ -808,7 +816,7 @@ PAGES.settings0 = function () {
   // Beta: every user can record a task (taps, swipes + pictures) and send it, so new duties can be built from it
   const rec = panel("Record a task (beta)", h("div", { class: "hint", style: { marginBottom: "10px" } },
       "Play a task by hand in the game while this records your taps and swipes with a small picture of each step. Give it a clear title (for example \u201cGold Levy\u201d or \u201cAlliance treasure\u201d), then send the zip to the developer."),
-    h("div", { class: "row" }, btn("Record a task...", flowRecordFlow, "sm pri"),
+    h("div", { class: "row" }, btn("Record a task\u2026", flowRecordFlow, "sm pri"),
       btn("Save recordings as zip", async () => { const j = await act(api("flow_zip")); if (j) toast(`Saved ${j.flows} recording(s) in Downloads: ${j.path}`, "ok"); }, "sm"),
       btn("Open recordings folder", () => act(api("flow_open")), "sm")));
   setTimeout(updateSummary, 0);
@@ -933,7 +941,7 @@ function monstersPanel(c) {
     h("div", { class: "row", style: { marginBottom: "14px" } }, h("span", { class: "lab" }, "Monster with no picture yet"), sel(c, "monster_unknown", ["join", "skip"]),
       S.dev ? btn("Open unknown-monster folder", () => act(api("open_unknown")), "sm") : null),
     body,
-    h("div", { class: "row", style: { marginTop: "14px" } }, S.dev ? btn("Add monster from screenshot...", addMonster) : null, btn("Refresh list", async () => { await reloadMeta(); rerender(); })));
+    h("div", { class: "row", style: { marginTop: "14px" } }, S.dev ? btn("Add monster from screenshot\u2026", addMonster) : null, btn("Refresh list", async () => { await reloadMeta(); rerender(); })));
 }
 async function addMonster() {
   const shot = await pickScreenshot("Screenshot of the rally list");
@@ -951,13 +959,29 @@ PAGES.tasks = function (fixed) {
   const sc = scopeBar("tasks", ["city_tasks", "rally_enabled", "city_enabled", "tasks_first"], "task list", fixed);
   const c = sc.c;
   c.city_tasks = c.city_tasks || [];
-  let selIdx = null;
-  const holder = h("div", {});
+  // one row per task (Rule 0): grip to drag the order, switch, name + what it opens, edit and remove on the row
+  const holder = h("div", { class: "tlist" });
+  let dragFrom = null;
+  const editAt = async (i) => { const r = await taskDialog(c.city_tasks[i]); if (r) { c.city_tasks[i] = r; draw(); } };
   const draw = () => {
-    const t = listTable(["Task", "Opens", "Every (min)", "On"], c.city_tasks.map((x, i) => ({ cells: [x.name, x.target, (x.at ? "at " + x.at : (x.every_min ?? 60)), x.enabled !== false ? "yes" : "no"], _dbl: () => edit() })), (i) => (selIdx = i), selIdx);
-    holder.innerHTML = ""; holder.appendChild(t.el);
+    holder.innerHTML = "";
+    if (!c.city_tasks.length) { holder.appendChild(h("div", { class: "empty" }, h("b", {}, "No city tasks yet"), h("span", {}, "Add a ready-made task, or make your own with Add custom."))); return; }
+    c.city_tasks.forEach((x, i) => {
+      const on = x.enabled !== false;
+      const sw = h("input", { type: "checkbox", checked: on, "aria-label": "Task " + x.name + " on", onchange: (e) => { x.enabled = e.target.checked; draw(); } });
+      holder.appendChild(h("div", { class: "trow" + (on ? "" : " off"), draggable: "true", title: "Drag to change the order - tasks higher up run first",
+        ondragstart: (e) => { dragFrom = i; e.dataTransfer.effectAllowed = "move"; },
+        ondragover: (e) => { e.preventDefault(); e.currentTarget.classList.add("over"); },
+        ondragleave: (e) => e.currentTarget.classList.remove("over"),
+        ondrop: (e) => { e.preventDefault(); e.currentTarget.classList.remove("over"); if (dragFrom == null || dragFrom === i) return; const [m] = c.city_tasks.splice(dragFrom, 1); c.city_tasks.splice(i, 0, m); dragFrom = null; draw(); },
+        ondblclick: () => editAt(i) },
+        h("span", { class: "grip", "aria-hidden": "true" }, "\u22ee\u22ee"),
+        h("label", { class: "tgl" }, sw, h("span", { class: "sw" })),
+        h("div", { class: "tname" }, h("b", {}, x.name), h("small", {}, (x.target ? "Opens " + String(x.target).replace(/^building:/, "").replace(/^icon:(.*)$/, "the $1 button").replace(/^(go|via|learned):/, "") + " \u00b7 " : "") + (x.at ? "at " + x.at : "every " + (x.every_min ?? 60) + " min"))),
+        h("button", { class: "btn sm", type: "button", onclick: () => editAt(i) }, "Edit\u2026"),
+        h("button", { class: "ix", type: "button", "aria-label": "Remove " + x.name, title: "Remove", onclick: async () => { if (!(await confirmBox("Remove task", `Remove '${x.name}' from the list?`, "Remove"))) return; c.city_tasks.splice(i, 1); draw(); } }, "\u2715")));
+    });
   };
-  const edit = async () => { if (selIdx === null) return; const r = await taskDialog(c.city_tasks[selIdx]); if (r) { c.city_tasks[selIdx] = r; draw(); } };
   const addExample = async () => {
     const have = new Set(c.city_tasks.map((t) => t.name));
     const todo = S.meta.examples.filter((t) => !have.has(t.name));
@@ -976,19 +1000,15 @@ PAGES.tasks = function (fixed) {
     note("Tip for best results: on each instance, open the city once and pinch it fully out (two fingers together). The bot finds buildings by reading the names under them, and a zoomed-in city shows too few names."),
     note("Rallies come first: the bot only leaves the rally list when no rally is available, runs the tasks that are due (top of the list first) and goes back. Switch 'Join rallies' off to make the bot do only the tasks. Building tasks need the city mapper to have run once."),
     holder,
-    h("div", { class: "row", style: { marginTop: "12px" } }, btn("Add ready-made task...", addExample, "pri"), btn("Add custom", async () => { const r = await taskDialog(null); if (r) { c.city_tasks.push(r); draw(); } }),
-      btn("Edit", edit), btn("On / Off", () => { if (selIdx === null) return; c.city_tasks[selIdx].enabled = !(c.city_tasks[selIdx].enabled !== false); draw(); }),
-      btn("Up", () => { if (selIdx > 0) { [c.city_tasks[selIdx - 1], c.city_tasks[selIdx]] = [c.city_tasks[selIdx], c.city_tasks[selIdx - 1]]; selIdx--; draw(); } }, "sm"),
-      btn("Down", () => { if (selIdx !== null && selIdx < c.city_tasks.length - 1) { [c.city_tasks[selIdx + 1], c.city_tasks[selIdx]] = [c.city_tasks[selIdx], c.city_tasks[selIdx + 1]]; selIdx++; draw(); } }, "sm"),
-      btn("Delete", () => { if (selIdx !== null) { c.city_tasks.splice(selIdx, 1); selIdx = null; draw(); } })));
+    h("div", { class: "cardfoot" }, btn("Add ready-made task\u2026", addExample, "pri"), btn("Add custom\u2026", async () => { const r = await taskDialog(null); if (r) { c.city_tasks.push(r); draw(); } })));
   const xy = (key, def) => inp(c, key, { cls: "short", get: xyText, set: (t) => parseXY(t, def) });
   const mapper = panel("City mapper",
     note("The bot drags the map to the top-left corner, sweeps the whole city, reads the building names and saves where each one is. Open the city screen on the instance first. It takes a few minutes."),
-    h("div", { class: "row", style: { marginBottom: "14px" } }, btn("Scan the city now", scanCityFlow, "pri"), cityInfo),
+    h("div", { class: "row", style: { marginBottom: "14px" } }, btn("Scan the city now", scanCityFlow), cityInfo),
     grid2(fld("Tap to leave the rally list for the city (x,y)", xy("city_to_tap", [35, 35])),
       fld("Tap to go back from the city to the rally list (x,y, if no rally_icon picture)", xy("rally_nav_tap", [])),
       fld("Empty ground to tap so names show (x,y, optional)", xy("city_label_tap", []))),
-    h("div", { style: { marginTop: "14px" } }, btn("Right-side icon positions...", iconsDialog)));
+    h("div", { style: { marginTop: "14px" } }, btn("Right-side icon positions\u2026", iconsDialog)));
   return fixed !== undefined ? h("div", {}, sc.bar, lockedWrap(tasks, sc.locked)) : h("div", {}, sc.bar, lockedWrap(tasks, sc.locked), mapper);
 };
 
@@ -1043,7 +1063,7 @@ PAGES.market = function () {
         ...PAY.map(([v, l]) => h("option", { value: v, selected: (it.pay || "gems") === v }, l))) : null;
       return h("div", { class: "bmcard" + (it ? " on" : ""), title: n, onclick: () => pick(n) },
         h("img", { src: `/api/market_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, alt: "", onerror: (e) => (e.target.style.visibility = "hidden") }),
-        h("div", { class: "bmname" }, f.label), it ? pay : h("div", { class: "bmsub" }, "Tap to buy"));
+        h("div", { class: "bmname" }, f.label), it ? pay : h("div", { class: "bmsub" }, "Click to buy"));
     })) : note("Nothing matches."));
     const k = c.market_items.length;
     sum.textContent = k ? "Buying " + k + ": " + c.market_items.map((i) => bmInfo(i.name).label).join(", ") : "Nothing chosen yet - the bot buys nothing in the Black Market.";
@@ -1057,7 +1077,7 @@ PAGES.market = function () {
       btn("Stamina only", () => { c.market_items = c.market_items.filter((i) => bmInfo(i.name).cat === "stamina").map((i) => ({ ...i, pay: "gems" }));
         for (const n of names) if (bmInfo(n).cat === "stamina" && !chosen(n)) c.market_items.push({ name: n, pay: "gems" }); cat = "stamina"; draw(); }, "sm"),
       btn("Clear all", () => { c.market_items = []; draw(); }, "sm"),
-      btn("Add item from screenshot...", async () => {
+      btn("Add item from screenshot\u2026", async () => {
         const shot = await pickScreenshot("Screenshot of the Black Market");
         if (!shot) return;
         const rect = await pickOnShot(shot, "Drag a box around just the item's PICTURE (the icon in the middle, without the number in the corner), then release.", "region");
@@ -1164,9 +1184,10 @@ PAGES.telegram = function () {
     cur = id;
     try { localStorage.setItem("rf_tg_view", id); } catch (e) {}
     views.forEach(([k, , el]) => el.classList.toggle("on", k === id));
-    [...bar.querySelectorAll("button[data-v]")].forEach((b) => b.classList.toggle("pri", b.dataset.v === id));
   };
-  views.forEach(([k, t, el]) => { const b = btn(t, () => show(k)); b.dataset.v = k; bar.appendChild(b); area.appendChild(el); });
+  const vst = { v: cur };                                      // the four views: one segmented control (rule 15), not four buttons
+  bar.appendChild(segPick(vst, "v", views.map(([k, t]) => [k, t]), { label: "Telegram view", after: (v) => show(v) }));
+  views.forEach(([, , el]) => area.appendChild(el));
   bar.appendChild(h("div", { style: { flex: 1 } }));
   bar.appendChild(maxToggle(win));
   win.appendChild(bar); win.appendChild(area);
@@ -1187,7 +1208,7 @@ PAGES.reliability = function () {
 PAGES.schedule = function () {
   const c = S.cfg;
   const sched = panel("Schedules: start and stop instances by the clock", h("div", { class: "row", style: { gap: "20px" } }, tog(c, "schedules_on", "Enable schedules"), h("div", { style: { flex: 1, minWidth: "260px" } }, fld("Default schedule", inp(c, "schedule")))),
-    note("Examples:  08:00-12:00, 18:00-23:30   |   Mon-Fri 08:00-22:00; Sat,Sun 10:00-14:00   |   22:00-02:00 (past midnight). An instance can have its own schedule in its page. The bot starts an instance when its window opens and stops it when the window ends; starting or stopping it yourself in between is respected."));
+    note("Examples: 08:00-12:00, 18:00-23:30 \u00b7 Mon-Fri 08:00-22:00; Sat,Sun 10:00-14:00 \u00b7 22:00-02:00 (past midnight). An instance can have its own schedule in its page. The bot starts an instance when its window opens and stops it when the window ends; starting or stopping it yourself in between is respected."));
   const alerts = panel("Alerts to your phone (Telegram and / or Discord)",
     grid2(fld("Telegram bot token", inp(c, "telegram_token", { type: "password" })), fld("Telegram chat id", inp(c, "telegram_chat", { get: (v) => v ?? "" })), fld("Discord webhook URL", inp(c, "discord_webhook", { type: "password" }))),
     h("div", { class: "row", style: { margin: "14px 0", gap: "26px" } }, tog(c, "notify_problems", "Message me about problems (restarts, stuck instance, stopped instance)"), tog(c, "notify_joins", "Message me for every joined rally")),
@@ -1205,7 +1226,7 @@ PAGES.updates = function () {
   return h("div", {}, panel(`Updates`,
     h("div", { class: "row", style: { justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" } },
       h("div", {}, h("b", {}, "Version " + S.version), h("small", { class: "sub", style: { display: "block", color: "var(--mute)" } }, "The app checks when it opens and every 30 minutes.")),
-      h("div", { class: "row", style: { gap: "10px" } }, btn("What's new", () => showWhatsNew(true)), btn("Check for updates now", async () => { if (await act(api("check_updates", { cfg: c }))) toast("Checking for updates..."); }, "pri"))),
+      h("div", { class: "row", style: { gap: "10px" } }, btn("What's new", () => showWhatsNew(true)), btn("Check for updates now", async () => { if (await act(api("check_updates", { cfg: c }))) toast("Checking for updates\u2026"); }, "pri"))),
     h("div", { style: { marginTop: "18px" } }, h("div", { class: "lab", style: { marginBottom: "8px" } }, "When a new version is found"), seg, note(tip + " A new version starts after the app restarts; running instances are started again by themselves."))), dev);
 };
 
@@ -1274,7 +1295,7 @@ PAGES.license = function () {
     h("div", { style: { fontWeight: 600, marginBottom: "10px", color: L.valid ? "var(--accent2)" : "var(--bad)" } },
       L.valid ? "Logged in as " + (L.user || L.buyer || "") : (L.error || "Not logged in.")),
     L.valid ? h("div", { class: "hint", style: { marginBottom: "12px" } },
-      `Up to ${L.instances} instance${L.instances > 1 ? "s" : ""} running at the same time` + (L.expires ? `  |  valid until ${L.expires}` + (left != null ? ` (${left} day${left === 1 ? "" : "s"} left)` : "") : "  |  no expiry") + `  |  instances in your list: ${S.devices.filter((d) => d.id).length}`) : null,
+      (L.instances ? `Up to ${L.instances} instance${L.instances > 1 ? "s" : ""} running at the same time` : "No limit on running instances") + (L.expires ? ` \u00b7 valid until ${L.expires}` + (left != null ? ` (${left} day${left === 1 ? "" : "s"} left)` : "") : " \u00b7 no expiry") + ` \u00b7 instances in your list: ${S.devices.filter((d) => d.id).length}`) : null,
     h("div", { class: "row", style: { margin: "12px 0" } },
       btn("Log out", async () => { if (await confirmBox("Log out", "Log out? All bots will stop.")) { const j = await act(api("logout")); if (j) { S.license = j.license; showLogin(); } } }),
       L.buy_url ? btn("Buy / extend", () => window.open(L.buy_url, "_blank")) : null),
@@ -1409,7 +1430,7 @@ function renderTodayAll() {
     if (!c.total) ce.append(h("span", {}, "no instances yet"));
     else if (!c.off.length) ce.append(h("span", {}, `on for all ${c.total} instance${c.total > 1 ? "s" : ""}`));
     else ce.append(h("span", { title: "Off on: " + c.off.join(", ") }, `\u26a0 off on ${c.off.length} of ${c.total}`), " \u00b7 ",
-      h("a", { href: "#", title: "Switch the Crazy Eggs duty on for every instance", onclick: turnOn }, "turn on"));
+      h("a", { href: "#", class: "lnk", title: "Switch the Crazy Eggs duty on for every instance", onclick: turnOn }, "turn on"));
     body.innerHTML = "";
     if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: "6", class: "mute" }, "No instances in your list yet.")));
     j.rows.forEach((r) => {
@@ -1447,8 +1468,8 @@ PAGES.duties = function (fixed, only, compact) {
       if (o.type === "rules") return h("a", { href: "#", class: "lab", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab && serial) S.gotoInstTab("mrally"); } }, serial ? "Monsters and presets: Monster rallies tab \u2192" : "Monsters and presets: on each instance's Monster rallies tab");
       const save = async (v) => { const j = await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } })); if (j) { rows = j.duties; own = j.own || {}; draw(); } };
       if (o.type === "bool") return h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label));
-      if (o.type === "select") return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
-        h("select", { onchange: (e) => save(e.target.value) }, o.choices.map((c) => h("option", { value: c, selected: c === o.val }, c))));
+      if (o.type === "select") return h("div", { class: "row", style: { gap: "8px" } }, h("span", { class: "lab" }, o.label),
+        ((st) => sel(st, "v", o.choices, { label: o.label, after: () => save(st.v) }))({ v: o.val }));
       return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
         h("input", { type: "number", min: o.min, max: o.max, value: o.val, style: { width: "110px" }, onchange: (e) => save(e.target.value) }));
     }));
@@ -1757,9 +1778,8 @@ function monsterRallyTab(serial) {
       const mine = rules.map((r, i) => [r, i]).filter(([r]) => r.preset === p);
       const box = h("div", { class: "mrlane" + (p === lane ? " sel" : "") + (mine.length ? "" : " empty"), onclick: (e) => { if (e.target.closest("button,input,select,.mrchip")) return; lane = p; paintLanes(); paintPool(); } },
         h("div", { class: "mrlhead" }, h("b", {}, "Preset " + p),
-          mine.length ? h("select", { class: "mrtime", "aria-label": "Rally time for preset " + p, title: "Rally time",
-            onchange: (e) => { mine.forEach(([r]) => (r.time = e.target.value)); saveRules(); paintCoords(); } },
-            MR_TIMES.map((v) => h("option", { value: v, selected: v === laneTime(p) }, v + " min"))) : null),
+          mine.length ? ((st) => segPick(st, "v", MR_TIMES.map((v) => [String(v), v + " min"]), { small: true, label: "Rally time for preset " + p,
+            after: (v) => { mine.forEach(([r]) => (r.time = MR_TIMES.find((x) => String(x) === v) ?? v)); saveRules(); paintCoords(); } }))({ v: String(laneTime(p)) }) : null),
         h("div", { class: "mrchips" },
           mine.length ? mine.map(([r, i]) => {
             const chip = h("span", { class: "mrchip" + (editing === i ? " edit" : ""), draggable: "true", title: "Drag to another preset \u00b7 click to set levels" },
@@ -2044,7 +2064,7 @@ PAGES.reports = function () {
   S.repDays = S.repDays || 1;
   const ranges = [[1, "Today"], [7, "7 days"], [30, "30 days"]];
   const seg = h("div", { class: "seg", role: "tablist" }, ...ranges.map(([d, l]) => h("button", { class: "segb" + (S.repDays === d ? " on" : ""), role: "tab", onclick: () => { S.repDays = d; rerender(); } }, l)));
-  const body = h("div", { class: "repbody" }, h("div", { class: "empty" }, "Loading..."));
+  const body = h("div", { class: "repbody" }, h("div", { class: "empty" }, "Loading\u2026"));
   const tile = (v, l) => h("div", { class: "stile" }, h("b", {}, String(v)), h("span", {}, l));
   const chips = (mons, max) => { const e = Object.entries(mons).sort((a, b) => b[1] - a[1]); return h("div", { class: "repchips" }, ...e.slice(0, max || 99).map(([m, n]) => h("span", { class: "repchip" }, m, h("b", {}, n))), max && e.length > max ? h("span", { class: "repmore" }, "+" + (e.length - max) + " more") : null); };
   (async () => {
@@ -2076,7 +2096,7 @@ PAGES.reports = function () {
 PAGES.logs = function () {
   const save = panel("Save the log", h("div", { class: "hint", style: { marginBottom: "10px" } }, "Pick how much and which instance, then save a small zip in Downloads to send for support."),
     saveLogRow(),
-    h("div", { class: "row", style: { marginTop: "12px" } }, btn("Copy last lines", copyLog, "sm"), btn("Report a problem...", saveReportFlow, "sm"),
+    h("div", { class: "row", style: { marginTop: "12px" } }, btn("Copy last lines", copyLog, "sm"), btn("Report a problem\u2026", saveReportFlow, "sm"),
       btn("Open logs folder", () => act(api("open_logs")), "sm")));
   const live = panel("Live log - all instances", h("div", { class: "row", style: { marginBottom: "10px" } },
       btn("Clear", async () => { await act(api("clear_log")); S.logs = []; logViews.forEach((v) => (v.el.innerHTML = "")); }, "sm")), logBox(null, true));

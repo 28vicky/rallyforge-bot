@@ -1485,3 +1485,31 @@ details.adv[open]>summary::before{transform:rotate(90deg)}
 .empty{display:flex;flex-direction:column;align-items:center;gap:6px}
 .empty b{color:var(--fg);font-weight:600}
 .gen-body .empty{padding:60px 16px}
+/* whole-app pass (23 Oct): click targets at least 28 px, task rows, middle dots */
+.tgl{min-height:28px}
+.infow{position:relative}
+.infoi{position:relative}
+.infoi::before{content:"";position:absolute;inset:-6px}                 /* 18 px circle, 30 px to click */
+a.lnk,.lnkb,.viewall,.vlink{display:inline-flex;align-items:center;min-height:28px}
+:root .ix{min-width:28px;min-height:28px}
+.tlist{display:flex;flex-direction:column;gap:6px;margin:6px 0}
+.trow{display:flex;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);cursor:default}
+.trow.over{border-color:var(--accent1)}
+.trow.off .tname{opacity:.65}
+.trow .grip{cursor:grab;color:var(--mute);letter-spacing:-3px;font-size:13px;padding:0 4px;user-select:none}
+.trow .tname{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.trow .tname small{color:var(--mute);font-size:12.5px}
+.trow .tgl{min-height:28px}
+/* switches reachable with Tab (the box was display:none): hidden but focusable, ring on the switch */
+.tgl{position:relative}
+.tgl input{display:block!important;position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.tgl input:focus-visible+.sw{outline:2px solid var(--accent1);outline-offset:2px}
+:root .tri{width:28px;height:28px}
+:root .mrchip .mrx{width:26px;height:26px}
+.rnq a,.rnlist a{display:inline-grid;place-items:center;min-width:26px;min-height:26px}
+/* segmented controls never wrap; a field holding one takes the room it needs */
+.seg{flex-wrap:nowrap;white-space:nowrap;max-width:100%}
+.fgrid .field:has(>.seg),.grid2 .field:has(>.seg),.grid3 .field:has(>.seg){grid-column:span 2}
+/* level chips: chosen = soft tint + accent text (one accent colour, not a wall of orange) */
+:root .lvchip.on{background:color-mix(in srgb,var(--accent1) 14%,transparent);color:var(--accent2);border-color:color-mix(in srgb,var(--accent1) 45%,transparent)}
+.field>.seg,.field>.row>.seg{align-self:flex-start}

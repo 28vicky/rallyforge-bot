@@ -78,7 +78,7 @@ function pickScreenshot(title) {
       const j = await act(api("shot_upload", { data: await readFile(f) }));
       if (j) { m.close(); res(j); }
     };
-    const buttons = [{ label: "Cancel", onclick: () => res(null) }, { label: "Choose image file...", keep: true, onclick: () => file.click() }];
+    const buttons = [{ label: "Cancel", onclick: () => res(null) }, { label: "Choose image file\u2026", keep: true, onclick: () => file.click() }];
     if (ids.length) buttons.push({ label: "Take from instance", cls: "pri", keep: true, onclick: async (e) => {
       const j = await act(api("shot_take", { serial: sel.value }));
       if (j) { m.close(); res(j); }
@@ -355,7 +355,7 @@ async function scanGeneralsFlow() {
   if (!ok) return;
   if (!(await act(api("scan_generals", { serial, mode })))) return;
   scanBox = modal({ title: "Scanning generals", focus: false, buttons: [{ label: "Stop and use what was found", cls: "pri", onclick: () => { act(api("scan_generals_stop")); return false; } }],
-    body: h("div", { id: "genScanInfo", style: { minWidth: "360px" } }, "Scrolling through the general list...") });
+    body: h("div", { id: "genScanInfo", style: { minWidth: "360px" } }, "Scrolling through the general list\u2026") });
 }
 async function scanGeneralsDone(d) {
   closeScanBox();
@@ -405,7 +405,7 @@ async function manualMapFlow(arg) {
   if (!info) { act(api("manual_close", {}, { quiet: true })); return; }
   const W = 270, H = 480;
   const img = h("img", { width: W, height: H, draggable: false, style: { display: "block" } });
-  const status = h("div", { class: "note" }, "Going to the top-left corner of the city...");
+  const status = h("div", { class: "note" }, "Going to the top-left corner of the city\u2026");
   const box = h("div", { class: "lst", style: { maxHeight: "480px", minWidth: "360px" } });
   let st = null, alive = true, shotN = 0, ready = false;
   const reload = () => { img.src = `/api/manual_shot?k=${window.KEY}&t=${++shotN}`; };
@@ -420,7 +420,7 @@ async function manualMapFlow(arg) {
       } }, h("option", { value: 0 }, opt ? "Not built / unknown" : "Unknown"), ...info.slots.map((p) => { const o = h("option", { value: p.n }, slotLabel(p)); if (p.n === cur) o.selected = true; return o; }));
       const go = h("button", { class: "btn", disabled: !cur, onclick: async () => {
         if (!ready || (st && st.busy)) return;
-        status.textContent = "Moving the camera...";
+        status.textContent = "Moving the camera\u2026";
         await act(api("manual_goto", { slot: Number(sel.value) }));
         reload();
       } }, "Go");
@@ -435,7 +435,7 @@ async function manualMapFlow(arg) {
         st = j;
         const wasReady = ready;
         ready = j.status === "Ready" && !j.busy;
-        status.textContent = j.status !== "Ready" ? j.status : j.busy ? "Moving..." : "Pick a slot for each building. Press Go to see that slot in the picture and check it.";
+        status.textContent = j.status !== "Ready" ? j.status : j.busy ? "Moving\u2026" : "Pick a slot for each building. Press Go to see that slot in the picture and check it.";
         if (ready && !wasReady && !img.src) reload();
       }
       await new Promise((r) => setTimeout(r, 1500));
@@ -477,7 +477,7 @@ function drawCityProgress() {
   const cards = [];
   for (const [serial, j] of jobs) {
     const p = j.progress;
-    let txt = "Starting...", pct = 2;
+    let txt = "Starting\u2026", pct = 2;
     if (p) {
       pct = Math.max(2, Math.min(100, p.pct != null ? p.pct : Math.round(100 * p.stops / p.total)));
       const m = Math.floor(p.seconds / 60), sec = String(p.seconds % 60).padStart(2, "0");
@@ -587,7 +587,7 @@ async function catalogFlow() {
   if (!ok) return;
   if (!(await act(api("catalog_crawl", { serial })))) return;
   scanBox = modal({ title: "Recording the catalogue", focus: false, buttons: [{ label: "Stop and save what was found", cls: "pri", onclick: () => { act(api("catalog_stop")); return false; } }],
-    body: h("div", { id: "catScanInfo", style: { minWidth: "380px" } }, "Starting...") });
+    body: h("div", { id: "catScanInfo", style: { minWidth: "380px" } }, "Starting\u2026") });
 }
 // General Manager > Scan Tavern portraits: same crawl, but it only ADDS to the general library (nothing is wiped)
 async function tavernPortraitsFlow() {
@@ -597,7 +597,7 @@ async function tavernPortraitsFlow() {
   if (!ok) return;
   if (!(await act(api("catalog_crawl", { serial, merge: true })))) return;
   scanBox = modal({ title: "Scanning Tavern portraits", focus: false, buttons: [{ label: "Stop and save what was found", cls: "pri", onclick: () => { act(api("catalog_stop")); return false; } }],
-    body: h("div", { id: "catScanInfo", style: { minWidth: "380px" } }, "Starting...") });
+    body: h("div", { id: "catScanInfo", style: { minWidth: "380px" } }, "Starting\u2026") });
 }
 async function catalogDone(d) {
   closeScanBox();
@@ -701,7 +701,7 @@ function showLogin(msg) {
   const pw = h("input", { type: "password", placeholder: "Password", autocomplete: "current-password", style: { width: "100%" } });
   const err = h("div", { style: { color: "var(--bad)", minHeight: "20px", marginTop: "8px", fontWeight: "600" } }, msg && msg !== "Please log in." ? msg : "");
   const go = async () => {
-    err.textContent = "Checking...";
+    err.textContent = "Checking\u2026";
     try {
       const j = await api("login", { id: id.value, pw: pw.value }, { quiet: true });
       S.license = j.license;

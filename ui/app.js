@@ -283,7 +283,7 @@ function buildRibbon() {
         ...(S.dev ? [{ label: "Scan generals", icon: "scan", run: () => scanGeneralsFlow() }] : []),
         { label: "Scan city", icon: "city", run: () => scanCityFlow(S.sel === "control" ? undefined : S.sel) },
         { label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) },
-        { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "grid"),
+        { label: "Save profile\u2026", icon: "save", run: saveProfileFlow }, { label: "Load profile\u2026", icon: "down", run: loadProfileFlow }]), "", "grid"),
       btn("App ▾", (e) => menu(e.currentTarget, [
         { label: "Updates", icon: "refresh", run: () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); } },
         { label: "Close window (bots keep running)", icon: "eye", run: () => act(api("hide_window")) },
@@ -307,14 +307,15 @@ async function copyLog() {
 // Save log: pick the time and the instance right where the log is shown (Control settings > Logs, and each instance's log)
 function saveLogRow(fixedName) {
   const spans = [["Last 1 hour", 1], ["Last 6 hours", 6], ["Last 24 hours", 24], ["Last 3 days", 72], ["Last 7 days", 168]];
-  const span = h("select", { "aria-label": "Time" }, ...spans.map(([t, v]) => h("option", { value: v, selected: v === 24 }, t)));
+  const span = { value: 24 };                                  // pick-one = segmented control (short labels)
+  const spanSeg = segPick(span, "value", spans.map(([t, v]) => [v, t.replace(/^Last /, "").replace(" hours", " h").replace(" hour", " h")]), { small: true, label: "Time" });
   const who = h("select", { "aria-label": "Instance" }, h("option", { value: "" }, "All instances"));
   if (fixedName) { who.innerHTML = ""; who.appendChild(h("option", { value: fixedName }, fixedName)); who.disabled = true; }
   else api("log_names", {}, { quiet: true }).then((r) => { for (const n of (r && r.names) || []) who.appendChild(h("option", { value: n }, n)); }).catch(() => {});
   const save = async () => { const j = await act(api("save_log", { hours: +span.value, name: who.value })); if (j) modal({ title: "Log saved", buttons: [
     { label: "Open folder", cls: "pri", onclick: () => { act(api("reveal_file", { path: j.path })); } }, { label: "Close" }],
     body: h("div", { class: "field" }, h("p", {}, `Saved ${j.lines} lines as a zip in Downloads:`), h("p", { style: { wordBreak: "break-all", fontFamily: "var(--mono)" } }, j.path)) }); };
-  return h("div", { class: "logsave" }, h("div", { class: "field" }, h("label", {}, "Time"), span), h("div", { class: "field" }, h("label", {}, "Instance"), who),
+  return h("div", { class: "logsave" }, h("div", { class: "field" }, h("label", {}, "Time"), spanSeg), h("div", { class: "field" }, h("label", {}, "Instance"), who),
     h("button", { class: "btn pri", type: "button", onclick: save }, "Save as zip"));
 }
 async function saveReportFlow() {
@@ -551,7 +552,7 @@ setInterval(tickPauseTimers, 1000);
 //   none running -> Start all is the main button, Pause all / Stop all greyed
 //   some running -> "Start the rest" + "2/8 running", Pause / Stop active
 //   all running  -> Start shows a green "Running" (not clickable), Pause / Stop active
-//   just pressed -> "Starting..." until every instance runs (instances start one by one; gives up after 3 min)
+//   just pressed -> "Starting\u2026" until every instance runs (instances start one by one; gives up after 3 min)
 function paintRibbonRun() {
   const rib = document.getElementById("ribbon");
   if (!rib || S.sel !== "control") return;
@@ -833,9 +834,9 @@ function paintStats(el, serial) {
     el.appendChild(h("div", { class: "stile" }, h("b", {}, String(v)), h("span", {}, l))));
 }
 function actNow(serial) {
-  if (serial !== null) { const x = S.now[serial]; return x ? `${x.t}  ${x.text}` : "Waiting for the bot to start..."; }
+  if (serial !== null) { const x = S.now[serial]; return x ? `${x.t}  ${x.text}` : "Waiting for the bot to start\u2026"; }
   const rows = Object.entries(S.now).map(([s, x]) => `${x.n}: ${x.text}`);
-  return rows.length ? rows.join("\n") : "Waiting for the bot to start...";
+  return rows.length ? rows.join("\n") : "Waiting for the bot to start\u2026";
 }
 function activityBox(serial, title) {
   const now = h("div", { class: "actnow" }), stats = h("div", { class: "actstats" });
@@ -914,7 +915,7 @@ function updateSummary() {
   const parts = [c.run + " running"];
   if (c.pause) parts.push(c.pause + " paused");
   if (c.error) parts.push(c.error + " with a problem");
-  const s = $("#sum"); if (s) s.textContent = parts.join("  |  ");
+  const s = $("#sum"); if (s) s.textContent = parts.join(" \u00b7 ");
   const r = $("#sbRun"); if (r) r.textContent = c.run + " running";
   const dt = $("#sbDot"); if (dt) dt.classList.toggle("on", c.run > 0);
   const who = $("#whoami");
@@ -960,10 +961,10 @@ function updateSummary() {
   }
   const ts = $("#tgStatus"); if (ts) ts.textContent = S.tg.status;
   const ram = $("#ramInfo");
-  if (ram && S.ram.total_mb) ram.textContent = `PC memory: ${(S.ram.total_mb - S.ram.free_mb).toFixed(0)} MB used of ${S.ram.total_mb.toFixed(0)} MB (${S.ram.free_mb.toFixed(0)} MB free)  |  this app: ${(S.ram.proc_mb || 0).toFixed(0)} MB`;
+  if (ram && S.ram.total_mb) ram.textContent = `PC memory: ${(S.ram.total_mb - S.ram.free_mb).toFixed(0)} MB used of ${S.ram.total_mb.toFixed(0)} MB (${S.ram.free_mb.toFixed(0)} MB free) \u00b7 this app: ${(S.ram.proc_mb || 0).toFixed(0)} MB`;
   const cs = $("#catScanInfo"); if (cs && S.catScan.running) cs.textContent = `Recorded ${S.catScan.count} generals so far... (see the log for the region and filter being read)`;
   if (window.drawCityProgress) drawCityProgress();
-  const gs = $("#genScanInfo"); if (gs && S.genScan.running) gs.textContent = `Found ${S.genScan.count} different generals so far...`;
+  const gs = $("#genScanInfo"); if (gs && S.genScan.running) gs.textContent = `Found ${S.genScan.count} different generals so far\u2026`;
 }
 
 async function handleEvent(ev) {
