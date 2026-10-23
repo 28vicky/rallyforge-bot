@@ -5161,16 +5161,39 @@ def _bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
 
 
 _HEAVY_LOCK = threading.RLock()            # only one emulator restart / game restart at a time: they are the PC's heaviest moments
+_HEAVY_QUEUE = []                          # serials waiting for _HEAVY_LOCK, first come first served
+_HEAVY_QLOCK = threading.Lock()
+
+
+def heavy_acquire(serial, stop, log=None):
+    """Take _HEAVY_LOCK in the order the instances asked for it (a plain lock let late instances jump the line,
+    so one instance could wait for ever). -> False when stopped while waiting."""
+    with _HEAVY_QLOCK:
+        if not _HEAVY_QUEUE and _HEAVY_LOCK.acquire(blocking=False):   # nobody waiting: no line to keep
+            return True
+        _HEAVY_QUEUE.append(serial)
+    if log:
+        log("[*] Another emulator is restarting - waiting for my turn (keeps the PC from overloading)")
+    try:
+        while not stop.is_set():
+            with _HEAVY_QLOCK:
+                first = bool(_HEAVY_QUEUE) and _HEAVY_QUEUE[0] == serial
+            if first and _HEAVY_LOCK.acquire(timeout=2):
+                return True
+            if not first:
+                stop.wait(1)
+        return False
+    finally:
+        with _HEAVY_QLOCK:
+            if serial in _HEAVY_QUEUE:
+                _HEAVY_QUEUE.remove(serial)
 
 
 def restart_emulator(dev, cfg, log, stop, why=""):
     """Close a stuck emulator (nicely first, then by force), start it again and wait until Evony is loaded."""
     pause_gate()                                                  # never restart an emulator while it is paused
-    if not _HEAVY_LOCK.acquire(blocking=False):
-        log("[*] Another emulator is restarting - waiting for my turn (keeps the PC from overloading)")
-        while not _HEAVY_LOCK.acquire(timeout=2):
-            if stop.is_set():
-                return False
+    if not heavy_acquire(dev.serial, stop, log):
+        return False
     try:
         return _restart_emulator(dev, cfg, log, stop, why)
     finally:
@@ -5276,13 +5299,14 @@ def force_restart_game(dev, cfg, log, stop):
     LOADING[dev.serial] = ("restart", time.time())
     _adb(dev.adb, dev.serial, "shell", "am", "force-stop", pkg)
     _nap(stop, 3, 4)
-    while not _HEAVY_LOCK.acquire(timeout=2):             # loading Evony is heavy: one at a time
-        if stop.is_set():
-            return False
+    if not heavy_acquire(dev.serial, stop, log):           # loading Evony is heavy: one at a time, in turn
+        return False
     try:
         start_app(dev.adb, dev.serial, pkg)
         _nap(stop, 8)
-        return wait_stable(dev, cfg, log, stop, pkg, allow_emu_restart=False)
+        if wait_stable(dev, cfg, log, stop, pkg, allow_emu_restart=False) or stop.is_set():
+            return not stop.is_set()
+        return _restart_emulator(dev, cfg, log, stop, "Evony did not load after a game restart")  # the lock is already ours
     finally:
         _HEAVY_LOCK.release()
 
