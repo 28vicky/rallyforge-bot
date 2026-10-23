@@ -9947,6 +9947,7 @@ def run_royal_thief(dev, cfg, log, stop):
 MR_POLL_MIN = 5                          # look for a new target this often
 MR_FORGET_MIN = 30                       # a target that was started / skipped is not tried again for this long
 MR_CENTER = (272, 480)                   # the searched tile sits in the middle of the map
+MR_EMPTY = (330, 250)                     # a map spot with no button: closes a ring (40,640 was the Quests button)
 MR_NEAR = [(0, 0), (0, -30), (-30, 10), (30, 10), (0, 35)]   # the monster's picture can sit a little off the tile centre
 MR_TIMES = {"5": (190, 512), "10": (395, 512), "30": (190, 590), "60": (395, 590)}   # Alliance War Rally! buttons (fallback spots)
 
@@ -10085,6 +10086,20 @@ def mr_search(dev, stop, x, y):
     return True
 
 
+def mr_attack_spot(shot):
+    """The monster's ring menu: -> (x, y) of its 'Attack' label, or None. Plain OCR only reads 'Att' on the ring's
+    dark label (Kiravik 23 Oct) - read the ring area enlarged and bright."""
+    try:
+        for t, ws in ocr_lines(shot[250:700, 0:540], 2.5, bright=True):
+            for w in ws:
+                if str(w[0]).lower().strip("|.,:;!() ") in ("attack", "attac", "atack"):
+                    return int(w[1]), int(w[2]) + 250
+    except Exception:
+        pass
+    p = rd_find(shot, ["Attack"], region=(0, 250, 540, 450), cutoff=0.75)
+    return (p[0], p[1]) if p else None
+
+
 def mr_still_there(dev, stop):
     """While waiting for a march: tap the monster in the middle; True when its ring shows Attack (the ring is closed again)."""
     for dx, dy in MR_NEAR[:3]:
@@ -10092,8 +10107,8 @@ def mr_still_there(dev, stop):
             return True
         dev.tap(MR_CENTER[0] + dx, MR_CENTER[1] + dy)
         _nap(stop, 1.2, 1.5)
-        hit = rd_find(dev.screenshot(), ["Attack"], region=(0, 250, 540, 450), cutoff=0.75)
-        dev.tap(40, 640)                                    # close the ring on empty map
+        hit = mr_attack_spot(dev.screenshot())
+        dev.tap(*MR_EMPTY)                                  # close the ring on empty map
         _nap(stop, 0.7, 0.9)
         if hit:
             return True
@@ -10110,9 +10125,9 @@ def mr_open_monster(dev, stop, want):
         _nap(stop, 1.3, 1.7)
         shot = dev.screenshot()
         rd_snap(shot, f"mrally_ring{MR_NEAR.index((dx, dy))}")   # what the tap opened (test pictures)
-        p = rd_find(shot, ["Attack"], region=(0, 250, 540, 450), cutoff=0.75)
+        p = mr_attack_spot(shot)
         if not p:
-            dev.tap(40, 640)                                # empty map: close whatever ring opened
+            dev.tap(*MR_EMPTY)                              # empty map: close whatever ring opened
             _nap(stop, 0.8, 1.0)
             continue
         dev.tap(p[0], max(100, p[1] - 30))
