@@ -91,6 +91,7 @@ const ICO = {
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2.500h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   power: '<path d="M12 3v8M6.500 6.500a8 8 0 1 0 11 0"/>',
   eye: '<path d="M2.500 12S6 5.500 12 5.500 21.500 12 21.500 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="2.800"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   egg: '<path d="M12 3C8 3 5 10 5 14.500a7 7 0 0 0 14 0C19 10 16 3 12 3z"/>',
 };
 function ico(name, cls) {
@@ -205,6 +206,7 @@ function layout() {
     h("div", { class: "main" },
       h("div", { class: "top" }, sideBtn(), h("img", { src: "/assets/logo.png", alt: "" }),
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
+        saveStEl(),
         h("button", { class: "btn sm newbtn", id: "newBtn", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "What\u2019s new"),
         h("span", { class: "sum", id: "sum" }),
         h("div", { class: "iconbtn", id: "modeBtn", title: "Dark / light", onclick: quickMode })),
@@ -237,6 +239,8 @@ function toggleSide() {
 }
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey && e.key.toLowerCase() === "b") || e.key === "F9") { e.preventDefault(); toggleSide(); }
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); saveAll(); }
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "z" && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "") && UNDO.length) { e.preventDefault(); undoLast(); }
 });
 
 function renderModeIcon() {
@@ -286,7 +290,10 @@ function buildRibbon() {
         { label: "Restart app", icon: "refresh", run: restartFlow }, { label: "Quit and stop everything", icon: "power", run: quitFlow }]), "", "more")));
 }
 async function saveAll() {
-  if (await act(api("save", { cfg: S.cfg, devices: S.devices }))) { AUTO.saved = AUTO.seen = cfgSnap(); toast("Settings saved.", "ok"); await reloadMeta(); }
+  saveState("saving");
+  const now = cfgSnap();
+  if (await act(api("save", { cfg: S.cfg, devices: S.devices }))) { if (AUTO.saved && now !== AUTO.saved) pushUndo(AUTO.saved, now); AUTO.saved = AUTO.seen = now; saveState("saved"); await reloadMeta(); }
+  else saveState("err", "see the message above");
 }
 async function copyLog() {
   const j = await act(api("log_text", { lines: 300 }));
@@ -997,6 +1004,7 @@ async function boot() {
   applyTheme();
   document.title = "RallyForge Bot " + S.version;
   layout();
+  saveState("saved");
   poll();
   checkWhatsNew();
   setTimeout(() => { try { maybeStartTour(); } catch (e) {} }, 2500);
@@ -1016,14 +1024,69 @@ setInterval(async () => {
   if (now === AUTO.saved) { AUTO.seen = now; return; }
   if (now !== AUTO.seen) { AUTO.seen = now; return; }                           // still being edited: wait until it is quiet
   AUTO.busy = true;
+  saveState("saving");
   try {
     await api("save", { cfg: S.cfg, devices: S.devices, auto: true }, { quiet: true });
+    if (AUTO.undoing) AUTO.undoing = false; else pushUndo(AUTO.saved, now);
     AUTO.saved = now; AUTO.err = "";
+    saveState("saved");
   } catch (e) {
     const m = e && !(e instanceof TypeError) ? String(e.message || "") : "";      // a setting that is not valid yet (not a lost connection)
+    saveState("err", m || "the app did not answer - it tries again");
     if (m && m !== AUTO.err) { AUTO.err = m; toast("Not saved yet: " + m, "error"); }
   } finally { AUTO.busy = false; }
 }, 1000);
+
+// ---- save status in the top bar + Undo (ui-simple, owner 23 Oct: "am I saved?"). Changes still save by themselves;
+// the top bar always says Saving... / Saved / Not saved, and Undo (or Ctrl+Z) puts back what the last save changed.
+// Undo only touches the settings that save changed, so switches saved elsewhere meanwhile are left alone. This session only.
+const UNDO = [];                                   // [{before, after}] JSON snapshots, newest last
+const UNDO_SKIP = /^(tour_done|last_seen_version|sidebar_open|ui_)/;   // view-only keys (tour seen, sidebar open, theme) are not "changes" to undo
+["input", "change", "pointerdown", "keydown"].forEach((t) => document.addEventListener(t, () => (AUTO.touched = true), true));
+function pushUndo(before, after) {
+  const touched = AUTO.touched; AUTO.touched = false;              // only what you changed; the app filling in defaults by itself is not an undo step
+  if (!touched || !before || !after || before === after) return;
+  const strip = (j) => { const o = JSON.parse(j); for (const k of Object.keys(o.c || {})) if (UNDO_SKIP.test(k)) delete o.c[k]; return JSON.stringify(o); };
+  if (strip(before) === strip(after)) return;
+  UNDO.push({ before, after }); if (UNDO.length > 30) UNDO.shift();
+}
+function saveState(st, msg) {
+  if (st) { AUTO.st = st; AUTO.stMsg = msg || ""; }
+  document.querySelectorAll(".savest").forEach(paintSave);
+}
+function saveStEl() { const el = h("span", { class: "savest", role: "status", "aria-live": "polite" }); paintSave(el); return el; }   // one in every page header
+function paintSave(el) {
+  const st = AUTO.st || "saved", msg = AUTO.stMsg;
+  el.className = "savest " + st;
+  el.title = "";
+  el.innerHTML = "";
+  if (st === "saving") { el.append(h("span", { class: "sdot" }), "Saving\u2026"); return; }
+  if (st === "err") { el.append(h("span", { class: "sdot" }), "Not saved: " + msg); el.title = "Fix this setting - nothing else is lost; it saves as soon as the value is valid."; return; }
+  el.title = "Your changes save by themselves. Ctrl+S saves now.";
+  el.append(ico("check", "sok"), "Saved");
+  if (UNDO.length) el.append(h("button", { class: "lnkb undob", type: "button", title: "Put back the last change (Ctrl+Z)", onclick: undoLast }, "Undo"));
+}
+function undoLast() {
+  const u = UNDO.pop();
+  if (!u) return;
+  const b = JSON.parse(u.before), a = JSON.parse(u.after);
+  const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  const back = (from, to, into) => {           // put back the keys this save changed (one level deeper for per-instance settings)
+    for (const k of new Set([...Object.keys(from || {}), ...Object.keys(to || {})])) {
+      if (same(from[k], to[k]) || (into === S.cfg && UNDO_SKIP.test(k))) continue;
+      if (k === "per_device" && from[k] && to[k] && typeof into[k] === "object") back(from[k], to[k], into[k]);
+      else if (from[k] === undefined) delete into[k];
+      else into[k] = JSON.parse(JSON.stringify(from[k]));
+    }
+  };
+  back(b.c, a.c, S.cfg);
+  if (!same(b.d, a.d)) S.devices = b.d;
+  AUTO.undoing = true;
+  AUTO.seen = cfgSnap();                          // save on the next tick (nothing is being typed)
+  saveState("saving");
+  rerender();
+  toast("Last change undone.", "ok");
+}
 
 // long help paragraphs (ui-simple): only the first sentence shows, a small "i" holds the rest
 // (hover shows the whole text, a click on the "i" or the line opens / closes it)

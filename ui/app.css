@@ -900,8 +900,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .setlnk:hover{background:rgba(255,255,255,.6);color:var(--fg)}
 .setlnk.on{background:var(--card);border-color:var(--line);color:var(--fg);box-shadow:var(--sh)}
 .setlnk.dim{color:#a8a29e;margin-top:8px}
-.savebar{position:sticky;bottom:-24px;z-index:10;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:12px 0 24px;background:var(--bgc);border-top:1px solid var(--line)}
-.savebar .sbtxt{margin-right:auto;font-size:12.5px;color:var(--mute)}
 .status{background:var(--bgc);border-top:1px solid var(--line)}
 :root .side .brand{font-family:var(--font);margin:0}
 .actstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding-top:14px}
@@ -1420,3 +1418,16 @@ details.adv[open]>summary::before{transform:rotate(90deg)}
 .inst .irun{position:absolute;right:6px;top:6px;margin:0}
 .inst .itx .nm{padding-right:30px}
 .inst .itx{margin-right:2px}
+/* save status in the top bar (ui-simple 23 Oct): Saved / Saving... / Not saved + Undo */
+.savest{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--mute);white-space:nowrap;max-width:46ch;overflow:hidden;text-overflow:ellipsis}
+.savest .ico.sok{width:15px;height:15px;color:#2f8a57}
+.savest .ico.sok svg{stroke-width:2.4}
+.savest .sdot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.savest.saving .sdot{animation:sbpulse 1s ease-in-out infinite}
+@keyframes sbpulse{50%{opacity:.35}}
+.savest.err{color:#b4321f;white-space:normal}
+[data-mode="dark"] .savest.err{color:#ff8a78}
+[data-mode="dark"] .savest .ico.sok{color:#5fc48a}
+.savest .undob{margin-left:4px;min-height:28px;padding:0 8px;font-size:13px}
+.savest .undob{color:var(--accent1)}
+:root .top .savest{margin-left:auto}:root .top .newbtn{margin-left:0}

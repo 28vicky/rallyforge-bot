@@ -180,11 +180,8 @@ PAGES.dashboard = function () {
       h("span", { class: "mute", style: { minWidth: "140px" } }, (a.name || "") + (a.removed ? "  (removed earlier)" : "")),
       btn("Add", () => addFound([a.id]), "sm pri"))),
     avail.length > 1 ? h("div", { class: "row", style: { marginTop: "8px" } }, btn("Add all " + avail.length, () => addFound(avail.map((a) => a.id)), "sm")) : null) : null;
-  const ctl = h("div", { class: "row", style: { marginBottom: "16px" } },
-    // Start / Pause / Resume / Stop all live only in the page header (ui-simple: one place)
-    btn("Save settings", saveAll));                               // Save / Load profile are in Tools
   const log = panel(null, activityBox(null, "Activity - all instances"));
-  return none ? h("div", {}, first, found, S.devices.length ? dev : null) : h("div", {}, renderEventCards(), renderTodayAll(), found, dev, ctl, log);
+  return none ? h("div", {}, first, found, S.devices.length ? dev : null) : h("div", {}, renderEventCards(), renderTodayAll(), found, dev, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
@@ -328,7 +325,7 @@ function instancePage(serial) {
     stBtn("Start", () => collectAndRun("start", { serial }), "pri"), stBtn("Pause", () => act(api("pause", { serial })), "warnb"), stBtn("Stop", () => act(api("stop", { serial })), "bad"), moreBtn);
   const head = h("div", { class: "row insthead", style: { margin: "0 0 12px", gap: "14px", alignItems: "center" } },
     sideBtn(), h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx),
-    status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial), h("span", { style: { flex: "1" } }), bar);
+    status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial), h("span", { style: { flex: "1" } }), saveStEl(), bar);
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
@@ -482,7 +479,6 @@ function instancePage(serial) {
     h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } }, btn("Scan city", () => scanCityFlow(serial)), btn("Map by hand", () => manualMapFlow(serial))));
   // Settings tab: section menu on the left (Advanced dimmed, last), Save / Discard bar pinned to the bottom
   const settingsTab = () => {
-    const snap = clone(ov);
     const secs = [
       ["phone", "Phone and start", () => [phone, autoStart]],
       ["inst", "Instance settings", () => [panelEl]],
@@ -501,9 +497,7 @@ function instancePage(serial) {
     };
     secs.forEach(([k, l]) => menuEl.appendChild(h("button", { class: "setlnk" + (k === "adv" ? " dim" : ""), "data-k": k, onclick: () => show(k) }, l)));
     show(S.sec.settings);
-    const bar = h("div", { class: "savebar" }, h("span", { class: "sbtxt" }, "Changes apply to " + (dev.name || short(serial)) + " only and save by themselves after 2 s"),
-      btn("Discard", () => { S.cfg.per_device[serial] = clone(snap); rerender(); toast("Changes discarded.", "ok"); }),
-      btn("Save changes", saveAll, "pri"));
+    const bar = h("p", { class: "hint", style: { marginTop: "12px" } }, "These settings apply to " + (dev.name || short(serial)) + " only.");   // saving + Undo: top bar
     return [h("div", { class: "setgrid" }, menuEl, h("div", {}, area, bar))];
   };
   const ITABS = [
@@ -1967,8 +1961,7 @@ function routinesCards(serial, ov, details) {
     else if (it.open === "tasks") parts.push(...details.tasks());
     for (const p of parts) if (p) body.appendChild(p);
     const runBtn = it.id ? h("button", { class: "btn", onclick: async () => { if (await act(api("run_now_add", { serial, id: "duty:" + it.id }))) toast(it.t + " runs next on this instance.", "ok"); } }, "Run now") : null;
-    detail.append(body, h("div", { class: "rtnbar2" }, h("small", { class: "hint" }, "Switches save at once; other changes save within 2 s."), runBtn,
-      h("button", { class: "btn primary", onclick: () => saveAll() }, "Save")));
+    detail.append(body, h("div", { class: "rtnbar2" }, runBtn));
   };
   let touched = false;                     // the owner clicked a row: keep it selected when the duties arrive
   root.addEventListener("click", (e) => { if (e.target.closest(".rtnitem,.rtnpill")) touched = true; }, true);
