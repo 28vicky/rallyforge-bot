@@ -99,7 +99,7 @@ function ico(name, cls) {
   return e;
 }
 const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", monsters: "sword", tasks: "list", duties: "clock", market: "bag", logs: "file", reports: "chart",
-  telegram: "send", reliability: "shield", schedule: "bell", updates: "down", themes: "palette", license: "key" };
+  telegram: "send", reliability: "shield", schedule: "bell", updates: "down", themes: "palette", license: "key", more: "more" };
 
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
@@ -520,10 +520,8 @@ const TAB_GROUPS = [
   ["tasks", "Tasks", null],
   ["duties", "Duties", null],
   ["market", "Market", null],
-  ["logs", "Logs", null],
-  ["reports", "Reports", null],
-  ["setup", "Setup", ["settings", "reliability", "schedule"]],
-  ["app", "App", ["updates", "telegram", "license"]],
+  // one row only (ui-simple): the rarely used pages live under More, grouped by small headings ("#...")
+  ["more", "More", ["logs", "reports", "#Setup", "settings", "reliability", "schedule", "#App", "updates", "telegram", "license"]],
 ];
 function closeTabMenu() { const m = document.getElementById("tabmenu"); if (m) m.remove(); document.removeEventListener("mousedown", tabMenuOutside, true); document.removeEventListener("keydown", tabMenuKey, true); }
 function tabMenuOutside(e) { const m = document.getElementById("tabmenu"); if (m && !m.contains(e.target) && !e.target.closest(".tab.grp")) closeTabMenu(); }
@@ -537,6 +535,7 @@ function openTabMenu(btn, items) {
   const m = h("div", { id: "tabmenu", class: "tabmenu", role: "menu" });
   m.dataset.for = btn.dataset.g;
   for (const k of items) {
+    if (k[0] === "#") { m.appendChild(h("div", { class: "tmh", role: "presentation" }, k.slice(1))); continue; }
     const l = (TABS.find((x) => x[0] === k) || [k, k])[1];
     m.appendChild(h("button", { class: "tmi" + (S.tab === k ? " on" : ""), role: "menuitem", onclick: () => pickTab(k) }, ico(TAB_ICO[k] || "grid"), l));
   }
@@ -559,12 +558,12 @@ function renderTabs() {
       t.appendChild(h("button", { class: "tab" + (S.tab === g ? " on" : ""), onclick: () => pickTab(g) }, ico(TAB_ICO[g] || "grid"), label));
       continue;
     }
-    const items = kids.filter(ok);
-    if (!items.length) continue;
+    const items = kids.filter((k, i, a) => k[0] === "#" ? a.slice(i + 1).some((x, j, b) => x[0] !== "#" && ok(x) && !b.slice(0, j).some((y) => y[0] === "#")) : ok(k));
+    if (!items.some((k) => k[0] !== "#")) continue;
     const here = items.includes(S.tab);
     const cur = here ? (TABS.find((x) => x[0] === S.tab) || [0, label])[1] : "";
     const b = h("button", { class: "tab grp" + (here ? " on" : ""), "aria-haspopup": "menu", onclick: (e) => openTabMenu(e.currentTarget, items) },
-      ico(TAB_ICO[here ? S.tab : items[0]] || "grid"), h("span", { class: "gl" }, label), here ? h("span", { class: "gcur" }, cur) : null, h("span", { class: "chev" }, "\u25BE"));
+      ico(TAB_ICO[here ? S.tab : "more"] || "grid"), h("span", { class: "gl" }, label), here ? h("span", { class: "gcur" }, cur) : null, h("span", { class: "chev" }, "\u25BE"));
     b.dataset.g = g;
     t.appendChild(b);
   }
