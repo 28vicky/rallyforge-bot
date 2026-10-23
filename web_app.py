@@ -88,8 +88,10 @@ class Controller:
         self.start_queue = []
         self.start_eta = {}                             # serial -> when Start all will start it (instance list countdown)
         self.logs = collections.deque(maxlen=2500)      # (id, serial, name, text)
-        self.acts = collections.deque(maxlen=1500)      # (id, serial, name, dict) - the Activity screen
+        self.acts = collections.deque(maxlen=6000)      # (id, serial, name, dict) - the Activity screen (this game day)
         self.seq = 0
+        self._acts_day = rb._game_day()
+        self._load_acts()
         self.events = collections.deque(maxlen=60)      # (id, kind, data) the interface should react to once
         self.shots = collections.OrderedDict()          # token -> screenshot (540x960)
         self.scan_found = []
@@ -125,7 +127,12 @@ class Controller:
                         elif d.get("k") in ("join", "fail") or (d.get("k") == "step" and str(d.get("text", "")).startswith(("Looking", "Idle"))):
                             rec["busy_until"] = 0
                     d["t"] = time.strftime("%H:%M:%S")
+                    gd = rb._game_day()
+                    if gd != self._acts_day:
+                        self._new_game_day(gd)
                     self.acts.append((self.seq, serial, name, d))
+                    if d.get("k") in ("join", "skip", "fail"):
+                        self._save_act(serial, name, d)
                     if serial and d.get("k") == "join":
                         self.day_count(serial, "joins", str(d.get("mon") or ""))
                     elif serial and d.get("k") == "skip" and str(d.get("why", "")).startswith("not enough time"):
@@ -152,7 +159,45 @@ class Controller:
     def toast(self, kind, msg):
         self.event("toast", {"kind": kind, "msg": msg})
 
-    DAY_FILE = rb.USER / "daily_stats.json"            # per instance, per game day: joins, late skips, monsters, restarts (8 days kept)
+    DAY_FILE = rb.USER / "daily_stats.json"            # per instance, per game day: joins, late skips, monsters, restarts (40 days kept - Reports page)
+    ACT_DIR = rb.USER / "activity"                     # acts_<game day>.jsonl: every join / skip / fail of that game day (40 days kept)
+    KEEP_DAYS = 40
+
+    def _act_file(self, day):
+        return self.ACT_DIR / f"acts_{day}.jsonl"
+
+    def _load_acts(self):
+        """Today's monster joins come back after an app restart; they start from 0 only at the game's daily reset."""
+        try:
+            for line in self._act_file(self._acts_day).read_text(encoding="utf-8").splitlines():
+                try:
+                    r = json.loads(line)
+                    self.seq += 1
+                    self.acts.append((self.seq, r.get("s", ""), r.get("n", ""), r.get("a") or {}))
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    def _save_act(self, serial, name, d):
+        try:
+            self.ACT_DIR.mkdir(parents=True, exist_ok=True)
+            with open(self._act_file(self._acts_day), "a", encoding="utf-8") as f:
+                f.write(json.dumps({"s": serial, "n": name, "a": d}) + "\n")
+        except Exception:
+            pass
+
+    def _new_game_day(self, day):
+        """Daily reset: the Activity screen starts again from 0; files older than KEEP_DAYS go."""
+        self._acts_day = day
+        self.acts.clear()
+        self.seq += 1
+        self.events.append((self.seq, "acts_reset", {}))
+        try:
+            for f in sorted(self.ACT_DIR.glob("acts_*.jsonl"))[:-self.KEEP_DAYS]:
+                f.unlink()
+        except Exception:
+            pass
 
     def day_count(self, serial, key, mon=""):
         """Today card numbers that survive an app restart. Called with self.lock held."""
@@ -169,7 +214,7 @@ class Controller:
             if key == "joins" and mon:
                 base = re.sub(r"\s+\d+$", "", mon).strip()
                 row.setdefault("monsters", {})[base] = row.get("monsters", {}).get(base, 0) + 1
-            for old in sorted(per)[:-8]:
+            for old in sorted(per)[:-self.KEEP_DAYS]:
                 per.pop(old, None)
             self.DAY_FILE.write_text(json.dumps(self._days), encoding="utf-8")
         except Exception:
@@ -1769,6 +1814,34 @@ class Api:
     def license_clear(self, p):
         self.c.lic.clear()
         return {"license": self.c.lic.info()}
+
+    def joins_report(self, p):
+        """Reports page: joins per instance and monster for the last N game days (from daily_stats.json)."""
+        c = self.c
+        days = max(1, min(int(p.get("days", 1) or 1), c.KEEP_DAYS))
+        today = rb._game_day()
+        import datetime
+        d0 = datetime.date.fromisoformat(today)
+        want = {str(d0 - datetime.timedelta(days=i)) for i in range(days)}
+        with c.lock:
+            if not hasattr(c, "_days"):
+                c.day_rows("")
+            names = {d["id"]: (d.get("name") or d["id"]) for d in c.devices}
+            out = []
+            for serial, per in (getattr(c, "_days", {}) or {}).items():
+                tot = {"joins": 0, "late": 0, "restarts": 0, "monsters": {}, "days": 0}
+                for day, row in per.items():
+                    if day not in want:
+                        continue
+                    tot["days"] += 1
+                    for k in ("joins", "late", "restarts"):
+                        tot[k] += int(row.get(k, 0) or 0)
+                    for m, n in (row.get("monsters") or {}).items():
+                        tot["monsters"][m] = tot["monsters"].get(m, 0) + int(n)
+                if tot["days"] or serial in names:
+                    out.append({"id": serial, "name": names.get(serial, serial), **tot})
+        out.sort(key=lambda r: (-r["joins"], r["name"].lower()))
+        return {"days": days, "today": today, "rows": out}
 
     def poll(self, p):
         c = self.c

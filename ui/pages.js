@@ -1658,6 +1658,40 @@ function routinesCards(serial, ov, details) {
 
 
 // ====================================================================== logs (Control settings > Logs): save the log right here, then the live log
+// ====================================================================== reports: who joined what, per day / week / month
+PAGES.reports = function () {
+  S.repDays = S.repDays || 1;
+  const ranges = [[1, "Today"], [7, "7 days"], [30, "30 days"]];
+  const seg = h("div", { class: "seg", role: "tablist" }, ...ranges.map(([d, l]) => h("button", { class: "segb" + (S.repDays === d ? " on" : ""), role: "tab", onclick: () => { S.repDays = d; rerender(); } }, l)));
+  const body = h("div", { class: "repbody" }, h("div", { class: "empty" }, "Loading..."));
+  const tile = (v, l) => h("div", { class: "stile" }, h("b", {}, String(v)), h("span", {}, l));
+  const chips = (mons, max) => { const e = Object.entries(mons).sort((a, b) => b[1] - a[1]); return h("div", { class: "repchips" }, ...e.slice(0, max || 99).map(([m, n]) => h("span", { class: "repchip" }, m, h("b", {}, n))), max && e.length > max ? h("span", { class: "repmore" }, "+" + (e.length - max) + " more") : null); };
+  (async () => {
+    const j = await act(api("joins_report", { days: S.repDays }, { quiet: true }));
+    body.innerHTML = "";
+    if (!j) { body.appendChild(h("div", { class: "empty" }, "Could not load the report.")); return; }
+    const rows = j.rows || [];
+    const all = { joins: 0, late: 0, restarts: 0, monsters: {} };
+    rows.forEach((r) => { all.joins += r.joins; all.late += r.late; all.restarts += r.restarts; Object.entries(r.monsters).forEach(([m, n]) => (all.monsters[m] = (all.monsters[m] || 0) + n)); });
+    if (!all.joins && !all.late) { body.appendChild(h("div", { class: "empty repempty" }, S.repDays === 1 ? "No rallies joined yet this game day. Joins show here as the instances join them - they start from 0 after the game's daily reset." : "No joins recorded in this period yet.")); return; }
+    body.appendChild(h("div", { class: "reptiles" }, tile(all.joins, "Rallies joined"), tile(Object.keys(all.monsters).length, "Monster types"), tile(all.late, "Skipped (too late)"), tile(all.restarts, "Game restarts")));
+    const open = S.repOpen || (S.repOpen = {});
+    const list = h("div", { class: "replist" });
+    const top = Math.max(1, ...rows.map((r) => r.joins));
+    rows.forEach((r) => {
+      const det = h("div", { class: "repdet", hidden: !open[r.id] }, Object.keys(r.monsters).length ? chips(r.monsters) : h("span", { class: "hint" }, "No joins in this period."));
+      const row = h("div", { class: "reprow" + (open[r.id] ? " open" : ""), onclick: () => { open[r.id] = !open[r.id]; det.hidden = !open[r.id]; row.classList.toggle("open", !!open[r.id]); } },
+        h("div", { class: "repname" }, h("b", {}, r.name), h("small", {}, r.late ? r.late + " too late" + (r.restarts ? " \u00b7 " + r.restarts + " restarts" : "") : (r.restarts ? r.restarts + " restarts" : "\u00a0"))),
+        h("div", { class: "repbar" }, h("span", { style: { width: (100 * r.joins / top).toFixed(1) + "%" } })),
+        h("div", { class: "repnum" }, r.joins), chips(r.monsters, 3), h("span", { class: "rtnchev" }, "\u203A"));
+      list.append(row, det);
+    });
+    body.append(panel("By instance", note("Click an instance to see every monster it joined."), list),
+      panel("By monster - all instances", chips(all.monsters)));
+  })();
+  return h("div", {}, panel(null, h("div", { class: "rephead" }, h("div", {}, h("h3", {}, "Rally report"), h("small", { class: "sub" }, "Which instance joined which monsters. Today counts from the game's daily reset; it survives app restarts.")), seg)), body);
+};
+
 PAGES.logs = function () {
   const save = panel("Save the log", h("div", { class: "hint", style: { marginBottom: "10px" } }, "Pick how much and which instance, then save a small zip in Downloads to send for support."),
     saveLogRow(),
