@@ -10158,71 +10158,221 @@ def find_learned_building(dev, cfg, log, stop, bname):
     return False
 
 
-# --- the instance's own city map (owner 23 Oct): every city is stitched once from its own views; after that any screenshot
-#     tells where the camera is, and a building is reached in a few measured drags instead of a 7-minute exploration -----------
-_CITY_MAPS = {}                                            # serial -> CityMap (features computed once)
-MAP_CELL = (200, 300)                                      # one mapping cell: views overlap by ~45% so each one is placed by the picture (a 300 px step left 60 px - too little, Kiravik 23 Oct)
+# --- the instance's own city map (owner 23 Oct): a KEYFRAME map - every kept view is stored with its map place; after that
+#     any city screenshot tells where the camera is, and a building is reached in a few measured drags ----------------------
+#     Places are solved from ALL pairwise picture links at once (least squares), never from the finger: the stitched map.png
+#     drifted and doubled the wall when views were placed by the drags (Kiravik 23 Oct, 60 views); the same 60 views solved
+#     this way give one consistent map (56 placed, 4 countryside views dropped, residual < 2 px, locate 56/56 at < 1 px).
+_CITY_MAPS = {}                                            # serial -> CityMap (features + index computed once)
+KF_MIN_PTS = 60                                            # agreeing feature points for a link / a locate
+KF_MIN_NCC = 0.5                                           # pixel correlation of the overlap: kills links between non-overlapping views
+                                                           # made by the static HUD pixels inside CITY_VIEW (a confident 0,0 shift)
+KF_MAP_MINUTES = 8                                         # hard cap for one mapping
 
 
 def _map_dir(dev):
     return LEARN_DIR / re.sub(r"[^\w.-]+", "_", str(getattr(dev, "serial", "default")))
 
 
+def _kf_gray(img):
+    x, y, w, h = CITY_VIEW
+    return cv2.cvtColor(img[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+
+
+def _kf_feats(gray):
+    if _ORB[0] is None:
+        _ORB[0] = cv2.ORB_create(2500)
+    return _ORB[0].detectAndCompute(gray, None)
+
+
+def _kf_consensus(d, min_pts=KF_MIN_PTS, step=300):
+    """The shift most of the match vectors `d` agree on (within 6 px). -> (dx, dy, n) or None."""
+    if len(d) < min_pts:
+        return None
+    best_n, best = 0, None
+    for i in range(0, len(d), max(1, len(d) // step)):
+        n = int(np.sum(np.all(np.abs(d - d[i]) < 6, axis=1)))
+        if n > best_n:
+            best_n, best = n, d[i]
+    if best_n < min_pts:
+        return None
+    inl = d[np.all(np.abs(d - best) < 6, axis=1)]
+    return float(inl[:, 0].mean()), float(inl[:, 1].mean()), best_n
+
+
+def _kf_ncc(ga, gb, dx, dy):
+    """Pixel correlation of the overlap when the content of `ga` sits (dx, dy) further in `gb`. 0 = no / tiny overlap."""
+    dx, dy = int(round(dx)), int(round(dy))
+    h, w = ga.shape
+    ow, oh = w - abs(dx), h - abs(dy)
+    if ow < 60 or oh < 60 or ow * oh < 30000:
+        return 0.0
+    a = ga[max(0, -dy):max(0, -dy) + oh, max(0, -dx):max(0, -dx) + ow].astype(np.float32)
+    b = gb[max(0, dy):max(0, dy) + oh, max(0, dx):max(0, dx) + ow].astype(np.float32)
+    a -= a.mean()
+    b -= b.mean()
+    den = float(np.sqrt((a * a).sum() * (b * b).sum()))
+    return float((a * b).sum() / den) if den > 0 else 0.0
+
+
+def _kf_link(fa, fb, ga, gb):
+    """Picture link between two views: content of a found (dx, dy) further in b. -> (dx, dy, points) or None."""
+    (ka, da), (kb, db) = fa, fb
+    if da is None or db is None or len(ka) < 30 or len(kb) < 30:
+        return None
+    m = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(da, db)
+    if len(m) < 30:
+        return None
+    d = np.float32([kb[q.trainIdx].pt for q in m]) - np.float32([ka[q.queryIdx].pt for q in m])
+    s = _kf_consensus(d)
+    if not s or abs(s[0]) >= ga.shape[1] * 0.95 or abs(s[1]) >= ga.shape[0] * 0.95:
+        return None
+    if _kf_ncc(ga, gb, s[0], s[1]) < KF_MIN_NCC:
+        return None
+    return s
+
+
+def _kf_solve(n, edges):
+    """Camera places from pairwise links (edge i->j with shift (dx, dy) means place_j = place_i - (dx, dy)). Weighted least
+    squares with view 0 fixed; links whose residual is over 6 px (repeating art) are dropped and it is solved again;
+    views left without a link to the main group are dropped. -> (kept view indices, xs, ys)."""
+    kept = list(range(n))
+    E = list(edges)
+
+    def groups(k, es):
+        parent = {v: v for v in k}
+
+        def f(a):
+            while parent[a] != a:
+                parent[a] = parent[parent[a]]
+                a = parent[a]
+            return a
+        for i, j, *_ in es:
+            parent[f(i)] = f(j)
+        g = {}
+        for v in k:
+            g.setdefault(f(v), []).append(v)
+        return sorted(g.values(), key=len, reverse=True)
+
+    def solve(k, es):
+        idx = {v: q for q, v in enumerate(k)}
+        A, bx, by, ws = [], [], [], []
+        for i, j, dx, dy, w in es:
+            r = np.zeros(len(k))
+            r[idx[j]] = 1
+            r[idx[i]] = -1
+            A.append(r)
+            bx.append(-dx)
+            by.append(-dy)
+            ws.append(np.sqrt(w))
+        r = np.zeros(len(k))
+        r[0] = 1
+        A.append(r)
+        bx.append(0.0)
+        by.append(0.0)
+        ws.append(100.0)
+        A = np.array(A) * np.array(ws)[:, None]
+        px = np.linalg.lstsq(A, np.array(bx) * ws, rcond=None)[0]
+        py = np.linalg.lstsq(A, np.array(by) * ws, rcond=None)[0]
+        return idx, px, py
+
+    for _ in range(8):
+        kept = groups(kept, E)[0] if E else kept[:1]
+        E = [e for e in E if e[0] in kept and e[1] in kept]
+        if not E:
+            break
+        idx, px, py = solve(kept, E)
+        res = np.array([max(abs(px[idx[j]] - px[idx[i]] + dx), abs(py[idx[j]] - py[idx[i]] + dy)) for i, j, dx, dy, w in E])
+        if res.max() <= 6:
+            break
+        worst = set(np.argsort(-res)[:max(1, int((res > 6).sum() * 0.3))].tolist())
+        E = [e for q, e in enumerate(E) if q not in worst]
+    if not E:
+        return kept[:1], np.zeros(1), np.zeros(1)
+    idx, px, py = solve(kept, E)
+    return kept, px - px.min(), py - py.min()
+
+
 class CityMap:
-    """The stitched map of one city. Map coordinates = pixels of map.png; a 'camera place' is the map coordinate of
-    screen point (0, 0), so screen (sx, sy) = map (cx + sx, cy + sy)."""
+    """The keyframe map of one city: city_learn/<serial>/kf.json (place per keyframe) + kf_NN.png (CITY_VIEW crops).
+    A 'camera place' is the map coordinate of screen point (0, 0), so screen (sx, sy) = map (cx + sx, cy + sy)."""
 
     def __init__(self, path):
-        self.path = path
-        self.img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+        self.path = path                                   # .../map.png (the stitched picture, for looking at)
         try:
             self.meta = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
         except Exception:
             self.meta = {}
-        self.kp = self.des = None
+        self.kf = []                                       # [(x, y, gray, keypoints)]
+        self.index = None
+        self.labels = self.pts = None
+        try:
+            for v in self.meta.get("keyframes", []):
+                im = cv2.imread(str(path.parent / v["file"]), cv2.IMREAD_GRAYSCALE)
+                if im is not None:
+                    self.kf.append((float(v["x"]), float(v["y"]), im, None))
+        except Exception:
+            self.kf = []
 
     def ok(self):
-        return self.img is not None and self.img.shape[0] > 400 and self.img.shape[1] > 300
+        return len(self.kf) >= 2
 
-    def _features(self):
-        if self.kp is None:
-            orb = cv2.ORB_create(40000)
-            self.kp, self.des = orb.detectAndCompute(self.img, None)
-        return self.kp, self.des
+    def _build(self):
+        """Feature index over ALL keyframes at once (one search per locate instead of one per keyframe: 1.0 s instead of
+        5.7 s for 56 keyframes)."""
+        if self.index is not None:
+            return
+        descs, labels, pts = [], [], []
+        for n, (x, y, g, _) in enumerate(self.kf):
+            k, d = _kf_feats(g)
+            if d is None:
+                continue
+            descs.append(d)
+            labels.append(np.full(len(k), n))
+            pts.append(np.float32([q.pt for q in k]))
+        self.labels = np.concatenate(labels)
+        self.pts = np.vstack(pts)
+        self.index = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=12, multi_probe_level=1), dict(checks=50))
+        self.index.add([np.vstack(descs)])
+        self.index.train()
 
-    def locate(self, shot, min_pts=35):
-        """Camera place from any city screenshot: its map-area feature points matched against the map, the shift most of
-        them agree on wins (same consensus as feat_shift). -> (cx, cy, agreeing points) or None."""
+    def locate(self, shot, min_pts=KF_MIN_PTS):
+        """Camera place from any city screenshot: its feature points searched in all keyframes at once, the keyframe
+        whose points agree on one shift wins once the pixels of the overlap agree too. -> (cx, cy, points) or None."""
         try:
-            x, y, w, h = CITY_VIEW
-            kp, des = self._features()
-            if des is None or len(kp) < 100:
-                return None
-            g = cv2.cvtColor(shot[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+            self._build()
+            g = _kf_gray(shot)
             if float(g.std()) < 12:
                 return None
-            ks, ds = cv2.ORB_create(2500).detectAndCompute(g, None)
-            if ds is None or len(ks) < 30:
+            k, d = _kf_feats(g)
+            if d is None or len(k) < 30:
                 return None
-            m = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(ds, des)
-            if len(m) < 30:
+            pts = np.float32([q.pt for q in k])
+            ms = self.index.knnMatch(d, k=3)
+            qi = np.array([m.queryIdx for mm in ms for m in mm], dtype=np.int64)
+            ti = np.array([m.trainIdx for mm in ms for m in mm], dtype=np.int64)
+            if len(qi) < min_pts:
                 return None
-            d = np.float32([kp[q.trainIdx].pt for q in m]) - np.float32([ks[q.queryIdx].pt for q in m])
-            best_n, best = 0, None
-            for i in range(0, len(d), max(1, len(d) // 600)):
-                n = int(np.sum(np.all(np.abs(d - d[i]) < 6, axis=1)))
-                if n > best_n:
-                    best_n, best = n, d[i]
-            if best_n < min_pts:
-                return None
-            inl = d[np.all(np.abs(d - best) < 6, axis=1)]
-            return float(inl[:, 0].mean()) - x, float(inl[:, 1].mean()) - y, best_n
+            lab = self.labels[ti]
+            cands = []
+            for n in np.unique(lab):
+                sel = lab == n
+                if sel.sum() < min_pts:
+                    continue
+                s = _kf_consensus(pts[qi[sel]] - self.pts[ti[sel]], min_pts)
+                if s:
+                    cands.append((s[2], int(n), s[0], s[1]))
+            cands.sort(reverse=True)
+            for npts, n, dx, dy in cands[:4]:
+                if _kf_ncc(self.kf[n][2], g, dx, dy) >= KF_MIN_NCC:
+                    return self.kf[n][0] - dx, self.kf[n][1] - dy, npts
+            return None
         except Exception:
             return None
 
 
 def city_map(dev):
-    """The instance's own map, or None when 'Map my city' has not been run yet."""
+    """The instance's own map, or None when 'Map my city' has not been run yet (or the old stitched-only map is there)."""
     key = str(getattr(dev, "serial", "default"))
     m = _CITY_MAPS.get(key)
     p = _map_dir(dev) / "map.png"
@@ -10235,22 +10385,40 @@ def city_map(dev):
     return m if m.ok() else None
 
 
-def run_map_city(dev, cfg, log, stop):
-    """Duty 'Map my city': explore every cell of the city once (flood fill, like the learned-picture search but it does
-    not stop) and stitch the map area of every view into city_learn/<serial>/map.png. Each view's place comes from the
-    picture itself (feature-point shift against the views already placed), never from the finger, so a view is placed
-    where it really is; a view that did not move the camera marks the cell as outside the city."""
-    if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
+def zoom_out_full(dev, cfg, stop, log):
+    """All the way out: Ctrl+wheel until the picture stops getting smaller (Kiravik 23 Oct: the two-notch zoom of the duties
+    left the city 1.8x bigger than the game's own widest view, so the map needed 56 views instead of ~8)."""
+    if cfg.get("zoom_out", False):
         zoom_out_city(dev, stop, log)
+    name = (load_config().get("device_names") or {}).get(dev.serial)
+    for i in range(6):
+        if stop.is_set():
+            return
+        before = dev.screenshot()
+        if not wheel_zoom_out(dev, log, name):
+            return
+        _nap(stop, 1.0, 1.3)
+        sc = _view_scale(before, dev.screenshot())
+        if not sc or sc >= 0.97:
+            log(f"[i]   zoom: fully out after {i} more notch(es)")
+            return
+    dev.zoomed_out = True
+
+
+def run_map_city(dev, cfg, log, stop):
+    """Duty 'Map my city': at the widest zoom, walk the city in rows from the top-left corner (serpentine, views ~75 %
+    of a screen apart, a row ends where the camera stops), keep every view that shows buildings, then solve all the
+    views' places from their picture links at once and save them as keyframes. The finger only chooses the next drag."""
     leave_to_city(dev, cfg, stop, log)
+    zoom_out_full(dev, cfg, stop, log)
     nav = CityNav(dev, stop, log)
     x, y, w, h = CITY_VIEW
-    SX, SY = MAP_CELL
-    views = []                                             # [(mapx, mapy, crop, feats)] placed views
+    STEPX, STEPY = int(w * 0.75), int(h * 0.75)
+    views = []                                             # [(crop_bgr, gray, feats, est_x, est_y)]
     t0 = time.time()
+    drags = [0]
 
     def clean_shot(shot=None):
-        """The city, with no ring open; -> the same shot object when nothing had to be done."""
         shot = dev.screenshot() if shot is None else shot
         if view_of(shot, cfg) != "city":
             leave_to_city(dev, cfg, stop, log)
@@ -10260,97 +10428,91 @@ def run_map_city(dev, cfg, log, stop):
             shot = nav._settled()
         return shot
 
-    def place(shot):
-        """Where is this view? Measured against the placed views it overlaps (best agreement wins). -> (mx, my) or None."""
-        est = (nav.cx, nav.cy)
-        best = None
-        for mx, my, crop, _ in views:
-            if abs(mx - est[0]) > w * 0.9 or abs(my - est[1]) > h * 0.9:
-                continue                                   # no overlap expected
-            f = feat_shift(_full(crop), shot)
-            if f and (best is None or f[2] > best[2]):
-                best = (mx - f[0], my - f[1], f[2])
-        return (best[0], best[1]) if best else None
-
-    def _full(crop):                                       # a stored crop back at its screen place, for feat_shift
-        full = np.zeros((960, 540, 3), np.uint8)
-        full[y:y + h, x:x + w] = crop
-        return full
-
-    def keep(shot, mx, my):
-        views.append((mx, my, shot[y:y + h, x:x + w].copy(), None))
+    def keep(shot):
+        """Keep this view when it shows buildings (the countryside / water has few feature points and no links)."""
+        g = _kf_gray(shot)
+        k, d = _kf_feats(g)
+        if d is None or len(k) < 700:
+            log(f"[i]   view at {round(nav.cx)},{round(nav.cy)}: {0 if d is None else len(k)} points - countryside, not kept")
+            return False
+        for _, _, _, ex, ey in views:                       # the same ground again (the edge slid the camera back)
+            if abs(ex - nav.cx) < 100 and abs(ey - nav.cy) < 100:
+                return False
+        views.append((shot[y:y + h, x:x + w].copy(), g, (k, d), nav.cx, nav.cy))
         rd_snap(shot, f"map_v{len(views):02d}")
+        log(f"[i]   map view {len(views)} at about {round(nav.cx)},{round(nav.cy)} ({len(k)} points)")
+        return True
 
-    shot = clean_shot()
-    keep(shot, 0.0, 0.0)
+    def move(dx, dy):
+        mx, my = nav.pan(dx, dy)
+        drags[0] += 1
+        return mx, my
+
+    def timed_out():
+        if stop.is_set() or time.time() - t0 > KF_MAP_MINUTES * 60:
+            log(f"[!]   Map my city: stopping after {round((time.time() - t0) / 60)} min - saving what there is")
+            return True
+        return False
+
+    nav.to_origin()                                        # top-left corner (the camera stops there)
     nav.cx = nav.cy = 0.0
-    # The frontier is the VIEWS, not a grid: a diamond-shaped city slides the camera along its edge, so a grid cell is
-    # often unreachable from one side but fine from another (Kiravik 21:40: 7 of 9 cells "dead" from the corner).
-    # From the current view try each direction once; wherever the camera lands is a new view when it is new ground.
-    STEP = ((SX, 0), (0, SY), (-SX, 0), (0, -SY))
-    tried = [set()]                                        # per view: directions already tried from it
-    at = 0                                                 # the view the camera is on (or nearest to)
-    tries = dead = idle = 0                                # idle = drags in a row that found no new ground
-    while tries < 150 and len(views) < 90 and idle < 10:   # Kiravik 23 Oct: 29 views in 20 min, then 10+ min of known ground
-        if stop.is_set():
-            return
-        if len(tried[at]) == 4:                            # this view is done: go to the nearest view with directions left
-            cand = [i for i in range(len(views)) if len(tried[i]) < 4]
-            if not cand:
+    keep(clean_shot())
+    dirx = 1
+    for row in range(12):
+        if timed_out():
+            break
+        empty = 0
+        for _ in range(12):                                # along the row
+            if timed_out():
                 break
-            at = min(cand, key=lambda i: abs(views[i][0] - nav.cx) + abs(views[i][1] - nav.cy))
-            for _ in range(3):
-                rx, ry = views[at][0] - nav.cx, views[at][1] - nav.cy
-                if abs(rx) < 60 and abs(ry) < 60:
+            mx, my = move(dirx * STEPX, 0)
+            if abs(mx) < STEPX * 0.3:                      # the edge: the camera did not follow the finger
+                break
+            if keep(clean_shot()):
+                empty = 0
+            else:
+                empty += 1
+                if empty >= 2:
                     break
-                shot = nav._settled()
-                nav.pan(rx, ry)
-                shot = clean_shot()
-                p = place(shot)
-                if p is not None:
-                    nav.cx, nav.cy = p
-            continue
-        tries += 1
-        sx, sy = min(STEP, key=lambda d: (d in tried[at], abs(d[0]) == 0))   # x first (the diamond is wider than tall on screen)
-        tried[at].add((sx, sy))
-        dx, dy, shot = nav._drag(270 + sx / 2, 440 + sy / 2, 270 - sx / 2, 440 - sy / 2, before=shot)
-        nav.cx -= dx
-        nav.cy -= dy
-        shot = clean_shot(shot)
-        p = place(shot)
-        if p is not None:
-            nav.cx, nav.cy = p                             # the picture says where we are (the finger only estimated it)
-        near_i = min(range(len(views)), key=lambda i: abs(views[i][0] - nav.cx) + abs(views[i][1] - nav.cy))
-        near = abs(views[near_i][0] - nav.cx) + abs(views[near_i][1] - nav.cy)
-        if near < 120:                                     # old ground (the edge: did not move, or slid back)
-            dead += 1
-            idle += 1
-            at = near_i
-            continue
-        idle = 0
-        keep(shot, nav.cx, nav.cy)
-        tried.append(set())
-        at = len(views) - 1
-        log(f"[i]   map view {len(views)} at {round(nav.cx)},{round(nav.cy)}" + ("" if p else " (by the drags)"))
-    # stitch
-    xs = [v[0] for v in views]
-    ys = [v[1] for v in views]
-    ox, oy = -min(xs), -min(ys)
-    W, H = int(max(xs) + ox) + w + 1, int(max(ys) + oy) + h + 1
-    canvas = np.zeros((H, W, 3), np.uint8)
-    for mx, my, crop, _ in views:                          # later views on top (fresher)
-        X, Y = int(round(mx + ox)), int(round(my + oy))
-        canvas[Y:Y + h, X:X + w] = crop
+        if timed_out():
+            break
+        mx, my = move(0, STEPY)                            # next row
+        if abs(my) < STEPY * 0.3:
+            break                                          # the bottom
+        keep(clean_shot())
+        dirx = -dirx
+    if len(views) < 2:
+        log("[!]  Map my city: fewer than 2 views with buildings - nothing saved")
+        return
+    # solve the places from the pictures
+    t1 = time.time()
+    edges = []
+    for i in range(len(views)):
+        for j in range(i + 1, len(views)):
+            s = _kf_link(views[i][2], views[j][2], views[i][1], views[j][1])
+            if s:
+                edges.append((i, j, s[0], s[1], s[2]))
+    kept, px, py = _kf_solve(len(views), edges)
     d = _map_dir(dev)
     d.mkdir(parents=True, exist_ok=True)
+    for old in d.glob("kf_*.png"):
+        old.unlink()
+    kfs = []
+    for q, i in enumerate(kept):
+        cv2.imwrite(str(d / f"kf_{q + 1:02d}.png"), views[i][0])
+        kfs.append({"file": f"kf_{q + 1:02d}.png", "x": float(px[q]), "y": float(py[q])})
+    W, H = int(px.max()) + w + 1, int(py.max()) + h + 1   # the stitched picture, for the user
+    canvas = np.zeros((H, W, 3), np.uint8)
+    for q, i in enumerate(kept):
+        X, Y = int(round(px[q])), int(round(py[q]))
+        canvas[Y:Y + h, X:X + w] = views[i][0]
     cv2.imwrite(str(d / "map.png"), canvas)
-    meta = {"at": time.strftime("%Y-%m-%d %H:%M"), "views": len(views), "size": [W, H],
-            "origin": [ox, oy], "zoomed_out": bool(getattr(dev, "zoomed_out", False))}
+    meta = {"at": time.strftime("%Y-%m-%d %H:%M"), "views": len(kept), "size": [W, H], "keyframes": kfs,
+            "links": len(edges), "zoomed_out": True}
     (d / "map.json").write_text(json.dumps(meta), encoding="utf-8")
     _CITY_MAPS.pop(str(getattr(dev, "serial", "default")), None)
-    # the learned buildings' map places were relative to the old map (or none): they are re-learned on the next find
-    for p in d.glob("*.json"):
-        if p.stem not in ("map",) and not p.stem.endswith("_prev"):
+    for p in d.glob("*.json"):                             # learned buildings' map places belonged to the old map
+        if p.stem != "map" and not p.stem.endswith("_prev"):
             try:
                 m = json.loads(p.read_text(encoding="utf-8"))
                 if "map" in m:
@@ -10358,7 +10520,9 @@ def run_map_city(dev, cfg, log, stop):
                     p.write_text(json.dumps(m), encoding="utf-8")
             except Exception:
                 pass
-    log(f"[+]  City map built: {len(views)} views, {W}x{H} px, {tries} drags ({dead} led to old ground), {round(time.time() - t0)} s")
+    dropped = len(views) - len(kept)
+    log(f"[+]  City map built: {len(kept)} keyframes ({dropped} views without a picture link dropped), {len(edges)} links, "
+        f"{W}x{H} px, {drags[0]} moves, {round(time.time() - t0)} s (solve {round(time.time() - t1)} s)")
 
 
 def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
