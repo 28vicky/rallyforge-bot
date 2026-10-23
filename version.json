@@ -1,12 +1,12 @@
 {
-  "version": "2.5.4",
-  "notes": "Daily reset follows Evony's own reset time",
+  "version": "2.5.5",
+  "notes": "Reports also shows joins from before the update",
   "files": {
     "rally_bot.py": {
-      "sha256": "afaa4143d32d8d762d99cd95162fce609798735e4440ce89ff6c5330de198c11"
+      "sha256": "771414a329335087c63492df9388439f1d6fc4b3263aec25d12cce4cd2430bb7"
     },
     "web_app.py": {
-      "sha256": "86d0fd70ba97744baf11cba45283a67a7484d685bfdba2333d699d4690d6350c"
+      "sha256": "69ff7ed172042bc7cfe009b1e8776e847d5c97e6bae3578402ab872a4afb9500"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "528fe7f3acd2e0f82ad6d4c384b434f6e5a24f4b5343ecbacef954f6376417d6"
     },
     "ui/changelog.js": {
-      "sha256": "0e88f5b39fcbe446e5c144c8a1b39affb1b650cc06fa96dd4d4a8179ec6698db"
+      "sha256": "c894b276aad290f9f399fbda7cdc237bee20d72ce6d101887ceea83516c2e909"
     },
     "ui/dialogs.js": {
       "sha256": "407675636f1221859dd7e1fa2b8eeacb241c1d05de7a2471bf81cc3ac5e1e68b"
@@ -1629,5 +1629,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "f01cf59be3fb43c7bc6122a5073d2ac723ebde5912743cf722f6ebc991212af6"
+  "sig": "4d8af933da8651ee49d38fb0cd6a9e2708e59af0382f67bab96b7c5277bcf835"
 }
