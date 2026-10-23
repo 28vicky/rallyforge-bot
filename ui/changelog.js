@@ -1,5 +1,9 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.2", date: "2026-10-23",
+    new: ["New Reports page: see which instance joined which monsters - today, the last 7 days or the last 30 days."],
+    fixed: ["The Monster joins list keeps today's joins when the app restarts. It starts again from 0 only at the game's daily reset.",
+      "World bosses (Thunder Scorpion, Bird of Hurricane, Behemoth King, Lord of Lava) are never joined - they cannot be joined as alliance rallies."] },
   { v: "2.5.1", date: "2026-10-23",
     new: ["New way to choose generals for a preset: click a general (or drag it) to add it, drag the handle to change the order, and remove one with its \u2715. Generals already added show a check mark."],
     fixed: ["The generals search box has a clear button."] },
