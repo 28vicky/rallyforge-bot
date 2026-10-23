@@ -6183,7 +6183,7 @@ def wheel_zoom_out(dev, log, name=None, notches=6):
 _INPUT_LOCK = threading.Lock()
 
 
-def real_wheel_zoom_out(dev, log, name=None, notches=6):
+def real_wheel_zoom_out(dev, log, name=None, notches=6, up=False):
     """Real Ctrl + wheel down over the emulator window (SendInput): brings the window to the front for ~2 s, moves the
     mouse over it, scrolls, puts the mouse back. Used when window messages are ignored (MuMu, 23 Oct). -> True when sent."""
     h = emu_window(dev, name)
@@ -6259,7 +6259,7 @@ def real_wheel_zoom_out(dev, log, name=None, notches=6):
         time.sleep(0.15)
         send(key(0x11))
         for _ in range(notches):
-            send(wheel(-120))
+            send(wheel(120 if up else -120))
             time.sleep(0.12)
         send(key(0x11, True))
         time.sleep(0.3)
@@ -6269,7 +6269,7 @@ def real_wheel_zoom_out(dev, log, name=None, notches=6):
             u32.ShowWindow(w, 4)                          # SW_SHOWNOACTIVATE: back as it was, without taking focus
         if prev:
             u32.SetForegroundWindow(prev)
-    log(f"[i] Zoom out: real Ctrl+wheel x{notches} over the emulator window ({cx},{cy})" + (f", {len(lowered)} window(s) in front minimised for it" if lowered else ""))
+    log(f"[i] Zoom {'in' if up else 'out'}: real Ctrl+wheel x{notches} over the emulator window ({cx},{cy})" + (f", {len(lowered)} window(s) in front minimised for it" if lowered else ""))
     return True
 
 
@@ -6321,6 +6321,19 @@ def zoom_out_city(dev, stop, log, max_tries=3):
                 ok_any = True
             elif sc and sc >= 0.97:
                 break
+        if not ok_any:                                    # nothing changed: already as far out as it goes, or the input is ignored?
+            before = dev.screenshot()
+            if real_wheel_zoom_out(dev, log, name, notches=2, up=True):
+                _nap(stop, 1.2, 1.5)
+                sc = _view_scale(before, dev.screenshot())
+                if sc and sc > 1.03:
+                    log(f"[+] Zoom: zooming IN works (scale {sc:.2f}) - the city was already fully zoomed out; zooming back out")
+                    real_wheel_zoom_out(dev, log, name, notches=6)
+                    _nap(stop, 1.0, 1.3)
+                    ok_any = True
+                else:
+                    log(f"[!] Zoom: zooming in did nothing either (scale {sc:.2f}) - the emulator ignores the Ctrl+wheel from the bot" if sc
+                        else "[!] Zoom: zoom-in check not measurable")
     if ok_any:
         dev.zoomed_out = True
         return True
@@ -10324,9 +10337,9 @@ def mr_search(dev, stop, x, y):
         _nap(stop, 0.8, 1.1)
         raise RuntimeError(f"the search box does not show X {x} Y {y} (read {got[:4]})")
     # one number misread (Y 444 read as 40404): go anyway - the monster check on the tile catches a wrong spot
-    if not rd_tap(dev, stop, ["Go"], region=(180, 575, 200, 75), whole=True, wait=(2.5, 3.0), shot=shot):
+    if not rd_tap(dev, stop, ["Go"], region=(180, 575, 200, 75), whole=True, wait=(1.6, 1.9), shot=shot):
         dev.tap(333, 610)
-        _nap(stop, 2.5, 3.0)
+        _nap(stop, 1.6, 1.9)
     return True
 
 
@@ -10463,10 +10476,10 @@ def _run_monster_rally(dev, cfg, log, stop):
             if line:
                 log(f"[*]  Monster rally: {label} - a {line} march line is already going to it, skipped")
                 break
-            mk = rt_marches(shot)
+            mk = None if getattr(dev, "mr_no_march_count", False) else rt_marches(shot)
+            if not mk:
+                dev.mr_no_march_count = True                 # the March panel is folded on the map: do not spend time reading it again
             free = (mk[1] - mk[0]) if mk else None
-            if not said and not mk:
-                log(f"[i]  Monster rally: {label} - march count not read")
             if free is None or free > keep_free:
                 break
             if not said:
@@ -10490,15 +10503,14 @@ def _run_monster_rally(dev, cfg, log, stop):
             got, page = mr_open_monster(dev, stop, tgt.get("name") or "")
             if got != "ok":
                 break
-            if not rd_tap(dev, stop, ["Alliance War"], region=(270, 730, 270, 130), wait=(1.8, 2.2), shot=page):
-                dev.tap(*MR_ALLIANCE_WAR)                    # white-on-brown label is often not read: its fixed spot
-                _nap(stop, 1.8, 2.2)
+            dev.tap(*MR_ALLIANCE_WAR)                        # fixed spot (the white-on-brown label is rarely read); window checked below
+            _nap(stop, 1.0, 1.2)
             shot = None
-            for _ in range(3):                               # the rally time window can be slow to open
+            for _ in range(5):                               # the rally time window can be slow to open
                 shot = dev.screenshot()
                 if rd_seen(shot, ["Alliance War Rally", "rally time"], region=(0, 300, 540, 160)):
                     break
-                _nap(stop, 1.2, 1.5)
+                _nap(stop, 0.7, 0.9)
             else:
                 rd_snap(shot, "mrally_time")
                 if view_of(shot, cfg) not in ("landscape", "world"):
@@ -10510,14 +10522,13 @@ def _run_monster_rally(dev, cfg, log, stop):
                     continue
                 tried.pop(key, None)
                 return later(2, "no rally window (all marches busy or no stamina)")
-            if not rd_tap(dev, stop, [f"{mode} minute(s)", f"{mode} minute"], region=(0, 460, 540, 180), cutoff=0.85, wait=(2.0, 2.5), shot=shot):
-                dev.tap(*MR_TIMES.get(mode, MR_TIMES["5"]))
-                _nap(stop, 2.0, 2.5)
-            for _ in range(6):                               # the troop page can take several seconds to open (owner 23 Oct)
+            dev.tap(*MR_TIMES.get(mode, MR_TIMES["5"]))      # fixed spot of the 5/10/30/60 min button; the troop page is checked below
+            _nap(stop, 1.0, 1.2)
+            for _ in range(12):                              # the troop page can take several seconds to open (owner 23 Oct)
                 shot = dev.screenshot()
                 if rd_seen(shot, ["Select a Preset"], region=(0, 0, 540, 180)) and not rd_seen(shot, ["rally time"], region=(0, 380, 540, 80)):
                     break
-                _nap(stop, 1.5, 1.8)
+                _nap(stop, 0.6, 0.8)
             rd_snap(shot, "mrally_preset_page")
             if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)) or rd_seen(shot, ["rally time"], region=(0, 380, 540, 80)):
                 rd_snap(shot, "mrally_nomarch")
@@ -10539,7 +10550,7 @@ def _run_monster_rally(dev, cfg, log, stop):
         n = RT_PRESETS.index(preset) if preset in RT_PRESETS else 0
         for _ in range(2):                                   # the first tap on a preset is sometimes lost
             dev.tap(62 + n * 61, 115)
-            _nap(stop, 1.2, 1.6)
+            _nap(stop, 0.6, 0.8)
         shot = dev.screenshot()
         rd_snap(shot, "mrally_troops")
         sta = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (280, 820, 260, 55))))
@@ -10547,12 +10558,11 @@ def _run_monster_rally(dev, cfg, log, stop):
             dev.back()
             _nap(stop, 1.0, 1.3)
             return later(60, f"stamina {sta[-2]} would drop under {keep_sta}")
-        if not rd_tap(dev, stop, ["March"], region=(330, 880, 210, 75), wait=(2.0, 2.5), shot=shot):
-            if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)):
-                dev.back()
-                raise RuntimeError("no March button")
-            dev.tap(*MR_MARCH)                               # gold March label is often not read (PC 23 Oct) - fixed spot
-            _nap(stop, 2.0, 2.5)
+        if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)):
+            dev.back()
+            raise RuntimeError("no March button (the troop page is gone)")
+        dev.tap(*MR_MARCH)                                   # fixed spot (the gold label is rarely read, PC 23 Oct); checked below
+        _nap(stop, 1.5, 1.8)
         shot = dev.screenshot()
         if rd_seen(shot, ["Select a Preset"], region=(0, 120, 540, 60)):
             rd_snap(shot, "mrally_stuck")
