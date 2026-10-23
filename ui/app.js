@@ -61,6 +61,7 @@ const S = {
 };
 // ------------------------------------------------------------------ icon set (one outline style: 24 grid, 1.8 stroke, currentColor)
 const ICO = {
+  chart: '<path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/>',
   bolt: '<path d="M13 3 4 14h7l-1 7 9-11h-7l1-7z"/>',
   play: '<path d="M8 5v14l11-7z"/>', pause: '<path d="M9 5v14M15 5v14"/>', stop: '<rect x="6" y="6" width="12" height="12" rx="2.5"/>',
   chev: '<path d="m6.5 9.5 5.5 5.5 5.5-5.5"/>',
@@ -97,12 +98,12 @@ function ico(name, cls) {
   e.innerHTML = '<svg viewBox="0 0 24 24">' + (ICO[name] || "") + "</svg>";
   return e;
 }
-const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", monsters: "sword", tasks: "list", duties: "clock", market: "bag", logs: "file",
+const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", monsters: "sword", tasks: "list", duties: "clock", market: "bag", logs: "file", reports: "chart",
   telegram: "send", reliability: "shield", schedule: "bell", updates: "down", themes: "palette", license: "key" };
 
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
-  ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["telegram", "Telegram & Discord"], ["reliability", "Reliability"],
+  ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram & Discord"], ["reliability", "Reliability"],
   ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Themes"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
@@ -520,6 +521,7 @@ const TAB_GROUPS = [
   ["duties", "Duties", null],
   ["market", "Market", null],
   ["logs", "Logs", null],
+  ["reports", "Reports", null],
   ["setup", "Setup", ["settings", "reliability", "schedule"]],
   ["app", "App", ["updates", "telegram", "license"]],
 ];
@@ -762,7 +764,7 @@ function pushActs(list) {
       while (v.body.childNodes.length > 200) v.body.removeChild(v.body.lastChild);
     }
   }
-  if (S.acts.length > 600) S.acts.splice(0, S.acts.length - 600);
+  if (S.acts.length > 6000) S.acts.splice(0, S.acts.length - 6000);     // a whole game day of joins (the server keeps the day across restarts)
   for (const v of actViews) { v.now.textContent = actNow(v.serial); paintStats(v.stats, v.serial); }
 }
 function pushLogs(list) {
@@ -864,6 +866,7 @@ function updateSummary() {
 async function handleEvent(ev) {
   const d = ev.d || {};
   if (ev.k === "toast") toast(d.msg, d.kind);
+  else if (ev.k === "acts_reset") { S.acts = []; for (const v of actViews) { v.body.innerHTML = ""; paintStats(v.stats, v.serial); } }   // the game's daily reset
   else if (ev.k === "devices") { const j = await act(api("state")); if (j) { S.devices = j.devices; if (S.sel === "control" && S.tab === "dashboard") rerender(); } }
   else if (ev.k === "bosses") { const j = await act(api("state", {}, { quiet: true })); if (j) { S.bosses = j.bosses; if (window.refreshBosses) refreshBosses(); } }
   else if (ev.k === "city_done") { const sr = ev.d && ev.d.serial; if (sr) { S.cityDone = { ...(S.cityDone || {}), [sr]: true }; if (S.cityJobs) delete S.cityJobs[sr]; if (window.drawCityProgress) drawCityProgress(); } else { closeScanBox(); if (window.showCityResult) showCityResult(); } const j = await act(api("state")); if (j) { S.cityInfo = j.city_info; if (window.refreshCityInfo) refreshCityInfo(); } toast("City mapper finished.", "ok"); }
