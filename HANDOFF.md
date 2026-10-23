@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## LATEST (24 Oct 01:15 IST) - 2.5.7 PUBLISHED (release/2.5.7 merged to main b64b018, signed version.json, check_release OK): T67 UI pass, T69 tests, generals tab fallback, dark mode, save status, safety stop, stamina, unknown windows, Behemoth King, task stats, detect, stability. Mode: Update available (not auto). NOT live tested. The PC dev copy app\v2.4.99 (feat/city-go keyframe map) is NOT in it - installing 2.5.7 on the PC replaces the dev copy.
+
 ## NEXT CHAT: read project doc claude/handoff_23oct_0740.md first (released today + open list: 1. too many game restarts, 2. slow building label search, 3. Rory Champions, 4. recorder on BlueStacks).
 
 ## LATEST (23 Oct 07:55 IST) - 2.5.4 live: daily reset = Evony own time (auto, T52).
