@@ -454,8 +454,6 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .inst.dragging { cursor: grabbing; }
 .inst.dragging { opacity: .45; outline: 1px dashed var(--accent2); }
 
-/* status bar: update available */
-.sb-upd { cursor: pointer; color: var(--accent2); font-weight: 700; text-decoration: underline; }
 .warnbar{margin:0 0 14px;padding:11px 14px;border-radius:var(--r2);border:1px solid var(--warn);background:rgba(217,165,102,.12);color:var(--fg);font-size:14.5px;line-height:1.45}
 .warnbar b{color:var(--warn)}
 .inst small{font-size:13px;font-weight:400;letter-spacing:.02em}
@@ -710,7 +708,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 :root .chip.pill-ok{color:var(--good)}:root .chip.pill-bad{color:var(--bad)}
 :root .status{border-top:0;background:transparent;height:30px;font-size:12px;color:var(--mute);gap:18px}
 :root .status .l{opacity:.7}
-:root .status .sb-upd{font-weight:500}
 :root .panel{border-color:var(--line)}
 :root .panel h3{font-weight:600}
 :root .hint,:root .note{color:var(--mute)}
@@ -861,10 +858,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .inst .dot.run{background:#10b981}.inst .dot.pause{background:#f59e0b}.inst .dot.error{background:var(--bad)}.inst .dot.stop,.inst .dot.idle{background:#9ca3af}
 .sidefoot{padding:12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .sidefoot .sflab{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);padding:0 4px}
-.allbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.allbtns .btn{padding:7px 0;font-size:12.5px;font-weight:700;background:#fff;border-radius:8px;box-shadow:none}
-.btn.olpause{color:#b45309;border:1px solid #fcd34d}.btn.olpause:hover{background:#fffbeb}
-.btn.olstop{color:#b91c1c;border:1px solid #fca5a5}.btn.olstop:hover{background:#fef2f2}
 .sidefoot .ctlbtn{border:1px solid var(--line);background:rgba(255,255,255,.8);color:var(--fg);font-size:13px;padding:9px;border-radius:8px}
 .sidefoot .ctlbtn.on{background:var(--accent);color:#fff;border-color:transparent}
 .app.inst-mode .top{display:none}
@@ -904,8 +897,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .setlnk:hover{background:rgba(255,255,255,.6);color:var(--fg)}
 .setlnk.on{background:var(--card);border-color:var(--line);color:var(--fg);box-shadow:var(--sh)}
 .setlnk.dim{color:#a8a29e;margin-top:8px}
-.savebar{position:sticky;bottom:-24px;z-index:10;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:12px 0 24px;background:var(--bgc);border-top:1px solid var(--line)}
-.savebar .sbtxt{margin-right:auto;font-size:12.5px;color:var(--mute)}
 .status{background:var(--bgc);border-top:1px solid var(--line)}
 :root .side .brand{font-family:var(--font);margin:0}
 .actstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding-top:14px}
@@ -943,7 +934,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .ovgrid .stile{display:flex;flex-direction:column-reverse;align-items:flex-start;gap:4px;padding:12px;border-radius:8px;background:var(--bg);border:1px solid var(--line)}
 .ovgrid .stile span{font-size:12.5px;color:var(--mute);font-weight:500}
 .ovgrid .stile b{font-size:24px;font-weight:800;line-height:1.1}
-.ovgrid .viewall{font-size:13px;font-weight:600;color:var(--accent1);text-decoration:none}
+.ovgrid .viewall{font-size:13px;font-weight:600;color:var(--accent2);text-decoration:none}
 .ovgrid .viewall:hover{text-decoration:underline}
 .ovgrid .acttable{width:100%;border-collapse:collapse;font-size:13px}
 .ovgrid .acttable th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);background:none}
@@ -1036,8 +1027,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .status .sbdot{width:8px;height:8px;border-radius:50%;background:var(--mute);opacity:.5}
 .status .sbdot.on{background:#10b981;opacity:1}
 .status .l{margin:0;font-size:12px;opacity:.75}
-.status .sb-upd{font-weight:600;color:var(--accent1);background:#fff5f0;border:1px solid #fbd5c5;padding:3px 10px;border-radius:6px;text-decoration:none}
-.status .sb-upd:hover{background:#ffeee6}
 /* the status bar belongs to the main area (like the mockup): it starts where the sidebar ends */
 .app:not(.nosb) .status{left:240px}
 .side{padding-bottom:12px}
@@ -1089,8 +1078,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .whoami .wtx b{font-size:13px}
 :root .whoami .wtx small{font-size:11.5px}
 :root .sidefoot .sflab{margin-top:2px;font-size:10.5px}
-:root .allbtns{gap:6px}
-:root .allbtns .btn{min-height:30px;padding:0;font-size:12.5px}
 :root .sidefoot .ctlbtn{min-height:32px;padding:0 10px;font-size:13px;font-weight:600}
 :root .sidefoot .ctlbtn.on{background:var(--card);color:var(--accent1);border:1px solid var(--accent1)}
 :root .sidefoot .ctlbtn.on .ico{color:var(--accent1)}
@@ -1250,3 +1237,227 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .mrc>.mrxy{grid-area:xy;font-size:12.5px;color:var(--mute)}
 .mrc>.rtnst,.mrc>.btn{grid-area:s}
 .mrc.dim>b{color:var(--mute)}
+/* ---- Duties page (ui-simple): short header with "i", slim duty rows ---- */
+.dhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.infow{position:relative;display:inline-flex}
+.infoi{width:18px;height:18px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--mute);font:600 11px/1 var(--font);font-style:italic;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.infoi:hover,.infow.open .infoi{color:var(--accent2);border-color:var(--accent1)}
+.infopop{display:none;position:absolute;top:24px;left:-8px;z-index:30;width:300px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;font-size:13px;line-height:1.45;color:var(--fg)}
+.infopop b{display:block;font-weight:600;margin-bottom:4px}
+.infow.open .infopop{display:block}
+.dline{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.panel .dline:first-of-type,.dline.only{border-top:0}
+.dline .tgl{flex:none}
+.dline .dtx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.dline .dtx b{font-weight:600;font-size:14px}
+.dline .dtx small{color:var(--mute);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dline.off .dtx b{color:var(--mute);font-weight:500}
+.dline .btn.sm{margin-left:2px}
+/* ---- one row of tabs (ui-simple): never wrap; rare pages sit under More with small headings ---- */
+:root .tabs,:root .stickyhead .tabs{flex-wrap:nowrap;overflow:hidden}
+.tmh{font-size:11.5px;font-weight:600;color:var(--mute);padding:10px 12px 4px}
+.tmh:first-child{padding-top:4px}
+/* ---- aligned form grid (ui-simple): label above field, equal widths ---- */
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,260px));gap:12px 20px;align-items:end}
+.fgrid .field input,.fgrid .field select{width:100%}
+.ptap{letter-spacing:0!important;text-transform:none}
+/* ---- sidebar (ui-simple): names are never cut; the status chip gives way instead ---- */
+.side{width:256px}
+.app.nosb .side{margin-left:-256px}
+.inst .nm{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere;flex:1 1 auto;min-width:64px}
+.inst .ichip{max-width:110px;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+/* ---- help text (ui-simple): first sentence + "i" ---- */
+.note.lead{cursor:pointer;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.note.lead>span{flex:0 1 auto}
+.note.lead .infoi{transform:translateY(3px);flex:none}
+.note.lead.opened .infoi{color:var(--accent2);border-color:var(--accent1)}
+/* ---- Dashboard instances + first run (ui-simple) ---- */
+.panel>.cardhead{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.panel>.cardhead h3{margin:0!important}
+.lnk{font-size:13px;color:var(--accent2);text-decoration:none}
+.lnk:hover{text-decoration:underline}
+.ilist{display:flex;flex-direction:column}
+.irow{display:grid;grid-template-columns:24px minmax(140px,240px) minmax(160px,260px) 32px;gap:12px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.irow:first-child{border-top:0}
+.irow .inum{color:var(--mute);font-size:12.5px;text-align:right}
+.irow input{border-color:transparent!important;background:transparent!important;box-shadow:none!important;padding:6px 8px}
+.irow input:hover,.irow input:focus{border-color:var(--line)!important;background:var(--field)!important}
+.irow .iname{font-weight:500}
+.irow .iaddr{font-family:var(--mono,ui-monospace,monospace);font-size:12.5px;color:var(--mute)}
+.ix{width:28px;height:28px;border-radius:8px;border:0;background:transparent;color:var(--mute);cursor:pointer;font-size:13px}
+.ix:hover{background:var(--field);color:var(--bad)}
+.ilist .empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:28px 12px}
+.ilist .empty b{color:var(--fg);font-weight:600}
+.fsteps{display:flex;flex-direction:column}
+.fstep{display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid var(--line)}
+.fstep:first-child{border-top:0;padding-top:4px}
+.fnum{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;color:var(--mute);flex:none}
+.fstep.done .fnum{background:var(--good);border-color:transparent;color:#fff}
+.ftx{flex:1;display:flex;flex-direction:column}
+.ftx b{font-weight:600;font-size:14.5px}
+.ftx small{color:var(--mute);font-size:12.5px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.sideempty{display:flex;flex-direction:column;gap:4px;padding:10px 12px;font-size:13px;color:var(--mute)}
+.dhead select{width:auto!important;min-width:200px;flex:0 0 auto}
+/* ---- Today card: the game's Auto-Join line (ui-simple) ---- */
+.ajline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;margin:0 0 14px;border:1px solid var(--line);border-radius:10px;font-size:13.5px}
+.ajline b{font-weight:600}
+.ajline .ajsub{color:var(--mute);font-size:12.5px}
+.ajline .ajsub::before,.ajline .ajwarn::before{content:"\00b7";margin-right:8px;color:var(--mute)}
+.ajline .ajwarn{color:var(--bad);font-weight:500;font-size:12.5px}
+.ajdot{width:8px;height:8px;border-radius:50%;background:var(--mute);flex:none}
+.ajdot.ok{background:var(--good)}.ajdot.bad{background:var(--bad)}
+.ajline[hidden]{display:none}
+.ajline{cursor:pointer}.ajline:hover{border-color:var(--accent1)}
+:root .stile.txt b{font-size:15px;line-height:1.9}
+/* ---- Duties (ui-simple): On / All + group pills, two columns ---- */
+.dfilter{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.dfilter .rtnpill .pc{margin-left:6px;opacity:.85;font-weight:500}
+.dgrouph{font-size:12.5px;font-weight:600;color:var(--mute);margin:14px 0 2px}
+.dgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:28px;align-items:start}
+@media (max-width:1100px){.dgrid{grid-template-columns:minmax(0,1fr)}}
+.dcell{min-width:0;border-top:1px solid var(--line)}
+.dcell .dline{border-top:0}
+/* ---- Settings (ui-simple): plain groups, Advanced folded ---- */
+.sgroup{padding:14px 0;border-top:1px solid var(--line)}
+.sgroup:first-of-type{border-top:0;padding-top:4px}
+.sgroup>h4{margin:0 0 10px;font-size:14px;font-weight:600;color:var(--fg)}
+.tgls{display:flex;flex-direction:column;gap:10px}
+details.adv{border-top:1px solid var(--line);padding-top:12px}
+details.adv>summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--mute);list-style:none}
+details.adv>summary::before{content:"\25B8";display:inline-block;margin-right:8px;transition:transform .15s}
+details.adv[open]>summary::before{transform:rotate(90deg)}
+/* ---- Dashboard event cards (ui-simple) ---- */
+.evcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:16px}
+.evcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.evh{display:flex;flex-direction:column;margin-bottom:4px}
+.evh b{font-weight:600;font-size:14.5px}
+.evh small{color:var(--mute);font-size:12.5px}
+.evrow{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.evrow>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.evv{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
+.evv.next{color:#1d4ed8}.evv.due{color:#92400e}.evv.bad{color:var(--bad)}
+.evcards[hidden]{display:none}
+
+/* ---------- (ui-simple) duty settings side panel: Crazy Eggs / Champions / Wheel / duty options open here, not under the row */
+.dline .btn.dset{flex:none}
+.dline .btn.dset.on{border-color:var(--accent);color:var(--accent)}
+.sideov{position:fixed;inset:0;z-index:50;background:var(--overlay);display:flex;justify-content:flex-end;animation:fade .15s}
+.sidep{width:min(480px,94vw);height:100%;display:flex;flex-direction:column;background:var(--card);background-color:var(--bgc);border-left:var(--bd);box-shadow:var(--appsh);animation:spin .2s ease-out}
+@keyframes spin{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}
+.sph{display:flex;align-items:flex-start;gap:10px;padding:18px 20px 12px;border-bottom:1px solid var(--line)}
+.sph .spt{flex:1;min-width:0}
+.sph h3{margin:0;font-family:var(--serif,inherit);font-size:19px;font-weight:600}
+.sph small{color:var(--mute);font-size:12.5px}
+.sph .dbadge{margin-top:3px}
+.spx{flex:none;width:32px;height:32px;border-radius:8px;border:0;background:transparent;color:var(--mute);font-size:22px;line-height:1;cursor:pointer}
+.spx:hover{background:var(--field);color:var(--fg)}
+.spb{flex:1;min-height:0;overflow:auto;padding:14px 20px 20px}
+.spb>.row{padding:0 0 12px !important;gap:12px 18px !important}
+.spb .subset{margin:0 0 14px;padding:0;border:0;background:none;animation:none}
+.spb .subset .subtitle{display:none}
+.spf{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:12px 20px 16px;border-top:1px solid var(--line)}
+.dline .btn.dset.on{background:var(--btn);color:var(--accent);border-color:var(--accent)}
+/* Crazy Eggs rows: switch, name + wait line, max a day, lucky hammer chip */
+.eggrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.eggrow.off .eggtx b{color:var(--mute);font-weight:500}
+.eggtx{display:flex;flex-direction:column;gap:1px;min-width:0}
+.eggtx b{font-weight:600;font-size:14px}.eggtx small{color:var(--mute);font-size:12.5px}
+.eggmax{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mute)}
+.eggmax input{width:62px;text-align:center}
+.luckyb{border:1px solid var(--line);background:transparent;color:var(--mute);border-radius:999px;padding:5px 11px;font:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.luckyb:hover{color:var(--fg);border-color:var(--off)}
+.luckyb.on{background:#fef3c7;border-color:#f59e0b;color:#92400e;font-weight:600}
+.fgrid.eggf{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));align-items:start;margin:14px 0 8px}
+.fgrid.eggf label{display:flex;flex-direction:column;gap:5px}
+.fgrid.eggf input{width:100%}
+.fgrid.eggf .unit{display:flex;align-items:center;gap:6px}.fgrid.eggf .unit span{color:var(--mute);font-size:13px}
+.fgrid.eggf small{font-size:12px;line-height:1.35}
+/* Champions rows: main switch, name (+ done today), taps, greets - labels once in a header line */
+.chrow{display:grid;grid-template-columns:52px minmax(0,1fr) 76px 76px;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.chrow input[type=number]{width:100%;text-align:center}
+.chrow:not(.set):not(.chhead) .eggtx b{font-weight:500}
+.chhead{border-top:0;padding:10px 0 4px;font-size:12px;color:var(--mute)}
+.chhead span:nth-child(n+3){text-align:center}
+.fgrid.eggf .wide{grid-column:1/-1;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+
+/* ---------- (ui-simple) sidebar rows: name + full status line, play/pause on the row, grip on hover */
+.inst{position:relative;flex-wrap:nowrap!important;align-items:flex-start!important;gap:10px!important;padding:9px 8px 9px 14px!important}
+.inst .dot{margin-top:6px}
+.inst .itx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.inst .itx .nm{font-weight:500;line-height:1.3}
+.inst .ist{font-size:12.5px;line-height:1.35;color:var(--mute);overflow-wrap:anywhere}
+.inst .ist.ok{color:#047857}.inst .ist.warn{color:#b45309}.inst .ist.bad{color:#b91c1c}.inst .ist.off{opacity:.8}
+.inst .ist .ctimer{font-variant-numeric:tabular-nums}
+.inst .grip{position:absolute;left:1px;top:50%;transform:translateY(-50%);font-size:11px;letter-spacing:-3px;color:var(--mute);opacity:0;cursor:grab;transition:opacity .12s}
+.inst:hover .grip{opacity:.6}
+.inst .irun{flex:none;width:28px;height:28px;margin-top:-1px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--fg);display:grid;place-items:center;cursor:pointer;opacity:0;transition:opacity .12s,background .12s}
+.inst .irun .ico svg{width:15px;height:15px}
+.inst:hover .irun,.inst.sel .irun,.inst:focus-visible .irun,.inst .irun:focus-visible{opacity:1}
+.inst .irun:hover{background:var(--card);border-color:var(--line)}
+.inst .irun.wait{cursor:default;opacity:.55}
+.inst:not(:hover):not(.sel) .irun.wait{opacity:0}
+.ispin{width:13px;height:13px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--mute);animation:ispin .9s linear infinite}
+@keyframes ispin{to{transform:rotate(360deg)}}
+.inst:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.instfilter{padding:0 6px 8px 2px}.instfilter:empty{display:none}
+.instfilter .seg{display:flex;width:100%}.instfilter .segb{flex:1;padding-inline:4px;font-size:12px;white-space:nowrap}
+.instfilter .segb:disabled{opacity:.45;cursor:default}
+.install{display:flex;align-items:center;gap:6px;padding:4px 10px 8px;font-size:12.5px}.install:empty{display:none}
+.lnkb{border:0;background:none;padding:2px 0;font:inherit;color:var(--mute);cursor:pointer}
+.lnkb:hover{color:var(--fg);text-decoration:underline}.lnkb.bad:hover{color:var(--bad)}
+.install .sep{color:var(--mute)}
+#sidemenu .tmi:disabled{opacity:.4;cursor:default}
+#sidemenu .tmi.bad:not(:disabled){color:var(--bad)}
+/* the play/pause icon sits beside the name only; the status line below gets the full row width */
+.inst .irun{position:absolute;right:6px;top:6px;margin:0}
+.inst .itx .nm{padding-right:30px}
+.inst .itx{margin-right:2px}
+/* save status in the top bar (ui-simple 23 Oct): Saved / Saving... / Not saved + Undo */
+.savest{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--mute);white-space:nowrap;max-width:46ch;overflow:hidden;text-overflow:ellipsis}
+.savest .ico.sok{width:15px;height:15px;color:#2f8a57}
+.savest .ico.sok svg{stroke-width:2.4}
+.savest .sdot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.savest.saving .sdot{animation:sbpulse 1s ease-in-out infinite}
+@keyframes sbpulse{50%{opacity:.35}}
+.savest.err{color:#b4321f;white-space:normal}
+[data-mode="dark"] .savest.err{color:#ff8a78}
+[data-mode="dark"] .savest .ico.sok{color:#5fc48a}
+.savest .undob{margin-left:4px;min-height:28px;padding:0 8px;font-size:13px}
+.savest .undob{color:var(--accent1)}
+:root .top .savest{margin-left:auto}:root .top .newbtn{margin-left:0}
+/* footer never wraps (23 Oct): every item on one line; the update button is short and cut with "..." if the window is narrow */
+.status .sbl>span,.status .sbr>*{white-space:nowrap}
+.status .sbl{flex:0 1 auto;overflow:hidden}
+.status .sbr{flex:0 1 auto;justify-content:flex-end}
+.status .sbr .vlink{flex:none}
+:root .status .sb-upd{display:inline-flex;align-items:center;gap:6px;min-height:28px;max-width:min(42vw,520px);padding:0 12px;border-radius:99px;border:1px solid color-mix(in srgb,var(--accent1) 45%,transparent);background:color-mix(in srgb,var(--accent1) 10%,transparent);color:var(--fg);font:500 12.5px/1 var(--sans,inherit);text-decoration:none;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:root .status .sb-upd:hover:not(:disabled){background:color-mix(in srgb,var(--accent1) 18%,transparent)}
+:root .status .sb-upd:disabled{cursor:default;opacity:1}
+:root .status .sb-upd.busy::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent1);animation:sbpulse 1s ease-in-out infinite}
+/* contrast pass (23 Oct): text on filled main buttons is readable in light and dark (WCAG 4.5:1) */
+[data-pal="ivory"]{--accbtn:#c2410c;--accbtnh:#9a3412;--accbtnfg:#ffffff}
+[data-pal="ivory"][data-mode="dark"]{--accbtn:#e0895f;--accbtnh:#eba07c;--accbtnfg:#1b120d}
+:root .btn.pri,:root .btn.primary,:root .ribbon .btn.pri,#ribbon .btn.pri,:root .tour-ask .btn.pri,:root .tour-box .btn.pri{background:var(--accbtn,var(--accent1));color:var(--accbtnfg,#fff);border-color:transparent}
+:root .btn.pri:hover:not(:disabled),:root .btn.primary:hover:not(:disabled),#ribbon .btn.pri:hover:not(:disabled){background:var(--accbtnh,var(--accent2));color:var(--accbtnfg,#fff)}
+:root .btn.pri .ico,:root .btn.primary .ico{color:currentColor}
+/* Today table: stopped / problem rows stay readable (muted colour only, no fading) */
+.tdall tr.off td{opacity:1}
+.tdall tr.off small{font-size:12px}
+/* running count chip: calm in dark too */
+[data-mode="dark"] .ribcount{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent)}
+/* light-mode text that measured under 4.5:1 (23 Oct contrast pass) */
+:root[data-mode="light"] .ribbon .btn.bad,:root[data-mode="light"] .ribbon .btn.bad .ico{color:#b91c1c!important}
+:root[data-mode="light"] .ribbon .btn.bad:hover:not(:disabled){background:#b91c1c;color:#fff!important}
+:root[data-mode="light"] .ribbon .btn.bad:hover:not(:disabled) .ico{color:#fff!important}
+:root[data-mode="light"] .state-pill.st-run,:root[data-mode="light"] .mon-pic{color:#047857}
+.tri.join{background:var(--accbtn,var(--accent));border-color:var(--accbtn,var(--accent));color:var(--accbtnfg,#fff)}
+:root[data-mode="light"] .insthead .mute{color:#4b5563}
+.pcard.off .ptap{color:var(--fg);opacity:.8}
+.tgview .hint{opacity:1}
+:root .status .sb-upd .ut{min-width:0;overflow:hidden;text-overflow:ellipsis}
+:root .status .sb-upd b{flex:none;font-weight:600;color:var(--accent2)}
+:root .status .sb-upd b::before{content:"\00b7";margin-right:6px;color:var(--mute);font-weight:400}
+.status .sbl>span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.status .sbl>.sbrun,.status .sbl>#sbRam{flex:none}
+.status .sbdot{flex:none}

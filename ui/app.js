@@ -91,6 +91,7 @@ const ICO = {
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2.500h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   power: '<path d="M12 3v8M6.500 6.500a8 8 0 1 0 11 0"/>',
   eye: '<path d="M2.500 12S6 5.500 12 5.500 21.500 12 21.500 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="2.800"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   egg: '<path d="M12 3C8 3 5 10 5 14.500a7 7 0 0 0 14 0C19 10 16 3 12 3z"/>',
 };
 function ico(name, cls) {
@@ -99,7 +100,7 @@ function ico(name, cls) {
   return e;
 }
 const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", monsters: "sword", tasks: "list", duties: "clock", market: "bag", logs: "file", reports: "chart",
-  telegram: "send", reliability: "shield", schedule: "bell", updates: "down", themes: "palette", license: "key" };
+  telegram: "send", reliability: "shield", schedule: "bell", updates: "down", themes: "palette", license: "key", more: "more" };
 
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
@@ -109,7 +110,7 @@ const TABS = [
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
 
 // ------------------------------------------------------------------ theme
-const DARK_ON = false;                            // dark mode hidden for now (owner 21 Oct); the saved choice (ui_mode) is kept, only the light look is shown
+const DARK_ON = true;                             // dark mode back on (owner 23 Oct, after the contrast pass); was hidden since 21 Oct, the saved choice (ui_mode) was kept
 function resolvedMode() {
   if (!DARK_ON) return "light";
   const m = S.cfg.ui_mode || "light";
@@ -196,16 +197,16 @@ function layout() {
       h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }),
         h("div", { class: "bt" }, h("b", {}, "RallyForge"), h("small", {}, "Automation Hub"))),
       h("h4", {}, h("span", {}, "Instances"), h("span", { class: "cnt", id: "instCnt" })),
+      h("div", { class: "instfilter", id: "instFilter" }),
       h("div", { class: "inst-list", id: "instList" }),
+      h("div", { class: "install", id: "instAll" }),
       h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }),
-        h("div", { class: "sflab" }, "All instances"),
-        h("div", { class: "allbtns" },
-          h("button", { class: "btn olpause", id: "sidePause", type: "button", title: "Pause every running instance", onclick: pauseOrResumeAll }, "Pause all"),
-          h("button", { class: "btn olstop", type: "button", title: "Stop every instance", onclick: () => act(api("stop", { serial: "all" })) }, "Stop all")),
+        // (ui-simple) Pause all / Stop all live only in the page header - one place for run controls
         h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
     h("div", { class: "main" },
       h("div", { class: "top" }, sideBtn(), h("img", { src: "/assets/logo.png", alt: "" }),
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
+        saveStEl(),
         h("button", { class: "btn sm newbtn", id: "newBtn", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "What\u2019s new"),
         h("span", { class: "sum", id: "sum" }),
         h("div", { class: "iconbtn", id: "modeBtn", title: "Dark / light", onclick: quickMode })),
@@ -216,7 +217,7 @@ function layout() {
     h("div", { class: "status" },
       h("div", { class: "sbl" }, h("span", { class: "sbrun" }, h("span", { class: "sbdot", id: "sbDot" }), h("span", { id: "sbRun" }, "0 running")),
         h("span", { id: "sbRam" }), h("span", { id: "sbTg" }), h("span", { id: "sbLic" })),
-      h("div", { class: "sbr" }, h("span", { id: "sbUpd", class: "sb-upd", style: { display: "none" } }),
+      h("div", { class: "sbr" }, h("button", { id: "sbUpd", class: "sb-upd", type: "button", style: { display: "none" } }),
         h("span", { class: "l vlink", role: "button", tabindex: "0", title: "What changed in this version" + (S.copyright ? "\n" + S.copyright : ""), onclick: () => openWhatsNew(), onkeydown: (e) => { if (e.key === "Enter") openWhatsNew(); } }, "v" + S.version + " \u00b7 by " + (S.author || "Kiravik"))))));
   buildRibbon();
   paintRunState();
@@ -238,6 +239,8 @@ function toggleSide() {
 }
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey && e.key.toLowerCase() === "b") || e.key === "F9") { e.preventDefault(); toggleSide(); }
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); saveAll(); }
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "z" && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "") && UNDO.length) { e.preventDefault(); undoLast(); }
 });
 
 function renderModeIcon() {
@@ -281,13 +284,16 @@ function buildRibbon() {
         { label: "Scan city", icon: "city", run: () => scanCityFlow(S.sel === "control" ? undefined : S.sel) },
         { label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) },
         { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "grid"),
-      btn("More ▾", (e) => menu(e.currentTarget, [
+      btn("App ▾", (e) => menu(e.currentTarget, [
         { label: "Updates", icon: "refresh", run: () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); } },
         { label: "Close window (bots keep running)", icon: "eye", run: () => act(api("hide_window")) },
         { label: "Restart app", icon: "refresh", run: restartFlow }, { label: "Quit and stop everything", icon: "power", run: quitFlow }]), "", "more")));
 }
 async function saveAll() {
-  if (await act(api("save", { cfg: S.cfg, devices: S.devices }))) { AUTO.saved = AUTO.seen = cfgSnap(); toast("Settings saved.", "ok"); await reloadMeta(); }
+  saveState("saving");
+  const now = cfgSnap();
+  if (await act(api("save", { cfg: S.cfg, devices: S.devices }))) { if (AUTO.saved && now !== AUTO.saved) pushUndo(AUTO.saved, now); AUTO.saved = AUTO.seen = now; saveState("saved"); await reloadMeta(); }
+  else saveState("err", "see the message above");
 }
 async function copyLog() {
   const j = await act(api("log_text", { lines: 300 }));
@@ -384,31 +390,120 @@ function devTag(d) {
 function renderSide() {
   const L = $("#instList");
   if (!L || S.dragging) return;          // do not redraw under the mouse while an instance is being dragged
+  closeSideMenu();
   L.innerHTML = "";
-  const item = (key, label, dot, extra) => h("div", { class: "inst st-" + (dot || "run") + (S.sel === key ? " sel" : ""), onclick: () => { S.sel = key; renderSide(); renderTabs(); renderPage(); } },
-    dot ? h("span", { class: "dot " + dot }) : h("span", { class: "dot run", style: { background: "var(--accent1)" } }),
-    h("span", { class: "nm", title: label }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
-  const ic = $("#instCnt"); if (ic) ic.textContent = S.devStatus.length + " total";
-  for (const d of S.devStatus) {
-    L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", "Paused", "Problem", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
-    // chip timer: counts down (kicked wait, turn in Start all) or up (emulator starting / game loading)
-    const tm = d.state === "run" && d.kicked_at ? { "data-at": String(d.kicked_at) } : d.state === "run" && d.loading ? { "data-since": String(d.loading_since) }
-      : d.state !== "run" && d.start_at ? { "data-at": String(d.start_at) } : null;
-    const chip = d.state === "run" && d.kicked_at ? ["kicked", "warn"] : d.state === "run" && d.loading ? [d.loading, "warn"] : d.state === "run" && d.no_stamina ? ["no stamina", "warn"]
-      : d.state === "run" ? (busyTask(d.id) ? [busyTask(d.id), "ok"] : ["idle", ""]) : d.start_at ? ["start", "off"] : d.state === "pause" ? ["paused", "warn"] : d.state === "error" ? ["problem", "bad"] : ["offline", "off"];
-    L.lastChild.querySelector(".nm").after(h("span", { class: "ichip " + chip[1], title: d.state === "run" ? (d.loading ? "Emulator / game starting" : ((S.now[d.id] || {}).text || "Idle") + (d.joins ? " \u2022 " + d.joins + " joins" : "")) : d.start_at ? "Waiting for its turn in Start all" : "" },
-      chip[0], tm ? h("span", Object.assign({ class: "ctimer" }, tm)) : null));      // status at a glance on the right; Start/Pause/Stop live in the page header
-    sideDrag(L.lastChild, d.id);
-    if (d.state === "pause" && d.resume_at) { const it = L.lastChild.querySelector("small") || L.lastChild.appendChild(h("small", {})); it.appendChild(h("span", { class: "ptimer", "data-at": String(d.resume_at) })); }   // kicked wait: timer sits in the chip
+  const devs = S.devStatus || [];
+  const nRun = devs.filter((d) => d.state === "run").length, nPause = devs.filter((d) => d.state === "pause").length;
+  const ic = $("#instCnt"); if (ic) ic.textContent = devs.length ? (nRun ? nRun + " of " + devs.length + " running" : devs.length + " total") : "";
+  // (ui-simple) All / Running / Problems filter once the list gets long
+  const isProb = (d) => d.state === "error" || (d.state === "run" && (d.kicked_at || d.no_stamina));
+  const nProb = devs.filter(isProb).length;
+  const F = $("#instFilter");
+  if (F) {
+    F.innerHTML = "";
+    if (devs.length >= 5) {
+      if (S.sideFilter === "prob" && !nProb) S.sideFilter = "";
+      const seg = (k, lab) => h("button", { class: "segb" + ((S.sideFilter || "") === k ? " on" : ""), type: "button", disabled: k === "prob" && !nProb, onclick: () => { S.sideFilter = k; renderSide(); } }, lab);
+      F.appendChild(h("div", { class: "seg small" }, seg("", "All"), seg("run", "Running " + nRun), seg("prob", "Problems " + nProb)));
+    }
+  }
+  if (!devs.length) L.appendChild(h("div", { class: "sideempty" }, "No instances yet.", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.sel = "control"; pickTab("dashboard"); renderSide(); } }, "Add your emulators")));
+  const shown = devs.filter((d) => !S.sideFilter || (S.sideFilter === "run" ? d.state === "run" : isProb(d)));
+  if (devs.length && !shown.length) L.appendChild(h("div", { class: "sideempty" }, S.sideFilter === "run" ? "Nothing is running." : "No problems right now."));
+  for (const d of shown) L.appendChild(sideRow(d));
+  // Pause all / Stop all: one quiet line under the list, only when 2 or more are active
+  const A = $("#instAll");
+  if (A) {
+    A.innerHTML = "";
+    if (nRun + nPause >= 2) A.append(
+      h("button", { class: "lnkb", type: "button", onclick: pauseOrResumeAll }, allPaused() ? "Resume all" : "Pause all"), h("span", { class: "sep" }, "·"),
+      h("button", { class: "lnkb bad", type: "button", onclick: async () => { if (await confirmBox("Stop all instances?", "Stop " + (nRun + nPause) + " instances? They stop joining rallies and doing duties until you start them again.", "Stop all")) { S.startingAt = 0; act(api("stop", { serial: "all" })); } } }, "Stop all"));
   }
   tickPauseTimers();
 }
+// one instance row: dot, full name, full status line (task / timer / joins), play-pause on the row
+function sideStatus(d) {
+  const T = (k, v) => ({ [k]: String(v) });
+  if (S.cityJobs && S.cityJobs[d.id] && S.cityJobs[d.id].running) return ["mapping the city", "ok"];
+  if (d.state === "run" && d.kicked_at) return ["kicked · back in", "warn", T("data-at", d.kicked_at)];
+  if (d.state === "run" && d.loading) return [d.loading, "warn", T("data-since", d.loading_since)];
+  if (d.state === "run" && d.no_stamina) return ["no stamina", "warn"];
+  if (d.state === "run") return [busyTask(d.id, true) || "idle", busyTask(d.id) ? "ok" : ""];
+  if (d.start_at) return ["starts in", "", T("data-at", d.start_at)];
+  if (d.queued) return ["queued", ""];
+  if (d.state === "pause") return d.resume_at ? ["paused · resumes in", "warn", T("data-at", d.resume_at)] : ["paused", "warn"];
+  if (d.state === "error") return ["problem · see the log", "bad"];
+  return ["stopped", "off"];
+}
+function sideRunAct(d) {      // what the row's button does now: [icon, label, fn] or a greyed spinner while it cannot act
+  const serial = d.id;
+  if (d.start_at || (d.state === "run" && d.loading)) return ["spin", d.start_at ? "Waiting its turn to start" : "Starting - wait a moment", null];
+  if (d.state === "run") return ["pause", "Pause " + (d.name || ""), () => act(api("pause", { serial }))];
+  if (d.state === "pause") return ["play", "Resume " + (d.name || ""), () => act(api("pause", { serial }))];
+  return ["play", "Start " + (d.name || ""), () => collectAndRun("start", { serial })];
+}
+function sideRow(d) {
+  const [txt, tone, tm] = sideStatus(d);
+  const [icon, lab, fn] = sideRunAct(d);
+  const joins = d.state === "run" && d.joins ? " · " + d.joins + " joins" : "";
+  const dot = (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state;
+  const full = ((S.now && S.now[d.id]) || {}).text || "";
+  const row = h("div", { class: "inst st-" + (dot || "run") + (S.sel === d.id ? " sel" : ""), tabindex: "0", role: "button", "aria-current": S.sel === d.id ? "true" : null,
+      onclick: () => { S.sel = d.id; renderSide(); renderTabs(); renderPage(); const r = document.querySelector('.inst[data-id="' + CSS.escape(d.id) + '"]'); if (r) r.focus(); },
+      oncontextmenu: (e) => { e.preventDefault(); openSideMenu(e, d); } },
+    h("span", { class: "grip", "aria-hidden": "true" }, "⋮⋮"),
+    h("span", { class: "dot " + dot }),
+    h("div", { class: "itx" }, h("span", { class: "nm" }, d.name || short(d.id)),
+      h("span", { class: "ist " + tone }, txt, tm ? h("span", Object.assign({ class: "ctimer" }, tm)) : null, joins)),
+    h("button", { class: "irun" + (fn ? "" : " wait"), type: "button", title: lab, "aria-label": lab, disabled: !fn, onclick: (e) => { e.stopPropagation(); if (fn) fn(); } },
+      icon === "spin" ? h("span", { class: "ispin" }) : ico(icon)));
+  row.dataset.tip = (d.name || short(d.id)) + " - " + (d.state === "run" && full ? full : txt) + (d.joins ? "\n" + d.joins + " joins today" : "");
+  sideDrag(row, d.id);
+  return row;
+}
+// right-click menu on an instance row: Start / Resume, Pause, Stop (Stop never sits on the row itself)
+function closeSideMenu() { const m = document.getElementById("sidemenu"); if (m) m.remove(); document.removeEventListener("mousedown", sideMenuOutside, true); document.removeEventListener("keydown", sideMenuKey, true); }
+function sideMenuOutside(e) { const m = document.getElementById("sidemenu"); if (m && !m.contains(e.target)) closeSideMenu(); }
+function sideMenuKey(e) { if (e.key === "Escape") closeSideMenu(); }
+function openSideMenu(e, d) {
+  closeSideMenu();
+  const serial = d.id, run = d.state === "run", pause = d.state === "pause", busy = d.start_at || (run && d.loading);
+  const item = (icon, lab, fn, off, cls) => h("button", { class: "tmi" + (cls ? " " + cls : ""), role: "menuitem", disabled: !!off, onclick: () => { closeSideMenu(); fn(); } }, ico(icon), lab);
+  const m = h("div", { id: "sidemenu", class: "tabmenu", role: "menu" },
+    h("div", { class: "tmh", role: "presentation" }, d.name || short(d.id)),
+    item("play", pause ? "Resume" : "Start", () => pause ? act(api("pause", { serial })) : collectAndRun("start", { serial }), run || busy),
+    item("pause", "Pause", () => act(api("pause", { serial })), !run || busy),
+    item("stop", "Stop", () => { act(api("stop", { serial })); }, !(run || pause || d.start_at), "bad"),
+    item("grid", "Open", () => { S.sel = serial; renderSide(); renderTabs(); renderPage(); }));
+  m.style.left = Math.min(e.clientX, innerWidth - 230) + "px";
+  m.style.top = Math.min(e.clientY, innerHeight - 200) + "px";
+  document.body.appendChild(m);
+  document.addEventListener("mousedown", sideMenuOutside, true);
+  document.addEventListener("keydown", sideMenuKey, true);
+}
+// keyboard in the instance list: up / down moves, Space plays or pauses the selected one
+document.addEventListener("keydown", (e) => {
+  const L = $("#instList");
+  if (!L || !L.contains(document.activeElement) || e.ctrlKey || e.altKey || e.metaKey) return;
+  const rows = [...L.querySelectorAll(".inst[data-id]")];
+  const i = rows.indexOf(document.activeElement.closest(".inst"));
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    const n = rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
+    if (n) n.click();
+  } else if ((e.key === " " || e.key === "Enter") && document.activeElement.classList.contains("inst")) {
+    e.preventDefault();
+    if (e.key === "Enter") return document.activeElement.click();
+    const d = S.devStatus.find((x) => x.id === document.activeElement.dataset.id);
+    const fn = d && sideRunAct(d)[2]; if (fn) fn();
+  }
+});
 // Drag an instance up or down in the left list to change the order (saved at once, kept after a restart)
 function sideDrag(el, id) {
   el.draggable = true;
   el.dataset.id = id;
-  el.title = "Drag to change the order";
+  el.title = (el.dataset.tip ? el.dataset.tip + "\n" : "") + "Drag to change the order";
   el.addEventListener("dragstart", (e) => { S.dragging = id; el.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", id); } catch (x) {} });
   el.addEventListener("dragover", (e) => {
     if (!S.dragging || S.dragging === id) return;
@@ -467,6 +562,7 @@ function paintRibbonRun() {
   rib.querySelectorAll("[data-act]").forEach((b) => {
     const a = b.dataset.act, lbl = b.querySelector(".runlbl");
     b.classList.remove("isrunning", "starting", "greyed");
+    if (!total) { b.classList.add("greyed"); return; }          // nothing to run yet: buttons look off (Rule 0)
     b.className = b.className.replace(/\bcur-\w+/g, "").replace(/\s+/g, " ").trim();
     if (a === "start" && lbl) {
       if (starting) { b.classList.add("starting"); lbl.textContent = "Starting\u2026"; }
@@ -520,10 +616,8 @@ const TAB_GROUPS = [
   ["tasks", "Tasks", null],
   ["duties", "Duties", null],
   ["market", "Market", null],
-  ["logs", "Logs", null],
-  ["reports", "Reports", null],
-  ["setup", "Setup", ["settings", "reliability", "schedule"]],
-  ["app", "App", ["updates", "telegram", "license"]],
+  // one row only (ui-simple): the rarely used pages live under More, grouped by small headings ("#...")
+  ["more", "More", ["logs", "reports", "#Setup", "settings", "reliability", "schedule", "#App", "updates", "telegram", "license"]],
 ];
 function closeTabMenu() { const m = document.getElementById("tabmenu"); if (m) m.remove(); document.removeEventListener("mousedown", tabMenuOutside, true); document.removeEventListener("keydown", tabMenuKey, true); }
 function tabMenuOutside(e) { const m = document.getElementById("tabmenu"); if (m && !m.contains(e.target) && !e.target.closest(".tab.grp")) closeTabMenu(); }
@@ -537,6 +631,7 @@ function openTabMenu(btn, items) {
   const m = h("div", { id: "tabmenu", class: "tabmenu", role: "menu" });
   m.dataset.for = btn.dataset.g;
   for (const k of items) {
+    if (k[0] === "#") { m.appendChild(h("div", { class: "tmh", role: "presentation" }, k.slice(1))); continue; }
     const l = (TABS.find((x) => x[0] === k) || [k, k])[1];
     m.appendChild(h("button", { class: "tmi" + (S.tab === k ? " on" : ""), role: "menuitem", onclick: () => pickTab(k) }, ico(TAB_ICO[k] || "grid"), l));
   }
@@ -559,12 +654,12 @@ function renderTabs() {
       t.appendChild(h("button", { class: "tab" + (S.tab === g ? " on" : ""), onclick: () => pickTab(g) }, ico(TAB_ICO[g] || "grid"), label));
       continue;
     }
-    const items = kids.filter(ok);
-    if (!items.length) continue;
+    const items = kids.filter((k, i, a) => k[0] === "#" ? a.slice(i + 1).some((x, j, b) => x[0] !== "#" && ok(x) && !b.slice(0, j).some((y) => y[0] === "#")) : ok(k));
+    if (!items.some((k) => k[0] !== "#")) continue;
     const here = items.includes(S.tab);
     const cur = here ? (TABS.find((x) => x[0] === S.tab) || [0, label])[1] : "";
     const b = h("button", { class: "tab grp" + (here ? " on" : ""), "aria-haspopup": "menu", onclick: (e) => openTabMenu(e.currentTarget, items) },
-      ico(TAB_ICO[here ? S.tab : items[0]] || "grid"), h("span", { class: "gl" }, label), here ? h("span", { class: "gcur" }, cur) : null, h("span", { class: "chev" }, "\u25BE"));
+      ico(TAB_ICO[here ? S.tab : "more"] || "grid"), h("span", { class: "gl" }, label), here ? h("span", { class: "gcur" }, cur) : null, h("span", { class: "chev" }, "\u25BE"));
     b.dataset.g = g;
     t.appendChild(b);
   }
@@ -632,9 +727,9 @@ function logBox(serial, tall) {
 S.acts = []; S.now = {};
 const esc = (t) => String(t == null ? "" : t);
 // what an instance is doing right now (from its latest step), in a few words for the instance list; "" = nothing (idle)
-function busyTask(serial) {
+function busyTask(serial, long) {
   const t = ((S.now && S.now[serial]) || {}).text || "";
-  const cut = (x) => (x.length > 16 ? x.slice(0, 15) + "\u2026" : x);
+  const cut = (x) => { const n = long ? 34 : 16; return x.length > n ? x.slice(0, n - 1) + "\u2026" : x; };   // the sidebar status line has the full width (long)
   let m;
   if (!t || /^(Looking|Idle|Auto-Join is on)/.test(t)) return "";
   if ((m = /^(?:Duty|City task): (.+)$/.exec(t))) return cut(m[1]);
@@ -848,10 +943,18 @@ function updateSummary() {
     const U = S.update;
     u.style.display = U ? "" : "none";
     if (U) {
-      const wait = U.waiting_for && U.waiting_for.length ? ` (waiting for ${U.waiting_for.join(", ")} to finish a join)` : "";
-      u.textContent = S.restartNow ? `Restarting now\u2026 the window closes and opens again in about 20\u201330 s` : U.needs_restart ? `\u2714 Version ${U.version} installed \u2013 click to restart now` : U.restarting ? `\u2714 Version ${U.version} installed \u2013 restarting in ${U.restart_in || 0} s${wait} \u2013 click to restart now`
-        : U.installing ? `Installing ${U.version}\u2026 please wait` : `\u2B06 Update ${U.version} available \u2013 click to install`;
-      u.title = (U.notes || "") + (U.installing ? "" : U.restarting ? "\nClick: restart now; the running instances start again by themselves" : "\nClick: install it, restart the app and start the running instances again");
+      // short, one line (footer never wraps); who it waits for and the notes go in the hover text
+      const names = (U.waiting_for || []).filter(Boolean);
+      const wait = names.length ? ` \u00b7 waiting for ${names.length === 1 ? names[0] : names.length + " instances"}` : "";
+      const busy = S.restartNow || U.installing;
+      u.disabled = !!busy;
+      u.className = "sb-upd" + (busy ? " busy" : "");
+      const [txt, verb] = S.restartNow ? ["Restarting\u2026", ""] : U.needs_restart ? [`${U.version} installed`, "Restart now"] : U.restarting ? [`Restarting in ${U.restart_in || 0} s${wait}`, "Restart now"]
+        : U.installing ? [`Installing ${U.version}\u2026`, ""] : [`Update ${U.version}`, "Install"];
+      u.innerHTML = "";
+      u.append(h("span", { class: "ut" }, txt)); if (verb) u.append(h("b", {}, verb));      // the action word never gets cut off; only the status text shortens
+      u.title = (S.restartNow ? "The window closes and opens again in about 20-30 s." : U.installing ? "Installing version " + U.version + ". Please wait." : U.restarting ? "Version " + U.version + " is installed." + (names.length ? " Waiting for " + names.join(", ") + " to finish a join." : "") + "\nClick: restart now; the running instances start again by themselves."
+        : U.needs_restart ? "Version " + U.version + " is installed.\nClick: restart now." : "Version " + U.version + " is available.\nClick: install it, restart the app and start the running instances again.") + (U.notes ? "\n\n" + U.notes : "");
       u.onclick = S.restartNow ? null : U.needs_restart ? (() => { S.restartNow = true; act(api("restart")); }) : U.restarting ? (() => { S.restartNow = true; act(api("restart_update_now")); }) : U.installing ? null : updateNow;
     }
   }
@@ -909,6 +1012,7 @@ async function boot() {
   applyTheme();
   document.title = "RallyForge Bot " + S.version;
   layout();
+  saveState("saved");
   poll();
   checkWhatsNew();
   setTimeout(() => { try { maybeStartTour(); } catch (e) {} }, 2500);
@@ -928,25 +1032,94 @@ setInterval(async () => {
   if (now === AUTO.saved) { AUTO.seen = now; return; }
   if (now !== AUTO.seen) { AUTO.seen = now; return; }                           // still being edited: wait until it is quiet
   AUTO.busy = true;
+  saveState("saving");
   try {
     await api("save", { cfg: S.cfg, devices: S.devices, auto: true }, { quiet: true });
+    if (AUTO.undoing) AUTO.undoing = false; else pushUndo(AUTO.saved, now);
     AUTO.saved = now; AUTO.err = "";
+    saveState("saved");
   } catch (e) {
     const m = e && !(e instanceof TypeError) ? String(e.message || "") : "";      // a setting that is not valid yet (not a lost connection)
-    if (m && m !== AUTO.err) { AUTO.err = m; toast("Not saved yet: " + m, "error"); }
+    saveState("err", m || "the app did not answer - it tries again");
+    AUTO.err = m;                                   // shown once, in the header (no pop-up as well)
   } finally { AUTO.busy = false; }
 }, 1000);
 
-// long help paragraphs fold to two lines (hover shows the whole text, a click opens / closes it - no extra links)
+// ---- save status in the top bar + Undo (ui-simple, owner 23 Oct: "am I saved?"). Changes still save by themselves;
+// the top bar always says Saving... / Saved / Not saved, and Undo (or Ctrl+Z) puts back what the last save changed.
+// Undo only touches the settings that save changed, so switches saved elsewhere meanwhile are left alone. This session only.
+const UNDO = [];                                   // [{before, after}] JSON snapshots, newest last
+const UNDO_SKIP = /^(tour_done|last_seen_version|sidebar_open|ui_)/;   // view-only keys (tour seen, sidebar open, theme) are not "changes" to undo
+["input", "change", "pointerdown", "keydown"].forEach((t) => document.addEventListener(t, () => (AUTO.touched = true), true));
+function pushUndo(before, after) {
+  const touched = AUTO.touched; AUTO.touched = false;              // only what you changed; the app filling in defaults by itself is not an undo step
+  if (!touched || !before || !after || before === after) return;
+  const strip = (j) => { const o = JSON.parse(j); for (const k of Object.keys(o.c || {})) if (UNDO_SKIP.test(k)) delete o.c[k]; return JSON.stringify(o); };
+  if (strip(before) === strip(after)) return;
+  UNDO.push({ before, after }); if (UNDO.length > 30) UNDO.shift();
+}
+function saveState(st, msg) {
+  if (st) { AUTO.st = st; AUTO.stMsg = msg || ""; }
+  document.querySelectorAll(".savest").forEach(paintSave);
+}
+function saveStEl() { const el = h("span", { class: "savest", role: "status", "aria-live": "polite" }); paintSave(el); return el; }   // one in every page header
+function paintSave(el) {
+  const st = AUTO.st || "saved", msg = AUTO.stMsg;
+  el.className = "savest " + st;
+  el.title = "";
+  el.innerHTML = "";
+  if (st === "saving") { el.append(h("span", { class: "sdot" }), "Saving\u2026"); return; }
+  if (st === "err") { el.append(h("span", { class: "sdot" }), "Not saved: " + msg); el.title = "Fix this setting - nothing else is lost; it saves as soon as the value is valid."; return; }
+  el.title = "Your changes save by themselves. Ctrl+S saves now.";
+  el.append(ico("check", "sok"), "Saved");
+  if (UNDO.length) el.append(h("button", { class: "lnkb undob", type: "button", title: "Put back the last change (Ctrl+Z)", onclick: undoLast }, "Undo"));
+}
+function undoLast() {
+  const u = UNDO.pop();
+  if (!u) return;
+  const b = JSON.parse(u.before), a = JSON.parse(u.after);
+  const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  const back = (from, to, into) => {           // put back the keys this save changed (one level deeper for per-instance settings)
+    for (const k of new Set([...Object.keys(from || {}), ...Object.keys(to || {})])) {
+      if (same(from[k], to[k]) || (into === S.cfg && UNDO_SKIP.test(k))) continue;
+      if (k === "per_device" && from[k] && to[k] && typeof into[k] === "object") back(from[k], to[k], into[k]);
+      else if (from[k] === undefined) delete into[k];
+      else into[k] = JSON.parse(JSON.stringify(from[k]));
+    }
+  };
+  back(b.c, a.c, S.cfg);
+  if (!same(b.d, a.d)) S.devices = b.d;
+  AUTO.undoing = true;
+  AUTO.seen = cfgSnap();                          // save on the next tick (nothing is being typed)
+  saveState("saving");
+  rerender();
+  toast("Last change undone.", "ok");
+}
+
+// long help paragraphs (ui-simple): only the first sentence shows, a small "i" holds the rest
+// (hover shows the whole text, a click on the "i" or the line opens / closes it)
 (function () {
+  const lead = (t) => {
+    const m = t.match(/^(.{20,120}?[.!?])(\s|$)/);
+    if (m) return m[1];
+    const cut = t.slice(0, 100); return cut.slice(0, Math.max(60, cut.lastIndexOf(" "))) + "\u2026";
+  };
   const fold = (n) => {
     if (n.dataset.fold || !n.isConnected) return;
     const t = (n.textContent || "").trim();
     if (t.length < 110 || n.closest(".warnbar,.modal,.toasts")) return;
-    n.dataset.fold = "1"; n.classList.add("clamp", "foldable"); n.title = t;
-    n.onclick = () => n.classList.toggle("clamp");
+    n.dataset.fold = "1"; n.title = t;
+    if (n.children.length) { n.classList.add("clamp", "foldable"); n.onclick = () => n.classList.toggle("clamp"); return; }
+    const short = lead(t);
+    if (short.length >= t.length - 2) return;
+    const txt = document.createElement("span"); txt.textContent = short;
+    const i = document.createElement("button"); i.type = "button"; i.className = "infoi"; i.textContent = "i"; i.setAttribute("aria-label", "More about this");
+    n.textContent = ""; n.append(txt, " ", i); n.classList.add("foldable", "lead");
+    const flip = (e) => { e.stopPropagation(); const open = n.classList.toggle("opened"); txt.textContent = open ? t : short; i.setAttribute("aria-expanded", open); };
+    n.onclick = flip;
   };
   const scan = (root) => (root || document).querySelectorAll(".pages .note").forEach(fold);
+  window.watchNotes = (el) => new MutationObserver(() => el.querySelectorAll(".note").forEach(fold)).observe(el, { childList: true, subtree: true });   // panels outside #pages (duty side panel)
   const start = () => {
     const p = document.getElementById("pages"); if (!p) return setTimeout(start, 300);
     new MutationObserver(() => scan(p)).observe(p, { childList: true, subtree: true });

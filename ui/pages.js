@@ -31,6 +31,15 @@ function parseXY(t, def) {
 function panel(title, ...kids) { return h("div", { class: "panel" }, title ? h("h3", {}, title) : null, kids); }
 function subset(title, ...kids) { return h("div", { class: "subset" }, h("div", { class: "subtitle" }, title), kids); }   // settings that belong to a switched-on row: shown inside the same card
 function note(t) { return h("p", { class: "note" }, t); }
+// small round "i": hover shows the text, click pins it open (details out of the way, one place)
+function infoTip(title, text) {
+  const b = h("button", { type: "button", class: "infoi", "aria-label": title, title: text }, "i");
+  const pop = h("span", { class: "infopop", role: "tooltip" }, h("b", {}, title), text);
+  const w = h("span", { class: "infow" }, b, pop);
+  b.onclick = (e) => { e.stopPropagation(); document.querySelectorAll(".infow.open").forEach((o) => { if (o !== w) o.classList.remove("open"); }); w.classList.toggle("open"); };
+  if (!infoTip.bound) { infoTip.bound = true; document.addEventListener("click", (e) => { if (!e.target.closest(".infow")) document.querySelectorAll(".infow.open").forEach((o) => o.classList.remove("open")); }); }
+  return w;
+}
 function fld(label, control, hint) { return h("div", { class: "field" }, h("label", {}, label), control, hint ? h("div", { class: "hint" }, hint) : null); }
 
 function inp(obj, key, o) {
@@ -123,26 +132,41 @@ const PAGES = {};
 
 // ====================================================================== dashboard
 PAGES.dashboard = function () {
-  const rows = h("div", {});
-  const applyDevs = () => act(api("set_devices", { devices: S.devices }, { quiet: true })).then(() => poll1());
+  // ---- your instances (ui-simple): one row each, name and address edited in place, x removes; Detect is the main action
+  const rows = h("div", { class: "ilist" });
+  const applyDevs = () => act(api("set_devices", { devices: S.devices.filter((d) => d.id) }, { quiet: true })).then(() => poll1());
   const draw = () => {
     rows.innerHTML = "";
+    if (!S.devices.some((d) => d.id) && !S.devices.length) rows.appendChild(h("div", { class: "empty" },
+      h("b", {}, "No instances yet"), h("span", {}, "Open your emulators with Evony, then press Detect emulators."), btn("Detect emulators", detectDevices, "pri")));
     S.devices.forEach((d, i) => {
-      rows.appendChild(h("div", { class: "row", style: { marginBottom: "8px", flexWrap: "nowrap" } },
-        h("span", { class: "lab", style: { width: "78px", flex: "none" } }, "Device " + (i + 1)),
-        h("input", { type: "text", value: d.id, placeholder: "127.0.0.1:5565 / instance-5556", style: { maxWidth: "300px" }, oninput: (e) => (d.id = e.target.value.trim()), onchange: applyDevs }),
-        h("input", { type: "text", value: d.name, placeholder: "Name (shown in the list)", style: { maxWidth: "220px" }, oninput: (e) => (d.name = e.target.value.trim()), onchange: applyDevs }),
-        btn("Remove", () => { if (S.devices.length <= 1) { d.id = ""; d.name = ""; } else S.devices.splice(i, 1); draw(); applyDevs(); }, "sm")));
+      rows.appendChild(h("div", { class: "irow" },
+        h("span", { class: "inum" }, String(i + 1)),
+        h("input", { type: "text", class: "iname", value: d.name, placeholder: "Name", "aria-label": "Name", oninput: (e) => (d.name = e.target.value.trim()), onchange: applyDevs }),
+        h("input", { type: "text", class: "iaddr", value: d.id, placeholder: "127.0.0.1:5565", "aria-label": "Address", oninput: (e) => (d.id = e.target.value.trim()), onchange: applyDevs }),
+        h("button", { class: "ix", type: "button", title: "Remove " + (d.name || d.id || "this row"), "aria-label": "Remove", onclick: () => { S.devices.splice(i, 1); draw(); applyDevs(); } }, "\u2715")));
     });
   };
   draw();
-  const dev = panel("Instances", rows, h("div", { class: "row" },
-    btn("+ Add device", () => { S.devices.push({ id: "", name: "" }); draw(); }),
-    btn("Detect instances", detectDevices, "pri"),
-    btn("Clear empty rows", () => { S.devices = S.devices.filter((d) => d.id); if (!S.devices.length) S.devices.push({ id: "", name: "" }); draw(); applyDevs(); }),
-    btn("Update instance list", applyDevs),
-    btn("Show removed instances again", async () => { if (!(await confirmBox("Removed instances", "Instances you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) { toast(j.restored ? `${j.restored} instance(s) can be detected again. Press Detect instances.` : "No instances were removed.", "ok"); } }, "sm")),
-    note("Any number of instances can be in this list. Detect shows the instances it finds - you add the ones you want. Drag them in the left list to change the order. Instances you remove stay removed, even after a restart."));
+  const dev = panel(null,
+    h("div", { class: "cardhead" }, h("h3", {}, "Your instances"),
+      infoTip("Instances", "Detect lists the emulators it finds; you add the ones you want. Drag them in the left list to change the order. Instances you remove stay removed, even after a restart."),
+      h("span", { style: { flex: "1" } }),
+      h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.devices.push({ id: "", name: "" }); draw(); const ins = rows.querySelectorAll(".iaddr"); if (ins.length) ins[ins.length - 1].focus(); } }, "Add by address"),
+      h("a", { href: "#", class: "lnk", onclick: async (e) => { e.preventDefault(); if (!(await confirmBox("Removed instances", "Instances you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) toast(j.restored ? `${j.restored} instance(s) can be detected again. Press Detect emulators.` : "No instances were removed.", "ok"); } }, "Show removed again"),
+      btn("Detect emulators", detectDevices, "pri sm")),
+    rows);
+  // ---- first run: three steps, each with one action (shown until the first instance is added)
+  const none = !S.devices.some((d) => d.id);
+  const step = (n, title, sub, action, done) => h("div", { class: "fstep" + (done ? " done" : "") },
+    h("span", { class: "fnum" }, done ? "\u2713" : String(n)), h("div", { class: "ftx" }, h("b", {}, title), h("small", {}, sub)), action);
+  const first = none ? panel(null, h("div", { class: "cardhead" }, h("h3", {}, "Get started")),
+    h("div", { class: "fsteps" },
+      step(1, "Find your emulators", "Open them with Evony on screen.", h("div", { class: "row", style: { gap: "12px" } },
+        h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.devices.push({ id: "", name: "" }); rerender(); } }, "Add by address"),
+        btn("Detect emulators", detectDevices, "pri sm")), false),
+      step(2, "Pick your presets", "Which game presets the bot may use.", btn("Open presets", () => pickTab("presets"), "sm"), false),
+      step(3, "Start", "The bot joins rallies and does your duties.", h("button", { class: "btn sm", disabled: true, title: "Add an instance first" }, "Start all"), false))) : null;
   // ---- instances found by Detect but not added: one click each (nothing is added by itself)
   const addFound = async (ids) => {
     const j = await act(api("add_found", { ids }));
@@ -156,11 +180,8 @@ PAGES.dashboard = function () {
       h("span", { class: "mute", style: { minWidth: "140px" } }, (a.name || "") + (a.removed ? "  (removed earlier)" : "")),
       btn("Add", () => addFound([a.id]), "sm pri"))),
     avail.length > 1 ? h("div", { class: "row", style: { marginTop: "8px" } }, btn("Add all " + avail.length, () => addFound(avail.map((a) => a.id)), "sm")) : null) : null;
-  const ctl = h("div", { class: "row", style: { marginBottom: "16px" } },
-    btn("Resume all", () => act(api("resume"))),                   // Start / Pause / Stop all live in the top bar and the sidebar
-    btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
   const log = panel(null, activityBox(null, "Activity - all instances"));
-  return h("div", {}, renderTodayAll(), found, dev, ctl, log);
+  return none ? h("div", {}, first, found, S.devices.length ? dev : null) : h("div", {}, renderEventCards(), renderTodayAll(), found, dev, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
@@ -304,7 +325,7 @@ function instancePage(serial) {
     stBtn("Start", () => collectAndRun("start", { serial }), "pri"), stBtn("Pause", () => act(api("pause", { serial })), "warnb"), stBtn("Stop", () => act(api("stop", { serial })), "bad"), moreBtn);
   const head = h("div", { class: "row insthead", style: { margin: "0 0 12px", gap: "14px", alignItems: "center" } },
     sideBtn(), h("h2", { style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx),
-    status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial), h("span", { style: { flex: "1" } }), bar);
+    status, h("span", { class: "mute", style: { fontSize: "13px" } }, serial), h("span", { style: { flex: "1" } }), saveStEl(), bar);
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
@@ -423,17 +444,13 @@ function instancePage(serial) {
     e.addEventListener("input", () => { const t = e.value.trim(); if (t === "") delete ov[key]; else ov[key] = Math.max(0, parseInt(t, 10) || 0); }); return e; };
   const ajOn = h("input", { type: "checkbox", checked: !!eff("game_auto_join", false) });
   ajOn.addEventListener("change", () => { ov.game_auto_join = ajOn.checked; });
-  const ajLeft = h("div", { class: "hint", style: { marginTop: "10px" } }, "Time left on the game's Auto-Join: not read yet (it is read the next time this instance checks it).");
-  const ajRefresh = async () => { if (!ajLeft.isConnected && ajLeft.dataset.shown) return; ajLeft.dataset.shown = "1";
-    try { const r = await api("aj_status", { serial }); if (r && r.left_s !== undefined) { const t = r.left_s, m = Math.round(r.age_s / 60); ajLeft.textContent = "Time left on the game's Auto-Join: " + Math.floor(t / 3600) + ":" + String(Math.floor(t % 3600 / 60)).padStart(2, "0") + " (read " + (m < 1 ? "just now" : m + " min ago") + ")."; } } catch (e) {} };
-  ajRefresh(); const ajTimer = setInterval(() => { if (!ajLeft.isConnected) clearInterval(ajTimer); else ajRefresh(); }, 30000);
   const autoJoin = panel("Auto-Join (the game's own, needs the Rally Monthly Card)",
     h("div", { class: "hint", style: { marginBottom: "10px" } }, "On: the bot stops joining rallies itself. It opens Alliance War > Auto-Join, reads the time left and presses Start again when it falls under your limit. Only turn it on for accounts that have the card. Leave the minutes blank to use the universal value."),
     h("div", { class: "row", style: { gap: "22px", alignItems: "center", flexWrap: "wrap" } },
       h("label", { class: "tgl" }, ajOn, h("span", { class: "sw" }), "Use the game's Auto-Join"),
       h("span", {}, "Renew when less than "), numOv("auto_join_renew_min", 120), h("span", {}, " min are left"),
       h("span", {}, "Check every "), numOv("auto_join_check_min", 10), h("span", {}, " min")),
-    ajLeft);
+    note("Time left and the next renew show on this instance's Overview, in the Today card."));
   const asOn = h("input", { type: "checkbox", checked: !!eff("auto_start", false) });
   asOn.addEventListener("change", () => { ov.auto_start = asOn.checked; });
   const autoStart = panel("Start by itself",
@@ -462,7 +479,6 @@ function instancePage(serial) {
     h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } }, btn("Scan city", () => scanCityFlow(serial)), btn("Map by hand", () => manualMapFlow(serial))));
   // Settings tab: section menu on the left (Advanced dimmed, last), Save / Discard bar pinned to the bottom
   const settingsTab = () => {
-    const snap = clone(ov);
     const secs = [
       ["phone", "Phone and start", () => [phone, autoStart]],
       ["inst", "Instance settings", () => [panelEl]],
@@ -481,9 +497,7 @@ function instancePage(serial) {
     };
     secs.forEach(([k, l]) => menuEl.appendChild(h("button", { class: "setlnk" + (k === "adv" ? " dim" : ""), "data-k": k, onclick: () => show(k) }, l)));
     show(S.sec.settings);
-    const bar = h("div", { class: "savebar" }, h("span", { class: "sbtxt" }, "Changes apply to " + (dev.name || short(serial)) + " only and save by themselves after 2 s"),
-      btn("Discard", () => { S.cfg.per_device[serial] = clone(snap); rerender(); toast("Changes discarded.", "ok"); }),
-      btn("Save changes", saveAll, "pri"));
+    const bar = h("p", { class: "hint", style: { marginTop: "12px" } }, "These settings apply to " + (dev.name || short(serial)) + " only.");   // saving + Undo: top bar
     return [h("div", { class: "setgrid" }, menuEl, h("div", {}, area, bar))];
   };
   const ITABS = [
@@ -593,9 +607,9 @@ function refreshInstanceControls() {
     const kk = d.state === "run" && d.kicked_at;
     const ns = d.state === "run" && d.no_stamina && !kk;
     s.className = "state-pill st-" + ((ns || kk) ? "pause" : d.state);
-    s.textContent = kk ? "\u26A0 KICKED - game opened on another device" : ns ? "\u26A0 NO STAMINA" + (d.joins ? `   |   joins ${d.joins}` : "") : (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
+    s.textContent = kk ? "\u26A0 Kicked \u00b7 game opened on another device" : ns ? "\u26A0 No stamina" + (d.joins ? ` \u00b7 joins ${d.joins}` : "") : (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? ` \u00b7 joins ${d.joins}` : "");
     const w = $("#instWarn"); if (w) w.style.display = ns ? "" : "none";
-    if (kk) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at), "data-pre": "   |   taking it back in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
+    if (kk) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at), "data-pre": " \u00b7 taking it back in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
     if (d.state === "pause" && d.resume_at) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.resume_at), "data-pre": " - runs again in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
   }
   if (typeof paintRunState === "function") paintRunState();
@@ -627,7 +641,7 @@ function presetPanels(c, inst) {
   const modes = [["fixed", "Start from first"], ["rotate", "Rotate presets"], ["random", "Random"]];
   const seg = h("div", { class: "seg" }, ...modes.map(([v, l]) => h("button", { class: "segb" + ((c.preset_mode || "rotate") === v ? " on" : ""), onclick: () => { c.preset_mode = v; rerender(); } }, l)));
   const card = (b, i) => {
-    if (!b.enabled) return h("div", { class: "pcard off", onclick: () => { b.enabled = true; rerender(); } }, h("div", { class: "pnum" }, String(b.n)), h("div", { class: "ptap" }, "TAP TO ARM"));
+    if (!b.enabled) return h("div", { class: "pcard off", onclick: () => { b.enabled = true; rerender(); } }, h("div", { class: "pnum" }, String(b.n)), h("div", { class: "ptap" }, "Tap to switch on"));
     const gens = h("div", { class: "pgens" + (b.pick_generals ? "" : " dis"), title: b.pick_generals ? "" : "Switch this preset to Listed to choose generals" }, h("div", { class: "lab" }, "Main general(s)"), genField(b, "main", `Preset ${ROMAN[i]} - main`),
       h("div", { class: "lab" }, "Assistant general(s)"), genField(b, "assistant", `Preset ${ROMAN[i]} - assistant`),
       tog(b, "assistant_optional", "Join without assistant if none is free"));
@@ -636,16 +650,19 @@ function presetPanels(c, inst) {
       h("div", { class: "seg small" }, h("button", { class: "segb" + (b.pick_generals ? "" : " on"), onclick: () => { b.pick_generals = false; rerender(); } }, "Game default"), h("button", { class: "segb" + (b.pick_generals ? " on" : ""), onclick: () => { b.pick_generals = true; rerender(); } }, "Listed")), tog(b, "skip_if_no_general", "Skip if no general"),
       gens);
   };
-  const bp = panel("Join presets (match the game's presets I-VIII)",
-    h("div", { class: "row", style: { marginBottom: "10px", gap: "18px" } }, tog(c, "game_auto_join", "Use the game's Auto-Join (needs the Rally Monthly Card)"),
-      h("span", { class: "lab" }, "Renew when less than (min) is left"), inp(c, "auto_join_renew_min", { type: "int", cls: "short" }),
-      h("span", { class: "lab" }, "Check every (min)"), inp(c, "auto_join_check_min", { type: "int", cls: "short" })),
-    note("On: the bot stops joining rallies itself. It opens Alliance War > Auto-Join, reads the time left and presses Start again when it falls under your limit (Start resets it to 8 hours). Switch it on per instance on each instance's own page if only some accounts have the card."),
-    h("div", { class: "row", style: { marginBottom: "6px" } }, h("span", { class: "lab" }, "Preset priority"), seg, h("span", { class: "armed" }, `${armed}/8 ARMED`),
+  const PRESET_HELP = "Tap an empty slot to arm that preset, \u2715 to switch it off. 'Start from first' always tries the lowest armed preset first; 'Rotate' takes them in turn. 'Game default' marches with the generals already saved in the game preset (nothing is searched). 'Listed' uses the generals you list on that card: if the preset already holds one of them the bot just marches, otherwise it searches for it and sets it. 'Skip if no general' skips a preset whose game preset has an empty slot and tries the next one.";
+  const bp = panel("Join presets",
+    h("div", { class: "dhead", style: { marginBottom: "10px" } }, tog(c, "game_auto_join", "Use the game's Auto-Join", { after: () => rerender() }),
+      infoTip("Game's Auto-Join", "Needs the Rally Monthly Card. When on, the bot stops joining rallies itself: it opens Alliance War > Auto-Join, reads the time left and presses Start again when it falls under your limit (Start resets it to 8 hours). Only some accounts have the card? Switch it on per instance on that instance's own page.")),
+    c.game_auto_join ? h("div", { class: "fgrid", style: { marginBottom: "14px" } },
+      fld("Renew when less than (min) is left", inp(c, "auto_join_renew_min", { type: "int" })),
+      fld("Check every (min)", inp(c, "auto_join_check_min", { type: "int" }))) : null,
+    h("div", { class: "dhead", style: { marginBottom: "10px" } }, h("span", { class: "lab" }, "Preset order"), seg,
+      infoTip("Presets", PRESET_HELP),
+      h("span", { style: { flex: "1" } }), h("span", { class: "armed" }, `${armed} of 8 on`),
       btn("1 - 6", () => { c.bot_presets.forEach((b) => (b.enabled = b.n <= 6)); rerender(); }, "sm"), btn("1 - 8", () => { c.bot_presets.forEach((b) => (b.enabled = true)); rerender(); }, "sm")),
     h("div", { class: "pgrid" }, c.bot_presets.map(card)),
-    note("Tap an empty slot to arm that preset, \u2715 to switch it off. 'Start from first' always tries the lowest armed preset first; 'Rotate' takes them in turn. 'Game default' marches with the generals already saved in the game preset (nothing is searched). 'Listed' uses the generals you list on that card: if the preset already holds one of them the bot just marches, otherwise it searches for it and sets it. 'Skip if no general' skips a preset whose game preset has an empty slot and tries the next one.") ,
-    h("div", { class: "row" }, h("span", { class: "lab" }, "Universal: skip a preset that already has more than this many troops (0 = off)"), inp(c, "max_troops", { type: "int", cls: "short" })));
+    h("div", { class: "fgrid", style: { marginTop: "14px" } }, fld("Skip a preset above this many troops (0 = off)", inp(c, "max_troops", { type: "int" }))));
   const favs = ["leave", "on", "off"];
   const gen = panel("Generals",
     grid2(fld("Main generals (best first)", genField(c, "general_main", "Main generals")), fld("Assistant generals (best first)", genField(c, "general_assistant", "Assistant generals")),
@@ -698,31 +715,46 @@ function staminaPanel(store, base) {
     note("Full = slides the bar to the very end, so stamina fills up to the game's limit (9,999) - the default. The game's own Max button is not used (it stops at 100). Game default = the amount the game suggests (2 items). Exact number = the number of items you type."));
 }
 PAGES.settings = function () {
-  const r = PAGES.settings0(); r.insertBefore(panel("Tour", note("A short walkthrough of where to click and how to set up your presets and start the bot."), h("div", { class: "row" }, btn("Take the tour", () => startTour()))), r.firstChild); return r;                  // themes live on their own Themes tab only
+  const r = PAGES.settings0(); r.appendChild(panel("Tour", note("A short walkthrough of where to click and how to set up your presets and start the bot."), h("div", { class: "row" }, btn("Take the tour", () => startTour())))); return r;                  // themes live on their own Themes tab only
 };
 PAGES.settings0 = function () {
   const c = S.cfg;
-  const g = panel("Universal settings (every instance, unless it has its own)",
-    grid2(
-      fld("ADB path (auto)", inp(c, "adb_path")), fld("Evony package name", inp(c, "evony_package")), fld("Pause lasts (minutes, 0 = until I press Pause again)", inp(c, "pause_minutes", { type: "int", cls: "short", get: (v) => (v === undefined ? 15 : v) })),
-      fld("Presets if bot presets unused (1-8)", inp(c, "presets", { get: (v) => (v || []).join(","), set: (t) => parsePresets(t) || [1] })), fld("Preset mode", sel(c, "preset_mode", ["rotate", "random", "fixed"])),
-      fld("Join if spare time >= (s)", inp(c, "safety_margin", { type: "int", cls: "short" })), fld("March time if not read (s)", inp(c, "march_guess", { type: "int", cls: "short", get: (v) => (v === undefined ? 10 : v) })), fld("Skip if rally has more than (s, 0 = any)", inp(c, "max_rally_seconds", { type: "int", cls: "short" })),
-      fld("Rally countdown read from", sel(c, "rally_timer_source", ["progress_bar", "join_button"])), fld("March time read from", sel(c, "march_timer_source", ["join_button", "progress_bar", "none"], { get: (v) => v || "none", set: (v) => (v === "none" ? "" : v) })),
-      fld("Max joins per device (0 = no limit)", inp(c, "max_joins", { type: "int", cls: "short" })), fld("Buttons to tap to reach the rally list", inp(c, "rally_nav_steps", { get: (v) => (v || []).join(", "), set: (t) => parseNames(t) })),
-      fld("Click delay (ms): lower = faster, higher = slower", inp(c, "click_delay_ms", { type: "int", cls: "short" })),
-      fld("Load on the PC / instance", sel(c, "cpu_level", [[1, "1 - fastest"], [2, "2 - balanced"], [3, "3 - light"], [4, "4 - lightest"]], { num: true, get: (v) => v || 2 })),
-      fld("Screenshot method", sel(c, "screenshot_mode", ["auto", "png"]))),
-    h("div", { class: "row", style: { marginTop: "14px", gap: "26px" } }, tog(c, "log_timers", "Log the timers it reads"), tog(c, "auto_launch_emulator", "Start the instance if it is closed"),
-      tog(c, "auto_launch_game", "Start Evony if it is not open and wait until it is loaded")),
-    note("Spare time = rally countdown minus your march time. 'Buttons to tap' are template names (default rally_icon); add more, e.g. alliance_button, war_button, if the rally list needs several taps. Any template named popup_something is tapped whenever it appears. Click delay scales every pause after a click; below ~500 ms the bot may click before a screen has loaded. A lighter load level scans less often."));
-  const lr = panel("Low RAM / weak PC", h("div", { id: "ramInfo", class: "hint", style: { marginBottom: "10px" } }, "PC memory: ..."),
-    tog(c, "low_memory", "Low-memory mode (no live picture, shorter logs, one text reading at a time, lower priority, slower instance start-up)"),
-    h("div", { style: { marginBottom: "8px" } }, tog(c, "keep_running_on_close", "Keep the bots running in the background when I close this window (off = closing the window stops everything)")),
-    h("div", { style: { marginBottom: "12px" } }, tog(c, "auto_start", "Start all instances by itself whenever the app opens (default for every instance - each one can override it on its own page)")),
-    grid2(fld("Gap between starting one instance and the next (seconds)", inp(c, "start_gap_seconds", { type: "int", cls: "short" })),
-      fld("Run at most this many instances at once (0 = no limit)", inp(c, "max_running_emulators", { type: "int", cls: "short" })),
-      fld("Wait for this much free RAM before starting an instance (MB, 0 = off)", inp(c, "min_free_ram_mb", { type: "int", cls: "short" }))),
-    h("div", { style: { marginTop: "12px" } }, tog(c, "close_emulator_on_stop", "Close an instance when its instance is stopped (frees its RAM; needs MuMu / LDPlayer or a stop command)")),
+  // (ui-simple) plain groups; same settings keys and saved values - only the labels, order and choice names changed
+  const sec = (title, ...kids) => h("div", { class: "sgroup" }, h("h4", {}, title), ...kids);
+  const g = panel("Settings for every instance",
+    h("p", { class: "hint", style: { margin: "-4px 0 6px" } }, "An instance with its own settings (on its page) keeps those."),
+    sec("Joining rallies",
+      h("div", { class: "fgrid" },
+        fld("Join only with this much time to spare (s)", inp(c, "safety_margin", { type: "int" })),
+        fld("Skip rallies longer than (s, 0 = any)", inp(c, "max_rally_seconds", { type: "int" })),
+        fld("Most joins per instance (0 = no limit)", inp(c, "max_joins", { type: "int" })),
+        fld("My march time if it can't be read (s)", inp(c, "march_guess", { type: "int", get: (v) => (v === undefined ? 10 : v) })),
+        fld("Read the rally countdown from", sel(c, "rally_timer_source", [["progress_bar", "Progress bar"], ["join_button", "Join button"]])),
+        fld("Read my march time from", sel(c, "march_timer_source", [["join_button", "Join button"], ["progress_bar", "Progress bar"], ["none", "Don't read it"]], { get: (v) => v || "none", set: (v) => (v === "none" ? "" : v) })))),
+    sec("Speed",
+      h("div", { class: "fgrid" },
+        fld("Load on the PC", sel(c, "cpu_level", [[1, "Fastest"], [2, "Balanced"], [3, "Light"], [4, "Lightest"]], { num: true, get: (v) => v || 2 })),
+        fld("Wait after each tap (ms)", inp(c, "click_delay_ms", { type: "int" })),
+        fld("Pause lasts (min, 0 = until I resume)", inp(c, "pause_minutes", { type: "int", get: (v) => (v === undefined ? 15 : v) })))),
+    sec("Starting up",
+      h("div", { class: "tgls" }, tog(c, "auto_launch_emulator", "Start the emulator if it is closed"), tog(c, "auto_launch_game", "Open Evony and wait until it has loaded"))),
+    h("details", { class: "adv" }, h("summary", {}, "Advanced"),
+      h("div", { class: "fgrid", style: { marginTop: "12px" } },
+        fld("ADB path", inp(c, "adb_path")), fld("Evony package name", inp(c, "evony_package")),
+        fld("Presets when no join presets are set (1-8)", inp(c, "presets", { get: (v) => (v || []).join(","), set: (t) => parsePresets(t) || [1] })),
+        fld("Preset order", sel(c, "preset_mode", [["fixed", "Start from first"], ["rotate", "Rotate presets"], ["random", "Random"]])),
+        fld("Buttons to tap to reach the rally list", inp(c, "rally_nav_steps", { get: (v) => (v || []).join(", "), set: (t) => parseNames(t) })),
+        fld("Screenshot method", sel(c, "screenshot_mode", [["auto", "Automatic"], ["png", "PNG (slower, safer)"]]))),
+      h("div", { class: "tgls", style: { marginTop: "12px" } }, tog(c, "log_timers", "Write the timers it reads to the log")),
+      note("Spare time = rally countdown minus your march time. 'Buttons to tap' are template names (default rally_icon); add more, e.g. alliance_button, war_button, if the rally list needs several taps. Any template named popup_something is tapped whenever it appears. Click delay scales every pause after a click; below ~500 ms the bot may click before a screen has loaded. A lighter load level scans less often.")));
+  const lr = panel("Running many instances", h("div", { id: "ramInfo", class: "hint", style: { marginBottom: "10px" } }, "PC memory: ..."),
+    tog(c, "low_memory", "Low-memory mode for a weak PC"),
+    h("div", { style: { marginBottom: "8px" } }, tog(c, "keep_running_on_close", "Keep the bots running when I close this window")),
+    h("div", { style: { marginBottom: "12px" } }, tog(c, "auto_start", "Start all instances when the app opens")),
+    h("div", { class: "fgrid" }, fld("Wait between instance starts (s)", inp(c, "start_gap_seconds", { type: "int", cls: "short" })),
+      fld("Most instances at once (0 = no limit)", inp(c, "max_running_emulators", { type: "int", cls: "short" })),
+      fld("Free RAM needed to start one (MB, 0 = off)", inp(c, "min_free_ram_mb", { type: "int", cls: "short" }))),
+    h("div", { style: { marginTop: "12px" } }, tog(c, "close_emulator_on_stop", "Close the emulator when its instance stops (frees RAM)")),
     note("The bot itself needs roughly 100 MB; the instances are what fill the RAM (about 1.5-4 GB each). Extra instances beyond the limit wait in a queue and start when another one stops. Set the instances to 540x960, 2 GB or less of memory and 1-2 CPU cores in their own settings. Closing this window frees even more memory: the bots keep running."));
   // Beta: every user can record a task (taps, swipes + pictures) and send it, so new duties can be built from it
   const rec = panel("Record a task (beta)", h("div", { class: "hint", style: { marginBottom: "10px" } },
@@ -1204,8 +1236,29 @@ PAGES.license = function () {
 function renderTodayCard(serial) {
   const head = h("div", { class: "tdreset" }), list = h("div", { class: "tdq" }), sum = h("div", { class: "tdsum" });
   const res = h("div", { class: "tdres" }), week = h("small", { class: "tdweek" });
+  // the game's Auto-Join (ui-simple): time left, when the bot renews it, and a warning when it has not been checked for a while
+  const aj = h("div", { class: "ajline", hidden: true, role: "button", tabindex: "0", title: "Open the Auto-Join settings",
+    onclick: () => { S.sec = S.sec || {}; S.sec.routines = "aj"; if (S.gotoInstTab) S.gotoInstTab("routines"); } });
+  const ajEff = (k, d) => { const o = ((S.cfg.per_device || {})[serial]) || {}; return o[k] !== undefined ? o[k] : S.cfg[k] !== undefined ? S.cfg[k] : d; };
+  const ajPaint = async () => {
+    if (!ajEff("game_auto_join", false)) { aj.hidden = true; return; }
+    aj.hidden = false;
+    const r = await api("aj_status", { serial }, { quiet: true }).catch(() => null);
+    const renewMin = +ajEff("auto_join_renew_min", 120) || 120, checkMin = +ajEff("auto_join_check_min", 10) || 10;
+    const run = (S.devStatus.find((d) => d.id === serial) || {}).state === "run";
+    aj.innerHTML = "";
+    const dot = (k) => h("span", { class: "ajdot " + k });
+    if (!r || r.left_s === undefined) { aj.append(dot("mute"), h("b", {}, "Auto-Join"), h("span", {}, run ? "time left not read yet - the bot checks it shortly" : "on - checked when the bot runs")); return; }
+    const left = Math.max(0, r.left_s - r.age_s), at = new Date(Date.now() + Math.max(0, left - renewMin * 60) * 1000);
+    const stale = run && r.age_s > Math.max(3 * checkMin * 60, 30 * 60);
+    const hm = (t) => Math.floor(t / 3600) + "h " + String(Math.floor(t % 3600 / 60)).padStart(2, "0") + "m";
+    aj.append(dot(stale || left === 0 ? "bad" : "ok"), h("b", {}, "Auto-Join"), h("span", {}, hm(left) + " left"),
+      h("span", { class: "ajsub" }, left <= renewMin * 60 ? "renews now" : "renews at " + at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
+      stale ? h("span", { class: "ajwarn" }, "Not checked for " + Math.round(r.age_s / 60) + " min") : h("span", { class: "ajsub" }, "checked " + (r.age_s < 60 ? "just now" : Math.round(r.age_s / 60) + " min ago")));
+  };
   const card = h("div", { class: "panel today" },
     h("div", { class: "cardhead" }, h("h3", {}, "Today"), head),
+    aj,
     h("div", { class: "tdgrid" },
       h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Duty queue"), list, sum),
       h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Today's results"), res, week)));
@@ -1215,7 +1268,7 @@ function renderTodayCard(serial) {
     head.textContent = `Daily reset in ${fmtHM(m.resetAt - (Date.now() / 1000 + m.skew))} · ${m.resetLocal} your time`;
   };
   const paint = () => {
-    const key = JSON.stringify([m.items, m.summary, m.results, m.week]);
+    const key = JSON.stringify([m.items, m.summary, m.results, m.week, ajEff("game_auto_join", false)]);
     if (key === last) return;                                               // nothing changed: keep the DOM as it is (no flicker)
     last = key;
     list.innerHTML = "";
@@ -1223,7 +1276,9 @@ function renderTodayCard(serial) {
       h("span", { class: "tdi" }, x.icon), h("span", { class: "tdt" }, x.title), h("small", {}, x.sub))));
     sum.textContent = m.summary;
     res.innerHTML = "";
-    m.results.forEach(([l, v, tip]) => res.appendChild(h("div", { class: "stile", title: tip || "" }, h("b", {}, String(v)), h("span", {}, l))));
+    const gameJoins = ajEff("game_auto_join", false);
+    m.results.forEach(([l, v, tip]) => { if (gameJoins && l === "Rallies joined") { l = "Rallies joined"; v = "By the game"; tip = "The game's Auto-Join is on, so the game joins rallies itself"; }
+      res.appendChild(h("div", { class: "stile" + (v === "By the game" ? " txt" : ""), title: tip || "" }, h("b", {}, String(v)), h("span", {}, l))); });
     week.textContent = m.week;
   };
   const load = async () => {
@@ -1231,6 +1286,7 @@ function renderTodayCard(serial) {
     const j = await api("today", { serial }, { quiet: true }).catch(() => null);
     if (j) m = todayModel(j, serial);
     tick(); paint();
+    ajPaint();
   };
   paint(); tick();
   const t1 = setInterval(() => { if (!card.isConnected) { clearInterval(t1); return; } tick(); }, 1000);
@@ -1240,6 +1296,38 @@ function renderTodayCard(serial) {
 }
 
 // ====================================================================== Today - all instances (Dashboard, nothing selected)
+// ---- event cards on the Dashboard (ui-simple, plan claude/event_calendar_plan_22oct.md): Monarch, SvS / KE, Bubble, Ending soon.
+// Look only for now: the data comes from the bot's daily Event Center scan ("events" request), which is not built yet -
+// until it answers, nothing is shown. Times are absolute (unix seconds) so the countdowns run on their own.
+function renderEventCards() {
+  const wrap = h("div", { class: "evcards", hidden: true });
+  const left = (t) => { const s = Math.max(0, t - Date.now() / 1000), d = Math.floor(s / 86400), hh = Math.floor(s % 86400 / 3600), mm = Math.floor(s % 3600 / 60);
+    return d ? `${d}d ${hh}h` : hh ? `${hh}h ${String(mm).padStart(2, "0")}m` : `${mm}m`; };
+  const card = (title, sub, ...rows) => h("div", { class: "evcard" }, h("div", { class: "evh" }, h("b", {}, title), sub ? h("small", {}, sub) : null), ...rows);
+  const line = (name, val, k) => h("div", { class: "evrow" }, h("span", {}, name), h("span", { class: "evv " + (k || "") }, val));
+  let data = null;
+  const paint = () => {
+    wrap.innerHTML = "";
+    const cards = (data && data.cards) || [];
+    if (!cards.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    for (const c of cards) {
+      if (c.kind === "monarch") wrap.appendChild(card(c.title || "Monarch", c.stage || "", line("Ends in", left(c.ends_at), "next")));
+      else if (c.kind === "svs") wrap.appendChild(card(c.title || "SvS / KE", c.text || "", line(c.label || "Begins in", left(c.at), "next")));
+      else if (c.kind === "bubble") {
+        const off = (c.rows || []).filter((r) => !r.ends_at || r.ends_at < Date.now() / 1000).length;
+        wrap.appendChild(card("Bubble", off ? off + " without a shield" : "All shielded",
+          ...(c.rows || []).slice(0, 5).map((r) => r.ends_at && r.ends_at > Date.now() / 1000 ? line(r.name, left(r.ends_at)) : line(r.name, "No shield", "bad"))));
+      } else if (c.kind === "ending") wrap.appendChild(card("Ending soon", "before the next reset",
+          ...(c.items || []).slice(0, 5).map((it) => line(it.name, left(it.ends_at), "due"))));
+    }
+  };
+  const load = async () => { if (!wrap.isConnected && data) return; const j = await api("events", {}, { quiet: true }).catch(() => null); data = j && j.ok !== false ? j : null; paint(); };
+  load();
+  const t = setInterval(() => { if (!wrap.isConnected) clearInterval(t); else paint(); }, 30000);
+  const t2 = setInterval(() => { if (!wrap.isConnected) clearInterval(t2); else load(); }, 300000);
+  return wrap;
+}
 function renderTodayAll() {
   const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {});
   const card = h("div", { class: "panel today" },
@@ -1314,9 +1402,41 @@ PAGES.duties = function (fixed, only, compact) {
       return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
         h("input", { type: "number", min: o.min, max: o.max, value: o.val, style: { width: "110px" }, onchange: (e) => save(e.target.value) }));
     }));
+  // (ui-simple) a duty's settings: in the Routines page they sit in its settings card; on the Duties list they open in a side panel
+  const SET_IDS = ["crazy_eggs", "champions", "wheel"];
+  const hasSet = (r) => r.on && ((r.opts && r.opts.length) || SET_IDS.includes(r.id));
+  const setBody = (r) => r.on ? [(r.opts && r.opts.length) ? dutyOpts(r) : null,
+    r.id === "crazy_eggs" ? ce : null, r.id === "champions" ? ch : null, r.id === "wheel" ? wh : null].filter(Boolean) : null;
+  let sideId = null;
+  const side = h("div", { class: "sideov", onclick: (e) => { if (e.target === side) closeSide(); } });
+  if (window.watchNotes) window.watchNotes(side);
+  const sideKey = (e) => { if (e.key === "Escape") closeSide(); };
+  const closeSide = () => {
+    const was = sideId; sideId = null; side.remove(); document.removeEventListener("keydown", sideKey);
+    const b = was && root.querySelector('.dset[data-id="' + was + '"]'); if (b) { b.classList.remove("on"); b.focus(); }
+  };
+  const drawSide = () => {
+    const r = rows.find((x) => x.id === sideId);
+    if (!r || !hasSet(r) || !root.isConnected) { closeSide(); return; }
+    const BADGE = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad" };
+    side.innerHTML = "";
+    side.appendChild(h("aside", { class: "sidep", role: "dialog", "aria-modal": "true", "aria-label": r.title + " settings" },
+      h("div", { class: "sph" },
+        h("div", { class: "spt" }, h("h3", {}, r.title), h("small", {}, (serial ? "This instance" : "All instances") + (r.schedule ? " · " + r.schedule : ""))),
+        r.status_text ? h("span", { class: "dbadge " + (BADGE[r.status] || "") }, r.status_text) : null,
+        h("button", { class: "spx", type: "button", "aria-label": "Close", title: "Close (Esc)", onclick: closeSide }, "×")),
+      h("div", { class: "spb" }, setBody(r)),
+      h("div", { class: "spf" }, h("span", { class: "hint" }, "Changes save as you make them."), h("button", { class: "btn pri", type: "button", onclick: closeSide }, "Done"))));
+  };
+  const openSide = (id) => {
+    sideId = id;
+    root.querySelectorAll(".dset").forEach((b) => b.classList.toggle("on", b.dataset.id === id));
+    drawSide();
+    if (sideId && !side.isConnected) { document.body.appendChild(side); document.addEventListener("keydown", sideKey); const x = side.querySelector(".spx"); if (x) x.focus(); }
+  };
   const draw = () => {
     root.innerHTML = "";
-    if (fixed === undefined) root.appendChild(hist);
+    if (sideId) setTimeout(drawSide, 0);             // keep the side panel in step (duty switched off, own-settings opts saved)
     const pick = h("select", { onchange: (e) => { serial = e.target.value; load(); loadCe(); loadCh(); loadWh(); loadRn(); } },
       [h("option", { value: "", selected: serial === "" }, "All instances (default)")].concat(S.devices.map((d) => h("option", { value: d.id, selected: d.id === serial }, d.name || short(d.id)))));
     if (compact) {
@@ -1336,27 +1456,52 @@ PAGES.duties = function (fixed, only, compact) {
       return;
     }
     if (!only) root.appendChild(panel("Duties",
-      note("Ready-made jobs the bot does between rallies, each with its own schedule. A duty runs once per game day (reset 00:00 UTC) or every N minutes. If it fails, the bot goes back to the rallies and tries again every hour until it is done; after 3 failures you get an alert and a report is saved. Switch on 'Do the tasks' on the Tasks tab so the bot leaves the rally list for the city."),
-      h("div", { class: "row" }, fixed !== undefined ? null : h("span", { class: "lab" }, "Settings for"), fixed !== undefined ? null : pick,
+      h("div", { class: "dhead" },
+        h("span", { class: "hint" }, "What the bot does between rallies."),
+        infoTip("How duties work", "Each duty runs once per game day (reset 00:00 UTC) or every few minutes. If one fails, the bot goes back to rallies and tries again every hour until it is done. After 3 failures you get an alert and a report is saved."),
+        h("span", { style: { flex: "1" } }),
+        fixed !== undefined ? null : pick,
         serial && own.duties ? h("span", { class: "chip own" }, "own settings") : null,
-        serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the universal setting") : null),
-      note(serial ? "Changes here apply to this instance only and replace the universal list for it. Pick 'All instances' to change the default for every instance that has no own settings." : "These are the defaults for every instance. Pick one instance to give it different settings."),
+        serial && own.duties ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("scope_reset", { serial, key: "duties" })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }, "Use the universal setting") : null,
+        serial ? infoTip("This instance only", "Changes here apply to this instance only. Pick 'All instances' to change the default for every instance without its own settings.") : null),
     ));
     if (!only) root.appendChild(rn);
-    for (const g of GROUPS) {
-      const list = rows.filter((r) => r.group === g && (!only || r.id === only));
-      if (!list.length) continue;
-      // only = one duty inside the Routines page: its switch and name are in that page's header, so just the settings here
-      root.appendChild(panel(only ? "Settings" : g, list.flatMap((r) => [h("div", { class: "row", style: { justifyContent: "space-between", padding: "8px 0", borderTop: only ? "0" : "1px solid var(--line)" } },
-        only ? null : h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" }), h("b", {}, r.title)),
-        h("span", { class: "hint", style: { flex: "1", margin: only ? "0 14px 0 0" : "0 14px" } }, r.note, " · ", r.schedule),
-        r.verified ? null : h("span", { class: "chip", title: "Steps are a first guess and have not been watched on a real instance yet" }, "untested"),
-        h("span", { class: "chip " + (r.status === "done" ? "pill-ok" : r.status === "gaveup" ? "pill-bad" : "") }, r.status_text),
-        r.status === "gaveup" ? h("button", { class: "btn sm", style: { marginLeft: "8px" }, onclick: async () => { const j = await act(api("duty_retry", { serial, id: r.id })); if (j) { rows = j.duties; own = j.own || {}; draw(); toast("It runs again shortly.", "ok"); } } }, "Retry") : null),
-        (r.on && r.opts && r.opts.length) ? dutyOpts(r) : null,
-        (r.on && r.id === "crazy_eggs") ? ce : null, (r.on && r.id === "champions") ? ch : null, (r.on && r.id === "wheel") ? wh : null,
-        (only && !r.on) ? note("Switch it on at the top and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean))));
+    const BADGE = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad" };
+    const item = (r) => [h("div", { class: "dline" + (only ? " only" : "") + (r.on ? "" : " off") },
+        only ? null : h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, "aria-label": r.title, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" })),
+        h("div", { class: "dtx", title: r.note || "" }, only ? null : h("b", {}, r.title), h("small", {}, r.schedule || r.note || "")),
+        S.dev && !r.verified ? h("span", { class: "dbadge", title: "Developer: steps not yet watched on a real instance" }, "untested") : null,
+        r.on && r.status_text ? h("span", { class: "dbadge " + (BADGE[r.status] || "") }, r.status_text) : null,
+        r.status === "gaveup" ? h("button", { class: "btn sm", onclick: async () => { const j = await act(api("duty_retry", { serial, id: r.id })); if (j) { rows = j.duties; own = j.own || {}; draw(); toast("It runs again shortly.", "ok"); } } }, "Retry") : null,
+        // (ui-simple) settings open in the side panel instead of under the row (half columns were too narrow)
+        (!only && hasSet(r)) ? h("button", { class: "btn sm dset" + (sideId === r.id ? " on" : ""), type: "button", "data-id": r.id, "aria-label": r.title + " settings", onclick: () => openSide(r.id) }, "Settings") : null),
+        only ? setBody(r) : null,
+        (only && !r.on) ? note("Switch it on at the top and its settings open here. " + (serial ? "This instance can have its own settings." : "")) : null].filter(Boolean);
+    if (only) {                                   // one duty inside the Routines page: its switch and name are in that page's header, so just the settings here
+      const list = rows.filter((r) => r.id === only);
+      if (list.length) root.appendChild(panel("Settings", list.flatMap(item)));
+      return;
     }
+    // (ui-simple) one card: On / All + group pills on top, duties in two columns - no long scroll, no empty middle
+    const onCount = rows.filter((r) => r.on).length;
+    if (!S.dutyView && rows.length) S.dutyView = { show: onCount ? "on" : "all", group: "" };   // decided once the list has loaded
+    const v = S.dutyView || { show: "all", group: "" };
+    if (v.show === "on" && !onCount) v.show = "all";
+    const segBtn = (lab, on, fn) => h("button", { class: "segb" + (on ? " on" : ""), type: "button", onclick: fn }, lab);
+    const pills = h("div", { class: "dfilter" },
+      h("div", { class: "seg small" }, segBtn("On (" + onCount + ")", v.show === "on", () => { v.show = "on"; draw(); }), segBtn("All (" + rows.length + ")", v.show === "all", () => { v.show = "all"; draw(); })),
+      h("div", { class: "rtnpills" }, [["", "All groups"]].concat(GROUPS.map((g) => [g, g])).map(([g, l]) =>
+        h("button", { class: "rtnpill" + (v.group === g ? " on" : ""), type: "button", onclick: () => { v.group = g; draw(); } }, l, h("span", { class: "pc" }, String(rows.filter((r) => (!g || r.group === g) && (v.show === "all" || r.on)).length))))));
+    const shown = rows.filter((r) => (v.show === "all" || r.on) && (!v.group || r.group === v.group));
+    const body = [];
+    for (const g of GROUPS) {
+      const list = shown.filter((r) => r.group === g);
+      if (!list.length) continue;
+      if (!v.group) body.push(h("div", { class: "dgrouph" }, g));
+      body.push(h("div", { class: "dgrid" }, list.map((r) => h("div", { class: "dcell" + (r.on ? " on" : "") }, item(r)))));
+    }
+    root.appendChild(panel(null, pills, body.length ? body : h("div", { class: "empty" }, v.show === "on" ? "No duty is on here yet. Pick All to switch some on." : "No duties in this group.")));
+    if (fixed === undefined) root.appendChild(hist);           // what the bot did: below the list, not above it
   };
   // what the bot did: today's state per instance + the latest task events
   const hist = h("div", {});
@@ -1394,20 +1539,23 @@ PAGES.duties = function (fixed, only, compact) {
       j.costs.map((k) => {
         const e = c.eggs[k] || { on: true, daily: 0 };
         const lucky = c.lucky === k || (c.lucky === "max" && k === j.costs[j.costs.length - 1]);
-        return h("div", { class: "row", style: { justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid var(--line)" } },
-          h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: e.on, onchange: (ev) => set({ egg: k, on: ev.target.checked }) }), h("span", { class: "sw" }), h("b", {}, k + " hammers")),
-          h("span", { class: "hint", style: { flex: "1", margin: "0 14px" } }, "wait after a miss about " + EGG_TIME[k] + (j.smashes && j.smashes[k] ? " · smashed today: " + j.smashes[k] : "")),
-          h("span", { class: "lab" }, "Max per day"),
-          h("input", { type: "number", class: "short", min: 0, max: 99, value: e.daily || "", placeholder: "no limit", title: "Empty = no limit", onchange: (ev) => set({ egg: k, daily: ev.target.value }) }),
-          h("button", { class: "btn" + (lucky ? " primary" : ""), title: "Use the daily Lucky Hammer on this egg", onclick: () => set({ lucky: lucky ? "" : k }) }, lucky ? "Lucky Hammer \u2713" : "Lucky Hammer"));
+        return h("div", { class: "eggrow" + (e.on ? "" : " off") },
+          h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: e.on, "aria-label": k + " hammers egg", onchange: (ev) => set({ egg: k, on: ev.target.checked }) }), h("span", { class: "sw" })),
+          h("div", { class: "eggtx" }, h("b", {}, k + " hammers"),
+            h("small", {}, "Waits about " + EGG_TIME[k] + " after a miss" + (j.smashes && j.smashes[k] ? " \u00b7 smashed today: " + j.smashes[k] : ""))),
+          h("label", { class: "eggmax", title: "Empty = no limit" }, h("span", {}, "Max a day"),
+            h("input", { type: "number", min: 0, max: 99, value: e.daily || "", placeholder: "\u221e", onchange: (ev) => set({ egg: k, daily: ev.target.value }) })),
+          h("button", { class: "luckyb" + (lucky ? " on" : ""), type: "button", "aria-pressed": lucky ? "true" : "false", title: lucky ? "The daily Lucky Hammer goes to this egg (click to switch it off)" : "Give the daily Lucky Hammer to this egg", onclick: () => set({ lucky: lucky ? "" : k }) }, lucky ? "\u2605 Lucky" : "\u2606 Lucky"));
       }),
-      h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Visit at most every"),
-        h("input", { type: "number", class: "short", min: 0, max: 600, value: c.min_gap == null ? 30 : c.min_gap, onchange: (ev) => set({ min_gap: ev.target.value }) }),
-        h("span", { class: "hint" }, "minutes. The bot goes back after this long and smashes every ready egg together. 0 = as soon as an egg is ready. When all four eggs are activated it stops for the day.")),
-      h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Hammers to keep"),
-        h("input", { type: "number", class: "short", min: 0, value: c.min_hammers || "", placeholder: "0", onchange: (ev) => set({ min_hammers: ev.target.value }) }),
-        h("span", { class: "hint" }, "never smash if it would leave fewer hammers than this"),
-        h("span", { class: "chip" }, j.lucky_used ? "Lucky Hammer used today" : (c.lucky ? "Lucky Hammer ready" : "Lucky Hammer off")))));
+      h("div", { class: "fgrid eggf" },
+        h("label", {}, h("span", { class: "lab" }, "Visit at most every"),
+          h("div", { class: "unit" }, h("input", { type: "number", min: 0, max: 600, value: c.min_gap == null ? 30 : c.min_gap, onchange: (ev) => set({ min_gap: ev.target.value }) }), h("span", {}, "min")),
+          h("small", { class: "hint" }, "Ready eggs are smashed together. 0 = as soon as one is ready.")),
+        h("label", {}, h("span", { class: "lab" }, "Hammers to keep"),
+          h("input", { type: "number", min: 0, value: c.min_hammers || "", placeholder: "0", onchange: (ev) => set({ min_hammers: ev.target.value }) }),
+          h("small", { class: "hint" }, "Never go below this many."))),
+      h("div", { class: "row", style: { marginTop: "4px" } }, h("span", { class: "chip" }, j.lucky_used ? "Lucky Hammer used today" : (c.lucky ? "Lucky Hammer ready" : "Lucky Hammer off")),
+        h("span", { class: "hint" }, "When all four eggs are done, it stops for the day."))));
   };
   const loadCe = async () => { const j = await act(api("crazy_eggs", { serial })); if (j) drawCe(j); };
   // Run a task now: the bot does the picked task first, before everything else, on this instance (or on all)
@@ -1445,17 +1593,18 @@ PAGES.duties = function (fixed, only, compact) {
       serial && j.own && j.own.wheel ? h("div", { class: "row" }, h("span", { class: "chip own" }, "own settings"),
         h("button", { class: "btn sm", onclick: async () => { await act(api("scope_reset", { serial, key: "wheel" })); loadWh(); } }, "Use the universal setting")) : null,
       note("Tavern > Wheel of Fortune. Each spin costs coins. The bot presses only the Spin buttons and closes the reward panel after every spin. With a big button it still finishes with smaller ones so the number of spins is exact."),
-      h("div", { class: "row", style: { gap: "8px" } }, h("span", { class: "lab" }, "Spin button"),
-        [1, 10, 100].map((b) => h("button", { class: "btn" + (c.button === b ? " primary" : ""), onclick: () => set({ button: b }) }, "Spin " + (b === 1 ? "once" : "\u00d7" + b)))),
-      h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Number of spins"),
-        h("input", { type: "number", class: "short", min: 0, value: c.spins || "", placeholder: "until out", onchange: (ev) => set({ spins: ev.target.value }) }),
-        h("span", { class: "hint" }, "e.g. 100, 1000 or 999999. Empty / 0 = spin until the coins are used up.")),
-      h("div", { class: "row", style: { marginTop: "8px" } }, h("span", { class: "lab" }, "Coins to keep"),
-        h("input", { type: "number", class: "short", min: 0, value: c.reserve || "", placeholder: "0", onchange: (ev) => set({ reserve: ev.target.value }) }),
-        h("span", { class: "hint" }, "never spin if it would leave fewer coins than this")),
-      h("div", { class: "row", style: { gap: "8px", marginTop: "8px" } }, h("span", { class: "lab" }, "Add chips first"),
-        [["off", "Off"], ["needed", "Only what's needed"], ["all", "All owned"]].map(([v, t]) => h("button", { class: "btn" + ((c.chips || "off") === v ? " primary" : ""), onclick: () => set({ chips: v }) }, t))),
-      note("Uses chip items you already own (100 / 500 / 1K Chips) before spinning. Items sold for gems are never bought.")));
+      h("div", { class: "fgrid eggf" },
+        h("div", { class: "wide" }, h("span", { class: "lab" }, "Spin button"),
+          h("div", { class: "seg small" }, [1, 10, 100].map((b) => h("button", { class: "segb" + (c.button === b ? " on" : ""), type: "button", onclick: () => set({ button: b }) }, "Spin " + (b === 1 ? "once" : "\u00d7" + b))))),
+        h("label", {}, h("span", { class: "lab" }, "Number of spins"),
+          h("input", { type: "number", min: 0, value: c.spins || "", placeholder: "Until out of coins", onchange: (ev) => set({ spins: ev.target.value }) }),
+          h("small", { class: "hint" }, "Empty or 0 = until the coins run out.")),
+        h("label", {}, h("span", { class: "lab" }, "Coins to keep"),
+          h("input", { type: "number", min: 0, value: c.reserve || "", placeholder: "0", onchange: (ev) => set({ reserve: ev.target.value }) }),
+          h("small", { class: "hint" }, "Never go below this many.")),
+        h("div", { class: "wide" }, h("span", { class: "lab" }, "Add chips first"),
+          h("div", { class: "seg small" }, [["off", "Off"], ["needed", "Only what's needed"], ["all", "All owned"]].map(([v, t]) => h("button", { class: "segb" + ((c.chips || "off") === v ? " on" : ""), type: "button", onclick: () => set({ chips: v }) }, t))),
+          h("small", { class: "hint" }, "Uses 100 / 500 / 1K chip items you own before spinning. Never buys with gems.")))));
   };
   const loadWh = async () => { const j = await act(api("wheel", { serial })); if (j) drawWh(j); };
   // Champions: how many of the daily 15 taps and 10 greetings each champion gets (this instance or all)
@@ -1474,18 +1623,17 @@ PAGES.duties = function (fixed, only, compact) {
         h("span", { class: "chip " + (sumG > j.max_greets ? "pill-bad" : "") }, "greets planned " + sumG + " / " + j.max_greets),
         h("span", { class: "chip" }, "done today: " + usedT + " taps, " + usedG + " greets"),
         Object.keys(j.plan).length ? h("button", { class: "btn sm", onclick: () => set({ clear: true }) }, "Clear all") : null),
+      h("div", { class: "chrow chhead" }, h("span", {}, "Main"), h("span", {}, "Champion"), h("span", {}, "Taps"), h("span", {}, "Greets")),
       j.names.map((n) => {
         const e = j.plan[n] || {};
         const full = (e.taps || 0) >= j.max_taps && (e.greets || 0) >= j.max_greets;
-        const mainSw = h("input", { type: "checkbox", checked: full, title: "Main champion: gets all " + j.max_taps + " taps and " + j.max_greets + " greetings every day (you can still change the numbers)", onchange: (ev) => set({ name: n, main: ev.target.checked }) });
-        return h("div", { class: "row", style: { justifyContent: "space-between", padding: "6px 0", borderTop: "1px solid var(--line)", gap: "10px" } },
-          h("label", { class: "tgl", title: "Main champion: one click gives this champion all the daily taps and greetings" }, mainSw, h("span", { class: "sw" }), ""),
-          h("b", { style: { flex: "1" } }, n),
-          h("span", { class: "hint" }, (j.taps && j.taps[n] ? "tapped " + j.taps[n] + " " : "") + (j.greets && j.greets[n] ? "greeted " + j.greets[n] : "")),
-          h("span", { class: "lab" }, "Taps"),
-          h("input", { type: "number", class: "short", min: 0, max: j.max_taps, value: e.taps || "", placeholder: "0", onchange: (ev) => set({ name: n, taps: ev.target.value }) }),
-          h("span", { class: "lab" }, "Greets"),
-          h("input", { type: "number", class: "short", min: 0, max: j.max_greets, value: e.greets || "", placeholder: "0", onchange: (ev) => set({ name: n, greets: ev.target.value }) }));
+        const done = (j.taps && j.taps[n] ? "tapped " + j.taps[n] : "") + (j.greets && j.greets[n] ? (j.taps && j.taps[n] ? " \u00b7 " : "") + "greeted " + j.greets[n] : "");
+        return h("div", { class: "chrow" + ((e.taps || e.greets) ? " set" : "") },
+          h("label", { class: "tgl", title: "Main champion: one click gives this champion all " + j.max_taps + " taps and " + j.max_greets + " greetings every day (the numbers can still be changed)" },
+            h("input", { type: "checkbox", checked: full, "aria-label": n + " main champion", onchange: (ev) => set({ name: n, main: ev.target.checked }) }), h("span", { class: "sw" })),
+          h("div", { class: "eggtx" }, h("b", {}, n), done ? h("small", {}, done + " today") : null),
+          h("input", { type: "number", min: 0, max: j.max_taps, value: e.taps || "", placeholder: "0", "aria-label": n + " taps", onchange: (ev) => set({ name: n, taps: ev.target.value }) }),
+          h("input", { type: "number", min: 0, max: j.max_greets, value: e.greets || "", placeholder: "0", "aria-label": n + " greets", onchange: (ev) => set({ name: n, greets: ev.target.value }) }));
       })));
   };
   const loadCh = async () => { const j = await act(api("champions", { serial })); if (j) drawCh(j); };
@@ -1815,8 +1963,7 @@ function routinesCards(serial, ov, details) {
     else if (it.open === "tasks") parts.push(...details.tasks());
     for (const p of parts) if (p) body.appendChild(p);
     const runBtn = it.id ? h("button", { class: "btn", onclick: async () => { if (await act(api("run_now_add", { serial, id: "duty:" + it.id }))) toast(it.t + " runs next on this instance.", "ok"); } }, "Run now") : null;
-    detail.append(body, h("div", { class: "rtnbar2" }, h("small", { class: "hint" }, "Switches save at once; other changes save within 2 s."), runBtn,
-      h("button", { class: "btn primary", onclick: () => saveAll() }, "Save")));
+    detail.append(body, h("div", { class: "rtnbar2" }, runBtn));
   };
   let touched = false;                     // the owner clicked a row: keep it selected when the duties arrive
   root.addEventListener("click", (e) => { if (e.target.closest(".rtnitem,.rtnpill")) touched = true; }, true);
