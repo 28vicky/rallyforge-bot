@@ -10056,6 +10056,18 @@ def mr_march_line(img, center=MR_CENTER):
     return None
 
 
+def mr_box_number(shot, box):
+    """One number box of the coordinate search (digits only, enlarged) -> int or None. The whole-line read missed
+    'Y: 622' on Kiravik (23 Oct)."""
+    try:
+        x, y, w, h = box
+        g = cv2.resize(cv2.cvtColor(shot[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY), None, fx=3, fy=3)
+        t = pytesseract.image_to_string(g, config="--psm 7 -c tessedit_char_whitelist=0123456789").strip()
+        return int(t) if t.isdigit() else None
+    except Exception:
+        return None
+
+
 def mr_search(dev, stop, x, y):
     """Map shown: open the coordinate search, type X and Y, check them, Go. -> True when the map flew there."""
     if cancel_quit_dialog(dev, dev.screenshot(), lambda *_: None):   # an 'exit the game?' box left open would eat the tap
@@ -10074,7 +10086,9 @@ def mr_search(dev, stop, x, y):
         _nap(stop, 0.5, 0.8)
         rd_keyboard_ok(dev, stop)
     shot = dev.screenshot()
-    got = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (30, 505, 480, 70))))
+    got = [mr_box_number(shot, (110, 500, 150, 45)), mr_box_number(shot, (315, 500, 150, 45))]   # the X and Y boxes
+    if None in got:                                          # digits-only read missed: the old whole-line read
+        got = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (30, 505, 480, 70))))
     if x not in got or y not in got:
         rd_snap(shot, "mrally_xy")
         dev.back()
