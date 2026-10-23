@@ -179,55 +179,67 @@ function genViewBar(onchange) {
 
 function chooseGenerals(title, current) {
   return new Promise((res) => {
-    let chosen = [...current], selA = new Set(), selC = new Set();
-    const A = h("div", { class: "lst" }), C = h("div", { class: "lst" });
+    let chosen = [...current];
+    const A = h("div", { class: "lst" }), C = h("div", { class: "lst gorder" });
     const flt = genFilter(() => draw());
     let term = "";
     const search = genSearch((t) => { term = t; draw(); });
     const viewBar = genViewBar(() => draw());
-    const gimg = (n) => h("img", { src: `/api/general_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, onerror: (e) => (e.target.style.display = "none") });
+    const gimg = (n) => h("img", { src: `/api/general_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, onerror: (e) => (e.target.style.visibility = "hidden") });
+    const toggle = (n) => { chosen = chosen.includes(n) ? chosen.filter((x) => x !== n) : [...chosen, n]; draw(); };
+    const clear = h("button", { type: "button", class: "linkbtn", onclick: () => { chosen = []; draw(); } }, "Clear all");
+    const leftCard = (n, kids, tip) => h("div", { class: "li" + (chosen.includes(n) ? " added" : ""), draggable: "true", title: tip,
+      ondragstart: (e) => { e.dataTransfer.setData("text/plain", n); e.dataTransfer.effectAllowed = "copy"; }, onclick: () => toggle(n) },
+      chosen.includes(n) ? h("span", { class: "gadded" }, "\u2713") : null, ...kids);
+    // ---- reorder by dragging the handle (pointer events: works with mouse, pen and touch)
+    let drag = null;
+    const rowAt = (y) => [...C.querySelectorAll(".gorow")].findIndex((r) => { const b = r.getBoundingClientRect(); return y < b.top + b.height / 2; });
+    const renumber = () => C.querySelectorAll(".gorow").forEach((r, k) => { r.dataset.i = k; r.querySelector(".gonum").textContent = k + 1; });
+    const startDrag = (e, row) => {
+      e.preventDefault(); row.setPointerCapture(e.pointerId); row.classList.add("dragging"); drag = { row };
+      row.onpointermove = (ev) => {
+        let k = rowAt(ev.clientY); const rows = [...C.querySelectorAll(".gorow")];
+        if (k < 0) k = rows.length; const from = +row.dataset.i;
+        if (k === from || k === from + 1) return;
+        C.insertBefore(row, rows[k] || null);
+        const n = chosen.splice(from, 1)[0]; chosen.splice(k > from ? k - 1 : k, 0, n); renumber();
+      };
+      row.onpointerup = row.onpointercancel = () => { row.onpointermove = row.onpointerup = row.onpointercancel = null; drag = null; draw(); };
+    };
     const draw = () => {
+      if (drag) return;
       const keepA = A.scrollTop, keepC = C.scrollTop;          // clicking a card must not jump the list back to the top
       A.innerHTML = ""; C.innerHTML = "";
       A.className = "lst" + (genViewGet() === "grid" ? " grid" : "");
       const cnt = {};
       S.generals.forEach((g) => { if (g.cat) cnt[g.cat] = (cnt[g.cat] || 0) + 1; });
-      Object.keys(cnt).sort().forEach((c) => { const k = "@" + c; A.appendChild(h("div", { class: "li" + (selA.has(k) ? " sel" : ""), title: "Every general in this category is tried (the first free one is used)", onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(k) ? selA.delete(k) : selA.add(k); else { selA = new Set([k]); } draw(); }, ondblclick: () => add() }, h("b", {}, "Category: " + c), h("span", { class: "hint", style: { marginLeft: "8px" } }, cnt[c] + (cnt[c] === 1 ? " general" : " generals")))); });
-      genSorted(S.generals.filter((g) => flt.ok(g) && (!term || g.name.toLowerCase().includes(term)) && (genViewGet() === "list" || g.pic !== false))).forEach((g) => A.appendChild(h("div", { class: "li" + (selA.has(g.name) ? " sel" : "") + (chosen.includes(g.name) ? " added" : ""), draggable: "true", ondragstart: (e) => { if (!selA.has(g.name)) { selA = new Set([g.name]); } e.dataTransfer.setData("text/plain", g.name); e.dataTransfer.effectAllowed = "copy"; }, onclick: (e) => { if (e.ctrlKey || e.shiftKey) selA.has(g.name) ? selA.delete(g.name) : selA.add(g.name); else { selA = new Set([g.name]); } draw(); }, ondblclick: () => add(), title: (chosen.includes(g.name) ? "Already in the order list. " : "") + (g.pic === false ? "No picture yet: the bot finds this general by its name (list view)" : "Double-click or drag to the right to add") }, chosen.includes(g.name) ? h("span", { class: "gadded" }, "\u2713") : null, genViewGet() === "grid" ? gimg(g.name) : null, h("span", { class: "gname" }, g.name), g.pic === false ? h("span", { class: "hint", style: { marginLeft: "6px" } }, "(by name)") : null)));
+      Object.keys(cnt).sort().forEach((c) => A.appendChild(leftCard("@" + c, [h("b", {}, "Category: " + c), h("span", { class: "hint", style: { marginLeft: "8px" } }, cnt[c] + (cnt[c] === 1 ? " general" : " generals"))], "Every general in this category is tried (the first free one is used). Click to add or remove.")));
+      genSorted(S.generals.filter((g) => flt.ok(g) && (!term || g.name.toLowerCase().includes(term)) && (genViewGet() === "list" || g.pic !== false))).forEach((g) =>
+        A.appendChild(leftCard(g.name, [genViewGet() === "grid" ? gimg(g.name) : null, h("span", { class: "gname" }, g.name), g.pic === false ? h("span", { class: "hint", style: { marginLeft: "6px" } }, "(by name)") : null],
+          (chosen.includes(g.name) ? "Added - click to take it out" : "Click to add") + (g.pic === false ? ". No picture yet: the bot finds this general by its name" : ""))));
       if (term && !A.querySelector(".li")) A.appendChild(h("div", { class: "empty" }, "No general matches '" + term + "'."));
       if (!S.generals.length) A.appendChild(h("div", { class: "empty" }, "No saved generals yet. Use 'Scan generals' or 'Add general from screenshot'."));
-      if (!chosen.length) C.appendChild(h("div", { class: "empty gempty" }, "No generals added yet. Click a general and tap Add, or double-click (or drag) it here."));
-      chosen.forEach((n, i) => C.appendChild(h("div", { class: "li gord" + (selC.has(n) ? " sel" : ""), draggable: "true", title: "Drag to change the order - double-click to remove",
-        ondragstart: (e) => { e.dataTransfer.setData("text/x-rf-order", String(i)); e.dataTransfer.effectAllowed = "move"; },
-        ondragover: (e) => { if (e.dataTransfer.types.includes("text/x-rf-order")) { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add("dropat"); } },
-        ondragleave: (e) => e.currentTarget.classList.remove("dropat"),
-        ondrop: (e) => { const f = e.dataTransfer.getData("text/x-rf-order"); if (f === "") return; e.preventDefault(); e.stopPropagation(); const k = chosen.splice(+f, 1)[0]; chosen.splice(i, 0, k); selC = new Set([k]); draw(); },
-        ondblclick: () => { chosen = chosen.filter((x) => x !== n); selC.delete(n); draw(); },
-        onclick: (e) => { if (e.ctrlKey || e.shiftKey) selC.has(n) ? selC.delete(n) : selC.add(n); else { selC = new Set([n]); } draw(); } }, h("span", { class: "chip" }, i + 1), n.startsWith("@") ? null : gimg(n), n.startsWith("@") ? "Category: " + n.slice(1) : n)));
-      paintBtns();
+      if (!chosen.length) C.appendChild(h("div", { class: "empty gempty" }, "No generals added yet. Click a general on the left (or drag it here) to add it."));
+      chosen.forEach((n, i) => {
+        const row = h("div", { class: "gorow", "data-i": i });
+        row.append(h("span", { class: "gohandle", title: "Drag to change the order", onpointerdown: (e) => startDrag(e, row) }, "\u22EE\u22EE"),
+          n.startsWith("@") ? h("span", { class: "goimg cat" }, "\u2261") : gimg(n),
+          h("span", { class: "goname" }, n.startsWith("@") ? "Category: " + n.slice(1) : n),
+          h("span", { class: "gonum" }, i + 1),
+          h("button", { type: "button", class: "gox", title: "Remove", onclick: () => toggle(n) }, "\u2715"));
+        C.appendChild(row);
+      });
+      clear.disabled = !chosen.length;
       A.scrollTop = keepA; C.scrollTop = keepC;
     };
-    const paintBtns = () => {
-      const has = selC.size > 0;
-      bRem.disabled = !has; bUp.disabled = selC.size !== 1 || chosen.indexOf([...selC][0]) <= 0;
-      bDown.disabled = selC.size !== 1 || chosen.indexOf([...selC][0]) >= chosen.length - 1;
-      bClr.disabled = !chosen.length; bAdd.disabled = ![...selA].some((n) => !chosen.includes(n));
-    };
-    const add = () => { selA.forEach((n) => { if (!chosen.includes(n)) chosen.push(n); }); draw(); };
-    const remove = () => { chosen = chosen.filter((n) => !selC.has(n)); selC.clear(); draw(); };
-    const move = (d) => { if (selC.size !== 1) return; const n = [...selC][0], i = chosen.indexOf(n), j = i + d; if (j < 0 || j >= chosen.length) return; chosen.splice(i, 1); chosen.splice(j, 0, n); draw(); };
-    const bAdd = h("button", { class: "btn sm", onclick: add, title: "Add the picked general(s) to the right (or double-click / drag one)" }, "Add ›");
-    const bRem = h("button", { class: "btn sm", onclick: remove }, "‹ Remove");
-    const bUp = h("button", { class: "btn sm", onclick: () => move(-1) }, "Up"), bDown = h("button", { class: "btn sm", onclick: () => move(1) }, "Down");
-    const bClr = h("button", { class: "btn sm", onclick: () => { chosen = []; selC.clear(); draw(); } }, "Clear all");
-    const left = h("div", { class: "row gacts" }, bAdd);
-    const right = h("div", { class: "row gacts" }, bRem, bUp, bDown, bClr);
-    C.addEventListener("dragover", (e) => { if (e.dataTransfer.types.includes("text/x-rf-order")) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; C.classList.add("drop"); });
+    C.addEventListener("dragover", (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; C.classList.add("drop"); });
     C.addEventListener("dragleave", () => C.classList.remove("drop"));
-    C.addEventListener("drop", (e) => { if (e.dataTransfer.types.includes("text/x-rf-order")) return; e.preventDefault(); C.classList.remove("drop"); const n = e.dataTransfer.getData("text/plain"); if (n && !selA.has(n)) selA = new Set([n]); add(); });
+    C.addEventListener("drop", (e) => { e.preventDefault(); C.classList.remove("drop"); const n = e.dataTransfer.getData("text/plain"); if (n && !chosen.includes(n)) { chosen.push(n); draw(); } });
     draw();
     modal({ title, wide: true, oncancel: () => res(null), focus: false, buttons: [{ label: "Cancel", onclick: () => res(null) }, { label: "OK", cls: "pri", onclick: () => res(chosen) }],
-      body: h("div", {}, h("div", { class: "two" }, h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "All generals"), viewBar), h("div", { class: "gbox" }, search, flt.el, A), left), h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "Tried in this order (top first)")), h("div", { class: "gbox" }, C), right))) });
+      body: h("div", { class: "two" },
+        h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "All generals"), viewBar), h("div", { class: "gbox" }, search, flt.el, A)),
+        h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "Tried in this order (top first)"), clear), h("div", { class: "gbox" }, C))) });
   });
 }
 
