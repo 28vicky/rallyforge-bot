@@ -562,6 +562,9 @@ def setup_tesseract():
     return shutil.which("tesseract") is not None
 
 
+TAP_JITTER_PX = 3                           # random offset of every tap (pixels at 540x960)
+
+
 _BS_DEFAULT = (r"C:\ProgramData\BlueStacks_nxt\bluestacks.conf",
                r"C:\ProgramData\BlueStacks_nxt_cn\bluestacks.conf",
                r"C:\ProgramData\BlueStacks\bluestacks.conf")
@@ -941,6 +944,8 @@ class Device:
 
     def tap(self, x, y):
         self.acted = time.time()
+        j = TAP_JITTER_PX                                   # a few pixels off each time, like a finger (never the exact same pixel)
+        x, y = x + random.randint(-j, j), y + random.randint(-j, j)
         self._run("shell", "input", "tap", str(int(x * self.sx)), str(int(y * self.sy)))
 
     def swipe(self, x1, y1, x2, y2, ms=300):
