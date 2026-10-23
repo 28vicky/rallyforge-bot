@@ -1639,8 +1639,9 @@ def viking_resolve(power, level=None):
     return (best[1], best[2]) if best else (None, level)
 
 
-# Point bosses: hit once for alliance points, nobody needs to join them. Never joined, whatever the monster list says.
-NEVER_JOIN = {"silver lionheart knight"}
+# Point bosses: hit once for alliance points, nobody needs to join them. World bosses (owner 23 Oct): they show on the
+# rally list but cannot be joined as alliance rallies. Never joined, whatever the monster list says.
+NEVER_JOIN = {"silver lionheart knight", "thunder scorpion", "bird of hurricane", "behemoth king", "lord of lava"}
 
 
 def never_join_present():
