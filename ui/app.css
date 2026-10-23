@@ -1273,3 +1273,36 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .app.nosb .side{margin-left:-256px}
 .inst .nm{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere;flex:1 1 auto;min-width:64px}
 .inst .ichip{max-width:110px;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+/* ---- help text (ui-simple): first sentence + "i" ---- */
+.note.lead{cursor:pointer;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.note.lead>span{flex:0 1 auto}
+.note.lead .infoi{transform:translateY(3px);flex:none}
+.note.lead.opened .infoi{color:var(--accent2);border-color:var(--accent1)}
+/* ---- Dashboard instances + first run (ui-simple) ---- */
+.panel>.cardhead{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.panel>.cardhead h3{margin:0!important}
+.lnk{font-size:13px;color:var(--accent2);text-decoration:none}
+.lnk:hover{text-decoration:underline}
+.ilist{display:flex;flex-direction:column}
+.irow{display:grid;grid-template-columns:24px minmax(140px,240px) minmax(160px,260px) 32px;gap:12px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.irow:first-child{border-top:0}
+.irow .inum{color:var(--mute);font-size:12.5px;text-align:right}
+.irow input{border-color:transparent!important;background:transparent!important;box-shadow:none!important;padding:6px 8px}
+.irow input:hover,.irow input:focus{border-color:var(--line)!important;background:var(--field)!important}
+.irow .iname{font-weight:500}
+.irow .iaddr{font-family:var(--mono,ui-monospace,monospace);font-size:12.5px;color:var(--mute)}
+.ix{width:28px;height:28px;border-radius:8px;border:0;background:transparent;color:var(--mute);cursor:pointer;font-size:13px}
+.ix:hover{background:var(--field);color:var(--bad)}
+.ilist .empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:28px 12px}
+.ilist .empty b{color:var(--fg);font-weight:600}
+.fsteps{display:flex;flex-direction:column}
+.fstep{display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid var(--line)}
+.fstep:first-child{border-top:0;padding-top:4px}
+.fnum{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;color:var(--mute);flex:none}
+.fstep.done .fnum{background:var(--good);border-color:transparent;color:#fff}
+.ftx{flex:1;display:flex;flex-direction:column}
+.ftx b{font-weight:600;font-size:14.5px}
+.ftx small{color:var(--mute);font-size:12.5px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.sideempty{display:flex;flex-direction:column;gap:4px;padding:10px 12px;font-size:13px;color:var(--mute)}
+.dhead select{width:auto!important;min-width:200px;flex:0 0 auto}

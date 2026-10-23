@@ -278,7 +278,7 @@ function buildRibbon() {
         { label: "Scan city", icon: "city", run: () => scanCityFlow(S.sel === "control" ? undefined : S.sel) },
         { label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) },
         { label: "Save profile...", icon: "save", run: saveProfileFlow }, { label: "Load profile...", icon: "down", run: loadProfileFlow }]), "", "grid"),
-      btn("More ▾", (e) => menu(e.currentTarget, [
+      btn("App ▾", (e) => menu(e.currentTarget, [
         { label: "Updates", icon: "refresh", run: () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); } },
         { label: "Close window (bots keep running)", icon: "eye", run: () => act(api("hide_window")) },
         { label: "Restart app", icon: "refresh", run: restartFlow }, { label: "Quit and stop everything", icon: "power", run: quitFlow }]), "", "more")));
@@ -387,6 +387,7 @@ function renderSide() {
     h("span", { class: "nm", title: label }, label), extra ? h("small", {}, extra) : null);
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   const ic = $("#instCnt"); if (ic) ic.textContent = S.devStatus.length + " total";
+  if (!S.devStatus.length) L.appendChild(h("div", { class: "sideempty" }, "No instances yet.", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.sel = "control"; pickTab("dashboard"); renderSide(); } }, "Add your emulators")));
   for (const d of S.devStatus) {
     L.appendChild(item(d.id, (d.name || short(d.id)), (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state, [(["Running", "Stopped", "Paused", "Problem", ""].includes(devTag(d)) ? "" : devTag(d)), ""].filter(Boolean).join(" · ")));
     // chip timer: counts down (kicked wait, turn in Start all) or up (emulator starting / game loading)
@@ -465,6 +466,7 @@ function paintRibbonRun() {
   rib.querySelectorAll("[data-act]").forEach((b) => {
     const a = b.dataset.act, lbl = b.querySelector(".runlbl");
     b.classList.remove("isrunning", "starting", "greyed");
+    if (!total) { b.classList.add("greyed"); return; }          // nothing to run yet: buttons look off (Rule 0)
     b.className = b.className.replace(/\bcur-\w+/g, "").replace(/\s+/g, " ").trim();
     if (a === "start" && lbl) {
       if (starting) { b.classList.add("starting"); lbl.textContent = "Starting\u2026"; }
@@ -934,14 +936,27 @@ setInterval(async () => {
   } finally { AUTO.busy = false; }
 }, 1000);
 
-// long help paragraphs fold to two lines (hover shows the whole text, a click opens / closes it - no extra links)
+// long help paragraphs (ui-simple): only the first sentence shows, a small "i" holds the rest
+// (hover shows the whole text, a click on the "i" or the line opens / closes it)
 (function () {
+  const lead = (t) => {
+    const m = t.match(/^(.{20,120}?[.!?])(\s|$)/);
+    if (m) return m[1];
+    const cut = t.slice(0, 100); return cut.slice(0, Math.max(60, cut.lastIndexOf(" "))) + "\u2026";
+  };
   const fold = (n) => {
     if (n.dataset.fold || !n.isConnected) return;
     const t = (n.textContent || "").trim();
     if (t.length < 110 || n.closest(".warnbar,.modal,.toasts")) return;
-    n.dataset.fold = "1"; n.classList.add("clamp", "foldable"); n.title = t;
-    n.onclick = () => n.classList.toggle("clamp");
+    n.dataset.fold = "1"; n.title = t;
+    if (n.children.length) { n.classList.add("clamp", "foldable"); n.onclick = () => n.classList.toggle("clamp"); return; }
+    const short = lead(t);
+    if (short.length >= t.length - 2) return;
+    const txt = document.createElement("span"); txt.textContent = short;
+    const i = document.createElement("button"); i.type = "button"; i.className = "infoi"; i.textContent = "i"; i.setAttribute("aria-label", "More about this");
+    n.textContent = ""; n.append(txt, " ", i); n.classList.add("foldable", "lead");
+    const flip = (e) => { e.stopPropagation(); const open = n.classList.toggle("opened"); txt.textContent = open ? t : short; i.setAttribute("aria-expanded", open); };
+    n.onclick = flip;
   };
   const scan = (root) => (root || document).querySelectorAll(".pages .note").forEach(fold);
   const start = () => {

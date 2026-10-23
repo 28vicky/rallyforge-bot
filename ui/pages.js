@@ -132,26 +132,41 @@ const PAGES = {};
 
 // ====================================================================== dashboard
 PAGES.dashboard = function () {
-  const rows = h("div", {});
-  const applyDevs = () => act(api("set_devices", { devices: S.devices }, { quiet: true })).then(() => poll1());
+  // ---- your instances (ui-simple): one row each, name and address edited in place, x removes; Detect is the main action
+  const rows = h("div", { class: "ilist" });
+  const applyDevs = () => act(api("set_devices", { devices: S.devices.filter((d) => d.id) }, { quiet: true })).then(() => poll1());
   const draw = () => {
     rows.innerHTML = "";
+    if (!S.devices.some((d) => d.id) && !S.devices.length) rows.appendChild(h("div", { class: "empty" },
+      h("b", {}, "No instances yet"), h("span", {}, "Open your emulators with Evony, then press Detect emulators."), btn("Detect emulators", detectDevices, "pri")));
     S.devices.forEach((d, i) => {
-      rows.appendChild(h("div", { class: "row", style: { marginBottom: "8px", flexWrap: "nowrap" } },
-        h("span", { class: "lab", style: { width: "78px", flex: "none" } }, "Device " + (i + 1)),
-        h("input", { type: "text", value: d.id, placeholder: "127.0.0.1:5565 / instance-5556", style: { maxWidth: "300px" }, oninput: (e) => (d.id = e.target.value.trim()), onchange: applyDevs }),
-        h("input", { type: "text", value: d.name, placeholder: "Name (shown in the list)", style: { maxWidth: "220px" }, oninput: (e) => (d.name = e.target.value.trim()), onchange: applyDevs }),
-        btn("Remove", () => { if (S.devices.length <= 1) { d.id = ""; d.name = ""; } else S.devices.splice(i, 1); draw(); applyDevs(); }, "sm")));
+      rows.appendChild(h("div", { class: "irow" },
+        h("span", { class: "inum" }, String(i + 1)),
+        h("input", { type: "text", class: "iname", value: d.name, placeholder: "Name", "aria-label": "Name", oninput: (e) => (d.name = e.target.value.trim()), onchange: applyDevs }),
+        h("input", { type: "text", class: "iaddr", value: d.id, placeholder: "127.0.0.1:5565", "aria-label": "Address", oninput: (e) => (d.id = e.target.value.trim()), onchange: applyDevs }),
+        h("button", { class: "ix", type: "button", title: "Remove " + (d.name || d.id || "this row"), "aria-label": "Remove", onclick: () => { S.devices.splice(i, 1); draw(); applyDevs(); } }, "\u2715")));
     });
   };
   draw();
-  const dev = panel("Instances", rows, h("div", { class: "row" },
-    btn("+ Add device", () => { S.devices.push({ id: "", name: "" }); draw(); }),
-    btn("Detect instances", detectDevices, "pri"),
-    btn("Clear empty rows", () => { S.devices = S.devices.filter((d) => d.id); if (!S.devices.length) S.devices.push({ id: "", name: "" }); draw(); applyDevs(); }),
-    btn("Update instance list", applyDevs),
-    btn("Show removed instances again", async () => { if (!(await confirmBox("Removed instances", "Instances you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) { toast(j.restored ? `${j.restored} instance(s) can be detected again. Press Detect instances.` : "No instances were removed.", "ok"); } }, "sm")),
-    note("Any number of instances can be in this list. Detect shows the instances it finds - you add the ones you want. Drag them in the left list to change the order. Instances you remove stay removed, even after a restart."));
+  const dev = panel(null,
+    h("div", { class: "cardhead" }, h("h3", {}, "Your instances"),
+      infoTip("Instances", "Detect lists the emulators it finds; you add the ones you want. Drag them in the left list to change the order. Instances you remove stay removed, even after a restart."),
+      h("span", { style: { flex: "1" } }),
+      h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.devices.push({ id: "", name: "" }); draw(); const ins = rows.querySelectorAll(".iaddr"); if (ins.length) ins[ins.length - 1].focus(); } }, "Add by address"),
+      h("a", { href: "#", class: "lnk", onclick: async (e) => { e.preventDefault(); if (!(await confirmBox("Removed instances", "Instances you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) toast(j.restored ? `${j.restored} instance(s) can be detected again. Press Detect emulators.` : "No instances were removed.", "ok"); } }, "Show removed again"),
+      btn("Detect emulators", detectDevices, "pri sm")),
+    rows);
+  // ---- first run: three steps, each with one action (shown until the first instance is added)
+  const none = !S.devices.some((d) => d.id);
+  const step = (n, title, sub, action, done) => h("div", { class: "fstep" + (done ? " done" : "") },
+    h("span", { class: "fnum" }, done ? "\u2713" : String(n)), h("div", { class: "ftx" }, h("b", {}, title), h("small", {}, sub)), action);
+  const first = none ? panel(null, h("div", { class: "cardhead" }, h("h3", {}, "Get started")),
+    h("div", { class: "fsteps" },
+      step(1, "Find your emulators", "Open them with Evony on screen.", h("div", { class: "row", style: { gap: "12px" } },
+        h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.devices.push({ id: "", name: "" }); rerender(); } }, "Add by address"),
+        btn("Detect emulators", detectDevices, "pri sm")), false),
+      step(2, "Pick your presets", "Which game presets the bot may use.", btn("Open presets", () => pickTab("presets"), "sm"), false),
+      step(3, "Start", "The bot joins rallies and does your duties.", h("button", { class: "btn sm", disabled: true, title: "Add an instance first" }, "Start all"), false))) : null;
   // ---- instances found by Detect but not added: one click each (nothing is added by itself)
   const addFound = async (ids) => {
     const j = await act(api("add_found", { ids }));
@@ -169,7 +184,7 @@ PAGES.dashboard = function () {
     // Start / Pause / Resume / Stop all live only in the page header (ui-simple: one place)
     btn("Save settings", saveAll), btn("Save profile...", saveProfileFlow), btn("Load profile...", loadProfileFlow));
   const log = panel(null, activityBox(null, "Activity - all instances"));
-  return h("div", {}, renderTodayAll(), found, dev, ctl, log);
+  return none ? h("div", {}, first, found, S.devices.length ? dev : null) : h("div", {}, renderTodayAll(), found, dev, ctl, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
@@ -657,7 +672,7 @@ function presetPanels(c, inst) {
       h("span", { style: { flex: "1" } }), h("span", { class: "armed" }, `${armed} of 8 on`),
       btn("1 - 6", () => { c.bot_presets.forEach((b) => (b.enabled = b.n <= 6)); rerender(); }, "sm"), btn("1 - 8", () => { c.bot_presets.forEach((b) => (b.enabled = true)); rerender(); }, "sm")),
     h("div", { class: "pgrid" }, c.bot_presets.map(card)),
-    h("div", { class: "fgrid", style: { marginTop: "14px" } }, fld("Skip a preset with more troops than (0 = off)", inp(c, "max_troops", { type: "int" }))));
+    h("div", { class: "fgrid", style: { marginTop: "14px" } }, fld("Skip a preset above this many troops (0 = off)", inp(c, "max_troops", { type: "int" }))));
   const favs = ["leave", "on", "off"];
   const gen = panel("Generals",
     grid2(fld("Main generals (best first)", genField(c, "general_main", "Main generals")), fld("Assistant generals (best first)", genField(c, "general_assistant", "Assistant generals")),
