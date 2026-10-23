@@ -110,7 +110,7 @@ const TABS = [
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
 
 // ------------------------------------------------------------------ theme
-const DARK_ON = false;                            // dark mode hidden for now (owner 21 Oct); the saved choice (ui_mode) is kept, only the light look is shown
+const DARK_ON = true;                             // dark mode back on (owner 23 Oct, after the contrast pass); was hidden since 21 Oct, the saved choice (ui_mode) was kept
 function resolvedMode() {
   if (!DARK_ON) return "light";
   const m = S.cfg.ui_mode || "light";
@@ -217,7 +217,7 @@ function layout() {
     h("div", { class: "status" },
       h("div", { class: "sbl" }, h("span", { class: "sbrun" }, h("span", { class: "sbdot", id: "sbDot" }), h("span", { id: "sbRun" }, "0 running")),
         h("span", { id: "sbRam" }), h("span", { id: "sbTg" }), h("span", { id: "sbLic" })),
-      h("div", { class: "sbr" }, h("span", { id: "sbUpd", class: "sb-upd", style: { display: "none" } }),
+      h("div", { class: "sbr" }, h("button", { id: "sbUpd", class: "sb-upd", type: "button", style: { display: "none" } }),
         h("span", { class: "l vlink", role: "button", tabindex: "0", title: "What changed in this version" + (S.copyright ? "\n" + S.copyright : ""), onclick: () => openWhatsNew(), onkeydown: (e) => { if (e.key === "Enter") openWhatsNew(); } }, "v" + S.version + " \u00b7 by " + (S.author || "Kiravik"))))));
   buildRibbon();
   paintRunState();
@@ -943,10 +943,18 @@ function updateSummary() {
     const U = S.update;
     u.style.display = U ? "" : "none";
     if (U) {
-      const wait = U.waiting_for && U.waiting_for.length ? ` (waiting for ${U.waiting_for.join(", ")} to finish a join)` : "";
-      u.textContent = S.restartNow ? `Restarting now\u2026 the window closes and opens again in about 20\u201330 s` : U.needs_restart ? `\u2714 Version ${U.version} installed \u2013 click to restart now` : U.restarting ? `\u2714 Version ${U.version} installed \u2013 restarting in ${U.restart_in || 0} s${wait} \u2013 click to restart now`
-        : U.installing ? `Installing ${U.version}\u2026 please wait` : `\u2B06 Update ${U.version} available \u2013 click to install`;
-      u.title = (U.notes || "") + (U.installing ? "" : U.restarting ? "\nClick: restart now; the running instances start again by themselves" : "\nClick: install it, restart the app and start the running instances again");
+      // short, one line (footer never wraps); who it waits for and the notes go in the hover text
+      const names = (U.waiting_for || []).filter(Boolean);
+      const wait = names.length ? ` \u00b7 waiting for ${names.length === 1 ? names[0] : names.length + " instances"}` : "";
+      const busy = S.restartNow || U.installing;
+      u.disabled = !!busy;
+      u.className = "sb-upd" + (busy ? " busy" : "");
+      const [txt, verb] = S.restartNow ? ["Restarting\u2026", ""] : U.needs_restart ? [`${U.version} installed`, "Restart now"] : U.restarting ? [`Restarting in ${U.restart_in || 0} s${wait}`, "Restart now"]
+        : U.installing ? [`Installing ${U.version}\u2026`, ""] : [`Update ${U.version}`, "Install"];
+      u.innerHTML = "";
+      u.append(h("span", { class: "ut" }, txt)); if (verb) u.append(h("b", {}, verb));      // the action word never gets cut off; only the status text shortens
+      u.title = (S.restartNow ? "The window closes and opens again in about 20-30 s." : U.installing ? "Installing version " + U.version + ". Please wait." : U.restarting ? "Version " + U.version + " is installed." + (names.length ? " Waiting for " + names.join(", ") + " to finish a join." : "") + "\nClick: restart now; the running instances start again by themselves."
+        : U.needs_restart ? "Version " + U.version + " is installed.\nClick: restart now." : "Version " + U.version + " is available.\nClick: install it, restart the app and start the running instances again.") + (U.notes ? "\n\n" + U.notes : "");
       u.onclick = S.restartNow ? null : U.needs_restart ? (() => { S.restartNow = true; act(api("restart")); }) : U.restarting ? (() => { S.restartNow = true; act(api("restart_update_now")); }) : U.installing ? null : updateNow;
     }
   }
@@ -1033,7 +1041,7 @@ setInterval(async () => {
   } catch (e) {
     const m = e && !(e instanceof TypeError) ? String(e.message || "") : "";      // a setting that is not valid yet (not a lost connection)
     saveState("err", m || "the app did not answer - it tries again");
-    if (m && m !== AUTO.err) { AUTO.err = m; toast("Not saved yet: " + m, "error"); }
+    AUTO.err = m;                                   // shown once, in the header (no pop-up as well)
   } finally { AUTO.busy = false; }
 }, 1000);
 

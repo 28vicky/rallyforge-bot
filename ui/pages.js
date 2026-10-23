@@ -607,9 +607,9 @@ function refreshInstanceControls() {
     const kk = d.state === "run" && d.kicked_at;
     const ns = d.state === "run" && d.no_stamina && !kk;
     s.className = "state-pill st-" + ((ns || kk) ? "pause" : d.state);
-    s.textContent = kk ? "\u26A0 KICKED - game opened on another device" : ns ? "\u26A0 NO STAMINA" + (d.joins ? `   |   joins ${d.joins}` : "") : (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? `   |   joins ${d.joins}` : "");
+    s.textContent = kk ? "\u26A0 Kicked \u00b7 game opened on another device" : ns ? "\u26A0 No stamina" + (d.joins ? ` \u00b7 joins ${d.joins}` : "") : (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? ` \u00b7 joins ${d.joins}` : "");
     const w = $("#instWarn"); if (w) w.style.display = ns ? "" : "none";
-    if (kk) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at), "data-pre": "   |   taking it back in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
+    if (kk) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at), "data-pre": " \u00b7 taking it back in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
     if (d.state === "pause" && d.resume_at) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.resume_at), "data-pre": " - runs again in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
   }
   if (typeof paintRunState === "function") paintRunState();

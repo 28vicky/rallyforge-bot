@@ -454,8 +454,6 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .inst.dragging { cursor: grabbing; }
 .inst.dragging { opacity: .45; outline: 1px dashed var(--accent2); }
 
-/* status bar: update available */
-.sb-upd { cursor: pointer; color: var(--accent2); font-weight: 700; text-decoration: underline; }
 .warnbar{margin:0 0 14px;padding:11px 14px;border-radius:var(--r2);border:1px solid var(--warn);background:rgba(217,165,102,.12);color:var(--fg);font-size:14.5px;line-height:1.45}
 .warnbar b{color:var(--warn)}
 .inst small{font-size:13px;font-weight:400;letter-spacing:.02em}
@@ -710,7 +708,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent1);box-shadow:0
 :root .chip.pill-ok{color:var(--good)}:root .chip.pill-bad{color:var(--bad)}
 :root .status{border-top:0;background:transparent;height:30px;font-size:12px;color:var(--mute);gap:18px}
 :root .status .l{opacity:.7}
-:root .status .sb-upd{font-weight:500}
 :root .panel{border-color:var(--line)}
 :root .panel h3{font-weight:600}
 :root .hint,:root .note{color:var(--mute)}
@@ -937,7 +934,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .ovgrid .stile{display:flex;flex-direction:column-reverse;align-items:flex-start;gap:4px;padding:12px;border-radius:8px;background:var(--bg);border:1px solid var(--line)}
 .ovgrid .stile span{font-size:12.5px;color:var(--mute);font-weight:500}
 .ovgrid .stile b{font-size:24px;font-weight:800;line-height:1.1}
-.ovgrid .viewall{font-size:13px;font-weight:600;color:var(--accent1);text-decoration:none}
+.ovgrid .viewall{font-size:13px;font-weight:600;color:var(--accent2);text-decoration:none}
 .ovgrid .viewall:hover{text-decoration:underline}
 .ovgrid .acttable{width:100%;border-collapse:collapse;font-size:13px}
 .ovgrid .acttable th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);background:none}
@@ -1030,8 +1027,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .status .sbdot{width:8px;height:8px;border-radius:50%;background:var(--mute);opacity:.5}
 .status .sbdot.on{background:#10b981;opacity:1}
 .status .l{margin:0;font-size:12px;opacity:.75}
-.status .sb-upd{font-weight:600;color:var(--accent1);background:#fff5f0;border:1px solid #fbd5c5;padding:3px 10px;border-radius:6px;text-decoration:none}
-.status .sb-upd:hover{background:#ffeee6}
 /* the status bar belongs to the main area (like the mockup): it starts where the sidebar ends */
 .app:not(.nosb) .status{left:240px}
 .side{padding-bottom:12px}
@@ -1317,7 +1312,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 :root .stile.txt b{font-size:15px;line-height:1.9}
 /* ---- Duties (ui-simple): On / All + group pills, two columns ---- */
 .dfilter{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:6px}
-.dfilter .rtnpill .pc{margin-left:6px;opacity:.6;font-weight:500}
+.dfilter .rtnpill .pc{margin-left:6px;opacity:.85;font-weight:500}
 .dgrouph{font-size:12.5px;font-weight:600;color:var(--mute);margin:14px 0 2px}
 .dgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:28px;align-items:start}
 @media (max-width:1100px){.dgrid{grid-template-columns:minmax(0,1fr)}}
@@ -1431,3 +1426,38 @@ details.adv[open]>summary::before{transform:rotate(90deg)}
 .savest .undob{margin-left:4px;min-height:28px;padding:0 8px;font-size:13px}
 .savest .undob{color:var(--accent1)}
 :root .top .savest{margin-left:auto}:root .top .newbtn{margin-left:0}
+/* footer never wraps (23 Oct): every item on one line; the update button is short and cut with "..." if the window is narrow */
+.status .sbl>span,.status .sbr>*{white-space:nowrap}
+.status .sbl{flex:0 1 auto;overflow:hidden}
+.status .sbr{flex:0 1 auto;justify-content:flex-end}
+.status .sbr .vlink{flex:none}
+:root .status .sb-upd{display:inline-flex;align-items:center;gap:6px;min-height:28px;max-width:min(42vw,520px);padding:0 12px;border-radius:99px;border:1px solid color-mix(in srgb,var(--accent1) 45%,transparent);background:color-mix(in srgb,var(--accent1) 10%,transparent);color:var(--fg);font:500 12.5px/1 var(--sans,inherit);text-decoration:none;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:root .status .sb-upd:hover:not(:disabled){background:color-mix(in srgb,var(--accent1) 18%,transparent)}
+:root .status .sb-upd:disabled{cursor:default;opacity:1}
+:root .status .sb-upd.busy::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent1);animation:sbpulse 1s ease-in-out infinite}
+/* contrast pass (23 Oct): text on filled main buttons is readable in light and dark (WCAG 4.5:1) */
+[data-pal="ivory"]{--accbtn:#c2410c;--accbtnh:#9a3412;--accbtnfg:#ffffff}
+[data-pal="ivory"][data-mode="dark"]{--accbtn:#e0895f;--accbtnh:#eba07c;--accbtnfg:#1b120d}
+:root .btn.pri,:root .btn.primary,:root .ribbon .btn.pri,#ribbon .btn.pri,:root .tour-ask .btn.pri,:root .tour-box .btn.pri{background:var(--accbtn,var(--accent1));color:var(--accbtnfg,#fff);border-color:transparent}
+:root .btn.pri:hover:not(:disabled),:root .btn.primary:hover:not(:disabled),#ribbon .btn.pri:hover:not(:disabled){background:var(--accbtnh,var(--accent2));color:var(--accbtnfg,#fff)}
+:root .btn.pri .ico,:root .btn.primary .ico{color:currentColor}
+/* Today table: stopped / problem rows stay readable (muted colour only, no fading) */
+.tdall tr.off td{opacity:1}
+.tdall tr.off small{font-size:12px}
+/* running count chip: calm in dark too */
+[data-mode="dark"] .ribcount{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent)}
+/* light-mode text that measured under 4.5:1 (23 Oct contrast pass) */
+:root[data-mode="light"] .ribbon .btn.bad,:root[data-mode="light"] .ribbon .btn.bad .ico{color:#b91c1c!important}
+:root[data-mode="light"] .ribbon .btn.bad:hover:not(:disabled){background:#b91c1c;color:#fff!important}
+:root[data-mode="light"] .ribbon .btn.bad:hover:not(:disabled) .ico{color:#fff!important}
+:root[data-mode="light"] .state-pill.st-run,:root[data-mode="light"] .mon-pic{color:#047857}
+.tri.join{background:var(--accbtn,var(--accent));border-color:var(--accbtn,var(--accent));color:var(--accbtnfg,#fff)}
+:root[data-mode="light"] .insthead .mute{color:#4b5563}
+.pcard.off .ptap{color:var(--fg);opacity:.8}
+.tgview .hint{opacity:1}
+:root .status .sb-upd .ut{min-width:0;overflow:hidden;text-overflow:ellipsis}
+:root .status .sb-upd b{flex:none;font-weight:600;color:var(--accent2)}
+:root .status .sb-upd b::before{content:"\00b7";margin-right:6px;color:var(--mute);font-weight:400}
+.status .sbl>span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.status .sbl>.sbrun,.status .sbl>#sbRam{flex:none}
+.status .sbdot{flex:none}
