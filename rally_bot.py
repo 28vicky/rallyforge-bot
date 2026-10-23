@@ -3457,7 +3457,90 @@ def daily_checkin(dev, shot, log, stop):
     return True
 
 
-def clear_popups(dev, cfg, log, stop, rounds=5):
+CITY_POPUP_WORDS = ["Event starts in", "Truce Agreement", "Server War is about to begin"]   # event pop-ups that sit over the city (the city is still recognised behind them)
+
+
+_STUCK_POPUPS = {}                         # serial -> times clear_popups ended still lost (3 in 10 min -> game restart)
+POPUP_LIB = USER / "popup_library"          # every unknown pop-up the bot meets: picture + what closed it (grows by itself)
+_poplib_lock = threading.Lock()
+_poplib_cache = {}
+
+
+def _pop_hash(shot):
+    """64-bit picture fingerprint of the middle of the screen (small changes like timers keep it nearly the same)."""
+    try:
+        g = cv2.resize(cv2.cvtColor(shot[100:860, 20:520], cv2.COLOR_BGR2GRAY), (9, 8), interpolation=cv2.INTER_AREA)
+        return int("".join("1" if b else "0" for b in (g[:, 1:] > g[:, :-1]).flatten()), 2)
+    except Exception:
+        return None
+
+
+def _poplib_load():
+    if not _poplib_cache:
+        try:
+            _poplib_cache.update(json.loads((POPUP_LIB / "index.json").read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    return _poplib_cache
+
+
+def _poplib_find(h):
+    """The library entry for this pop-up (fingerprint within 8 bits), or (None, None)."""
+    if h is None:
+        return None, None
+    for k, v in _poplib_load().items():
+        if bin(int(k, 16) ^ h).count("1") <= 8:
+            return k, v
+    return None, None
+
+
+def _poplib_save():
+    try:
+        POPUP_LIB.mkdir(parents=True, exist_ok=True)
+        (POPUP_LIB / "index.json").write_text(json.dumps(_poplib_cache, indent=1), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _poplib_seen(h, shot, log):
+    """Save a pop-up the bot has not met before (picture + entry). -> its entry."""
+    with _poplib_lock:
+        k, v = _poplib_find(h)
+        if v is None and h is not None:
+            k = f"{h:016x}"
+            v = {"fix": None, "xy": None, "seen": 0, "first": time.strftime("%Y-%m-%d %H:%M"), "file": f"popup_{k}.png"}
+            if len(_poplib_cache) < 500:
+                _poplib_cache[k] = v
+                try:
+                    POPUP_LIB.mkdir(parents=True, exist_ok=True)
+                    cv2.imwrite(str(POPUP_LIB / v["file"]), shot)
+                except Exception:
+                    pass
+                log(f"[i] New pop-up saved to the library ({v['file']})")
+        if v is not None:
+            v["seen"] = v.get("seen", 0) + 1
+            v["last"] = time.strftime("%Y-%m-%d %H:%M")
+            _poplib_save()
+        return v
+
+
+def _poplib_learn(pending, shot, log):
+    """After a tap on an unknown pop-up: if the screen changed, remember that tap as the fix for that pop-up."""
+    if not pending:
+        return
+    h0, how, xy = pending
+    h1 = _pop_hash(shot)
+    if h1 is None or bin(h0 ^ h1).count("1") <= 8:
+        return                                              # still the same window: that tap did not close it
+    with _poplib_lock:
+        k, v = _poplib_find(h0)
+        if v is not None and v.get("fix") != how:
+            v["fix"], v["xy"] = how, [int(xy[0]), int(xy[1])]
+            _poplib_save()
+            log(f"[i] Learned how to close pop-up {k}: {how} at {tuple(v['xy'])}")
+
+
+def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
     """Close whatever covers the game (offers, event pop-ups, full-screen sales, dialogs) so the bot can carry on with
     what it was doing. Uses your popup_* pictures first; on a screen it does not know it presses Back, but only when it
     can recognise the city (Back on the city would open the quit dialog). -> number of things closed."""
@@ -3466,13 +3549,27 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
     outside_done = False
     x_spot_done = False
     back_arrow_taps = 0
+    pending = None                                         # (fingerprint, how, xy) of the last tap on an unknown pop-up
+    known_done = set()
     for _ in range(rounds):
         if stop.is_set():
             break
         shot = dev.screenshot()
+        _poplib_learn(pending, shot, log)
+        pending = None
         if cancel_quit_dialog(dev, shot, log):
             closed += 1
             continue
+        if find_text(shot, ["new game updates", "restart the game"], region=(20, 300, 500, 300), cutoff=0.75):
+            rs = find_text(shot, ["Restart"], region=(60, 380, 420, 320), cutoff=0.8) or find_text(shot, ["Restart"], cutoff=0.8)
+            if not rs:
+                log("[!] Game update window - the Restart button could not be read")
+                return closed
+            dev.tap(*rs)                                    # the game's 'new updates, please restart' window: only Restart closes it
+            LOADING[dev.serial] = ("restart", time.time())
+            log("[*] Game update window - tapped Restart, the game reloads")
+            _nap(stop, 8, 10)
+            return closed + 1
         hit = None
         for name in list_templates("popup_"):
             if name == "popup_exit_cancel":
@@ -3490,6 +3587,18 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         if tab_row(shot) is not None:                      # a Generals screen: nothing in the way
             break
         st = screen_state(shot, cfg)
+        if st in ("city", "unknown") and find_text(shot, CITY_POPUP_WORDS, region=(30, 90, 480, 720), cutoff=0.8):
+            cx = find_close_x(shot[90:810, 30:510])        # an event pop-up over the city (e.g. Server War): its X if it has one, else tap outside it
+            if cx:
+                dev.tap(cx[0][0] + 30, cx[0][1] + 90)
+                log("[*] Closed an event pop-up over the city with its X button")
+            else:
+                ox, oy = cfg.get("popup_outside_tap") or (8, 480)
+                dev.tap(int(ox), int(oy))
+                log(f"[*] Event pop-up over the city has no X - tapped outside it ({ox},{oy})")
+            closed += 1
+            _nap(stop, 1.0, 1.5)
+            continue
         if st != "unknown" or not has_template("city_screen"):
             break
         if daily_checkin(dev, shot, log, stop):            # the game's Daily Rewards window: claim today's sign-in reward first
@@ -3498,7 +3607,10 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         if tap_alliance_war_row(dev, shot, log):          # the Alliance page is not a pop-up: go on into Alliance War
             _nap(stop, 1.5, 2.2)
             break
-        if world_map(shot):                                # the world map: the globe goes to the city (Back / the portrait would loop)
+        if world_map(shot):                                # the world map: go to the city only when the caller needs it
+            if not want_city:
+                log("[*] On the world map - working from here")
+                break
             dev.tap(*VIEW_TOGGLE)
             log("[*] On the world map - tapped the globe to go to the city")
             closed += 1
@@ -3513,21 +3625,33 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
                 _gold = 0
         except Exception:
             _gold = 0
-        if _gold > 250 and back_arrow_taps < 6:
+        full_page = _gold > 250
+        if _gold > 250 and back_arrow_taps < 6:            # a full page, not a pop-up: its Back arrow
             back_arrow_taps += 1
             dev.tap(*cfg.get("city_to_tap", (35, 35)))
             log("[*] A full page is open (not a pop-up) - tapped the Back arrow")
             closed += 1
             _nap(stop, 1.2, 1.8)
             continue
-        cx = find_close_x(shot)
-        if cx:                                             # any pop-up with a round X button: tap it (works on every instance)
+        _ph = _pop_hash(shot)
+        _pe = None if full_page else _poplib_seen(_ph, shot, log)        # every unknown pop-up goes into the library
+        if _pe and _pe.get("fix") and _pe.get("xy") and _ph not in known_done:
+            known_done.add(_ph)                            # met before: use the tap that closed it last time
+            dev.tap(*_pe["xy"])
+            pending = (_ph, _pe["fix"], _pe["xy"])
+            log(f"[*] Known pop-up - closing it the way that worked before ({_pe['fix']} at {tuple(_pe['xy'])})")
+            closed += 1
+            _nap(stop, 1.0, 1.5)
+            continue
+        cx = find_close_x(shot)                            # unknown window, step 1: its round X button
+        if cx:
             dev.tap(cx[0][0], cx[0][1])
+            pending = (_ph, "x", cx[0][:2]) if _ph is not None else None
             log(f"[*] Closed a pop-up with its X button ({cx[0][0]},{cx[0][1]})")
             closed += 1
             _nap(stop, 0.8, 1.3)
             continue
-        if not outside_done:                               # an unknown dialog: wait until it is steady, tap beside it first
+        if not outside_done and not full_page:             # step 2: no X - wait until it is steady, tap outside it
             outside_done = True
             prev = shot
             for _w in range(6):
@@ -3538,14 +3662,16 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
                 prev = cur
             ox, oy = cfg.get("popup_outside_tap") or (8, 480)
             dev.tap(int(ox), int(oy))
-            log(f"[*] Unknown pop-up - waited until it was steady, tapped outside it ({ox},{oy})")
+            pending = (_ph, "outside", (ox, oy)) if _ph is not None else None
+            log(f"[*] Unknown pop-up - no X button, tapped outside it ({ox},{oy})")
             closed += 1
             _nap(stop, 1.0, 1.5)
             continue
-        if not x_spot_done:                                # tapping outside did not close it: try the usual X spot once (offer pop-ups with a round X on the corner)
+        if not x_spot_done and not full_page:              # tapping outside did not close it: try the usual X spot once
             x_spot_done = True
             ox, oy = cfg.get("popup_x_tap") or (477, 141)
             dev.tap(int(ox), int(oy))
+            pending = (_ph, "x spot", (ox, oy)) if _ph is not None else None
             log(f"[*] Unknown pop-up - tapping outside did not close it, tapped the usual X spot ({ox},{oy})")
             closed += 1
             _nap(stop, 1.0, 1.5)
@@ -3578,6 +3704,24 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
                 tap_hit(dev, c)
                 log("[*] Back opened the quit dialog - cancelled it")
                 _nap(stop, 0.8, 1.2)
+    try:                                                   # still lost after everything: count it; 3 times in 10 min -> restart the game
+        _end = dev.screenshot()
+        _lost = screen_state(_end, cfg) == "unknown" and not world_map(_end) and tab_row(_end) is None
+    except Exception:
+        _lost = False
+    _now = time.time()
+    _hist = [t for t in _STUCK_POPUPS.get(dev.serial, []) if _now - t < 600] + ([_now] if _lost else [])
+    _STUCK_POPUPS[dev.serial] = [] if not _lost else _hist
+    if len(_hist) >= 3 and not stop.is_set():
+        _STUCK_POPUPS[dev.serial] = []
+        log("[!] Could not get past an unknown screen 3 times in 10 min - restarting the game")
+        try:
+            (USER / "debug").mkdir(exist_ok=True)
+            cv2.imwrite(str(USER / "debug" / "stuck_before_restart.png"), _end)
+        except Exception:
+            pass
+        force_restart_game(dev, cfg, log, stop)
+        closed += 1
     return closed
 
 
