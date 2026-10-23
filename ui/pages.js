@@ -176,7 +176,7 @@ const INSTANCE_FIELDS = [
   ["general_main_tab", "Main general: category tab", "tab"], ["general_main_fav", "Main general: favourites", "choice", ["leave", "on", "off"]],
   ["general_assistant_tab", "Assistant: category tab", "tab"], ["general_assistant_fav", "Assistant: favourites", "choice", ["leave", "on", "off"]],
   ["general_view", "General list view while joining", "choice", ["grid", "list"]],
-  ["general_on_fail", "If choosing a general fails", "choice", ["skip", "march"]], ["monster_unknown", "Monster with no picture", "choice", ["join", "skip"]], ["game_auto_join", "Use the game's Auto-Join (bot only renews it)", "bool"], ["general_assistant_optional", "No assistant available: join without it", "bool"], ["auto_join_renew_min", "Auto-Join: renew when less than (min) is left", "int"], ["auto_join_check_min", "Auto-Join: check every (min)", "int"], ["save_unknown_monsters", "Beta: save pictures of unknown monsters", "bool"],
+  ["general_on_fail", "If choosing a general fails", "choice", ["skip", "march"]], ["monster_unknown", "Monster with no picture", "choice", ["join", "skip"]], ["game_auto_join", "Use the game's Auto-Join (bot only renews it)", "bool"], ["general_assistant_optional", "No assistant available: join without it", "bool"], ["auto_join_renew_min", "Auto-Join: renew when less than (min) is left", "int"], ["auto_join_check_min", "Auto-Join: check every (min)", "int"], ["save_unknown_monsters", "Beta: save pictures of unknown monsters", "bool"], ["zoom_out", "Zoom the city out before finding buildings", "bool"], ["zoom_foreground", "Allow momentary foreground mouse focus for emulator zoom", "bool"],
   ["rally_nav_steps", "Buttons to reach rally list", "names"], ["lost_seconds", "Restart Evony if lost for (s, 0 = never)", "int"], ["reclaim_elsewhere", "Reclaim when I play elsewhere", "bool"], ["reclaim_grace_min", "Wait this long after I play elsewhere (min)", "int"], ["settle_seconds", "Wait after the game loads (s, 0 = off)", "int"],
   ["click_delay_ms", "Click delay (ms)", "int"], ["adaptive_delay", "Slow down after failures", "bool"],
   ["frozen_seconds", "Restart Evony if screen frozen (s)", "int"], ["stuck_seconds", "Restart instance if stuck (s)", "int"],
@@ -214,6 +214,8 @@ const FIELD_HELP = {
   monster_unknown: "What to do with a monster the bot has no picture of.",
   cerberus: "Cerberus rallies are very big. skip = never join them.",
   game_auto_join: "The game joins by itself (needs the Rally Monthly Card); the bot only renews it.",
+  zoom_out: "Before going to a building the bot zooms the city out once per game start, so building names can be read.",
+  zoom_foreground: "Needed for MuMu: for about 2 seconds the emulator window comes to the front and the mouse scrolls over it (Ctrl + wheel), then the mouse goes back. Leave off if you use the PC while the bot runs.",
   general_assistant_optional: "Yes = if no assistant general is free, march with the main general only.",
   auto_join_renew_min: "Press Start on the game's Auto-Join again when less than this many minutes are left.",
   auto_join_check_min: "How often (minutes) the bot looks at the Auto-Join time left.",
@@ -504,6 +506,7 @@ function instancePage(serial) {
       ["mon", "Monsters", () => [PAGES.monsters(serial)]],
       ["gen", "March presets & generals", () => ownP],
       ["sta", "Stamina", () => [staminaPanel(ov, S.cfg)]]])],
+    ["mrally", "Monster rallies", () => [monsterRallyTab(serial)]],
     ["logs", "Itinerary & Logs", () => [h("div", { class: "loggrid" }, instItinerary(serial), instHistory(serial))]],
     ["settings", "Settings", settingsTab],
   ];
@@ -1303,6 +1306,7 @@ PAGES.duties = function (fixed, only, compact) {
   // a duty's own settings (Resource Tax resource, training amount, speed-ups ...), saved with the duty
   const dutyOpts = (r) => h("div", { class: "row", style: { flexWrap: "wrap", gap: "14px", padding: "4px 0 10px 46px" } },
     r.opts.map((o) => {
+      if (o.type === "rules") return h("a", { href: "#", class: "lab", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab && serial) S.gotoInstTab("mrally"); } }, serial ? "Monsters and presets: Monster rallies tab \u2192" : "Monsters and presets: on each instance's Monster rallies tab");
       const save = async (v) => { const j = await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } })); if (j) { rows = j.duties; own = j.own || {}; draw(); } };
       if (o.type === "bool") return h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label));
       if (o.type === "select") return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
@@ -1488,6 +1492,179 @@ PAGES.duties = function (fixed, only, compact) {
 };
 
 
+// ====================================================================== monster rallies (instance tab): start Alliance War rallies on Telegram coordinates
+// The game has 8 fixed presets and many monsters, so the page is built around the presets: one lane per preset (I-VIII)
+// with its rally time, holding the monsters that preset attacks. Monsters come from the library on the right: drag one
+// onto a lane, or pick a lane and click the monster. A monster can sit in two lanes with different levels (Ymir 1-4 -> II, 5-6 -> III).
+// Below: the rules (waiting, free marches, stamina) and the coordinates Telegram has right now, with what the bot would do.
+const MR_PRESETS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+const MR_TIMES = ["5", "10", "30", "60"];
+function monsterRallyTab(serial) {
+  const root = h("div", { class: "mr" });
+  let duty = null, rules = [], coords = { items: [], now: Date.now() / 1000 };
+  let lane = "I", q = "", editing = -1, drag = null;           // picked lane, library search, chip whose levels are open, what is dragged
+  const ruleFor = (name, lvl) => {
+    const low = String(name || "").toLowerCase().trim();
+    if (!low) return -1;
+    return rules.findIndex((r) => r.on !== false && r.name && (low.includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(low)) && (!lvl || (lvl >= (r.min || 1) && lvl <= (r.max || 99))));
+  };
+  const optVal = (k, d) => { const o = duty && (duty.opts || []).find((x) => x.k === k); return o && o.val !== undefined && o.val !== null ? o.val : d; };
+  const setOpt = async (opt) => { const j = await act(api("duty_set", { serial, id: "monster_rally", opt })); if (j) take(j, false); };
+  const saveRules = () => setOpt({ rules });
+  const changed = () => { saveRules(); paintLanes(); paintPool(); paintCoords(); };
+  const take = (j, redraw = true) => {
+    duty = (j.duties || []).find((d) => d.id === "monster_rally") || null;
+    const v = optVal("rules", null);
+    if (redraw) rules = (Array.isArray(v) ? v.map((r) => ({ ...r })) : [{ name: "Ymir", min: 1, max: 99, preset: "I", time: "5", on: true }]).filter((r) => !isBoss(r.name));
+    if (redraw) draw(); else paintHead();
+  };
+  const laneTime = (p) => String((rules.find((r) => r.preset === p) || {}).time || "5");
+  const add = (name, p) => {
+    p = p || lane;
+    if (isBoss(name)) { toast(name + " is a world boss - nobody can join it, so it cannot be rallied here.", "error"); return; }
+    if (rules.some((r) => r.preset === p && r.name.toLowerCase() === name.toLowerCase())) { toast(name + " is already on preset " + p + ".", "ok"); return; }
+    rules.push({ name, min: 1, max: 99, preset: p, time: laneTime(p), on: true });
+    changed();
+  };
+  const move = (i, p) => { if (rules[i].preset === p) return; rules[i].preset = p; rules[i].time = laneTime(p); changed(); };
+  // world bosses nobody can join (rally_bot NEVER_JOIN) are left out of this page altogether (owner 23 Oct 08:24)
+  const isBoss = (n) => (S.neverJoin || []).includes(String(n || "").toLowerCase().trim());
+  const lvTxt = (r) => (r.min || 1) <= 1 && (r.max || 99) >= 99 ? "all levels" : (r.min === r.max ? "Lv" + r.min : "Lv" + (r.min || 1) + "–" + (r.max || 99));
+  // ---- head: switch, state, Run now
+  const head = h("div", { class: "panel mrhead" });
+  const paintHead = () => {
+    head.innerHTML = "";
+    if (!duty) return;
+    const st = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad" }[duty.status] || "";
+    head.append(
+      h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: duty.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: "monster_rally", on: e.target.checked })); if (j) take(j, false); } }), h("span", { class: "sw" })),
+      h("div", { class: "mrtitle" }, h("h2", {}, "Monster rallies"),
+        h("small", { class: "sub" }, "Starts an Alliance War rally on monsters from the Telegram section, with the preset each monster sits on. Not tested in the game yet.")),
+      duty.on ? h("span", { class: "rtnst " + st }, duty.status_text) : h("span", { class: "rtnst" }, "off"),
+      h("button", { class: "btn", disabled: !duty.on, title: duty.on ? "" : "Switch it on first", onclick: async () => { if (await act(api("run_now_add", { serial, id: "duty:monster_rally" }))) toast("Monster rallies run next on this instance.", "ok"); } }, "Run now"));
+  };
+  // ---- preset lanes
+  const lanes = h("div", { class: "mrlanes" });
+  const dropOn = (el, p) => {
+    el.addEventListener("dragover", (e) => { if (!drag) return; e.preventDefault(); el.classList.add("over"); });
+    el.addEventListener("dragleave", () => el.classList.remove("over"));
+    el.addEventListener("drop", (e) => { e.preventDefault(); el.classList.remove("over"); if (!drag) return;
+      if (drag.i !== undefined) move(drag.i, p); else add(drag.name, p); drag = null; });
+  };
+  const paintLanes = () => {
+    lanes.innerHTML = "";
+    for (const p of MR_PRESETS) {
+      const mine = rules.map((r, i) => [r, i]).filter(([r]) => r.preset === p);
+      const box = h("div", { class: "mrlane" + (p === lane ? " sel" : "") + (mine.length ? "" : " empty"), onclick: (e) => { if (e.target.closest("button,input,select,.mrchip")) return; lane = p; paintLanes(); paintPool(); } },
+        h("div", { class: "mrlhead" }, h("b", {}, "Preset " + p),
+          mine.length ? h("select", { class: "mrtime", "aria-label": "Rally time for preset " + p, title: "Rally time",
+            onchange: (e) => { mine.forEach(([r]) => (r.time = e.target.value)); saveRules(); paintCoords(); } },
+            MR_TIMES.map((v) => h("option", { value: v, selected: v === laneTime(p) }, v + " min"))) : null),
+        h("div", { class: "mrchips" },
+          mine.length ? mine.map(([r, i]) => {
+            const chip = h("span", { class: "mrchip" + (editing === i ? " edit" : ""), draggable: "true", title: "Drag to another preset \u00b7 click to set levels" },
+              h("button", { class: "mrcl", onclick: () => { editing = editing === i ? -1 : i; paintLanes(); } }, r.name, h("small", {}, lvTxt(r))),
+              editing === i ? h("span", { class: "mrlvl" }, "Lv",
+                h("input", { type: "number", min: 1, max: 99, value: r.min || 1, "aria-label": r.name + " lowest level", onchange: (e) => { r.min = Math.max(1, Math.min(99, +e.target.value || 1)); if (r.min > (r.max || 99)) r.max = r.min; saveRules(); paintCoords(); } }), "–",
+                h("input", { type: "number", min: 1, max: 99, value: r.max || 99, "aria-label": r.name + " highest level", onchange: (e) => { r.max = Math.max(1, Math.min(99, +e.target.value || 99)); if (r.max < (r.min || 1)) r.min = r.max; saveRules(); paintCoords(); } }),
+                h("button", { class: "mrok", onclick: () => { editing = -1; paintLanes(); } }, "Done")) : null,
+              h("button", { class: "mrx", "aria-label": "Remove " + r.name + " from preset " + p, title: "Remove", onclick: () => { rules.splice(i, 1); editing = -1; changed(); } }, "×"));
+            chip.addEventListener("dragstart", (e) => { drag = { i }; try { e.dataTransfer.setData("text/plain", r.name); } catch (x) {} });
+            chip.addEventListener("dragend", () => { drag = null; });
+            return chip;
+          }) : h("span", { class: "mrdrop" }, "Click or drag monsters here")));
+      dropOn(box, p);
+      lanes.appendChild(box);
+    }
+  };
+  // ---- monster library (pick from it)
+  const pool = h("div", { class: "mrpool" });
+  const poolHead = h("div", { class: "mrpoolhead" });
+  const names = () => [...new Set([...(S.monsters || []), ...(coords.items || []).map((c) => c.name).filter(Boolean)])].filter((n) => !isBoss(n)).sort((a, b) => a.localeCompare(b));
+  const paintPool = () => {
+    poolHead.innerHTML = "";
+    const clr = h("button", { class: "mrclr", type: "button", title: "Clear the search", "aria-label": "Clear the search", hidden: !q,
+      onclick: () => { q = ""; inp.value = ""; clr.hidden = true; paintChips(); inp.focus(); } }, "\u2715");
+    const inp = h("input", { type: "text", class: "mrsearch", placeholder: "Search monsters", "aria-label": "Search monsters", value: q,
+      oninput: (e) => { q = e.target.value; clr.hidden = !q; paintChips(); },
+      onkeydown: (e) => { if (e.key === "Escape" && q) { e.preventDefault(); clr.click(); } } });
+    poolHead.append(h("div", { class: "mrsbox" }, inp, clr),
+      h("small", { class: "hint" }, "Click adds to ", h("b", {}, "Preset " + lane), " · or drag onto any preset"));
+    paintChips();
+  };
+  const paintChips = () => {
+    pool.innerHTML = "";
+    const list = names().filter((n) => !q || n.toLowerCase().includes(q.toLowerCase()));
+    if (!list.length) { pool.appendChild(h("div", { class: "mrempty" }, h("b", {}, q ? "No monster matches" : "No monsters known yet"), q ? h("button", { class: "btn sm", onclick: () => add(q.trim()) }, "Add “" + q.trim() + "” to Preset " + lane) : null)); return; }
+    for (const n of list) {
+      const on = rules.filter((r) => r.name.toLowerCase() === n.toLowerCase()).map((r) => r.preset);
+      const chip = h("button", { class: "mrpchip" + (on.length ? " used" : ""), draggable: "true",
+        title: on.length ? "On preset " + on.join(", ") + " \u00b7 click to add to Preset " + lane : "Add to Preset " + lane, onclick: () => add(n) },
+        n, on.length ? h("span", { class: "mrtag" }, on.join(" ")) : null);
+      chip.addEventListener("dragstart", (e) => { drag = { name: n }; try { e.dataTransfer.setData("text/plain", n); } catch (x) {} });
+      chip.addEventListener("dragend", () => { drag = null; });
+      pool.appendChild(chip);
+    }
+  };
+  // ---- rules
+  const num = (k, label, hint, d, max) => h("label", { class: "mrfield" }, h("span", { class: "lab" }, label),
+    h("input", { type: "number", min: 0, max, value: optVal(k, d), onchange: (e) => setOpt({ [k]: e.target.value }) }), h("small", { class: "hint" }, hint));
+  const rulesCard = () => panel(null, h("div", { class: "cardhead" }, h("h3", {}, "Rules")),
+    h("div", { class: "mrfields" },
+      num("max_wait", "Give up on a monster after", "minutes without a free march \u00b7 0 = stay until it is rallied", 0, 120),
+      num("keep_free", "Marches kept free", "for joining other rallies", 0, 5),
+      num("keep_stamina", "Keep stamina", "never start a rally under this", 100, 9999),
+      num("max_age", "Coordinates up to", "minutes old", 30, 600)),
+    h("label", { class: "tgl", style: { marginTop: "12px" } }, h("input", { type: "checkbox", checked: optVal("skip_busy", true) !== false, onchange: (e) => setOpt({ skip_busy: e.target.checked }) }), h("span", { class: "sw" }),
+      h("span", {}, "Skip a monster that a march is already going to")));
+  // ---- coordinates Telegram has now
+  const cbox = h("div", { class: "mrcoords" });
+  const ago = (t) => { const s = Math.max(0, Math.round(coords.now - t)); return s < 60 ? s + " s" : s < 3600 ? Math.round(s / 60) + " min" : Math.round(s / 3600) + " h"; };
+  const paintCoords = () => {
+    cbox.innerHTML = "";
+    const maxAge = (+optVal("max_age", 30) || 30) * 60;
+    const items = (coords.items || []).filter((c) => !isBoss(c.name)).slice(0, 40);
+    if (!items.length) {
+      cbox.appendChild(h("div", { class: "mrempty" }, h("b", {}, "No coordinates from Telegram yet"),
+        h("span", {}, "Link Telegram and pick the chats to watch, then monsters show up here."),
+        h("button", { class: "btn sm", onclick: () => { S.sel = "control"; S.tab = "telegram"; renderSide(); renderTabs(); renderPage(); } }, "Open Telegram settings")));
+      return;
+    }
+    for (const c of items) {
+      const i = ruleFor(c.name, c.level), r = rules[i], old = coords.now - c.t > maxAge;
+      cbox.appendChild(h("div", { class: "mrc" + (i < 0 || old ? " dim" : "") },
+        h("b", {}, (c.level ? "Lv" + c.level + " " : "") + (c.name || "?")),
+        h("span", { class: "mrxy" }, "X " + c.x + "  Y " + c.y + " \u00b7 " + ago(c.t) + " ago" + (c.km != null ? " \u00b7 " + c.km + " km" : "")),
+        i >= 0 && !old ? h("span", { class: "rtnst ok" }, "Preset " + r.preset + " · " + r.time + " min")
+          : old ? h("span", { class: "rtnst" }, "too old")
+          : rules.some((x) => x.on === false && x.name && String(c.name || "").toLowerCase().includes(x.name.toLowerCase())) ? h("span", { class: "rtnst" }, "off in your list")
+          : h("button", { class: "btn sm", title: "Add this monster to Preset " + lane, onclick: () => add(c.name) }, "+ Preset " + lane)));
+    }
+  };
+  const loadCoords = async () => { const j = await api("coords", {}, { quiet: true }).catch(() => null); if (j) { coords = j; paintCoords(); } };
+  const draw = () => {
+    root.innerHTML = "";
+    paintHead(); paintLanes(); paintPool(); paintCoords();
+    root.append(head, h("div", { class: "mrgrid" },
+      h("div", { class: "mrcol" },
+        panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "Presets"), h("small", { class: "sub" }, "Each preset attacks the monsters on it. A monster can be on two presets with different levels."))), lanes),
+        rulesCard()),
+      h("div", { class: "mrcol" },
+        panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "Monsters"), h("small", { class: "sub" }, "Your monster library and the names Telegram sends"))), poolHead, pool),
+        panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "From Telegram now"), h("small", { class: "sub" }, "What the bot would do with each coordinate"))), cbox))));
+  };
+  act(api("duties", { serial })).then((j) => { if (j) take(j); });
+  loadCoords();
+  const tick = setInterval(async () => {
+    if (!root.isConnected) { clearInterval(tick); return; }
+    loadCoords();
+    const j = await api("duties", { serial }, { quiet: true }).catch(() => null);
+    if (j) take(j, false);
+  }, 20000);
+  return root;
+}
+
+
 // ====================================================================== routines (instance tab): master-detail around the game's daily activities
 // Left: one row per activity of Tavern > Activity (points it gives, today's state, a switch). Right: the picked activity's own settings.
 // UI only: every switch and setting is the same one as before (duty_set / the instance's own values), just shown per activity.
@@ -1506,7 +1683,7 @@ const ACTIVITIES = [
   ["Events", "Crazy Eggs", 0, "crazy_eggs"], ["Events", "Wisdom Dome tokens", 0, "wisdom_dome_tokens"],
 ];
 const ACT_MAX = 145;                   // the game's last Activity chest
-const ACT_HIDDEN = new Set(["reach_keep_tavern", "market_capture", "tavern_catalog", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy"]);   // test duties: full duty list only
+const ACT_HIDDEN = new Set(["monster_rally", "reach_keep_tavern", "market_capture", "tavern_catalog", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy"]);   // test duties: full duty list only; Monster rallies has its own tab
 function routinesCards(serial, ov, details) {
   const root = h("div", { class: "rtn rtnmd" });
   let filter = "all", sel = null, duties = [];

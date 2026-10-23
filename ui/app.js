@@ -887,7 +887,7 @@ async function handleEvent(ev) {
 async function reloadMeta() {
   const j = await act(api("state"));
   if (!j) return;
-  S.generals = j.generals; S.monsters = j.monsters; S.catalog = j.catalog || S.catalog || []; S.profiles = j.profiles; S.cityInfo = j.city_info; S.bosses = j.bosses;
+  S.generals = j.generals; S.monsters = j.monsters; S.catalog = j.catalog || S.catalog || []; S.neverJoin = j.never_join || S.neverJoin || []; S.profiles = j.profiles; S.cityInfo = j.city_info; S.bosses = j.bosses;
 }
 
 async function boot() {
@@ -901,7 +901,7 @@ async function boot() {
   S.cfg = j.cfg;
   S.devices = j.devices;
   S.firstRun = j.first_run;
-  S.generals = j.generals; S.monsters = j.monsters; S.catalog = j.catalog || S.catalog || []; S.profiles = j.profiles; S.cityInfo = j.city_info; S.bosses = j.bosses;
+  S.generals = j.generals; S.monsters = j.monsters; S.catalog = j.catalog || S.catalog || []; S.neverJoin = j.never_join || S.neverJoin || []; S.profiles = j.profiles; S.cityInfo = j.city_info; S.bosses = j.bosses;
   S.meta = { buildings: j.building_names, icons: j.icons, examples: j.example_tasks, botPresets: j.default_bot_presets };
   S.devStatus = (await api("poll", { since: 0 })).devs;
   S.cfg.ui_pal = S.cfg.ui_pal || "ivory";

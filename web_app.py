@@ -1578,7 +1578,7 @@ class Api:
             cfg.setdefault(k, "")
         return {
             "version": rb.VERSION, "author": rb.AUTHOR, "copyright": rb.COPYRIGHT, "cfg": cfg, "devices": c.devices, "first_run": c.first_run,
-            "generals": c.generals_info(), "monsters": rb.list_monsters(refresh=True), "catalog": rb.MONSTER_CATALOG,
+            "generals": c.generals_info(), "monsters": rb.list_monsters(refresh=True), "catalog": rb.MONSTER_CATALOG, "never_join": sorted(rb.NEVER_JOIN),
             "profiles": rb.list_profiles(), "city_info": c.city_info(),
             "bosses": rb.get_bosses(), "building_names": rb.BUILDING_NAMES,
             "icons": rb.DEFAULT_CITY_ICONS, "example_tasks": EXAMPLE_TASKS,
@@ -1724,6 +1724,22 @@ class Api:
                     raise ApiError(f"{o['label']}: enter a number.")
             elif o["type"] == "select" and v not in o["choices"]:
                 raise ApiError(f"{o['label']}: pick one of the list.")
+            elif o["type"] == "rules":                     # Monster rallies list: monster, levels, preset, rally time
+                if not isinstance(v, list):
+                    raise ApiError("Monster list: wrong format.")
+                clean = []
+                for r in v[:40]:
+                    if not isinstance(r, dict):
+                        continue
+                    try:
+                        lo, hi = max(1, min(int(r.get("min") or 1), 99)), max(1, min(int(r.get("max") or 99), 99))
+                    except (TypeError, ValueError):
+                        raise ApiError("Monster list: levels must be numbers.")
+                    clean.append({"name": str(r.get("name") or "").strip()[:40], "min": min(lo, hi), "max": max(lo, hi),
+                                  "preset": r.get("preset") if r.get("preset") in rb.RT_PRESETS else "I",
+                                  "time": str(r.get("time")) if str(r.get("time")) in rb.MR_TIMES else "5",
+                                  "on": r.get("on") is not False})
+                v = clean
             row[o["k"]] = v
         self._save_scoped(scope, "duties", duties)
         return self.duties(p)
@@ -1986,6 +2002,20 @@ class Api:
     def aj_status(self, p):
         v = rb.AJ_LEFT.get(p.get("serial"))
         return {} if not v else {"left_s": int(v[0]), "age_s": int(time.time() - v[1])}
+
+    def restart_game(self, p):
+        """Close and open Evony on one instance (or all) at its next loop."""
+        s = p.get("serial")
+        for x in ([s] if s and s != "all" else [d.get("id") for d in self.c.devices if d.get("id")]):
+            rb.GAME_RESTART_REQ.add(x)
+        return {}
+
+    def restart_emulator(self, p):
+        """Close and start the emulator of one instance (or all) at its next loop."""
+        s = p.get("serial")
+        for x in ([s] if s and s != "all" else [d.get("id") for d in self.c.devices if d.get("id")]):
+            rb.EMU_RESTART_REQ.add(x)
+        return {}
 
     def takeback(self, p):
         s = p.get("serial")

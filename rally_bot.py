@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.5.5"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.5.6"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -218,6 +218,8 @@ DEFAULTS = {
     "game_reset_utc": "auto",                # when the game's daily reset happens: auto = Evony's own (midnight US Pacific, follows daylight saving), or HH:MM UTC
     "tasks_first": True,                    # a task/duty that is due goes before waiting for new rallies (a rally already on screen is always joined first)
     "city_enabled": False,                  # run the tasks (Tasks tab) while no rally is waiting
+    "zoom_out": False,                      # zoom the city out (once per game start) before going to a building
+    "zoom_foreground": False,               # zoom fallback: real Ctrl+wheel over the emulator window (moves the mouse ~2 s)
     "city_tasks": [],                       # [{name, enabled, target, steps, every_min}], see run_step()
     "duties": {},                           # {duty_id: {on, every_min}} - ready-made duties, see DUTY_LIBRARY
     "wheel": {"button": 1, "spins": 10, "reserve": 0, "chips": "off"},   # Tavern > Wheel of Fortune: biggest button (1/10/100), spins to do (0 = until the coins are used up), coins to keep
@@ -5169,6 +5171,8 @@ def save_start_picture(dev, cfg, log, keep=30):
 
 KICKED = {}                       # serial -> time (epoch s) when the wait after being kicked ends (shown in the emulator list)
 TAKEBACK = {}                     # serial -> Event: set from the interface to end the wait after being kicked
+GAME_RESTART_REQ = set()          # serials whose Evony should be closed and opened again (Restart game from the interface)
+EMU_RESTART_REQ = set()           # serials whose emulator should be closed and started again (Restart emulator from the interface)
 
 
 def reclaim_if_kicked(dev, cfg, log, stop, screen):
@@ -6110,6 +6114,165 @@ def _view_scale(a, b):
         return None
 
 
+def emu_window(dev, name=None):
+    """Windows handle of this emulator's game picture (MuMu: MuMuManager info render_wnd; else a window titled with the name)."""
+    if os.name != "nt":
+        return None
+    import ctypes
+    u32 = ctypes.windll.user32
+    m = re.fullmatch(r"127\.0\.0\.1:(\d+)", dev.serial)
+    mgr = mumu_manager(dev.adb) if m and int(m.group(1)) >= 16000 else None
+    if mgr:
+        try:
+            idx = mumu_index(dev.serial, dev.adb, name)
+            out = subprocess.run([str(mgr), "info", "-v", str(idx)], capture_output=True, text=True,
+                                 timeout=20, creationflags=NOWIN).stdout
+            info = json.loads(out)
+            for k in ("render_wnd", "main_wnd"):
+                v = str(info.get(k) or "")
+                if v and int(v, 16) and u32.IsWindow(int(v, 16)):
+                    return int(v, 16)
+        except Exception:
+            pass
+    if not name:
+        return None
+    want, hits = str(name).strip().lower(), []
+    proto = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+    def cb(h, _):
+        n = u32.GetWindowTextLengthW(h)
+        if n and u32.IsWindowVisible(h):
+            b = ctypes.create_unicode_buffer(n + 1)
+            u32.GetWindowTextW(h, b, n + 1)
+            if b.value.strip().lower() == want:
+                hits.append(h)
+        return True
+    u32.EnumWindows(proto(cb), 0)
+    return hits[0] if hits else None
+
+
+def wheel_zoom_out(dev, log, name=None, notches=6):
+    """Ctrl + mouse wheel down sent to the emulator window (owner 23 Oct: zooms the city out on MuMu and BlueStacks).
+    Window messages only - the owner's mouse and the window focus are not touched. -> True when sent."""
+    h = emu_window(dev, name)
+    if not h:
+        log("[i] Zoom out: emulator window not found for Ctrl+wheel")
+        return False
+    import ctypes
+    from ctypes import wintypes
+    u32 = ctypes.windll.user32
+    rc = wintypes.RECT()
+    u32.GetWindowRect(h, ctypes.byref(rc))
+    cx, cy = (rc.left + rc.right) // 2, (rc.top + rc.bottom) // 2
+    lp = ((cy & 0xFFFF) << 16) | (cx & 0xFFFF)
+    targets = [h]
+    proto = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    u32.EnumChildWindows(h, proto(lambda c, _: targets.append(c) or True), 0)
+    for t in targets:
+        u32.PostMessageW(t, 0x0100, 0x11, 0x001D0001)                  # WM_KEYDOWN Ctrl
+    for _ in range(notches):
+        for t in targets:
+            u32.PostMessageW(t, 0x020A, ((-120 & 0xFFFF) << 16) | 0x0008, lp)   # WM_MOUSEWHEEL down + MK_CONTROL
+        time.sleep(0.12)
+    for t in targets:
+        u32.PostMessageW(t, 0x0101, 0x11, 0xC01D0001)                  # WM_KEYUP Ctrl
+    log(f"[i] Zoom out: Ctrl+wheel x{notches} sent to window {h:#x} ({len(targets)} parts)")
+    return True
+
+
+_INPUT_LOCK = threading.Lock()
+
+
+def real_wheel_zoom_out(dev, log, name=None, notches=6, up=False):
+    """Real Ctrl + wheel down over the emulator window (SendInput): brings the window to the front for ~2 s, moves the
+    mouse over it, scrolls, puts the mouse back. Used when window messages are ignored (MuMu, 23 Oct). -> True when sent."""
+    h = emu_window(dev, name)
+    if not h:
+        return False
+    import ctypes
+    from ctypes import wintypes
+    u32 = ctypes.windll.user32
+    top = h
+    for _ in range(4):                                    # the render window is a child: bring its top window forward
+        p = u32.GetParent(top)
+        if not p:
+            break
+        top = p
+
+    class MI(ctypes.Structure):
+        _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG), ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
+                    ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
+
+    class KI(ctypes.Structure):
+        _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD), ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
+                    ("dwExtraInfo", ctypes.c_size_t)]
+
+    class U(ctypes.Union):
+        _fields_ = [("mi", MI), ("ki", KI), ("pad", ctypes.c_byte * 32)]
+
+    class INP(ctypes.Structure):
+        _fields_ = [("type", wintypes.DWORD), ("u", U)]
+
+    def send(*items):
+        arr = (INP * len(items))(*items)
+        u32.SendInput(len(items), arr, ctypes.sizeof(INP))
+
+    def key(vk, up=False):
+        i = INP(type=1)
+        i.u.ki = KI(vk, 0, 2 if up else 0, 0, 0)
+        return i
+
+    def wheel(d):
+        i = INP(type=0)
+        i.u.mi = MI(0, 0, d & 0xFFFFFFFF, 0x0800, 0, 0)
+        return i
+    with _INPUT_LOCK:                                     # one emulator at a time: the mouse is shared
+        rc = wintypes.RECT()
+        u32.GetWindowRect(h, ctypes.byref(rc))
+        cx, cy = (rc.left + rc.right) // 2, (rc.top + rc.bottom) // 2
+        old = wintypes.POINT()
+        u32.GetCursorPos(ctypes.byref(old))
+        prev = u32.GetForegroundWindow()
+        u32.ShowWindow(top, 9)                            # SW_RESTORE (does nothing when not minimised)
+        send(key(0x12), key(0x12, True))                  # Alt tap: Windows then allows SetForegroundWindow
+        u32.SetForegroundWindow(top)
+        u32.SetWindowPos(top, -1, 0, 0, 0, 0, 0x0043)     # HWND_TOPMOST for the scroll: other windows may cover it (PC 23 Oct)
+        time.sleep(0.4)
+        lowered = []
+        for _ in range(3):                                # windows in front of it (e.g. the RallyForge window): minimise them for the scroll
+            cov = u32.GetAncestor(u32.WindowFromPoint(wintypes.POINT(cx, cy)), 2)
+            if not cov or cov == top or u32.IsChild(top, cov) or u32.GetAncestor(h, 2) == cov:
+                break
+            u32.ShowWindow(cov, 6)                        # SW_MINIMIZE the window in front of the emulator for the scroll
+            lowered.append(cov)
+            time.sleep(0.4)
+        cov = u32.WindowFromPoint(wintypes.POINT(cx, cy))
+        if cov not in (h, top) and not u32.IsChild(top, cov):
+            def _wn(w):
+                b, c = ctypes.create_unicode_buffer(200), ctypes.create_unicode_buffer(200)
+                u32.GetWindowTextW(w, b, 200)
+                u32.GetClassNameW(w, c, 200)
+                return f"{b.value!r}/{c.value}"
+            ct = u32.GetAncestor(cov, 2) or cov
+            log(f"[i] Zoom out: window {_wn(top)} rect {rc.left},{rc.top},{rc.right},{rc.bottom} is covered by {_wn(ct)} - scrolling anyway")
+        u32.SetCursorPos(cx, cy)
+        time.sleep(0.15)
+        send(key(0x11))
+        for _ in range(notches):
+            send(wheel(120 if up else -120))
+            time.sleep(0.12)
+        send(key(0x11, True))
+        time.sleep(0.3)
+        u32.SetCursorPos(old.x, old.y)
+        u32.SetWindowPos(top, -2, 0, 0, 0, 0, 0x0013)     # HWND_NOTOPMOST again, no move/size/activate
+        for w in reversed(lowered):
+            u32.ShowWindow(w, 4)                          # SW_SHOWNOACTIVATE: back as it was, without taking focus
+        if prev:
+            u32.SetForegroundWindow(prev)
+    log(f"[i] Zoom {'in' if up else 'out'}: real Ctrl+wheel x{notches} over the emulator window ({cx},{cy})" + (f", {len(lowered)} window(s) in front minimised for it" if lowered else ""))
+    return True
+
+
 def zoom_out_city(dev, stop, log, max_tries=3):
     """Zoom the city view out with a two-finger pinch (done once per emulator session). -> True when the view got wider."""
     if getattr(dev, "zoomed_out", False):
@@ -6120,20 +6283,60 @@ def zoom_out_city(dev, stop, log, max_tries=3):
         lab = json.loads((USER / "pinch_lab.json").read_text(encoding="utf-8"))
     except Exception:
         lab = {}
-    if lab.get("shell"):
+    if lab.get("shell") and lab.get("on"):
         for c in ([lab["shell"]] if isinstance(lab["shell"], str) else lab["shell"]):
             r = dev._run("shell", "sh", "-c", "'" + c + "'", timeout=40)
             out = ((r.stdout or b"") + (r.stderr or b"")).decode("utf-8", "ignore")
             for i in range(0, min(len(out), 3000), 300):
                 log(f"[i] lab> {out[i:i + 300]!r}")
     kw = lab.get("params") or {}
-    for vi, var in enumerate(lab.get("variants") or []):
+    for vi, var in enumerate((lab.get("variants") if lab.get("on") else None) or []):
         b = dev.screenshot()
         ok = dev.pinch_in(**var)
         _nap(stop, 1.5, 1.8)
         a = dev.screenshot()
         sc = _view_scale(b, a)
         log(f"[i] lab variant {vi} {var}: sent={ok} scale={sc} {getattr(dev, 'last_pinch', '')}")
+    name = (load_config().get("device_names") or {}).get(dev.serial)
+    for i in range(2):                                    # first way: Ctrl + wheel down on the emulator window
+        before = dev.screenshot()
+        if not wheel_zoom_out(dev, log, name):
+            break
+        _nap(stop, 1.2, 1.5)
+        sc = _view_scale(before, dev.screenshot())
+        log(f"[i] Zoom out (Ctrl+wheel) {i + 1}: view scale {sc:.2f}" if sc else f"[i] Zoom out (Ctrl+wheel) {i + 1}: scale not measurable")
+        if sc and sc < 0.93:
+            ok_any = True
+        elif sc and sc >= 0.97:
+            break
+    if not ok_any and load_config().get("zoom_foreground", False):     # window messages ignored: real mouse + keyboard (opt-in)
+        for i in range(2):
+            before = dev.screenshot()
+            if not real_wheel_zoom_out(dev, log, name):
+                break
+            _nap(stop, 1.2, 1.5)
+            sc = _view_scale(before, dev.screenshot())
+            log(f"[i] Zoom out (real Ctrl+wheel) {i + 1}: view scale {sc:.2f}" if sc else f"[i] Zoom out (real Ctrl+wheel) {i + 1}: scale not measurable")
+            if sc and sc < 0.93:
+                ok_any = True
+            elif sc and sc >= 0.97:
+                break
+        if not ok_any:                                    # nothing changed: already as far out as it goes, or the input is ignored?
+            before = dev.screenshot()
+            if real_wheel_zoom_out(dev, log, name, notches=2, up=True):
+                _nap(stop, 1.2, 1.5)
+                sc = _view_scale(before, dev.screenshot())
+                if sc and sc > 1.03:
+                    log(f"[+] Zoom: zooming IN works (scale {sc:.2f}) - the city was already fully zoomed out; zooming back out")
+                    real_wheel_zoom_out(dev, log, name, notches=6)
+                    _nap(stop, 1.0, 1.3)
+                    ok_any = True
+                else:
+                    log(f"[!] Zoom: zooming in did nothing either (scale {sc:.2f}) - the emulator ignores the Ctrl+wheel from the bot" if sc
+                        else "[!] Zoom: zoom-in check not measurable")
+    if ok_any:
+        dev.zoomed_out = True
+        return True
     for i in range(max_tries):
         if stop.is_set():
             return False
@@ -7716,6 +7919,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             px_, py_ = tx - nav.cx, ty - nav.cy
             return (px_, py_) if (x0 <= px_ <= x0 + w and y0 <= py_ <= y0 + h) else None
 
+        if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
+            zoom_out_city(dev, stop, log)                   # buildings are found at the zoomed-out size (owner 23 Oct)
         for k in pkeys:
             tx, ty = pitems[k]
             log(f"[*] Going to {k}")
@@ -7934,6 +8139,15 @@ _WM_NOTE = [0.0, ""]                                       # last time a 'not th
 def world_map(shot):
     """The world map (after the globe button): its bottom-left buttons 'Bookmarks' / 'World Map' are not in the city."""
     try:
+        tp = template_path("world_map_btn")                  # picture of the World Map button (OCR differs per PC - Kiravik 23 Oct)
+        if tp is not None:
+            t = cv2.imread(str(tp))
+            if t is not None:
+                a = shot[740:920, 0:160]
+                r = cv2.matchTemplate(a, t, cv2.TM_CCOEFF_NORMED)
+                _, mx, _, (x, y) = cv2.minMaxLoc(r)
+                if mx >= 0.85 and a[y:y + t.shape[0], x:x + t.shape[1]].mean() >= 0.8 * t.mean():   # not dimmed by a window on top
+                    return True
         if find_text(shot, ["World Map", "Bookmarks"], region=(0, 600, 200, 330), cutoff=0.75) is not None:
             return True
         texts = [t for t, _ in ocr_lines(shot[600:930, 0:200], 2.5, bright=True)]
@@ -7998,7 +8212,7 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             toggled += 1
             say(f"[*] Recovery: showing the {v} view - switching to the {want} view")
             dev.tap(*VIEW_TOGGLE)
-            _nap(stop, 2.2, 3.0)
+            _nap(stop, 4.0, 5.0) if want == "world" else _nap(stop, 2.2, 3.0)   # the world map takes longer to draw
             continue
         if close_reward_panel(dev, stop, None):
             continue
@@ -8017,6 +8231,9 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             _nap(stop, 0.8, 1.2)
             continue
         unknown += 1
+        if want == "world" and toggled and unknown <= 3:   # just switched: the world map may still be loading - Back there asks to quit
+            _nap(stop, 2.0, 2.5)
+            continue
         cx = find_close_x(shot) if unknown % 2 == 1 else []
         if cx:
             dev.tap(cx[0][0], cx[0][1])
@@ -8945,20 +9162,21 @@ def as_snap(img, tag):
 def run_alliance_science(dev, cfg, log, stop):
     """From the city: Alliance button -> Alliance Science row -> tap Donate on the recommended science until the day's
     donations are used up. Only the free daily donations; nothing that costs gems is pressed."""
-    shot = dev.screenshot()
-    h = find(shot, "rally_icon", 0.8) if has_template("rally_icon") else None
-    pos = (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
-    dev.tap(*pos)
-    _nap(stop, 1.8, 2.4)
+    rd_alliance_page(dev, cfg, stop)
     row = None
-    for i in range(4):                                     # the Science row is below the fold: scroll the menu up
+    words = ["Alliance Science", "Science", "Alliance Tech", "Technology", "Research"]
+    moves = [(316, 778, 303, 548)] * 5 + [(303, 400, 316, 760)] * 7      # up past the fold first, then back down
+    for i in range(len(moves) + 1):
         shot = dev.screenshot()
         if i == 0:
             as_snap(shot, "1_alliance")
-        row = find_text(shot, ["Alliance Science", "Science"], region=(60, 420, 360, 470), cutoff=0.75)
-        if row or stop.is_set():
+        row = find_text(shot, words, region=(40, 200, 460, 740), cutoff=0.72)
+        if not row:
+            r = rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.72)
+            row = (r[0], r[1]) if r else None
+        if row or stop.is_set() or i == len(moves):
             break
-        dev.swipe(316, 778, 303, 548, 450)
+        dev.swipe(*moves[i], 450)
         _nap(stop, 1.0, 1.4)
     if not row:
         as_snap(dev.screenshot(), "2_failed")
@@ -9165,10 +9383,20 @@ def rd_keyboard_ok(dev, stop):
 def rd_alliance_page(dev, cfg, stop):
     """From the city: open the Alliance page (same way as Alliance Science)."""
     shot = dev.screenshot()
-    h = find(shot, "rally_icon", 0.8) if has_template("rally_icon") else None
-    pos = (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
-    dev.tap(*pos)
-    _nap(stop, 1.8, 2.4)
+    ab = find_text(shot, ["Alliance"], region=(400, 200, 140, 740), cutoff=0.7)   # the word under the button: its place moves with the icons above
+    h = find(shot, "rally_icon", 0.8) if not ab and has_template("rally_icon") else None
+    pos = (int(ab[0]), max(int(ab[1]) - 38, 0)) if ab else (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
+    for attempt in range(2):
+        if attempt and rd_seen(shot, ["Mail"], region=(0, 0, 540, 140)):    # the fixed spot hit Mail (owner 23 Oct): back out first
+            dev.back()
+            _nap(stop, 1.0, 1.3)
+        dev.tap(*pos)
+        _nap(stop, 1.8, 2.4)
+        shot = dev.screenshot()
+        if rd_seen(shot, ["Alliance"], region=(0, 0, 540, 140)) or rd_seen(shot, ["Alliance Gift", "Alliance Help", "Alliance Science", "Alliance War", "Alliance Treasure", "Alliance Shop", "Members"], region=(40, 200, 460, 760)):
+            return shot
+    rd_snap(shot, "alliance_page_failed")
+    raise RuntimeError("the Alliance page did not open (screen not found)")
 
 
 def rd_alliance_row(dev, stop, words):
@@ -9404,17 +9632,36 @@ def run_refining_card(dev, cfg, log, stop):
 
 # --- Alliance page ------------------------------------------------------------------------------------------------
 def run_alliance_gift(dev, cfg, log, stop):
-    """Alliance > Alliance Gift > Open All."""
+    """Alliance > Alliance Gift > Open All. Gifts keep coming all day: this runs every hour, and 'nothing to open'
+    counts only when the gift page itself was seen (owner 23 Oct: never Done without checking the screen)."""
     rd_alliance_page(dev, cfg, stop)
     if not rd_alliance_row(dev, stop, ["Alliance Gift"]):
-        raise RuntimeError("no Alliance Gift row on the Alliance page")
-    if not rd_tap(dev, stop, ["Open All"], region=(130, 860, 280, 100), wait=(2.2, 2.8)):
-        rd_snap(dev.screenshot(), "agift_1")
-        log("[+]  Alliance Gift: nothing to open")
-        rd_nothing()
+        raise RuntimeError("no Alliance Gift row on the Alliance page (screen not found)")
+    shot = dev.screenshot()
+    if not rd_tap(dev, stop, ["Open All"], region=(130, 860, 280, 100), wait=(2.2, 2.8), shot=shot):
+        rd_snap(shot, "agift_1")
+        if not rd_seen(shot, ["Alliance Gift", "Gift"], region=(0, 0, 540, 160)):
+            raise RuntimeError("the Alliance Gift page did not open (screen not found)")
+        log("[+]  Alliance Gift: gift page checked - nothing to open right now")
         return
     rd_close_reward(dev, stop, spot=(270, 120))
     log("[+]  Alliance Gift: all gifts opened")
+
+
+def run_alliance_help(dev, cfg, log, stop):
+    """Alliance > Help > Help All. Help requests come and go all day: runs every hour; 'nothing to help' counts only when
+    the help page itself was seen."""
+    rd_alliance_page(dev, cfg, stop)
+    if not rd_alliance_row(dev, stop, ["Alliance Help", "Help"]):
+        raise RuntimeError("no Help row on the Alliance page (screen not found)")
+    shot = dev.screenshot()
+    rd_snap(shot, "ahelp_1")
+    if rd_tap(dev, stop, ["Help All", "Help all"], region=(0, 760, 540, 200), wait=(1.8, 2.3), shot=shot):
+        log("[+]  Alliance Help: Help All pressed")
+        return
+    if not rd_seen(shot, ["Help"], region=(0, 0, 540, 160)):
+        raise RuntimeError("the Alliance Help page did not open (screen not found)")
+    log("[+]  Alliance Help: help page checked - nobody needs help right now")
 
 
 def run_alliance_treasure(dev, cfg, log, stop):
@@ -9935,14 +10182,414 @@ def run_royal_thief(dev, cfg, log, stop):
     leave_to_city(dev, cfg, stop, log)
 
 
+# ------------------------------------------------------------ Monster rally starter (owner's recording 23 Oct 07:44, project doc claude/flow_rally_monsters.md)
+# Coordinates come from the Telegram section (live feed + boss finder). Map > coordinate search (Server / X / Y / Go) >
+# tap the monster in the middle > Attack > monster page (name, level) > Alliance War > rally time > preset > March.
+# No free march: stay on the monster until it is rallied (owner 23 Oct 08:20) - only a march line to it or the monster
+# disappearing makes the bot move on. 'max_wait' minutes > 0 sets a limit (0 = no limit, the default).
+# Skipped: a monster that is gone (no Attack / other name on its page) or that a march line is already going to.
+MR_POLL_MIN = 1                          # look for a new target this often (monsters die fast - owner 23 Oct)
+MR_FORGET_MIN = 30                       # a target that was started / skipped is not tried again for this long
+MR_CENTER = (272, 480)                   # the searched tile sits in the middle of the map
+MR_ALLIANCE_WAR = (384, 768)              # Alliance War button on a monster page (Attack sits at 170)
+MR_MARCH = (404, 910)                    # March button on the Alliance War troop page
+MR_EMPTY = (330, 250)                     # a map spot with no button: closes a ring (40,640 was the Quests button)
+MR_NEAR = [(0, 0), (0, -30), (-30, 10), (30, 10), (0, 35)]   # the monster's picture can sit a little off the tile centre
+MR_TIMES = {"5": (190, 512), "10": (395, 512), "30": (190, 590), "60": (395, 590)}   # Alliance War Rally! buttons (fallback spots)
+
+
+def mr_save(serial, **kw):
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        row = data.setdefault(serial or "default", {}).setdefault("monster_rally", {})
+        row.update(kw)
+        try:
+            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def mr_row(serial):
+    return (load_duty_state().get(serial or "default") or {}).get("monster_rally") or {}
+
+
+MR_DEFAULT_RULES = [{"name": "Ymir", "min": 1, "max": 99, "preset": "I", "time": "5", "on": True}]
+
+
+def mr_rules(cfg):
+    """The Monster rallies tab: which monster (and levels) each preset attacks, and that preset's rally time."""
+    rules = rd_opt(cfg, "monster_rally", "rules", None)
+    out = []
+    for r in (rules if isinstance(rules, list) else MR_DEFAULT_RULES):
+        if not isinstance(r, dict) or not str(r.get("name") or "").strip() or r.get("on") is False:
+            continue
+        out.append({"name": str(r["name"]).strip(), "min": int(r.get("min") or 1), "max": int(r.get("max") or 99),
+                    "preset": r.get("preset") if r.get("preset") in RT_PRESETS else "I",
+                    "time": str(r.get("time")) if str(r.get("time")) in MR_TIMES else "5"})
+    return out
+
+
+def mr_rule_for(rules, name, level):
+    """-> (index, rule) of the first row that fits this monster, or (None, None)."""
+    low = str(name or "").lower().strip()
+    if not low:
+        return None, None
+    for i, r in enumerate(rules):
+        rn = r["name"].lower()
+        if (rn in low or low in rn) and (not level or r["min"] <= level <= r["max"]):
+            return i, r
+    return None, None
+
+
+def mr_targets(cfg, tried):
+    """Telegram coordinates of monsters that sit on a preset (Monster rallies tab), best first (newest, then nearest).
+    -> [{name, level, x, y, km, t, rule, rank}]"""
+    rules = mr_rules(cfg)
+    age = float(rd_opt(cfg, "monster_rally", "max_age", 30) or 30) * 60
+    now = time.time()
+    feed, _ = feed_get(_feed_keep[0] if _feed_keep[0] is not None else int(cfg.get("tg_keep_min", 60) or 0))
+    try:
+        upd = json.loads(BOSS_FILE.read_text(encoding="utf-8")).get("updated", 0) if BOSS_FILE.exists() else 0
+    except Exception:
+        upd = 0
+    pool = list(feed) + [dict(b, t=upd) for b in get_bosses()]
+    out, seen = [], set()
+    for it in pool:
+        key = f"{it.get('x')},{it.get('y')}"
+        if key in seen or now - float(tried.get(key, 0)) < MR_FORGET_MIN * 60:
+            continue
+        seen.add(key)
+        if now - float(it.get("t") or 0) > age:
+            continue
+        if str(it.get("name") or "").lower().strip() in NEVER_JOIN:      # world bosses: nobody can rally them
+            continue
+        i, r = mr_rule_for(rules, it.get("name"), it.get("level") or 0)
+        if r is None:
+            continue
+        out.append(dict(it, rule=r, rank=i))
+    km = lambda it: it.get("km") if it.get("km") is not None else 1e9
+    out.sort(key=lambda it: (-round(float(it.get("t") or 0) / 60), km(it)))     # newest minute first, then nearest
+    return out
+
+
+def mr_march_line(img, center=MR_CENTER):
+    """True when a march line (white = another player, green = an alliance march) ends at the monster in the middle.
+    First guess, not checked on a real line yet: long straight bright strokes whose line passes the centre."""
+    try:
+        h, w = img.shape[:2]
+        x0, y0, x1, y1 = 0, 200, w, 800                     # below the march panel, above the bottom buttons
+        roi = img[y0:y1, x0:x1]
+        hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+        white = cv2.inRange(hsv, (0, 0, 215), (180, 45, 255))
+        green = cv2.inRange(hsv, (45, 120, 120), (80, 255, 255))
+        cx, cy = center[0] - x0, center[1] - y0
+        for name, mask in (("white", white), ("green", green)):
+            m = mask.copy()
+            cv2.circle(m, (cx, cy), 45, 0, -1)              # the monster itself (Ymir is white / ice blue) never counts
+            segs = cv2.HoughLinesP(m, 1, np.pi / 180, 40, minLineLength=70, maxLineGap=12)
+            for s in (segs.reshape(-1, 4) if segs is not None else []):    # (N,1,4) or (N,4) depending on the OpenCV build
+                ax, ay, bx, by = [int(v) for v in s]
+                dx, dy = bx - ax, by - ay
+                ln = (dx * dx + dy * dy) ** 0.5
+                if ln < 70 or abs(dy) < 6:                  # text and flat map edges are level - a march line to the middle is not
+                    continue
+                dist = abs(dy * (cx - ax) - dx * (cy - ay)) / ln
+                near_end = min(((ax - cx) ** 2 + (ay - cy) ** 2) ** 0.5, ((bx - cx) ** 2 + (by - cy) ** 2) ** 0.5)
+                if dist < 22 and near_end < 150:
+                    return name
+    except Exception:
+        return None
+    return None
+
+
+def mr_box_number(shot, box):
+    """One number box of the coordinate search (digits only, enlarged) -> int or None. The whole-line read missed
+    'Y: 622' on Kiravik (23 Oct)."""
+    try:
+        x, y, w, h = box
+        g = cv2.resize(cv2.cvtColor(shot[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY), None, fx=3, fy=3)
+        t = pytesseract.image_to_string(g, config="--psm 7 -c tessedit_char_whitelist=0123456789").strip()
+        return int(t) if t.isdigit() else None
+    except Exception:
+        return None
+
+
+def mr_search(dev, stop, x, y):
+    """Map shown: open the coordinate search, type X and Y, check them, Go. -> True when the map flew there."""
+    if cancel_quit_dialog(dev, dev.screenshot(), lambda *_: None):   # an 'exit the game?' box left open would eat the tap
+        _nap(stop, 0.8, 1.2)
+    dev.tap(300, 845)                                       # the X: Y: box at the bottom of the map
+    _nap(stop, 1.4, 1.8)
+    shot = dev.screenshot()
+    if not rd_seen(shot, ["Search", "Server"], region=(0, 280, 540, 280)):
+        rd_snap(shot, "mrally_search")
+        return False
+    for spot, val in (((206, 535), x), ((428, 545), y)):
+        dev.tap(*spot)
+        _nap(stop, 1.0, 1.4)
+        rd_clear_field(dev, stop, 6)
+        dev.text(str(val))
+        _nap(stop, 0.5, 0.8)
+        rd_keyboard_ok(dev, stop)
+    shot = dev.screenshot()
+    got = [mr_box_number(shot, (110, 500, 150, 45)), mr_box_number(shot, (315, 500, 150, 45))]   # the X and Y boxes
+    if None in got:                                          # digits-only read missed: the old whole-line read
+        got = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (30, 505, 480, 70))))
+    if x not in got and y not in got:                       # neither number read back: the typing went wrong
+        rd_snap(shot, "mrally_xy")
+        dev.back()
+        _nap(stop, 0.8, 1.1)
+        raise RuntimeError(f"the search box does not show X {x} Y {y} (read {got[:4]})")
+    # one number misread (Y 444 read as 40404): go anyway - the monster check on the tile catches a wrong spot
+    if not rd_tap(dev, stop, ["Go"], region=(180, 575, 200, 75), whole=True, wait=(1.6, 1.9), shot=shot):
+        dev.tap(333, 610)
+        _nap(stop, 1.6, 1.9)
+    return True
+
+
+MR_EMPTY_RING = [False]                    # set by mr_attack_spot: the last ring was the empty-land one (Occupy / Teleport)
+
+
+def mr_attack_spot(shot):
+    """The monster's ring menu: -> (x, y) of its 'Attack' label, or None. Plain OCR only reads 'Att' on the ring's
+    dark label (Kiravik 23 Oct) - read the ring area enlarged and bright. Empty land (Occupy / Teleport ring) sets
+    MR_EMPTY_RING[0] so the caller can skip the monster at once."""
+    MR_EMPTY_RING[0] = False
+    try:
+        for t, ws in ocr_lines(shot[250:700, 0:540], 2.5, bright=True):
+            for w in ws:
+                word = str(w[0]).lower().strip("|.,:;!() ")
+                if word in ("attack", "attac", "atack"):
+                    return int(w[1]), int(w[2]) + 250
+                if word in ("occupy", "teleport"):
+                    MR_EMPTY_RING[0] = True
+    except Exception:
+        pass
+    if MR_EMPTY_RING[0]:
+        return None
+    p = rd_find(shot, ["Attack"], region=(0, 250, 540, 450), cutoff=0.75)
+    return (p[0], p[1]) if p else None
+
+
+def mr_still_there(dev, stop):
+    """While waiting for a march: tap the monster in the middle; True when its ring shows Attack (the ring is closed again)."""
+    for dx, dy in MR_NEAR[:3]:
+        if stop.is_set():
+            return True
+        dev.tap(MR_CENTER[0] + dx, MR_CENTER[1] + dy)
+        _nap(stop, 1.2, 1.5)
+        hit = mr_attack_spot(dev.screenshot())
+        dev.tap(*MR_EMPTY)                                  # close the ring on empty map
+        _nap(stop, 0.7, 0.9)
+        if hit:
+            return True
+        if MR_EMPTY_RING[0]:                                # empty land on the tile: the monster is dead
+            return False
+    return False
+
+
+def mr_open_monster(dev, stop, want, level=None):
+    """Tap the monster in the middle; its ring menu must have Attack, its page must show the wanted name.
+    -> ('ok', page_shot) | ('gone', None) | ('other', name_read)"""
+    for dx, dy in MR_NEAR:
+        if stop.is_set():
+            return "gone", None
+        dev.tap(MR_CENTER[0] + dx, MR_CENTER[1] + dy)
+        _nap(stop, 1.3, 1.7)
+        shot = dev.screenshot()
+        rd_snap(shot, f"mrally_ring{MR_NEAR.index((dx, dy))}")   # what the tap opened (test pictures)
+        p = mr_attack_spot(shot)
+        if not p:
+            dev.tap(*MR_EMPTY)                              # empty map: close whatever ring opened
+            _nap(stop, 0.8, 1.0)
+            if MR_EMPTY_RING[0]:                            # Occupy / Teleport = empty land: gone, no more taps
+                return "gone", None
+            continue
+        dev.tap(p[0], max(100, p[1] - 30))
+        _nap(stop, 1.8, 2.3)
+        page = dev.screenshot()
+        rd_snap(page, "mrally_page")
+        if not rd_seen(page, ["Alliance War", "Winning Odds"], region=(0, 650, 540, 220)):
+            dev.back()
+            _nap(stop, 0.8, 1.1)
+            continue
+        head = " ".join(t for t, _ in ocr_lines(page[120:300, 0:540], 2.5, bright=True))   # plain OCR garbled the name
+        import difflib
+        toks = re.findall(r"[a-z]+", head.lower())
+        words = [w for w in want.lower().split() if len(w) > 2]
+        missing = [w for w in words if not any(w == t or difflib.SequenceMatcher(None, w, t).ratio() >= (0.75 if len(w) <= 5 else 0.8) for t in toks)]
+        lv = re.search(r"(?:lv|level)\.?\s*(\d{1,2})\b", head.lower())
+        wrong_lv = bool(level and lv and int(lv.group(1)) != int(level))
+        if missing or wrong_lv:                               # every word of the name (Epic Cerberus is not Legendary Cerberus) and the level must fit
+            dev.back()
+            _nap(stop, 0.8, 1.1)
+            return "other", head[:40]
+        return "ok", page
+    return "gone", None
+
+
+def run_monster_rally(dev, cfg, log, stop):
+    """The universal pop-up closer is held off meanwhile: it closed the rally time window by its X (Kiravik 23 Oct)."""
+    was = getattr(dev, "_guard_busy", False)
+    dev._guard_busy = True
+    try:
+        return _run_monster_rally(dev, cfg, log, stop)
+    finally:
+        dev._guard_busy = was
+
+
+def _run_monster_rally(dev, cfg, log, stop):
+    serial = getattr(dev, "serial", "")
+    row = mr_row(serial)
+    now = time.time()
+    tried = {k: v for k, v in (row.get("tried") or {}).items() if now - float(v) < MR_FORGET_MIN * 60}
+    mr_save(serial, tried=tried, next_at=now + MR_POLL_MIN * 60)
+
+    def later(minutes, why):
+        mr_save(serial, tried=tried, next_at=time.time() + minutes * 60)
+        log(f"[*]  Monster rally: {why} - again at {time.strftime('%H:%M', time.localtime(time.time() + minutes * 60))}")
+
+    targets = mr_targets(cfg, tried)
+    if not targets:
+        return later(MR_POLL_MIN, "no Telegram coordinate matches the monster list")
+    keep_free = int(float(rd_opt(cfg, "monster_rally", "keep_free", 0) or 0))
+    max_wait = float(rd_opt(cfg, "monster_rally", "max_wait", 0) or 0) * 60          # 0 = stay until it is rallied
+    keep_sta = int(float(rd_opt(cfg, "monster_rally", "keep_stamina", 100) or 0))
+    skip_lines = rd_opt(cfg, "monster_rally", "skip_busy", True) in (True, "true", "1", 1)
+    if not ensure_view(dev, cfg, stop, log, "world"):       # the world map ("landscape" here = the rally list view)
+        return later(MR_POLL_MIN, "the map did not open")
+    shot = _wait_view(dev, cfg, stop, "landscape", 30)
+    if shot is None:
+        return later(MR_POLL_MIN, "the map did not open")
+    for tgt in targets[:10]:                                # a gone / busy monster: try the next coordinate
+        if stop.is_set():
+            return
+        mode, preset = tgt["rule"]["time"], tgt["rule"]["preset"]   # this monster's own preset and rally time
+        key, label = f"{tgt['x']},{tgt['y']}", f"{('Lv' + str(tgt['level']) + ' ') if tgt.get('level') else ''}{tgt.get('name') or 'monster'} ({tgt['x']},{tgt['y']})"
+        tried[key] = time.time()
+        mr_save(serial, tried=tried)
+        if not mr_search(dev, stop, tgt["x"], tgt["y"]):
+            return later(MR_POLL_MIN, "the coordinate search did not open")
+        _nap(stop, 1.0, 1.4)
+        t0 = time.time()
+        gone, checked, said = False, time.time(), False
+        while True:                                          # stay on this monster until a march is free
+            if stop.is_set():
+                return
+            shot = dev.screenshot()
+            rd_snap(shot, "mrally_map")
+            if view_of(shot, cfg) not in ("landscape", "world"):        # a popup / restart took the map away
+                tried.pop(key, None)
+                return later(1, "the map was closed while waiting")
+            line = mr_march_line(shot) if skip_lines else None
+            if line:
+                log(f"[*]  Monster rally: {label} - a {line} march line is already going to it, skipped")
+                break
+            mk = None if getattr(dev, "mr_no_march_count", False) else rt_marches(shot)
+            if not mk:
+                dev.mr_no_march_count = True                 # the March panel is folded on the map: do not spend time reading it again
+            free = (mk[1] - mk[0]) if mk else None
+            if free is None or free > keep_free:
+                break
+            if not said:
+                log(f"[*]  Monster rally: {label} - all marches busy, waiting on the monster")
+                said = True
+            if time.time() - checked > 60:                   # still there? (tap it: the ring must have Attack, then close it)
+                checked = time.time()
+                if not mr_still_there(dev, stop):
+                    gone = True
+                    log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
+                    break
+            if max_wait and time.time() - t0 >= max_wait:
+                log(f"[*]  Monster rally: {label} - no free march for {round(max_wait / 60)} min")
+                tried.pop(key, None)                         # not the monster's fault: it may be tried again next time
+                return later(max(1, round(((mk[2] if mk else None) or 120) / 60)), "all marches are busy")
+            wait = min(20, max(5, (mk[2] or 20) + 2))
+            _nap(stop, wait, wait + 1)
+        if line or gone:
+            continue
+        while True:                                          # the march count was not read / was wrong: keep trying here
+            got, page = mr_open_monster(dev, stop, tgt.get("name") or "", tgt.get("level"))
+            if got != "ok":
+                break
+            dev.tap(*MR_ALLIANCE_WAR)                        # fixed spot (the white-on-brown label is rarely read); window checked below
+            _nap(stop, 1.0, 1.2)
+            shot = None
+            for _ in range(5):                               # the rally time window can be slow to open
+                shot = dev.screenshot()
+                if rd_seen(shot, ["Alliance War Rally", "rally time"], region=(0, 300, 540, 160)):
+                    break
+                _nap(stop, 0.7, 0.9)
+            else:
+                rd_snap(shot, "mrally_time")
+                if view_of(shot, cfg) not in ("landscape", "world"):
+                    dev.back()
+                    _nap(stop, 1.0, 1.3)
+                if not max_wait or time.time() - t0 < max_wait:   # back on the map = no free march (or no stamina): wait here
+                    log(f"[*]  Monster rally: {label} - no rally window (all marches busy?), trying again in 30 s")
+                    _nap(stop, 30, 32)
+                    continue
+                tried.pop(key, None)
+                return later(2, "no rally window (all marches busy or no stamina)")
+            dev.tap(*MR_TIMES.get(mode, MR_TIMES["5"]))      # fixed spot of the 5/10/30/60 min button; the troop page is checked below
+            _nap(stop, 1.0, 1.2)
+            for _ in range(12):                              # the troop page can take several seconds to open (owner 23 Oct)
+                shot = dev.screenshot()
+                if rd_seen(shot, ["Select a Preset"], region=(0, 0, 540, 180)) and not rd_seen(shot, ["rally time"], region=(0, 380, 540, 80)):
+                    break
+                _nap(stop, 0.6, 0.8)
+            rd_snap(shot, "mrally_preset_page")
+            if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)) or rd_seen(shot, ["rally time"], region=(0, 380, 540, 80)):
+                rd_snap(shot, "mrally_nomarch")
+                dev.tap(504, 352)                                # X of the rally time popup
+                _nap(stop, 1.0, 1.3)
+                if (not max_wait or time.time() - t0 < max_wait) and not (skip_lines and mr_march_line(dev.screenshot())):
+                    log(f"[*]  Monster rally: {label} - no free march yet, waiting on the monster")
+                    _nap(stop, 20, 22)
+                    continue
+                tried.pop(key, None)
+                return later(2, "the troop page did not open (no free march?)")
+            break
+        if got == "gone":
+            log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
+            continue
+        if got == "other":
+            log(f"[*]  Monster rally: {label} - another monster stands there ({page}), skipped")
+            continue
+        n = RT_PRESETS.index(preset) if preset in RT_PRESETS else 0
+        for _ in range(2):                                   # the first tap on a preset is sometimes lost
+            dev.tap(62 + n * 61, 115)
+            _nap(stop, 0.6, 0.8)
+        shot = dev.screenshot()
+        rd_snap(shot, "mrally_troops")
+        sta = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (280, 820, 260, 55))))
+        if keep_sta and len(sta) >= 2 and sta[-2] - sta[-1] < keep_sta:
+            dev.back()
+            _nap(stop, 1.0, 1.3)
+            return later(60, f"stamina {sta[-2]} would drop under {keep_sta}")
+        if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)):
+            dev.back()
+            raise RuntimeError("no March button (the troop page is gone)")
+        dev.tap(*MR_MARCH)                                   # fixed spot (the gold label is rarely read, PC 23 Oct); checked below
+        _nap(stop, 1.5, 1.8)
+        shot = dev.screenshot()
+        if rd_seen(shot, ["Select a Preset"], region=(0, 120, 540, 60)):
+            rd_snap(shot, "mrally_stuck")
+            dev.back()
+            raise RuntimeError("the march did not leave (no troops?)")
+        log(f"[+]  Monster rally: started on {label} - {mode} min, preset {preset}")
+        return later(1, "rally started, looking for the next one")
+    later(MR_POLL_MIN, "every coordinate tried was gone or taken")
+
 RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
             "general_chest": run_general_chest, "vip_claim": run_vip_claim, "recruit_citizens": run_recruit_citizens,
             "civilization_card": run_civilization_card, "empire_depot": run_empire_depot, "lucky_raffle": run_lucky_raffle,
-            "refining_card": run_refining_card, "alliance_gift": run_alliance_gift, "alliance_treasure": run_alliance_treasure,
+            "refining_card": run_refining_card, "alliance_gift": run_alliance_gift, "alliance_help": run_alliance_help, "alliance_treasure": run_alliance_treasure,
             "ranger_knight": run_ranger_knight, "train_troops": run_train_troops, "build_traps": run_build_traps,
             "troop_healing": run_troop_healing, "activity_chests": run_activity_chests, "gate_visitors": run_gate_visitors,
             "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes,
-            "wisdom_dome_tokens": run_wisdom_dome_tokens, "royal_thief": run_royal_thief}
+            "wisdom_dome_tokens": run_wisdom_dome_tokens, "royal_thief": run_royal_thief,
+            "monster_rally": run_monster_rally}
 
 
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
@@ -9960,12 +10607,12 @@ DUTY_LIBRARY = [
     {"id": "mail", "group": "Reward claims", "title": "Mail rewards", "every_min": 180, "verified": False,
      "note": "Opens Mail and taps Claim all.",
      "target": "icon:Mail", "steps": ["wait 1.5", "tap_text Claim All|Read All|Claim"]},
-    {"id": "alliance_gift", "group": "Reward claims", "title": "Alliance gift", "every_min": 0, "verified": False,
+    {"id": "alliance_gift", "group": "Reward claims", "title": "Alliance gift", "every_min": 60, "verified": False,
      "note": "Alliance > Alliance Gift > Open All.",
      "target": "self:", "steps": ["alliance_gift"]},
     {"id": "alliance_help", "group": "Daily activities", "title": "Alliance help", "every_min": 60, "verified": False,
      "note": "Alliance > Help > Help all.",
-     "target": "icon:Alliance", "steps": ["wait 1.5", "tap_text Help", "wait 1.2", "tap_text Help All|Help all", "wait 1"]},
+     "target": "self:", "steps": ["alliance_help"]},
     {"id": "champions", "group": "Daily activities", "title": "Champions", "every_min": 0, "verified": False,
      "note": "Keep > Champions: 15 taps and 10 greetings a day on the champions you pick (only active ones). Needs the city map (Keep).",
      "target": "building:Keep", "tap_dy": 0, "steps": ["wait 1.2", "champions"]},
@@ -10082,6 +10729,16 @@ DUTY_LIBRARY = [
      "target": "self:", "steps": ["royal_thief"],
      "opts": [{"k": "troops", "label": "Troops", "type": "select", "def": "Power First",
                "choices": ["Power First"] + ["Preset " + n for n in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")]}]},
+    {"id": "monster_rally", "group": "Daily activities", "title": "Start monster rallies", "every_min": 5, "verified": False,
+     "note": "Takes monster coordinates from the Telegram section, flies there with the map search and starts an Alliance War rally with the preset set for that monster. "
+             "No free march: waits on the monster. Skips a monster that is gone or that a march is already going to.",
+     "target": "self:", "steps": ["monster_rally"],
+     "opts": [{"k": "rules", "label": "Monsters", "type": "rules", "def": None},
+              {"k": "max_wait", "label": "Give up on a monster after (min, 0 = wait until it is rallied)", "type": "number", "min": 0, "max": 120, "def": 0},
+              {"k": "keep_free", "label": "Marches to keep free for joining", "type": "number", "min": 0, "max": 5, "def": 0},
+              {"k": "keep_stamina", "label": "Keep at least this much stamina", "type": "number", "min": 0, "max": 9999, "def": 100},
+              {"k": "max_age", "label": "Ignore coordinates older than (min)", "type": "number", "min": 1, "max": 600, "def": 30},
+              {"k": "skip_busy", "label": "Skip a monster a march is already going to", "type": "bool", "def": True}]},
 ]
 DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
 
@@ -10181,7 +10838,7 @@ def duty_status(serial, duty_id, cfg):
     tries = int(row.get("tries", 0)) if row.get("day") == day else 0
     if row.get("done_day") == day:                          # checked twice: nothing left in the game until the reset
         return "done", "Done for today"
-    if duty_id in ("crazy_eggs", "royal_thief"):           # timer driven: comes back when the next egg is ready
+    if duty_id in ("crazy_eggs", "royal_thief", "monster_rally"):           # timer driven: comes back when the next egg is ready
         if row.get("all_done_day") == day:
             return "done", "All eggs done"
         fs = _duty_fail_state(row, tries, now)
@@ -11353,6 +12010,12 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 return True
             if cancel_quit_dialog(dev, scr, log):
                 continue
+            if i > 0 and world_map(scr):                       # the arrow led to the world map: Back there asks to quit - use the city button
+                dev.tap(*VIEW_TOGGLE)
+                log("[*] On the world map - tapped the city button")
+                if wait_state("city", 8):
+                    return True
+                continue
             if i == 0:
                 dev.tap(*cfg["city_to_tap"])
             elif i == 3:
@@ -11404,6 +12067,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         at_bottom[0] = False                  # the list reopens at the top: the next sweep jumps to the bottom first
         outside_taps = [0]
         back_taps = [0]
+        mail_backs = [0]
         war_row_taps = [0]
         view_toggles = [0]
         last_toggle = [0.0]
@@ -11450,6 +12114,17 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     dev.tap(int(_row[0]), int(_row[1]))
                     log(f"[*] On the Alliance page - tapped the 'Alliance War' row ({int(_row[0])},{int(_row[1])})")
                     nap(1.5, 2.2)
+                    continue
+            if st == "unknown" and mail_backs[0] < 4:
+                try:
+                    in_mail = find_text(screen, ["Mail", "Inbox", "System", "Reports"], region=(60, 0, 420, 130), cutoff=0.8)
+                except Exception:
+                    in_mail = None
+                if in_mail:                                   # Mail (or a mail opened from it): device Back, not taps that open more mails (owner 23 Oct)
+                    mail_backs[0] += 1
+                    dev.back()
+                    log("[*] Recovery: on the Mail page - pressed Back")
+                    nap(1.0, 1.5)
                     continue
             if st == "unknown" and back_taps[0] < 2:          # a full page (event, Royal Thief, ...) has the gold Back arrow top left: use it first
                 try:
@@ -11641,6 +12316,16 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 if rep_txt:
                     log(rep_txt)
             emit_frame(screen)
+            if serial in EMU_RESTART_REQ:                        # Restart emulator asked from the interface
+                EMU_RESTART_REQ.discard(serial)
+                log("[*] Restart emulator asked - closing and starting the emulator")
+                restart_emulator(dev, cfg, log, stop, "asked from the interface")
+                continue
+            if serial in GAME_RESTART_REQ:                       # Restart game asked from the interface
+                GAME_RESTART_REQ.discard(serial)
+                log("[*] Restart game asked - closing and opening Evony")
+                force_restart_game(dev, cfg, log, stop)
+                continue
             st = screen_state(screen, cfg)
             if st != "rally_list" and time.time() - kick_check[0] > 4:
                 kick_check[0] = time.time()

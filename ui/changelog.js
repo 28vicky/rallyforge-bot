@@ -1,5 +1,13 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.6", date: "2026-10-23",
+    new: ["Monster rallies: a new tab on each instance starts alliance rallies on the monsters you choose, from the Telegram coordinates - with your own preset and rally time per monster.",
+      "Pumpkin Monster and Lava Turtle rallies are now recognised.",
+      "New settings: zoom the city out before finding buildings, and (for MuMu) allow the bot to bring the emulator to the front for a moment to zoom."],
+    fixed: ["Alliance Help and Alliance Gift run every hour and only count as done after the bot has checked the page.",
+      "Alliance duties no longer open Mail by mistake, and the bot leaves the Mail page by itself.",
+      "Alliance Science finds its row more reliably.",
+      "Fewer stops on the world map and faster return to the city."] },
   { v: "2.5.5", date: "2026-10-23",
     new: [],
     fixed: ["Reports also shows your joins from before you updated (up to the last 7 days)."] },
