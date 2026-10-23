@@ -1144,3 +1144,29 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 /* Footer version opens "What changed" (the sidebar version pill was removed). */
 .vlink{cursor:pointer}
 .vlink:hover{color:var(--accent2);text-decoration:underline}
+
+/* Reports page */
+.rephead{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.rephead h3{margin:0}
+.rephead .sub{display:block;color:var(--mute);font-size:12.5px;margin-top:2px}
+.reptiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.reptiles .stile{background:var(--card);border:1px solid var(--line);border-radius:var(--r2,10px);padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.reptiles .stile b{font-size:22px}
+.reptiles .stile span{font-size:12.5px;color:var(--mute)}
+.replist{display:flex;flex-direction:column}
+.reprow{display:grid;grid-template-columns:minmax(120px,180px) minmax(80px,1fr) 52px minmax(0,1.6fr) 14px;align-items:center;gap:14px;padding:10px 8px;border-radius:9px;cursor:pointer}
+.reprow:hover{background:rgba(127,127,127,.08)}
+.reprow.open{background:color-mix(in srgb,var(--accent1) 8%,transparent)}
+.reprow.open .rtnchev{transform:rotate(90deg)}
+.repname b{display:block;font-size:14px}
+.repname small{display:block;font-size:12px;color:var(--mute)}
+.repbar{height:8px;border-radius:99px;background:rgba(127,127,127,.15);overflow:hidden}
+.repbar span{display:block;height:100%;border-radius:99px;background:var(--accent1)}
+.repnum{font-weight:700;font-size:15px;text-align:right}
+.repchips{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.repchip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:99px;background:var(--field);border:1px solid var(--line);font-size:12.5px;white-space:nowrap}
+.repchip b{font-weight:700}
+.repmore{font-size:12px;color:var(--mute);align-self:center}
+.repdet{padding:4px 8px 14px 8px}
+.repempty{padding:40px 12px;text-align:center}
+@media (max-width:900px){.reptiles{grid-template-columns:repeat(2,minmax(0,1fr))}.reprow{grid-template-columns:1fr 52px 14px}.reprow .repbar,.reprow>.repchips{display:none}}
