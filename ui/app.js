@@ -276,7 +276,7 @@ function buildRibbon() {
     grp("Run",
       btn("Start", () => { if (S.sel === "control" && allPaused()) return act(api("resume")); if (S.sel === "control") { S.startingAt = Date.now(); paintRunState(); } collectAndRun("start", { serial: target() }); }, "pri", "play"),
       btn("Pause", () => act(api("pause", { serial: target() })), "", "pause"),
-      btn("Stop", () => { S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop"), h("span", { class: "ribcount", id: "ribCount" })),
+      btn("Stop", async () => { if (S.sel === "control" && !(await confirmStopAll())) return; S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop")),
     grp("Tools",
       btn("Tools ▾", (e) => menu(e.currentTarget, [
         { label: "Generals", icon: "users", run: () => openGeneralManager() },
@@ -396,7 +396,7 @@ function renderSide() {
   const cb = $("#ctlBtn"); if (cb) cb.classList.toggle("on", S.sel === "control");
   const devs = S.devStatus || [];
   const nRun = devs.filter((d) => d.state === "run").length, nPause = devs.filter((d) => d.state === "pause").length;
-  const ic = $("#instCnt"); if (ic) ic.textContent = devs.length ? (nRun ? nRun + " of " + devs.length + " running" : devs.length + " total") : "";
+  const ic = $("#instCnt"); if (ic) ic.textContent = runText();
   // (ui-simple) All / Running / Problems filter once the list gets long
   const isProb = (d) => d.state === "error" || (d.state === "run" && (d.kicked_at || d.no_stamina));
   const nProb = devs.filter(isProb).length;
@@ -419,7 +419,7 @@ function renderSide() {
     A.innerHTML = "";
     if (nRun + nPause >= 2) A.append(
       h("button", { class: "lnkb", type: "button", onclick: pauseOrResumeAll }, allPaused() ? "Resume all" : "Pause all"), h("span", { class: "sep" }, "·"),
-      h("button", { class: "lnkb bad", type: "button", onclick: async () => { if (await confirmBox("Stop all instances?", "Stop " + (nRun + nPause) + " instances? They stop joining rallies and doing duties until you start them again.", "Stop all")) { S.startingAt = 0; act(api("stop", { serial: "all" })); } } }, "Stop all"));
+      h("button", { class: "lnkb bad", type: "button", onclick: async () => { if (await confirmStopAll()) { S.startingAt = 0; act(api("stop", { serial: "all" })); } } }, "Stop all"));
   }
   tickPauseTimers();
 }
@@ -574,11 +574,17 @@ function paintRibbonRun() {
     if ((a === "pause" || a === "stop") && busy === 0 && !starting) b.classList.add("greyed");
     if (a === "pause" && allPaused()) b.classList.add("greyed");          // nothing left to pause: Resume all is on the Start button
   });
-  const c = document.getElementById("ribCount");
-  if (c) { c.textContent = run && run < total ? run + "/" + total + " running" : ""; }
 }
 setInterval(() => { if (S.startingAt) paintRibbonRun(); }, 3000);
 // every running instance paused -> the Pause buttons turn into Resume (otherwise there is no way to carry on)
+// the one running-status text: sidebar count (and the status bar while the sidebar is hidden)
+function runText() { const n = S.devStatus.length, r = S.devStatus.filter((d) => d.state === "run").length; return n ? (r ? r + " of " + n + " running" : "None running") : ""; }
+// Stop all: one question everywhere (header button + sidebar link)
+function confirmStopAll() {
+  const n = S.devStatus.filter((d) => d.state === "run" || d.state === "pause").length;
+  if (n < 1) return Promise.resolve(true);
+  return confirmBox(n > 1 ? "Stop all instances?" : "Stop the running instance?", (n > 1 ? "Stop " + n + " instances? They stop" : "It stops") + " joining rallies and doing duties until you start again.", n > 1 ? "Stop all" : "Stop");
+}
 function allPaused() { const sts = S.devStatus.map((d) => d.state); return sts.includes("pause") && !sts.includes("run"); }
 function pauseOrResumeAll() { return act(allPaused() ? api("resume") : api("pause", { serial: "all" })); }
 function paintPauseLabels() {
@@ -912,11 +918,8 @@ async function poll() {
 function updateSummary() {
   const c = { run: 0, pause: 0, error: 0 };
   S.devStatus.forEach((d) => { if (c[d.state] !== undefined) c[d.state]++; });
-  const parts = [c.run + " running"];
-  if (c.pause) parts.push(c.pause + " paused");
-  if (c.error) parts.push(c.error + " with a problem");
-  const s = $("#sum"); if (s) s.textContent = parts.join(" \u00b7 ");
-  const r = $("#sbRun"); if (r) r.textContent = c.run + " running";
+  const r = $("#sbRun"); if (r) r.textContent = runText() || "No instances";
+  const ni = $("#instN"); if (ni) { const n = S.devices.filter((d) => d.id).length; ni.textContent = n + (n === 1 ? " instance" : " instances"); }
   const dt = $("#sbDot"); if (dt) dt.classList.toggle("on", c.run > 0);
   const who = $("#whoami");
   if (who) {

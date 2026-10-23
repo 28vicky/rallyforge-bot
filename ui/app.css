@@ -1513,3 +1513,16 @@ a.lnk,.lnkb,.viewall,.vlink{display:inline-flex;align-items:center;min-height:28
 /* level chips: chosen = soft tint + accent text (one accent colour, not a wall of orange) */
 :root .lvchip.on{background:color-mix(in srgb,var(--accent1) 14%,transparent);color:var(--accent2);border-color:color-mix(in srgb,var(--accent1) 45%,transparent)}
 .field>.seg,.field>.row>.seg{align-self:flex-start}
+/* (Apple pass 24 Oct) running status said once: the sidebar count; the status bar repeats it only while the sidebar is hidden */
+.app:not(.nosb) .status .sbrun{display:none}
+.top .sum:empty{min-width:0}
+/* Dashboard: "N instances · Manage" line + the instances side panel */
+.instline{display:flex;align-items:center;gap:8px;margin:-2px 2px 16px;font-size:13.5px;color:var(--mute)}
+.instline .sep{opacity:.6}
+.instline .imanage{min-height:28px;color:var(--accent2,var(--accent));font-weight:600}
+.instline .imanage:hover{text-decoration:underline}
+.sidep .irow{grid-template-columns:22px minmax(0,1fr) minmax(0,150px) 28px;gap:8px}
+.sidep .ilinks{gap:18px;margin:12px 0 6px;padding:0!important}
+.tdall td small.bad{color:var(--bad)}
+.app:not(.nosb) .status .sbl>.sbrun+span::before{content:none}
+.side h4 .cnt:empty{display:none}

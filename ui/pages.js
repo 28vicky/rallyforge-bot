@@ -184,42 +184,75 @@ const PAGES = {};
 
 // ====================================================================== dashboard
 PAGES.dashboard = function () {
-  // ---- your instances (ui-simple): one row each, name and address edited in place, x removes; Detect is the main action
-  const rows = h("div", { class: "ilist" });
+  // ---- your instances (Apple pass 24 Oct): the Dashboard is a status screen, so the list folds into one line
+  // "N instances · Manage" that opens it in the right side panel. Name and address are edited in place there,
+  // x asks before it removes, Detect is the panel's main action. New users keep the "Get started" steps.
   const applyDevs = () => act(api("set_devices", { devices: S.devices.filter((d) => d.id) }, { quiet: true })).then(() => poll1());
-  const draw = () => {
-    rows.innerHTML = "";
-    if (!S.devices.some((d) => d.id) && !S.devices.length) rows.appendChild(h("div", { class: "empty" },
-      h("b", {}, "No instances yet"), h("span", {}, "Open your emulators with Evony, then press Detect emulators."), btn("Detect emulators", detectDevices, "pri")));
-    S.devices.forEach((d, i) => {
-      rows.appendChild(h("div", { class: "irow" },
-        h("span", { class: "inum" }, String(i + 1)),
-        h("input", { type: "text", class: "iname", value: d.name, placeholder: "Name", "aria-label": "Name", oninput: (e) => (d.name = e.target.value.trim()), onchange: applyDevs }),
-        h("input", { type: "text", class: "iaddr", value: d.id, placeholder: "127.0.0.1:5565", "aria-label": "Address", oninput: (e) => (d.id = e.target.value.trim()), onchange: applyDevs }),
-        h("button", { class: "ix", type: "button", title: "Remove " + (d.name || d.id || "this row"), "aria-label": "Remove", onclick: () => { S.devices.splice(i, 1); draw(); applyDevs(); } }, "\u2715")));
-    });
+  const instRows = (rows, after) => {
+    const draw = () => {
+      rows.innerHTML = "";
+      if (!S.devices.length) rows.appendChild(h("div", { class: "empty" },
+        h("b", {}, "No instances yet"), h("span", {}, "Open your emulators with Evony, then press Detect emulators.")));
+      S.devices.forEach((d, i) => {
+        const label = d.name || d.id || "this row";
+        rows.appendChild(h("div", { class: "irow" },
+          h("span", { class: "inum" }, String(i + 1)),
+          h("input", { type: "text", class: "iname", value: d.name, placeholder: "Name", "aria-label": "Name", oninput: (e) => (d.name = e.target.value.trim()), onchange: applyDevs }),
+          h("input", { type: "text", class: "iaddr", value: d.id, placeholder: "127.0.0.1:5565", "aria-label": "Address", oninput: (e) => (d.id = e.target.value.trim()), onchange: applyDevs }),
+          h("button", { class: "ix", type: "button", title: "Remove " + label, "aria-label": "Remove " + label, onclick: async () => {
+            if (d.id && !(await confirmBox("Remove " + label + "?", "The bot stops using this instance. Detect will not add it again until you choose Show removed again. Its settings are kept.", "Remove"))) return;
+            S.devices.splice(i, 1); draw(); applyDevs(); if (after) after();
+          } }, "✕")));
+      });
+    };
+    draw();
+    return draw;
   };
-  draw();
-  const dev = panel(null,
-    h("div", { class: "cardhead" }, h("h3", {}, "Your instances"),
-      infoTip("Instances", "Detect lists the emulators it finds; you add the ones you want. Drag them in the left list to change the order. Instances you remove stay removed, even after a restart."),
-      h("span", { style: { flex: "1" } }),
-      h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.devices.push({ id: "", name: "" }); draw(); const ins = rows.querySelectorAll(".iaddr"); if (ins.length) ins[ins.length - 1].focus(); } }, "Add by address"),
-      h("a", { href: "#", class: "lnk", onclick: async (e) => { e.preventDefault(); if (!(await confirmBox("Removed instances", "Instances you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) toast(j.restored ? `${j.restored} instance(s) can be detected again. Press Detect emulators.` : "No instances were removed.", "ok"); } }, "Show removed again"),
-      btn("Detect emulators", detectDevices, "pri sm")),
-    rows);
+  const addRow = (rows, draw) => { S.devices.push({ id: "", name: "" }); draw(); const ins = rows.querySelectorAll(".iaddr"); if (ins.length) ins[ins.length - 1].focus(); };
+  const showRemoved = async () => { if (!(await confirmBox("Removed instances", "Instances you removed are never added again by Detect. Clear that list so the next Detect can add them?"))) return; const j = await act(api("restore_removed")); if (j) toast(j.restored ? `${j.restored} instance(s) can be detected again. Press Detect emulators.` : "No instances were removed.", "ok"); };
+  // the side panel (same look as a duty's settings panel)
+  const side = h("div", { class: "sideov", onclick: (e) => { if (e.target === side) closeSide(); } });
+  let opener = null;
+  const sideKey = (e) => { if (e.key === "Escape" && !document.querySelector(".ov")) closeSide(); };
+  const closeSide = () => { side.remove(); document.removeEventListener("keydown", sideKey); rerender(); const m = document.querySelector(".imanage"); if (m) m.focus(); else if (opener) opener.focus(); };
+  const openSide = (e) => {
+    opener = e && e.currentTarget;
+    const rows = h("div", { class: "ilist" });
+    const cnt = h("small", {});
+    const count = () => { const n = S.devices.filter((d) => d.id).length; cnt.textContent = n + (n === 1 ? " instance" : " instances") + " · changes save as you make them"; };
+    const draw = instRows(rows, count);
+    count();
+    side.innerHTML = "";
+    side.appendChild(h("aside", { class: "sidep", role: "dialog", "aria-modal": "true", "aria-label": "Your instances" },
+      h("div", { class: "sph" },
+        h("div", { class: "spt" }, h("h3", {}, "Your instances"), cnt),
+        h("button", { class: "spx", type: "button", "aria-label": "Close", title: "Close (Esc)", onclick: closeSide }, "×")),
+      h("div", { class: "spb" },
+        rows,
+        h("div", { class: "row ilinks" },
+          h("a", { href: "#", class: "lnk", onclick: (ev) => { ev.preventDefault(); addRow(rows, draw); } }, "Add by address"),
+          h("a", { href: "#", class: "lnk", onclick: (ev) => { ev.preventDefault(); showRemoved(); } }, "Show removed again")),
+        note("Drag instances in the left list to change the order. Instances you remove stay removed, even after a restart.")),
+      h("div", { class: "spf" }, btn("Detect emulators", detectDevices, "pri"), h("span", { style: { flex: "1" } }), h("button", { class: "btn", type: "button", onclick: closeSide }, "Done"))));
+    if (!side.isConnected) { document.body.appendChild(side); document.addEventListener("keydown", sideKey); }
+    if (window.watchNotes) window.watchNotes(side);
+    const f = side.querySelector(".iname"); (f || side.querySelector(".spx")).focus();
+  };
   // ---- first run: three steps, each with one action (shown until the first instance is added)
   const none = !S.devices.some((d) => d.id);
   const step = (n, title, sub, action, done) => h("div", { class: "fstep" + (done ? " done" : "") },
-    h("span", { class: "fnum" }, done ? "\u2713" : String(n)), h("div", { class: "ftx" }, h("b", {}, title), h("small", {}, sub)), action);
+    h("span", { class: "fnum" }, done ? "✓" : String(n)), h("div", { class: "ftx" }, h("b", {}, title), h("small", {}, sub)), action);
+  const firstRows = h("div", { class: "ilist" });
   const first = none ? panel(null, h("div", { class: "cardhead" }, h("h3", {}, "Get started")),
     h("div", { class: "fsteps" },
       step(1, "Find your emulators", "Open them with Evony on screen.", h("div", { class: "row", style: { gap: "12px" } },
         h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.devices.push({ id: "", name: "" }); rerender(); } }, "Add by address"),
         btn("Detect emulators", detectDevices, "pri sm")), false),
       step(2, "Pick your presets", "Which game presets the bot may use.", btn("Open presets", () => pickTab("presets"), "sm"), false),
-      step(3, "Start", "The bot joins rallies and does your duties.", h("button", { class: "btn sm", disabled: true, title: "Add an instance first" }, "Start all"), false))) : null;
-  // ---- instances found by Detect but not added: one click each (nothing is added by itself)
+      step(3, "Start", "The bot joins rallies and does your duties.", h("button", { class: "btn sm", disabled: true, title: "Add an instance first" }, "Start all"), false)),
+    S.devices.length ? firstRows : null) : null;
+  if (none && S.devices.length) instRows(firstRows);       // an address row the user just added: typed in place, under the steps
+  // ---- instances found by Detect but not added: one click each (nothing is added by itself). Plain buttons: Start is the page's one main button
   const addFound = async (ids) => {
     const j = await act(api("add_found", { ids }));
     if (j) { S.devices = j.devices; S.avail = j.available; toast(ids.length > 1 ? `${ids.length} instances added.` : "Instance added.", "ok"); rerender(); poll1(); }
@@ -229,11 +262,15 @@ PAGES.dashboard = function () {
     note("Detect only shows what it found. Press Add for each instance you want the bot to use."),
     ...avail.map((a) => h("div", { class: "row", style: { marginBottom: "6px", gap: "14px" } },
       h("span", { style: { minWidth: "170px", fontFamily: "var(--mono)" } }, a.id),
-      h("span", { class: "mute", style: { minWidth: "140px" } }, (a.name || "") + (a.removed ? "  (removed earlier)" : "")),
-      btn("Add", () => addFound([a.id]), "sm pri"))),
+      h("span", { class: "mute", style: { minWidth: "140px" } }, (a.name || "") + (a.removed ? " (removed earlier)" : "")),
+      btn("Add", () => addFound([a.id]), "sm"))),
     avail.length > 1 ? h("div", { class: "row", style: { marginTop: "8px" } }, btn("Add all " + avail.length, () => addFound(avail.map((a) => a.id)), "sm")) : null) : null;
+  const n = S.devices.filter((d) => d.id).length;
+  const line = h("div", { class: "instline" },
+    h("span", { id: "instN" }, n + (n === 1 ? " instance" : " instances")), h("span", { class: "sep" }, "·"),
+    h("button", { class: "lnkb imanage", type: "button", title: "Names, addresses, add or remove instances", onclick: openSide }, "Manage"));
   const log = panel(null, activityBox(null, "Activity - all instances"));
-  return none ? h("div", {}, first, found, S.devices.length ? dev : null) : h("div", {}, renderEventCards(), renderTodayAll(), found, dev, log);
+  return none ? h("div", {}, first, found) : h("div", {}, renderEventCards(), renderTodayAll(), line, found, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
@@ -1400,11 +1437,12 @@ function renderEventCards() {
   return wrap;
 }
 function renderTodayAll() {
-  const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {});
+  const head = h("div", { class: "tdreset" }), ce = h("div", { class: "tdce" }), body = h("tbody", {}), hrow = h("tr", {});
+  let cols = "";
   const card = h("div", { class: "panel today" },
     h("div", { class: "cardhead" }, h("h3", {}, "Today \u00b7 all instances"), head), ce,
     h("table", { class: "tdall" },
-      h("thead", {}, h("tr", {}, ...["Instance", "Shield", "Buff", "Duties", "Joins", "Skipped (late)"].map((c) => h("th", {}, c)))), body));
+      h("thead", {}, hrow), body));
   let j = null, last = "";
   const skew = () => (j ? j.now - Date.now() / 1000 : 0);
   const tick = () => {
@@ -1431,14 +1469,20 @@ function renderTodayAll() {
     else if (!c.off.length) ce.append(h("span", {}, `on for all ${c.total} instance${c.total > 1 ? "s" : ""}`));
     else ce.append(h("span", { title: "Off on: " + c.off.join(", ") }, `\u26a0 off on ${c.off.length} of ${c.total}`), " \u00b7 ",
       h("a", { href: "#", class: "lnk", title: "Switch the Crazy Eggs duty on for every instance", onclick: turnOn }, "turn on"));
+    // Shield / Buff appear only once the bot reads them from the game (a row carries shield / buff)
+    const sb = j.rows.some((r) => r.shield != null || r.buff != null);
+    const want = ["Instance"].concat(sb ? ["Shield", "Buff"] : [], ["Duties", "Joins", "Skipped (late)"]);
+    if (cols !== want.join()) { cols = want.join(); hrow.innerHTML = ""; want.forEach((c) => hrow.appendChild(h("th", {}, c))); }
     body.innerHTML = "";
-    if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: "6", class: "mute" }, "No instances in your list yet.")));
+    if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: String(want.length), class: "mute" }, "No instances in your list yet.")));
+    const WORD = { error: "problem", stop: "stopped", idle: "stopped" };
     j.rows.forEach((r) => {
       const off = !["run", "pause"].includes(st[r.serial]);
       const all = r.duties_total && r.duties_done >= r.duties_total;
+      const tx = (v) => v == null || v === "" ? "-" : String(v);
       body.appendChild(h("tr", { class: off ? "off" : "", title: "Open " + r.name, onclick: () => open(r.serial) },
-        h("td", {}, h("b", {}, r.name), off ? h("small", {}, " offline") : null),
-        h("td", { title: "Not read from the game yet" }, "-"), h("td", { title: "Not read from the game yet" }, "-"),
+        h("td", {}, h("b", {}, r.name), off ? h("small", { class: st[r.serial] === "error" ? "bad" : "" }, " " + (WORD[st[r.serial]] || "stopped")) : null),
+        sb ? h("td", {}, tx(r.shield)) : null, sb ? h("td", {}, tx(r.buff)) : null,
         h("td", { class: all ? "ok" : "" }, r.duties_total ? `${r.duties_done}/${r.duties_total}` + (all ? " \u2713" : "") : "-"),
         h("td", {}, String(r.joins)), h("td", {}, String(r.late))));
     });
