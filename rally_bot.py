@@ -9377,11 +9377,25 @@ def rd_tap(dev, stop, words, region=None, cutoff=0.78, whole=False, wait=(1.4, 1
     return True
 
 
+def ring_label_big(shot, words):
+    """Ring menu labels are small: read the menu area enlarged (light text and plain) and find one of `words`.
+    -> (x, y) of the label in screen pixels, or None."""
+    import difflib
+    want = [w.lower() for w in words]
+    for bright in (True, False):
+        for text, ws in ocr_lines(shot[110:760, 0:540], 2.5, bright):
+            for wd in ws:
+                t = re.sub(r"[^a-z]", "", wd[0].lower())
+                if len(t) >= 3 and any(t == w or (len(w) >= 4 and difflib.SequenceMatcher(None, t, w).ratio() >= 0.8) for w in want):
+                    return int(wd[1]), int(wd[2]) + 110
+    return None
+
+
 def rd_ring(dev, stop, words, cutoff=0.75):
     """A building's ring menu is open: tap the item with this label (the icon sits just above its label)."""
     for i in range(2):
         shot = dev.screenshot()
-        p = rd_find(shot, words, region=(0, 110, 540, 650), cutoff=cutoff)
+        p = rd_find(shot, words, region=(0, 110, 540, 650), cutoff=cutoff) or ring_label_big(shot, words)
         if p:
             dev.tap(p[0], max(100, p[1] - 35))
             _nap(stop, 2.0, 2.6)
