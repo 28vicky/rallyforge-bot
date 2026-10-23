@@ -10290,8 +10290,8 @@ def run_map_city(dev, cfg, log, stop):
     STEP = ((SX, 0), (0, SY), (-SX, 0), (0, -SY))
     tried = [set()]                                        # per view: directions already tried from it
     at = 0                                                 # the view the camera is on (or nearest to)
-    tries = dead = 0
-    while tries < 150 and len(views) < 90:
+    tries = dead = idle = 0                                # idle = drags in a row that found no new ground
+    while tries < 150 and len(views) < 90 and idle < 10:   # Kiravik 23 Oct: 29 views in 20 min, then 10+ min of known ground
         if stop.is_set():
             return
         if len(tried[at]) == 4:                            # this view is done: go to the nearest view with directions left
@@ -10324,8 +10324,10 @@ def run_map_city(dev, cfg, log, stop):
         near = abs(views[near_i][0] - nav.cx) + abs(views[near_i][1] - nav.cy)
         if near < 120:                                     # old ground (the edge: did not move, or slid back)
             dead += 1
+            idle += 1
             at = near_i
             continue
+        idle = 0
         keep(shot, nav.cx, nav.cy)
         tried.append(set())
         at = len(views) - 1
