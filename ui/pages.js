@@ -1327,7 +1327,9 @@ PAGES.duties = function (fixed, only, compact) {
         h("div", { class: "cardhead" }, h("h3", {}, "Daily duties"), h("span", { class: "cnt" }, onRows.length + " active")),
         h("div", { class: "dlist" }, onRows.slice(0, 7).map((r) => h("div", { class: "drow" },
           h("div", { class: "dtx" }, h("div", { class: "dname" }, h("b", {}, r.title), h("span", { class: "dbadge " + (badge[r.status] || "") }, r.status_text)),
-            h("small", {}, (r.note || "") + (r.schedule ? " \u00b7 " + r.schedule : ""))),
+            h("small", {}, (r.note || "") + (r.schedule ? " \u00b7 " + r.schedule : "")),
+            r.week && (r.week.ok || r.week.fail) ? h("small", { class: "dweek", title: r.week.last_error ? "Last problem: " + r.week.last_error : "" },
+              "Last 7 days: " + r.week.ok + " done" + (r.week.fail ? " \u00b7 " + r.week.fail + " failed" : "")) : null),
           h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: r.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: r.id, on: e.target.checked })); if (j) { rows = j.duties; own = j.own || {}; draw(); } } }), h("span", { class: "sw" })))).concat(onRows.length ? [] : [note("No duty is switched on yet.")]),
           onRows.length > 7 ? [h("small", { class: "hint" }, "+" + (onRows.length - 7) + " more switched on")] : []),
         h("button", { class: "btn manageall", onclick: () => { S.sec = S.sec || {}; S.sec.routines = "duties"; if (S.gotoInstTab) S.gotoInstTab("routines"); } }, "Manage all duties \u2192")));

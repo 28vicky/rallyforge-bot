@@ -10965,6 +10965,13 @@ def duty_record(serial, duty_id, ok, msg="", nothing=False):
         row["tries"] = int(row.get("tries", 0)) + 1
         row["last_try"] = time.time()
         row["msg"] = msg
+        hist = row.setdefault("hist", {})                        # per game day: [done, failed] - kept 7 days (task success stats)
+        hd = hist.setdefault(str(day), [0, 0])
+        hd[0 if ok else 1] += 1
+        for k in sorted(hist)[:-7]:
+            hist.pop(k, None)
+        if not ok:
+            row["last_error"], row["last_error_at"] = msg, time.time()
         if ok:
             row["last_ok"], row["status"] = time.time(), "done"
             row["tries"] = 0                                     # fulfilled: failures start counting again from 0
