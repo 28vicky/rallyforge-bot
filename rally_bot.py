@@ -4006,10 +4006,18 @@ def choose_general(dev, name, cfg, log, stop, role="main"):
             nap(0.8, 1.2)
         return hit, busy, best_all
 
-    hit, busy, best_all = scan(want)
-    if not hit and not busy and 2 <= want <= 5 and not stop.is_set():
+    tab_now = want
+    if not 1 <= want <= 5:                               # 'Leave as is': the game shows the tab it had open last (often Development)
+        try:
+            _tr = tab_row(dev.screenshot())
+            tab_now = _tr[0] if _tr is not None else (selected_tab(dev.screenshot()) or 0)
+        except Exception as _e:
+            quiet_err("choose_general.tab_now", _e)
+            tab_now = 0
+    hit, busy, best_all = scan(tab_now)
+    if not hit and not busy and 2 <= tab_now <= 5 and not stop.is_set():
         # not in the chosen tab (a general can sit in another category than the one saved for it): the All tab lists every general
-        log(f"[i] '{name}' is not in the {TAB_NAMES[want]} tab - looking in All")
+        log(f"[i] '{name}' is not in the {TAB_NAMES[tab_now]} tab - looking in All")
         switched = False
         if tab_row(dev.screenshot()) is not None:
             switched = select_gen_tab(dev, 1, log, stop)
@@ -4023,7 +4031,7 @@ def choose_general(dev, name, cfg, log, stop, role="main"):
             hit, busy2, best2 = scan(1)
             busy, best_all = busy or busy2, max(best_all, best2)
             if hit:
-                log(f"[i] Found '{name}' in the All tab - its saved tab ({TAB_NAMES[want]}) may be wrong; check it in Manage generals")
+                log(f"[i] Found '{name}' in the All tab" + (f" - its saved tab ({TAB_NAMES[want]}) may be wrong; check it in Manage generals" if want == tab_now else ""))
     if not hit:
         if busy:
             log(f"[!] {role.capitalize()} general '{name}' is busy (not Idle)")
