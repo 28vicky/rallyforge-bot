@@ -1724,6 +1724,8 @@ class Api:
                     raise ApiError(f"{o['label']}: enter a number.")
             elif o["type"] == "select" and v not in o["choices"]:
                 raise ApiError(f"{o['label']}: pick one of the list.")
+            elif o["type"] == "text":
+                v = str(v or "").strip()[:200]
             row[o["k"]] = v
         self._save_scoped(scope, "duties", duties)
         return self.duties(p)

@@ -1307,6 +1307,8 @@ PAGES.duties = function (fixed, only, compact) {
       if (o.type === "bool") return h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label));
       if (o.type === "select") return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
         h("select", { onchange: (e) => save(e.target.value) }, o.choices.map((c) => h("option", { value: c, selected: c === o.val }, c))));
+      if (o.type === "text") return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
+        h("input", { type: "text", value: o.val || "", placeholder: "any", style: { width: "220px" }, onchange: (e) => save(e.target.value) }));
       return h("label", { class: "row", style: { gap: "6px" } }, h("span", { class: "lab" }, o.label),
         h("input", { type: "number", min: o.min, max: o.max, value: o.val, style: { width: "110px" }, onchange: (e) => save(e.target.value) }));
     }));
@@ -1502,6 +1504,7 @@ const ACTIVITIES = [
   ["Market & Tavern", "Greet Champions", 2, "champions"], ["Market & Tavern", "Ranger Knight Order", 3, "ranger_knight"],
   ["Alliance", "Alliance Help", 1, "alliance_help"], ["Alliance", "Alliance Donation", 1, "alliance_science"],
   ["Army", "Monster Killing", 3, "@rally"], ["Army", "Stamina", 3, "@stamina"], ["Army", "Use the game's Auto-Join", 0, "@aj"],
+  ["Army", "Start monster rallies", 0, "monster_rally"],
   ["Army", "Patrol", 1, null, true], ["Army", "Relic Exploration", 5, null, true], ["Army", "Resource Gathering", 1, null, true],
   ["Events", "Crazy Eggs", 0, "crazy_eggs"], ["Events", "Wisdom Dome tokens", 0, "wisdom_dome_tokens"],
 ];

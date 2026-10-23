@@ -9935,6 +9935,267 @@ def run_royal_thief(dev, cfg, log, stop):
     leave_to_city(dev, cfg, stop, log)
 
 
+# ------------------------------------------------------------ Monster rally starter (owner's recording 23 Oct 07:44, project doc claude/flow_rally_monsters.md)
+# Coordinates come from the Telegram section (live feed + boss finder). Map > coordinate search (Server / X / Y / Go) >
+# tap the monster in the middle > Attack > monster page (name, level) > Alliance War > rally time > preset > March.
+# No free march: stay on the monster and attack as soon as one is free (up to 'max_wait' minutes).
+# Skipped: a monster that is gone (no Attack / other name on its page) or that a march line is already going to.
+MR_POLL_MIN = 5                          # look for a new target this often
+MR_FORGET_MIN = 30                       # a target that was started / skipped is not tried again for this long
+MR_CENTER = (272, 480)                   # the searched tile sits in the middle of the map
+MR_NEAR = [(0, 0), (0, -30), (-30, 10), (30, 10), (0, 35)]   # the monster's picture can sit a little off the tile centre
+MR_TIMES = {"5": (190, 512), "10": (395, 512), "30": (190, 590), "60": (395, 590)}   # Alliance War Rally! buttons (fallback spots)
+
+
+def mr_save(serial, **kw):
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        row = data.setdefault(serial or "default", {}).setdefault("monster_rally", {})
+        row.update(kw)
+        try:
+            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def mr_row(serial):
+    return (load_duty_state().get(serial or "default") or {}).get("monster_rally") or {}
+
+
+def mr_targets(cfg, tried):
+    """Telegram coordinates that fit the settings, best first (newest, then nearest). -> [{name, level, x, y, km, t}]"""
+    names = [n.strip().lower() for n in str(rd_opt(cfg, "monster_rally", "monsters", "") or "").split(",") if n.strip()]
+    lo = int(float(rd_opt(cfg, "monster_rally", "min_level", 1) or 0))
+    hi = int(float(rd_opt(cfg, "monster_rally", "max_level", 99) or 99))
+    age = float(rd_opt(cfg, "monster_rally", "max_age", 30) or 30) * 60
+    now = time.time()
+    feed, _ = feed_get(_feed_keep[0] if _feed_keep[0] is not None else int(cfg.get("tg_keep_min", 60) or 0))
+    try:
+        upd = json.loads(BOSS_FILE.read_text(encoding="utf-8")).get("updated", 0) if BOSS_FILE.exists() else 0
+    except Exception:
+        upd = 0
+    pool = list(feed) + [dict(b, t=upd) for b in get_bosses()]
+    out, seen = [], set()
+    for it in pool:
+        key = f"{it.get('x')},{it.get('y')}"
+        if key in seen or now - float(tried.get(key, 0)) < MR_FORGET_MIN * 60:
+            continue
+        seen.add(key)
+        name, lvl = str(it.get("name") or ""), it.get("level") or 0
+        if names and not any(n in name.lower() for n in names):
+            continue
+        if lvl and not lo <= lvl <= hi:
+            continue
+        if now - float(it.get("t") or 0) > age:
+            continue
+        out.append(it)
+    km = lambda it: it.get("km") if it.get("km") is not None else 1e9
+    out.sort(key=lambda it: (-round(float(it.get("t") or 0) / 60), km(it)))     # newest minute first, then nearest
+    return out
+
+
+def mr_march_line(img, center=MR_CENTER):
+    """True when a march line (white = another player, green = an alliance march) ends at the monster in the middle.
+    First guess, not checked on a real line yet: long straight bright strokes whose line passes the centre."""
+    try:
+        h, w = img.shape[:2]
+        x0, y0, x1, y1 = 0, 200, w, 800                     # below the march panel, above the bottom buttons
+        roi = img[y0:y1, x0:x1]
+        hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+        white = cv2.inRange(hsv, (0, 0, 215), (180, 45, 255))
+        green = cv2.inRange(hsv, (45, 120, 120), (80, 255, 255))
+        cx, cy = center[0] - x0, center[1] - y0
+        for name, mask in (("white", white), ("green", green)):
+            m = mask.copy()
+            cv2.circle(m, (cx, cy), 45, 0, -1)              # the monster itself (Ymir is white / ice blue) never counts
+            segs = cv2.HoughLinesP(m, 1, np.pi / 180, 40, minLineLength=70, maxLineGap=12)
+            for s in (segs.reshape(-1, 4) if segs is not None else []):    # (N,1,4) or (N,4) depending on the OpenCV build
+                ax, ay, bx, by = [int(v) for v in s]
+                dx, dy = bx - ax, by - ay
+                ln = (dx * dx + dy * dy) ** 0.5
+                if ln < 70 or abs(dy) < 6:                  # text and flat map edges are level - a march line to the middle is not
+                    continue
+                dist = abs(dy * (cx - ax) - dx * (cy - ay)) / ln
+                near_end = min(((ax - cx) ** 2 + (ay - cy) ** 2) ** 0.5, ((bx - cx) ** 2 + (by - cy) ** 2) ** 0.5)
+                if dist < 22 and near_end < 150:
+                    return name
+    except Exception:
+        return None
+    return None
+
+
+def mr_search(dev, stop, x, y):
+    """Map shown: open the coordinate search, type X and Y, check them, Go. -> True when the map flew there."""
+    dev.tap(300, 845)                                       # the X: Y: box at the bottom of the map
+    _nap(stop, 1.4, 1.8)
+    shot = dev.screenshot()
+    if not rd_seen(shot, ["Search", "Server"], region=(0, 280, 540, 280)):
+        rd_snap(shot, "mrally_search")
+        return False
+    for spot, val in (((206, 535), x), ((428, 545), y)):
+        dev.tap(*spot)
+        _nap(stop, 1.0, 1.4)
+        rd_clear_field(dev, stop, 6)
+        dev.text(str(val))
+        _nap(stop, 0.5, 0.8)
+        rd_keyboard_ok(dev, stop)
+    shot = dev.screenshot()
+    got = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (30, 505, 480, 70))))
+    if x not in got or y not in got:
+        rd_snap(shot, "mrally_xy")
+        dev.back()
+        _nap(stop, 0.8, 1.1)
+        raise RuntimeError(f"the search box does not show X {x} Y {y} (read {got[:4]})")
+    if not rd_tap(dev, stop, ["Go"], region=(180, 575, 200, 75), whole=True, wait=(2.5, 3.0), shot=shot):
+        dev.tap(333, 610)
+        _nap(stop, 2.5, 3.0)
+    return True
+
+
+def mr_open_monster(dev, stop, want):
+    """Tap the monster in the middle; its ring menu must have Attack, its page must show the wanted name.
+    -> ('ok', page_shot) | ('gone', None) | ('other', name_read)"""
+    for dx, dy in MR_NEAR:
+        if stop.is_set():
+            return "gone", None
+        dev.tap(MR_CENTER[0] + dx, MR_CENTER[1] + dy)
+        _nap(stop, 1.3, 1.7)
+        shot = dev.screenshot()
+        p = rd_find(shot, ["Attack"], region=(0, 250, 540, 450), cutoff=0.75)
+        if not p:
+            dev.tap(40, 640)                                # empty map: close whatever ring opened
+            _nap(stop, 0.8, 1.0)
+            continue
+        dev.tap(p[0], max(100, p[1] - 30))
+        _nap(stop, 1.8, 2.3)
+        page = dev.screenshot()
+        rd_snap(page, "mrally_page")
+        if not rd_seen(page, ["Alliance War", "Winning Odds"], region=(0, 650, 540, 220)):
+            dev.back()
+            _nap(stop, 0.8, 1.1)
+            continue
+        head = " ".join(t for t, _ in rd_lines(page, (0, 150, 400, 120)))
+        if want and want.lower().split()[0] not in head.lower():
+            dev.back()
+            _nap(stop, 0.8, 1.1)
+            return "other", head[:40]
+        return "ok", page
+    return "gone", None
+
+
+def run_monster_rally(dev, cfg, log, stop):
+    serial = getattr(dev, "serial", "")
+    row = mr_row(serial)
+    now = time.time()
+    tried = {k: v for k, v in (row.get("tried") or {}).items() if now - float(v) < MR_FORGET_MIN * 60}
+    mr_save(serial, tried=tried, next_at=now + MR_POLL_MIN * 60)
+
+    def later(minutes, why):
+        mr_save(serial, tried=tried, next_at=time.time() + minutes * 60)
+        log(f"[*]  Monster rally: {why} - again at {time.strftime('%H:%M', time.localtime(time.time() + minutes * 60))}")
+
+    targets = mr_targets(cfg, tried)
+    if not targets:
+        return later(MR_POLL_MIN, "no Telegram coordinate fits the settings")
+    mode = str(rd_opt(cfg, "monster_rally", "rally_time", "5 minutes")).split()[0]
+    preset = str(rd_opt(cfg, "monster_rally", "preset", "Preset I")).split()[-1]
+    keep_free = int(float(rd_opt(cfg, "monster_rally", "keep_free", 0) or 0))
+    max_wait = float(rd_opt(cfg, "monster_rally", "max_wait", 5) or 0) * 60
+    keep_sta = int(float(rd_opt(cfg, "monster_rally", "keep_stamina", 100) or 0))
+    skip_lines = rd_opt(cfg, "monster_rally", "skip_busy", True) in (True, "true", "1", 1)
+    if not ensure_view(dev, cfg, stop, log, "landscape"):
+        return later(MR_POLL_MIN, "the map did not open")
+    shot = _wait_view(dev, cfg, stop, "landscape", 30)
+    if shot is None:
+        return later(MR_POLL_MIN, "the map did not open")
+    for tgt in targets[:3]:                                 # a gone / busy monster: try the next coordinate
+        if stop.is_set():
+            return
+        key, label = f"{tgt['x']},{tgt['y']}", f"{('Lv' + str(tgt['level']) + ' ') if tgt.get('level') else ''}{tgt.get('name') or 'monster'} ({tgt['x']},{tgt['y']})"
+        tried[key] = time.time()
+        mr_save(serial, tried=tried)
+        if not mr_search(dev, stop, tgt["x"], tgt["y"]):
+            return later(MR_POLL_MIN, "the coordinate search did not open")
+        _nap(stop, 1.0, 1.4)
+        t0 = time.time()
+        while True:                                          # stay on this monster until a march is free (or max_wait)
+            if stop.is_set():
+                return
+            shot = dev.screenshot()
+            rd_snap(shot, "mrally_map")
+            line = mr_march_line(shot) if skip_lines else None
+            if line:
+                log(f"[*]  Monster rally: {label} - a {line} march line is already going to it, skipped")
+                break
+            mk = rt_marches(shot)
+            free = (mk[1] - mk[0]) if mk else None
+            if free is None or free > keep_free:
+                break
+            if time.time() - t0 >= max_wait:
+                log(f"[*]  Monster rally: {label} - no free march for {round(max_wait / 60)} min")
+                tried.pop(key, None)                         # not the monster's fault: it may be tried again next time
+                return later(max(1, round(((mk[2] if mk else None) or 120) / 60)), "all marches are busy")
+            wait = min(20, max(5, (mk[2] or 20) + 2))
+            _nap(stop, wait, wait + 1)
+        if line:
+            continue
+        while True:                                          # the march count was not read / was wrong: keep trying here until max_wait
+            got, page = mr_open_monster(dev, stop, tgt.get("name") or "")
+            if got != "ok":
+                break
+            if not rd_tap(dev, stop, ["Alliance War"], region=(270, 730, 270, 130), wait=(1.8, 2.2), shot=page):
+                dev.back()
+                raise RuntimeError("no Alliance War button on the monster's page")
+            shot = dev.screenshot()
+            rd_snap(shot, "mrally_time")
+            if not rd_seen(shot, ["Alliance War Rally", "rally time"], region=(0, 300, 540, 160)):
+                dev.back()
+                _nap(stop, 1.0, 1.3)
+                raise RuntimeError("the rally time popup did not open (stamina?)")
+            if not rd_tap(dev, stop, [f"{mode} minute(s)", f"{mode} minute"], region=(0, 460, 540, 180), cutoff=0.85, wait=(2.0, 2.5), shot=shot):
+                dev.tap(*MR_TIMES.get(mode, MR_TIMES["5"]))
+                _nap(stop, 2.0, 2.5)
+            shot = dev.screenshot()
+            if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)) or rd_seen(shot, ["rally time"], region=(0, 380, 540, 80)):
+                rd_snap(shot, "mrally_nomarch")
+                dev.tap(504, 352)                                # X of the rally time popup
+                _nap(stop, 1.0, 1.3)
+                if time.time() - t0 < max_wait and not (skip_lines and mr_march_line(dev.screenshot())):
+                    log(f"[*]  Monster rally: {label} - no free march yet, waiting on the monster")
+                    _nap(stop, 20, 22)
+                    continue
+                tried.pop(key, None)
+                return later(2, "the troop page did not open (no free march?)")
+            break
+        if got == "gone":
+            log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
+            continue
+        if got == "other":
+            log(f"[*]  Monster rally: {label} - another monster stands there ({page}), skipped")
+            continue
+        n = RT_PRESETS.index(preset) if preset in RT_PRESETS else 0
+        for _ in range(2):                                   # the first tap on a preset is sometimes lost
+            dev.tap(62 + n * 61, 115)
+            _nap(stop, 1.2, 1.6)
+        shot = dev.screenshot()
+        rd_snap(shot, "mrally_troops")
+        sta = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (280, 820, 260, 55))))
+        if keep_sta and len(sta) >= 2 and sta[-2] - sta[-1] < keep_sta:
+            dev.back()
+            _nap(stop, 1.0, 1.3)
+            return later(60, f"stamina {sta[-2]} would drop under {keep_sta}")
+        if not rd_tap(dev, stop, ["March"], region=(330, 880, 210, 75), wait=(2.0, 2.5), shot=shot):
+            dev.back()
+            raise RuntimeError("no March button")
+        shot = dev.screenshot()
+        if rd_seen(shot, ["Select a Preset"], region=(0, 120, 540, 60)):
+            rd_snap(shot, "mrally_stuck")
+            dev.back()
+            raise RuntimeError("the march did not leave (no troops?)")
+        log(f"[+]  Monster rally: started on {label} - {mode} min, preset {preset}")
+        return later(1, "rally started, looking for the next one")
+    later(MR_POLL_MIN, "every coordinate tried was gone or taken")
+
 RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
             "general_chest": run_general_chest, "vip_claim": run_vip_claim, "recruit_citizens": run_recruit_citizens,
             "civilization_card": run_civilization_card, "empire_depot": run_empire_depot, "lucky_raffle": run_lucky_raffle,
@@ -9942,7 +10203,8 @@ RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor
             "ranger_knight": run_ranger_knight, "train_troops": run_train_troops, "build_traps": run_build_traps,
             "troop_healing": run_troop_healing, "activity_chests": run_activity_chests, "gate_visitors": run_gate_visitors,
             "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes,
-            "wisdom_dome_tokens": run_wisdom_dome_tokens, "royal_thief": run_royal_thief}
+            "wisdom_dome_tokens": run_wisdom_dome_tokens, "royal_thief": run_royal_thief,
+            "monster_rally": run_monster_rally}
 
 
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
@@ -10082,6 +10344,22 @@ DUTY_LIBRARY = [
      "target": "self:", "steps": ["royal_thief"],
      "opts": [{"k": "troops", "label": "Troops", "type": "select", "def": "Power First",
                "choices": ["Power First"] + ["Preset " + n for n in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")]}]},
+    {"id": "monster_rally", "group": "Daily activities", "title": "Start monster rallies", "every_min": 5, "verified": False,
+     "note": "Takes monster coordinates from the Telegram section, flies there with the map search and starts an Alliance War rally. "
+             "No free march: waits on the monster. Skips a monster that is gone or that a march is already going to.",
+     "target": "self:", "steps": ["monster_rally"],
+     "opts": [{"k": "monsters", "label": "Monsters (comma separated, empty = any)", "type": "text", "def": "Ymir"},
+              {"k": "min_level", "label": "Lowest level", "type": "number", "min": 1, "max": 99, "def": 1},
+              {"k": "max_level", "label": "Highest level", "type": "number", "min": 1, "max": 99, "def": 99},
+              {"k": "rally_time", "label": "Rally time", "type": "select", "def": "5 minutes",
+               "choices": ["5 minutes", "10 minutes", "30 minutes", "60 minutes"]},
+              {"k": "preset", "label": "Troops", "type": "select", "def": "Preset I",
+               "choices": ["Preset " + n for n in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")]},
+              {"k": "max_wait", "label": "Wait on a monster for a free march (min)", "type": "number", "min": 0, "max": 30, "def": 5},
+              {"k": "keep_free", "label": "Marches to keep free for joining", "type": "number", "min": 0, "max": 5, "def": 0},
+              {"k": "keep_stamina", "label": "Keep at least this much stamina", "type": "number", "min": 0, "max": 9999, "def": 100},
+              {"k": "max_age", "label": "Ignore coordinates older than (min)", "type": "number", "min": 1, "max": 600, "def": 30},
+              {"k": "skip_busy", "label": "Skip a monster a march is already going to", "type": "bool", "def": True}]},
 ]
 DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
 
@@ -10181,7 +10459,7 @@ def duty_status(serial, duty_id, cfg):
     tries = int(row.get("tries", 0)) if row.get("day") == day else 0
     if row.get("done_day") == day:                          # checked twice: nothing left in the game until the reset
         return "done", "Done for today"
-    if duty_id in ("crazy_eggs", "royal_thief"):           # timer driven: comes back when the next egg is ready
+    if duty_id in ("crazy_eggs", "royal_thief", "monster_rally"):           # timer driven: comes back when the next egg is ready
         if row.get("all_done_day") == day:
             return "done", "All eggs done"
         fs = _duty_fail_state(row, tries, now)
