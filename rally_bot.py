@@ -10144,7 +10144,7 @@ def run_monster_rally(dev, cfg, log, stop):
     max_wait = float(rd_opt(cfg, "monster_rally", "max_wait", 0) or 0) * 60          # 0 = stay until it is rallied
     keep_sta = int(float(rd_opt(cfg, "monster_rally", "keep_stamina", 100) or 0))
     skip_lines = rd_opt(cfg, "monster_rally", "skip_busy", True) in (True, "true", "1", 1)
-    if not ensure_view(dev, cfg, stop, log, "landscape"):
+    if not ensure_view(dev, cfg, stop, log, "world"):       # the world map ("landscape" here = the rally list view)
         return later(MR_POLL_MIN, "the map did not open")
     shot = _wait_view(dev, cfg, stop, "landscape", 30)
     if shot is None:
