@@ -1,9 +1,9 @@
 {
-  "version": "2.5.2",
-  "notes": "Reports page, monster joins kept across restarts, world bosses never joined",
+  "version": "2.5.3",
+  "notes": "Royal Thief duty, new Routines page, duties stop when done, fixes",
   "files": {
     "rally_bot.py": {
-      "sha256": "c2bd380e3446a669f98053ccde672f1b1fd71e2031e8713bd252e6bba3922fa9"
+      "sha256": "b14ef6cef96e15d57707667057d463ba7f480cf2b17375fb920e77380b20517e"
     },
     "web_app.py": {
       "sha256": "67833abc6dcd4887ec5b57a446c6923f67b757c15e8220a4a5ceb0493c1459e2"
@@ -12,13 +12,13 @@
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "3f62f261dabf0519f3e28122ccf447320721de29865e7d70d23bb917c1233429"
+      "sha256": "6546be54c8e26753eb94c5e353b2e66835755afe1a63dd2818eb6996ff5d7703"
     },
     "ui/app.js": {
       "sha256": "528fe7f3acd2e0f82ad6d4c384b434f6e5a24f4b5343ecbacef954f6376417d6"
     },
     "ui/changelog.js": {
-      "sha256": "c9c0f3e3deee2fe1a871371683e9c48ac69f7cadf8579aba043d2aa2f0ae9bd7"
+      "sha256": "516f21e70dd32e05a1b513a6f9c6d18aeab38789757505c913d5feb4a147f111"
     },
     "ui/dialogs.js": {
       "sha256": "407675636f1221859dd7e1fa2b8eeacb241c1d05de7a2471bf81cc3ac5e1e68b"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "d38693852b52cdbfec7d5c3982ee9a9e6142efadfe340ce862e5199081868d04"
+      "sha256": "27599b681aabc452721b90219a0b60b61343781f0e3c8d05fc1dcd99d72d721d"
     },
     "ui/tour.js": {
       "sha256": "97832158ac492e07b26ebeedf630bcd55ce7e70353d19df386aa183616bcac2a"
@@ -1629,5 +1629,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "e91dba515fbb30147005fcf9216e216be5b9b4be92160357fb7f0686ee047a45"
+  "sig": "14246e6ae7b813acde8c3bdf320dff32b102443407a22b228b464d15426a5751"
 }
