@@ -11784,8 +11784,13 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                 if ok:
                     _nap(stop, 1.2, 1.8)
                     _TL.rd_nothing = False
-                    for st in t.get("steps", []):
-                        run_step(dev, cfg, log, stop, st)
+                    was_busy = getattr(dev, "_guard_busy", False)
+                    dev._guard_busy = True                   # the pop-up closer must not shut the duty's own windows (Levy window, 23 Oct)
+                    try:
+                        for st in t.get("steps", []):
+                            run_step(dev, cfg, log, stop, st)
+                    finally:
+                        dev._guard_busy = was_busy
                     leave_to_city(dev, cfg, stop, log)
                 result = (ok is not False, "" if ok is not False else "could not open it")
             except Exception as e:
