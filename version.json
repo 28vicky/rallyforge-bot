@@ -1,12 +1,12 @@
 {
-  "version": "2.5.3",
-  "notes": "Royal Thief duty, new Routines page, duties stop when done, fixes",
+  "version": "2.5.4",
+  "notes": "Daily reset follows Evony's own reset time",
   "files": {
     "rally_bot.py": {
-      "sha256": "b14ef6cef96e15d57707667057d463ba7f480cf2b17375fb920e77380b20517e"
+      "sha256": "afaa4143d32d8d762d99cd95162fce609798735e4440ce89ff6c5330de198c11"
     },
     "web_app.py": {
-      "sha256": "67833abc6dcd4887ec5b57a446c6923f67b757c15e8220a4a5ceb0493c1459e2"
+      "sha256": "86d0fd70ba97744baf11cba45283a67a7484d685bfdba2333d699d4690d6350c"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "528fe7f3acd2e0f82ad6d4c384b434f6e5a24f4b5343ecbacef954f6376417d6"
     },
     "ui/changelog.js": {
-      "sha256": "516f21e70dd32e05a1b513a6f9c6d18aeab38789757505c913d5feb4a147f111"
+      "sha256": "0e88f5b39fcbe446e5c144c8a1b39affb1b650cc06fa96dd4d4a8179ec6698db"
     },
     "ui/dialogs.js": {
       "sha256": "407675636f1221859dd7e1fa2b8eeacb241c1d05de7a2471bf81cc3ac5e1e68b"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "27599b681aabc452721b90219a0b60b61343781f0e3c8d05fc1dcd99d72d721d"
+      "sha256": "a99939c3d2b204ac63938382a52c66847e0cf7573ee99f37f64e58adf9bfbbcd"
     },
     "ui/tour.js": {
       "sha256": "97832158ac492e07b26ebeedf630bcd55ce7e70353d19df386aa183616bcac2a"
@@ -1629,5 +1629,5 @@
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
     }
   },
-  "sig": "14246e6ae7b813acde8c3bdf320dff32b102443407a22b228b464d15426a5751"
+  "sig": "f01cf59be3fb43c7bc6122a5073d2ac723ebde5912743cf722f6ebc991212af6"
 }
