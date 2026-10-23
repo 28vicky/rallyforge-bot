@@ -195,12 +195,13 @@ function chooseGenerals(title, current) {
     const remove = () => { chosen = chosen.filter((n) => !selC.has(n)); selC.clear(); draw(); };
     const move = (d) => { if (selC.size !== 1) return; const n = [...selC][0], i = chosen.indexOf(n), j = i + d; if (j < 0 || j >= chosen.length) return; chosen.splice(i, 1); chosen.splice(j, 0, n); draw(); };
     draw();
-    const mid = h("div", { class: "row", style: { justifyContent: "center", margin: "10px 0" } },
-      h("button", { class: "btn sm", onclick: add }, "Add ›"), h("button", { class: "btn sm", onclick: remove }, "‹ Remove"),
+    const left = h("div", { class: "row gacts" }, h("button", { class: "btn sm", onclick: add, title: "Add the picked general(s) to the right (or double-click one)" }, "Add ›"));
+    const right = h("div", { class: "row gacts" },
+      h("button", { class: "btn sm", onclick: remove }, "‹ Remove"),
       h("button", { class: "btn sm", onclick: () => move(-1) }, "Up"), h("button", { class: "btn sm", onclick: () => move(1) }, "Down"),
       h("button", { class: "btn sm", onclick: () => { chosen = []; draw(); } }, "Clear all"));
     modal({ title, wide: true, oncancel: () => res(null), focus: false, buttons: [{ label: "Cancel", onclick: () => res(null) }, { label: "OK", cls: "pri", onclick: () => res(chosen) }],
-      body: h("div", {}, h("div", { class: "two" }, h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "All generals"), viewBar), h("div", { class: "gbox" }, search, flt.el, A)), h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "Tried in this order (top first)")), h("div", { class: "gbox" }, C))), mid) });
+      body: h("div", {}, h("div", { class: "two" }, h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "All generals"), viewBar), h("div", { class: "gbox" }, search, flt.el, A), left), h("div", {}, h("div", { class: "ghead" }, h("div", { class: "lab" }, "Tried in this order (top first)")), h("div", { class: "gbox" }, C), right))) });
   });
 }
 

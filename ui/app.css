@@ -483,7 +483,9 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .gbox{display:flex;flex-direction:column;height:400px;border-radius:var(--r2);background:var(--field);box-shadow:var(--inset);overflow:hidden}
 .gbox>input{border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none;margin:0;flex:none}
 .gbox>input:focus{outline:none;border-bottom-color:var(--accent1)}
-.gbox>.row{flex:none;margin:6px 8px!important}
+.gbox>.row{flex:none;margin:6px 8px!important;flex-wrap:nowrap}
+.gbox>.row select{flex:1 1 0;width:auto}                        /* troop type + region side by side */
+.gacts{margin-top:10px;justify-content:center}
 .gbox>.lst,.two .gbox>.lst{flex:1 1 auto;min-height:0!important;max-height:none!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;overflow:auto}
 
 .ghead .lab{line-height:1;display:flex;align-items:center}
