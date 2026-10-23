@@ -9488,6 +9488,27 @@ def rd_alliance_row(dev, stop, words):
 
 
 # --- simple city claims ---------------------------------------------------------------------------------------
+LEVY_ALL_BTN = (390, 742)                  # orange "Free Levy All" button in the Levy window
+
+
+def levy_free_times(shot):
+    """'Free Levy Times: 15' in the Levy window -> 15, or None when not read."""
+    t = " ".join(x for x, _ in rd_lines(shot, (30, 520, 480, 160))).lower()
+    m = re.search(r"free\s*levy\s*times[^0-9]{0,4}(\d{1,3})", t)
+    if m:
+        return int(m.group(1))
+    try:                                                 # light digits on beige: read the number box alone, thresholded
+        g = cv2.resize(cv2.cvtColor(shot[573:607, 205:290], cv2.COLOR_BGR2GRAY), None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
+        for th in (180, 170, 190, 160):
+            b = cv2.threshold(g, th, 255, cv2.THRESH_BINARY_INV)[1]
+            d = pytesseract.image_to_string(b, config="--psm 7 -c tessedit_char_whitelist=0123456789").strip()
+            if d.isdigit():
+                return int(d)
+    except Exception:
+        pass
+    return None
+
+
 def run_gold_levy(dev, cfg, log, stop):
     """Keep's ring menu is open: Levy -> Free Levy All. The 'Gems Levy' button is never pressed."""
     if not rd_ring(dev, stop, ["Levy"]):
@@ -9496,13 +9517,23 @@ def run_gold_levy(dev, cfg, log, stop):
     rd_snap(shot, "levy_1")
     if not rd_seen(shot, ["Levy"], region=(0, 80, 540, 760)):
         raise RuntimeError("the Levy window did not open")
-    if not rd_tap(dev, stop, ["Free Levy All"], region=(180, 690, 360, 120), shot=shot, wait=(2.0, 2.6)):
-        log("[+]  Gold Levy: no free levies left today")
+    left = levy_free_times(shot)
+    if left == 0:
+        log("[+]  Gold Levy: no free levies left today (Free Levy Times 0)")
         rd_nothing()
         return
+    if not rd_tap(dev, stop, ["Free Levy All"], region=(180, 690, 360, 120), shot=shot, wait=(2.0, 2.6)):
+        if left is None:
+            raise RuntimeError("Free Levy Times not readable and no Free Levy All button read (nothing pressed)")
+        dev.tap(*LEVY_ALL_BTN)                           # white text on the orange button is often not read: its fixed spot
+        _nap(stop, 2.0, 2.6)
     rd_close_reward(dev, stop)
-    rd_snap(dev.screenshot(), "levy_2")
-    log("[+]  Gold Levy: free levies used")
+    after = dev.screenshot()
+    rd_snap(after, "levy_2")
+    now = levy_free_times(after)
+    if left and now is not None and now >= left:
+        raise RuntimeError(f"Free Levy All did not use the free levies ({left} -> {now})")
+    log(f"[+]  Gold Levy: free levies used" + (f" ({left} -> {now})" if left is not None and now is not None else ""))
 
 
 def run_resource_tax(dev, cfg, log, stop):
