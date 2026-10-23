@@ -4,7 +4,9 @@ Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony ra
 
 ## NEXT CHAT: read project doc claude/handoff_23oct_0740.md first (released today + open list: 1. too many game restarts, 2. slow building label search, 3. Rory Champions, 4. recorder on BlueStacks).
 
-## LATEST (23 Oct 07:40 IST) - 2.5.3 live: everything ready went out (T39 Routines page, T40 Royal Thief kill side, T41 restart queue, T43 train amount, T44 Crazy Eggs/Champions stop, T46 done till reset, T50 Updates page, T51 tidy changelog). Owner: testers test and report / send logs. PC test copy = same content; installing 2.5.3 there is fine.
+## LATEST (23 Oct 07:55 IST) - 2.5.4 live: daily reset = Evony own time (auto, T52).
+
+## EARLIER (23 Oct 07:40 IST) - 2.5.3 live: everything ready went out (T39 Routines page, T40 Royal Thief kill side, T41 restart queue, T43 train amount, T44 Crazy Eggs/Champions stop, T46 done till reset, T50 Updates page, T51 tidy changelog). Owner: testers test and report / send logs. PC test copy = same content; installing 2.5.3 there is fine.
 
 ## EARLIER (23 Oct 07:30 IST) - 2.5.2 live: Reports page + monster joins kept across restarts (T48), world bosses never joined (T49). PC test build (test/all-23oct) has the rest (T39-T41, T43, T44, T46).
 
@@ -151,7 +153,7 @@ PUBLISHED 2.4.76 (T8 update-restart) on 21 Oct 12:20 IST; check_release OK. Not 
 | T49 | World bosses never joined (owner 23 Oct 07:22): NEVER_JOIN + thunder scorpion, bird of hurricane, behemoth king, lord of lava | fix/world-boss-never-join | rally_bot.py NEVER_JOIN | - | PUBLISHED 2.5.2 |
 | T50 | Hide update address (owner 23 Oct 07:29): Updates page shows version + Check now + What's new + Off / Ask me / Automatic segmented control; update address + key only when S.dev (developer build) in a Developer panel; check_update error no longer prints the URL | fix/hide-update-address | ui/pages.js PAGES.updates, rally_bot.py check_update message | PUBLISHED 2.5.3 (23 Oct 07:40 IST) - not live tested; testers report / send logs | ready (23 Oct 07:35 IST) - compiled only |
 | T51 | Changelog tidy (owner 23 Oct 07:31: keep What's new short, to the point, only what users need): all entries rewritten, small builds folded (2.4.93/95/97 dropped), no numbers/timings/internals | chore/changelog-tidy | ui/changelog.js only | PUBLISHED 2.5.3 (23 Oct 07:40 IST) - not live tested; testers report / send logs | ready - ship with the next release (owner: release together with more updates) |
-| T52 | Evony reset time (owner 23 Oct 07:47): game_reset_utc default "auto" = midnight US Pacific with US DST (07:00 UTC now, 08:00 UTC from 1 Nov 2026 09:00 UTC); reset_min() replaces _RESET_MIN[0] everywhere; one-time migration (_reset_auto_v1) moves saved 00:00 / 07:00 to auto; a typed HH:MM still wins | fix/evony-reset-time | rally_bot.py set_game_reset/_game_day/migrate_cfg/DEFAULTS, web_app.py 3 reset_min uses, ui/pages.js label+hint | - | ready (23 Oct 07:55 IST) - compiled + DST dates unit-checked |
+| T52 | Evony reset time (owner 23 Oct 07:47): game_reset_utc default "auto" = midnight US Pacific with US DST (07:00 UTC now, 08:00 UTC from 1 Nov 2026 09:00 UTC); reset_min() replaces _RESET_MIN[0] everywhere; one-time migration (_reset_auto_v1) moves saved 00:00 / 07:00 to auto; a typed HH:MM still wins | fix/evony-reset-time | rally_bot.py set_game_reset/_game_day/migrate_cfg/DEFAULTS, web_app.py 3 reset_min uses, ui/pages.js label+hint | PUBLISHED 2.5.4 (23 Oct 07:55 IST) | ready (23 Oct 07:55 IST) - compiled + DST dates unit-checked |
 | R | Release chat: merge finished branches into main, version bump, changelog, publish (owner says publish) | main | everything | - | when owner asks |
 
 Safe to run together: T1 + T3 + T4 + T6, or T2 + T6 + T7. Avoid pairs listed in "Clash with".
