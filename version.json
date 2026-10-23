@@ -1,27 +1,27 @@
 {
-  "version": "2.5.6",
-  "notes": "Monster rallies, Pumpkin Monster, alliance fixes",
+  "version": "2.5.7",
+  "notes": "UI pass, dark mode, save status, safety stop, stamina, unknown windows, Behemoth King, task stats, detect, stability",
   "files": {
     "rally_bot.py": {
-      "sha256": "f4af3a0538ccae526ffa4016198fbb135e59fd5d053b6ee10c9388195fbf36ff"
+      "sha256": "3e99d7ae82d0113b2ea26a995962f5ed79f80f0c641272dbfa4716ba75cdfc99"
     },
     "web_app.py": {
-      "sha256": "f0b4ef9abfdbb0f3c2d56615eb40776bc82af59e56f0e21a023ee61976873f17"
+      "sha256": "617cc0e09a6884dbae1d5d3e3676526ee919b41379edccb77ead54a0c027fe50"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "d918f6b0078f19ceb382aa8221673d2aafce1712331b1120b4b1c8e817a7b9ad"
+      "sha256": "cc2e892b541ba48f950efecdf41a2098bff1f9691295474ae557263ff0556e12"
     },
     "ui/app.js": {
-      "sha256": "786f766dc89f230e15fcc2610972a5f9ddb5a162efd81f0acd62c2f3ab7c6f16"
+      "sha256": "15d13e5100c7d04b3f6b123e280920c7451fbbb308a322cd1f34e35b11018a1c"
     },
     "ui/changelog.js": {
-      "sha256": "09ee7451d9acfca4d4193d3b33f67c4c43c8f26fe7d85418a4d1e87250bc2cbe"
+      "sha256": "ef682b5c4c5006cfcb3e2572882de06a5b08277d39c5f250dcc5e81ce9f4f3b1"
     },
     "ui/dialogs.js": {
-      "sha256": "407675636f1221859dd7e1fa2b8eeacb241c1d05de7a2471bf81cc3ac5e1e68b"
+      "sha256": "9a7fd0dcede3c0a5cc8b284e6d5ba4be9690dc5dba2d5ed4f4fe3cfe8fd6cb5c"
     },
     "ui/fonts.css": {
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "6d649ba9ca24859ed489048bd182bfa2de13f8cf7fe355e101a9ef08400407be"
+      "sha256": "a06dce27e498a24e629d9cfb535b9515a519974b11ed09e7c615a54a3247e3c2"
     },
     "ui/tour.js": {
       "sha256": "97832158ac492e07b26ebeedf630bcd55ce7e70353d19df386aa183616bcac2a"
@@ -1640,5 +1640,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "a22c0f588374820566aecb3ad1fd35bed42d5286b860692f632f71069b502248"
+  "sig": "fd1c0a702a35d3fd7e193d4143a6ed9ee2c0e3c7a41a4377a0fedadc77c3d028"
 }
