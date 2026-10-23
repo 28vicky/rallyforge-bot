@@ -70,13 +70,57 @@ function tog(obj, key, label, o) {
   i.addEventListener("change", () => { obj[key] = i.checked; if (o.after) o.after(i.checked); });
   return h("label", { class: "tgl" }, i, h("span", { class: "sw" }), label);
 }
+// pick-one choice as a segmented control (rule 15). opts = [[value, label, hint?], ...]; values compare as text, the saved type is kept
+function segPick(obj, key, opts, o) {
+  o = o || {};
+  const cur = () => String(obj[key] == null || obj[key] === "" ? (o.def ?? "") : obj[key]);
+  const g = h("div", { class: "seg" + (o.small ? " small" : ""), role: "radiogroup", "aria-label": o.label || key });
+  const paint = () => [...g.children].forEach((b) => { const on = b.dataset.v === cur(); b.classList.toggle("on", on); b.setAttribute("aria-checked", on); b.tabIndex = on ? 0 : -1; });
+  const choose = (v) => { obj[key] = v; paint(); if (o.after) o.after(v); };
+  opts.forEach(([v, l, tip], i) => g.appendChild(h("button", { class: "segb", type: "button", role: "radio", "data-v": String(v), title: tip || "",
+    onclick: () => choose(v),
+    onkeydown: (e) => {                                    // arrow keys move between the choices, like a radio group
+      const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      const n = (i + d + opts.length) % opts.length;
+      choose(opts[n][0]); g.children[n].focus();
+    } }, l)));
+  paint();
+  return g;
+}
+const GEN_TABS = [[0, "Auto", "The general's own tab when it is known, otherwise the tab that is open - then All if it is not there"], [1, "All"], [2, "Military"], [3, "Development"], [4, "Duty"], [5, "Sub City", "Subordinate City"]];
+const GEN_FAVS = [["leave", "Leave"], ["on", "On"], ["off", "Off"]];
+// the generals the bot tries, best first: chips with the general's picture, drag to reorder, x to remove, Choose... opens the picker
 function genField(obj, key, title) {
-  const el = h("input", { type: "text", readOnly: true, value: asList(obj[key]).join(", ") });
-  const btn = h("button", { class: "btn sm", onclick: async () => {
-    const r = await chooseGenerals(title, asList(obj[key]));
-    if (r !== null) { obj[key] = r; el.value = r.join(", "); }
-  } }, "Pick...");
-  return h("div", { class: "row", style: { flexWrap: "nowrap" } }, el, btn);
+  const wrap = h("div", { class: "gchips" });
+  const set = (arr) => { obj[key] = arr; draw(); };
+  let dragFrom = null;
+  function draw() {
+    const arr = asList(obj[key]);
+    wrap.innerHTML = "";
+    if (!arr.length) wrap.appendChild(h("span", { class: "gnone" }, "None - the game's own choice"));
+    arr.forEach((n, i) => {
+      const cat = n.startsWith("@");
+      const chip = h("span", { class: "gchip", draggable: "true", title: (i + 1) + ". " + (cat ? "every general in your category " + n.slice(1) : n) + (arr.length > 1 ? " - drag to change the order" : ""),
+        ondragstart: (e) => { dragFrom = i; e.dataTransfer.effectAllowed = "move"; chip.classList.add("dragging"); },
+        ondragend: () => chip.classList.remove("dragging"),
+        ondragover: (e) => { e.preventDefault(); chip.classList.add("over"); },
+        ondragleave: () => chip.classList.remove("over"),
+        ondrop: (e) => { e.preventDefault(); chip.classList.remove("over"); if (dragFrom == null || dragFrom === i) return; const a = [...arr]; const [m] = a.splice(dragFrom, 1); a.splice(i, 0, m); dragFrom = null; set(a); } },
+        h("span", { class: "gnum" }, String(i + 1)),
+        cat ? null : h("img", { src: `/api/general_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, alt: "", onerror: (e) => e.target.remove() }),
+        h("span", { class: "gnm" }, cat ? "Category: " + n.slice(1) : n),
+        h("button", { class: "gx", type: "button", "aria-label": "Remove " + n, title: "Remove", onclick: () => set(arr.filter((_, k) => k !== i)) }, "\u2715"));
+      wrap.appendChild(chip);
+    });
+    wrap.appendChild(h("button", { class: "btn sm gadd", type: "button", onclick: async () => {
+      const r = await chooseGenerals(title, asList(obj[key]));
+      if (r !== null) set(r);
+    } }, arr.length ? "Change\u2026" : "Choose\u2026"));
+  }
+  draw();
+  return wrap;
 }
 const BTN_ICON = { Start: "play", Pause: "pause", Stop: "stop", "Take game back now": "refresh" };
 const btn = (label, fn, cls, icon) => {
@@ -186,7 +230,6 @@ PAGES.dashboard = function () {
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
 const TAB_CHOICES = ["Leave as is", "All", "Military", "Development", "Duty", "Subordinate City"];   // index = tab number in the game (0 = do not switch)
-const tabOptions = TAB_CHOICES.map((l, i) => [i, l]);
 // ====================================================================== per-instance page
 const INSTANCE_FIELDS = [
   ["presets", "Presets (1-8, e.g. 1,2)", "presets"], ["preset_mode", "Preset mode", "choice", ["rotate", "random", "fixed"]],
@@ -636,48 +679,54 @@ function presetPanels(c, inst) {
   if (c.general_assistant_tab == null || c.general_assistant_tab === "") c.general_assistant_tab = c.general_tab || 0;
   if (!c.general_main_fav) c.general_main_fav = c.general_favourites || "leave";
   if (!c.general_assistant_fav) c.general_assistant_fav = c.general_favourites || "leave";
-  const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
   const armed = c.bot_presets.filter((b) => b.enabled).length;
-  const modes = [["fixed", "Start from first"], ["rotate", "Rotate presets"], ["random", "Random"]];
-  const seg = h("div", { class: "seg" }, ...modes.map(([v, l]) => h("button", { class: "segb" + ((c.preset_mode || "rotate") === v ? " on" : ""), onclick: () => { c.preset_mode = v; rerender(); } }, l)));
-  const card = (b, i) => {
-    if (!b.enabled) return h("div", { class: "pcard off", onclick: () => { b.enabled = true; rerender(); } }, h("div", { class: "pnum" }, String(b.n)), h("div", { class: "ptap" }, "Tap to switch on"));
-    const gens = h("div", { class: "pgens" + (b.pick_generals ? "" : " dis"), title: b.pick_generals ? "" : "Switch this preset to Listed to choose generals" }, h("div", { class: "lab" }, "Main general(s)"), genField(b, "main", `Preset ${ROMAN[i]} - main`),
-      h("div", { class: "lab" }, "Assistant general(s)"), genField(b, "assistant", `Preset ${ROMAN[i]} - assistant`),
-      tog(b, "assistant_optional", "Join without assistant if none is free"));
-    return h("div", { class: "pcard" },
-      h("div", { class: "phead" }, h("span", { class: "pbadge" }, String(b.n)), h("b", {}, "Preset " + b.n), h("button", { class: "px", title: "Switch this preset off", onclick: () => { b.enabled = false; rerender(); } }, "\u2715")),
-      h("div", { class: "seg small" }, h("button", { class: "segb" + (b.pick_generals ? "" : " on"), onclick: () => { b.pick_generals = false; rerender(); } }, "Game default"), h("button", { class: "segb" + (b.pick_generals ? " on" : ""), onclick: () => { b.pick_generals = true; rerender(); } }, "Listed")), tog(b, "skip_if_no_general", "Skip if no general"),
-      gens);
-  };
-  const PRESET_HELP = "Tap an empty slot to arm that preset, \u2715 to switch it off. 'Start from first' always tries the lowest armed preset first; 'Rotate' takes them in turn. 'Game default' marches with the generals already saved in the game preset (nothing is searched). 'Listed' uses the generals you list on that card: if the preset already holds one of them the bot just marches, otherwise it searches for it and sets it. 'Skip if no general' skips a preset whose game preset has an empty slot and tries the next one.";
-  const bp = panel("Join presets",
+  // ---- one card per preset that is on; the ones that are off are small numbered chips (click = on)
+  const card = (b) => h("div", { class: "pcard" },
+    h("div", { class: "phead" }, h("span", { class: "pbadge" }, String(b.n)), h("b", {}, "Preset " + b.n),
+      h("button", { class: "px", type: "button", title: "Turn preset " + b.n + " off", "aria-label": "Turn preset " + b.n + " off", onclick: () => { b.enabled = false; rerender(); } }, "\u2715")),
+    segPick(b, "pick_generals", [[false, "Game's generals", "March with the generals saved in the game preset - nothing is searched"], [true, "My list", "Use the generals you list here"]], { small: true, label: "Generals for preset " + b.n, after: () => rerender() }),
+    b.pick_generals
+      ? h("div", { class: "pgens" }, h("div", { class: "lab" }, "Main"), genField(b, "main", `Preset ${b.n} - main general`),
+          h("div", { class: "lab" }, "Assistant"), genField(b, "assistant", `Preset ${b.n} - assistant general`),
+          tog(b, "assistant_optional", "Join without an assistant if none is free"))
+      : h("p", { class: "hint pnote" }, "Marches with the generals already saved in this game preset."),
+    tog(b, "skip_if_no_general", "Skip if a general slot is empty"));
+  const off = c.bot_presets.filter((b) => !b.enabled);
+  const offRow = off.length ? h("div", { class: "poff" }, h("span", { class: "lab" }, armed ? "Turn on" : "Turn on a preset"),
+    ...off.map((b) => h("button", { class: "pchip", type: "button", title: "Turn preset " + b.n + " on", onclick: () => { b.enabled = true; rerender(); } }, "+ " + b.n)),
+    off.length > 1 ? h("button", { class: "lnkb", type: "button", onclick: () => { c.bot_presets.forEach((b) => (b.enabled = true)); rerender(); } }, "Turn all on") : null) : null;
+  const PRESET_HELP = "The bot marches with these game presets. 'Start from first' always tries the lowest preset that is on first; 'Rotate' takes them in turn; 'Random' picks any. 'Game's generals' marches with the generals saved in the game preset; 'My list' searches for the generals you list (if the preset already holds one of them it just marches). 'Skip if a general slot is empty' moves on to the next preset.";
+  const bp = panel(null,
+    h("div", { class: "cardhead" }, h("h3", {}, "Join presets"), infoTip("Presets", PRESET_HELP), h("span", { style: { flex: "1" } }), h("span", { class: "armed" }, `${armed} of 8 on`)),
     h("div", { class: "dhead", style: { marginBottom: "10px" } }, tog(c, "game_auto_join", "Use the game's Auto-Join", { after: () => rerender() }),
       infoTip("Game's Auto-Join", "Needs the Rally Monthly Card. When on, the bot stops joining rallies itself: it opens Alliance War > Auto-Join, reads the time left and presses Start again when it falls under your limit (Start resets it to 8 hours). Only some accounts have the card? Switch it on per instance on that instance's own page.")),
     c.game_auto_join ? h("div", { class: "fgrid", style: { marginBottom: "14px" } },
       fld("Renew when less than (min) is left", inp(c, "auto_join_renew_min", { type: "int" })),
       fld("Check every (min)", inp(c, "auto_join_check_min", { type: "int" }))) : null,
-    h("div", { class: "dhead", style: { marginBottom: "10px" } }, h("span", { class: "lab" }, "Preset order"), seg,
-      infoTip("Presets", PRESET_HELP),
-      h("span", { style: { flex: "1" } }), h("span", { class: "armed" }, `${armed} of 8 on`),
-      btn("1 - 6", () => { c.bot_presets.forEach((b) => (b.enabled = b.n <= 6)); rerender(); }, "sm"), btn("1 - 8", () => { c.bot_presets.forEach((b) => (b.enabled = true)); rerender(); }, "sm")),
-    h("div", { class: "pgrid" }, c.bot_presets.map(card)),
-    h("div", { class: "fgrid", style: { marginTop: "14px" } }, fld("Skip a preset above this many troops (0 = off)", inp(c, "max_troops", { type: "int" }))));
-  const favs = ["leave", "on", "off"];
-  const gen = panel("Generals",
-    grid2(fld("Main generals (best first)", genField(c, "general_main", "Main generals")), fld("Assistant generals (best first)", genField(c, "general_assistant", "Assistant generals")),
-      fld("Main generals: look in this category", sel(c, "general_main_tab", tabOptions, { num: true })), fld("Main: favourites filter (heart)", sel(c, "general_main_fav", favs)),
-      fld("Assistant generals: look in this category", sel(c, "general_assistant_tab", tabOptions, { num: true })), fld("Assistant: favourites filter (heart)", sel(c, "general_assistant_fav", favs)),
-      fld("If no general on the list works", sel(c, "general_on_fail", ["skip", "march"])), fld("Restart Evony if lost for (s, 0 = never)", inp(c, "lost_seconds", { type: "int", cls: "short" }))),
-    h("div", { class: "row", style: { marginTop: "12px", gap: "26px" } }, tog(c, "general_idle_only", "Only pick generals that are Idle"),
-      tog(c, "general_assistant_optional", "No assistant available: join with the main general only"),
-      h("div", { class: "row" }, h("span", { class: "lab" }, "General list view while joining"),
-        sel(c, "general_view", [["grid", "Thumbnails (fast, recommended)"], ["list", "List (slow, reads names)"]]))),
-    note("Empty = keep the generals from the preset. If the first general is not in the list, is busy or cannot be selected, the bot tries the next one. 'skip' = do not join that rally; 'march' = march with the preset's generals. Generals are found by their picture (take the screenshot in the GRID view of 'Select a General'). Tab numbers count from the left; the open tab shows its name (e.g. Development = 3). The bot switches the list to grid view itself and finds the Assistant slot after the Main general is set."),
-    inst ? null : h("div", { class: "row" }, btn("Manage generals...", openGeneralManager, "pri"), S.dev ? btn("Scan generals from the game...", scanGeneralsFlow) : null,
-      S.dev ? btn("Build general catalogue (developer)...", catalogFlow) : null, S.dev ? btn("Open catalogue folder", () => act(api("catalog_open")), "sm") : null,
-      S.dev ? btn("Record city frames (developer)...", cityCaptureFlow) : null, S.dev ? btn("Open city capture folder", () => act(api("city_capture_open")), "sm") : null,
-      S.dev ? btn("Add general from screenshot...", () => addGeneralFlow()) : null, S.dev ? btn("Capture a button / pop-up from screenshot...", captureTemplate) : null));
+    h("div", { class: "dhead", style: { marginBottom: "12px" } }, h("span", { class: "lab" }, "Order"),
+      segPick(c, "preset_mode", [["fixed", "Start from first"], ["rotate", "Rotate"], ["random", "Random"]], { def: "rotate", label: "Preset order" })),
+    armed ? h("div", { class: "pgrid" }, c.bot_presets.filter((b) => b.enabled).map(card))
+      : h("div", { class: "empty" }, h("b", {}, "No preset is on"), h("span", {}, "Turn on at least one preset below - the bot marches with it.")),
+    offRow,
+    h("div", { class: "fgrid", style: { marginTop: "16px" } }, fld("Skip a preset that already holds more than this many troops (0 = off)", inp(c, "max_troops", { type: "int" }))));
+  // ---- how the bot finds generals in the game's 'Select a General' list
+  const GEN_HELP = "If the first general is not in the list, is busy or cannot be selected, the bot tries the next one. Generals are found by their picture (taken in the thumbnail view of 'Select a General'). Search in: the bot opens that tab of the list; Auto uses the tab each general belongs to. If a general is not in that tab, the bot also looks in All.";
+  const gen = panel(null,
+    h("div", { class: "cardhead" }, h("h3", {}, "Generals"), infoTip("Generals", GEN_HELP)),
+    grid2(fld("Main generals, best first", genField(c, "general_main", "Main generals")), fld("Assistant generals, best first", genField(c, "general_assistant", "Assistant generals"))),
+    h("div", { class: "gsearch2" },
+      h("span", {}), h("span", { class: "lab" }, "Search in"), h("span", { class: "lab" }, "Favourites filter"),
+      h("span", { class: "lab rowlab" }, "Main"), segPick(c, "general_main_tab", GEN_TABS, { small: true, def: 0, label: "Main generals: search in" }), segPick(c, "general_main_fav", GEN_FAVS, { small: true, def: "leave", label: "Main generals: favourites filter" }),
+      h("span", { class: "lab rowlab" }, "Assistant"), segPick(c, "general_assistant_tab", GEN_TABS, { small: true, def: 0, label: "Assistant generals: search in" }), segPick(c, "general_assistant_fav", GEN_FAVS, { small: true, def: "leave", label: "Assistant generals: favourites filter" })),
+    h("div", { class: "fgrid2" },
+      fld("If none of the listed generals works", segPick(c, "general_on_fail", [["skip", "Skip the rally"], ["march", "March anyway", "March with the generals the preset holds"]], { small: true, def: "skip" })),
+      fld("Find generals by", segPick(c, "general_view", [["grid", "Picture", "Thumbnail view - faster and more reliable"], ["list", "Name", "List view - reads the names"]], { small: true, def: "grid" }))),
+    h("div", { class: "row", style: { marginTop: "14px", gap: "26px" } }, tog(c, "general_idle_only", "Only pick generals that are Idle"),
+      tog(c, "general_assistant_optional", "No assistant free: join with the main general only")),
+    inst ? null : h("div", { class: "cardfoot" }, btn("Manage generals\u2026", openGeneralManager), S.dev ? btn("Scan generals from the game\u2026", scanGeneralsFlow) : null,
+      S.dev ? btn("Build general catalogue (developer)\u2026", catalogFlow) : null, S.dev ? btn("Open catalogue folder", () => act(api("catalog_open")), "sm") : null,
+      S.dev ? btn("Record city frames (developer)\u2026", cityCaptureFlow) : null, S.dev ? btn("Open city capture folder", () => act(api("city_capture_open")), "sm") : null,
+      S.dev ? btn("Add general from screenshot\u2026", () => addGeneralFlow()) : null, S.dev ? btn("Capture a button / pop-up from screenshot\u2026", captureTemplate) : null));
   return [bp, gen];
 }
 PAGES.presets = function () { return h("div", {}, ...presetPanels(S.cfg, false)); };
@@ -1131,7 +1180,8 @@ PAGES.reliability = function () {
   return panel("Reliability: slow down after failures, restart when stuck", tog(c, "adaptive_delay", "Slow down after a failed click, speed up again after a success"),
     h("div", { style: { height: "14px" } }),
     grid2(fld("Slowest it goes (x click delay)", inp(c, "adaptive_max", { type: "float", cls: "short" })), fld("Restart Evony if the screen is frozen for (s, 0 = off)", inp(c, "frozen_seconds", { type: "int", cls: "short" })),
-      fld("Restart the instance if stuck / not answering for (s, 0 = off)", inp(c, "stuck_seconds", { type: "int", cls: "short" })), fld("Give up after this many instance restarts per hour", inp(c, "max_emulator_restarts", { type: "int", cls: "short" }))),
+      fld("Restart the instance if stuck / not answering for (s, 0 = off)", inp(c, "stuck_seconds", { type: "int", cls: "short" })), fld("Give up after this many instance restarts per hour", inp(c, "max_emulator_restarts", { type: "int", cls: "short" })),
+      fld("Restart Evony if the bot cannot tell where it is for (s, 0 = never)", inp(c, "lost_seconds", { type: "int", cls: "short" }))),
     note("'Frozen' = Join buttons or a non-rally screen that has not changed at all. 'Stuck' = no screenshot from the instance, a frozen screen that came back after restarting Evony, or not getting back to the rally list. The instance is closed with its own command (MuMu and LDPlayer are known; otherwise set 'Command that closes this instance' for that instance), then started again."));
 };
 PAGES.schedule = function () {

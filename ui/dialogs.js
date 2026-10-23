@@ -170,11 +170,10 @@ function genSearch(onTerm) {
   return h("div", { class: "gsearch" }, h("span", { class: "gsico", "aria-hidden": "true" }), inp, clr);
 }
 function genSorted(arr) { return arr.slice().sort((a, b) => (b.pic !== false) - (a.pic !== false) || a.name.toLowerCase().localeCompare(b.name.toLowerCase())); }
-function genViewBar(onchange) {
-  const mk = (v, label) => h("button", { class: "btn sm gv" + (genViewGet() === v ? " pri" : ""), title: v === "grid" ? "Only generals that have a picture, shown as thumbnails" : "Every general, one per line", onclick: () => { genViewSet(v); box.querySelectorAll("button").forEach((b) => b.classList.toggle("pri", b.dataset.v === genViewGet())); onchange(); } }, label);
-  const box = h("div", { class: "row", style: { gap: "6px" } }, mk("list", [h("span", { class: "gvi" }, "\u2630"), "List"]), mk("grid", [h("span", { class: "gvi" }, "\u25A6"), "Grid"]));
-  box.querySelectorAll("button").forEach((b, i) => (b.dataset.v = i ? "grid" : "list"));
-  return box;
+function genViewBar(onchange) {                     // List / Grid of the generals lists: a segmented control like every pick-one choice
+  const st = { v: genViewGet() };
+  return segPick(st, "v", [["list", "List", "Every general, one per line"], ["grid", "Grid", "Only generals that have a picture, shown as thumbnails"]],
+    { small: true, label: "Show generals as", after: (v) => { genViewSet(v); onchange(); } });
 }
 
 function chooseGenerals(title, current) {
@@ -255,21 +254,25 @@ async function addGeneralFlow(name) {
 }
 
 function openGeneralManager() {
-  const TABS_ = ["(use default)", "0 - leave as is", "1 - All", "2 - Military", "3 - Development", "4 - Duty", "5 - Subordinate City"];
-  const FAVS = ["(use default)", "leave", "on", "off"];
+  const m = { tab: "", fav: "" };                    // the chosen general's own settings ("" = use the Main / Assistant setting)
   const COPIES = ["Any (best match)", "Most stars", "1st on screen", "2nd on screen", "3rd on screen", "4th on screen", "5th on screen", "6th on screen"];
   let cur = null, term = "";
   const list = h("div", { class: "lst", style: { maxHeight: "430px", minHeight: "430px" } });
   const search = genSearch((t) => { term = t; drawList(); });
   const name = h("input", { type: "text" });
-  const tab = h("select", {}, TABS_.map((t) => h("option", {}, t)));
-  const fav = h("select", {}, FAVS.map((t) => h("option", {}, t)));
-  const copy = h("select", {}, COPIES.map((t) => h("option", {}, t)));
+  const tabHold = h("div", {}), favHold = h("div", {});
+  const drawSegs = () => {                           // pick-one choices = segmented controls, same as the Generals card; a change saves at once
+    tabHold.replaceChildren(segPick(m, "tab", [["", "Default", "Use the Main / Assistant 'Search in' setting"], ...GEN_TABS.slice(1)], { small: true, label: "Search in", after: save }));
+    favHold.replaceChildren(segPick(m, "fav", [["", "Default", "Use the Main / Assistant favourites setting"], ...GEN_FAVS], { small: true, label: "Favourites filter", after: save }));
+  };
+  const copy = h("select", { onchange: () => save() }, COPIES.map((t) => h("option", {}, t)));
   const catList = h("datalist", { id: "genCats" });
-  const catIn = h("input", { type: "text", list: "genCats", placeholder: "e.g. Ground, Mounted, Ranged - or leave empty" });
+  const catIn = h("input", { type: "text", list: "genCats", placeholder: "e.g. Ground, Mounted, Ranged - or leave empty", onchange: () => save() });
   const fillCats = () => { catList.innerHTML = ""; [...new Set(S.generals.map((g) => g.cat).filter(Boolean))].sort().forEach((c) => catList.appendChild(h("option", { value: c }))); };
   const pic = h("img", { class: "gen-pic", style: { display: "none" } });
-  const msg = h("div", { class: "hint" }, "'(use default)' = use the Main / Assistant tab and favourites settings. The picture must come from a screenshot of the grid view, because the bot finds the general by matching it.");
+  const msg = h("div", { class: "hint" }, "Changes save by themselves. The picture must come from a screenshot of the thumbnail view, because the bot finds the general by matching it.");
+  name.addEventListener("change", () => save());
+  name.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); name.blur(); } });
   const find = (n) => S.generals.find((g) => g.name === n);
   const flt = genFilter(() => drawList());
   function drawList() {
@@ -278,15 +281,17 @@ function openGeneralManager() {
     const items = genSorted(S.generals.filter((g) => (!term || g.name.toLowerCase().includes(term)) && flt.ok(g) && (genViewGet() === "list" || g.pic !== false)));
     items.forEach((g) => list.appendChild(h("div", { class: "li" + (g.name === cur ? " sel" : ""), onclick: () => select(g.name) },
       genViewGet() === "grid" ? h("img", { src: `/api/general_img?name=${encodeURIComponent(g.name)}&k=${window.KEY}&t=${Date.now() % 100000}`, onerror: (e) => (e.target.style.display = "none") }) : null,
-      h("span", { class: "gname", style: { flex: 1 } }, g.name), h("span", { class: "hint gmeta", style: { color: "inherit", opacity: .7 } }, `${g.cat ? g.cat + " · " : ""}${g.tab == null ? (g.cat_tab ? TAB_CHOICES[g.cat_tab] + " (auto)" : "default tab") : TAB_CHOICES[Number(g.tab)]} · ${g.fav || "default"}`))));
+      h("span", { class: "gname", style: { flex: 1 } }, g.name), h("span", { class: "hint gmeta", style: { color: "inherit", opacity: .7 } }, `${g.cat ? g.cat + " · " : ""}${g.tab == null || Number(g.tab) === 0 ? (g.cat_tab ? TAB_CHOICES[g.cat_tab] + " (auto)" : "Auto") : TAB_CHOICES[Number(g.tab)]}${g.fav ? " · favourites " + g.fav : ""}`))));
     if (!items.length) list.appendChild(h("div", { class: "empty" }, "No generals. Use 'Scan from the game' or 'Add from screenshot'."));
   }
   function select(n) {
     cur = n; const g = find(n);
     if (!g) return;
     name.value = n;
-    tab.value = g.tab == null ? TABS_[0] : TABS_[1 + Number(g.tab)];
-    fav.value = g.fav || FAVS[0];
+    detail.style.display = ""; pickHint.style.display = "none"; delBtn.disabled = false;
+    m.tab = g.tab == null || Number(g.tab) === 0 ? "" : Number(g.tab);
+    m.fav = g.fav || "";
+    drawSegs();
     catIn.value = g.cat || ""; fillCats();
     const c = g.copy;
     copy.selectedIndex = c === "stars" ? 1 : c === "any" || c == null ? 0 : (Number(c) >= 1 && Number(c) <= 6 ? 1 + Number(c) : 0);
@@ -295,30 +300,34 @@ function openGeneralManager() {
   }
   async function save() {
     if (!cur) return;
-    const t = tab.value === TABS_[0] ? null : Number(tab.value[0]);
-    const f = fav.value === FAVS[0] ? null : fav.value;
+    if (typeof saveState === "function") saveState("saving");
+    const t = m.tab === "" ? null : Number(m.tab);
+    const f = m.fav === "" ? null : m.fav;
     const ci = copy.selectedIndex;
     const j = await act(api("general_meta", { name: cur, new_name: name.value.trim(), tab: t, fav: f, copy: ci === 0 ? null : ci === 1 ? "stars" : ci - 1, cat: catIn.value.trim() }));
-    if (!j) return;
+    if (!j) { if (typeof saveState === "function") saveState("err", "general settings - see the message"); return; }
     if (j.renamed) swapGeneral(cur, j.name);
-    S.generals = j.generals; cur = j.name; drawList(); select(cur); msg.textContent = `Saved '${j.name}'.`;
+    S.generals = j.generals; cur = j.name; drawList(); select(cur); msg.textContent = `Saved '${j.name}'.`; if (typeof saveState === "function") saveState("saved");
   }
   async function del() {
     if (!cur || !(await confirmBox("Delete general", `Delete '${cur}' and its picture?`))) return;
     const j = await act(api("general_delete", { name: cur }));
-    if (j) { swapGeneral(cur, null); S.generals = j.generals; cur = null; pic.style.display = "none"; name.value = ""; drawList(); }
+    if (j) { swapGeneral(cur, null); S.generals = j.generals; cur = null; pic.style.display = "none"; name.value = ""; detail.style.display = "none"; pickHint.style.display = ""; delBtn.disabled = true; drawList(); }
   }
+  const delBtn = h("button", { class: "btn sm", onclick: del, disabled: true, title: "Delete the chosen general" }, "Delete");
   async function recapture() { if (cur) { await addGeneralFlow(cur); drawList(); select(cur); } }
   const left = h("div", {}, h("div", { class: "row", style: { marginBottom: "8px" } },
-    h("button", { class: "btn sm pri", onclick: async () => { await addGeneralFlow(); drawList(); } }, "+ Add from screenshot..."),
-    h("button", { class: "btn sm", onclick: () => scanGeneralsFlow() }, "Scan from the game..."),
-    h("button", { class: "btn sm", onclick: () => tavernPortraitsFlow() }, "Scan Tavern portraits..."),
-    h("button", { class: "btn sm", onclick: del }, "Delete"), genViewBar(() => drawList())), h("div", { class: "gbox", style: { height: "470px" } }, search, flt.el, list));
-  const right = h("div", { class: "field", style: { gap: "9px" } }, h("label", {}, "General name"), name, h("label", {}, "Tab in the 'Select a General' list"), tab,
-    h("label", {}, "Favourites filter (heart)"), fav, h("label", {}, "If you own several copies of it"), copy,
+    h("button", { class: "btn sm pri", onclick: async () => { await addGeneralFlow(); drawList(); } }, "Add from screenshot\u2026"),
+    h("button", { class: "btn sm", onclick: () => scanGeneralsFlow() }, "Scan from the game\u2026"),
+    h("button", { class: "btn sm", onclick: () => tavernPortraitsFlow() }, "Scan Tavern portraits\u2026"),
+    delBtn, genViewBar(() => drawList())), h("div", { class: "gbox", style: { height: "470px" } }, search, flt.el, list));
+  const detail = h("div", { class: "field", style: { gap: "9px", display: "none" } }, h("label", {}, "General name"), name, h("label", {}, "Search in (tab of 'Select a General')"), tabHold,
+    h("label", {}, "Favourites filter (heart)"), favHold, h("label", {}, "If you own several copies of it"), copy,
     h("label", {}, "Category (your own group, e.g. Ground / Mounted)"), catIn, catList,
-    h("div", {}, h("button", { class: "btn pri sm", onclick: save }, "Save changes")), h("label", {}, "Picture the bot looks for"), pic,
-    h("button", { class: "btn sm", onclick: recapture }, "New picture from a screenshot..."), msg);
+    h("label", {}, "Picture the bot looks for"), pic,
+    h("button", { class: "btn sm", onclick: recapture }, "New picture from a screenshot\u2026"), msg);
+  const pickHint = h("div", { class: "empty" }, h("b", {}, "No general chosen"), h("span", {}, "Click a general on the left to see and change its settings."));
+  const right = h("div", {}, pickHint, detail);
   drawList();
   modal({ title: "General Manager", wide: true, focus: false, buttons: [{ label: "Close", cls: "pri" }], body: h("div", { class: "gen-body" }, left, right) });
 }

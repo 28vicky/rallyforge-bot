@@ -285,10 +285,7 @@ table.t td{padding:2px 8px 2px 0;vertical-align:middle}
 .armed{font-size:14px;font-weight:700;color:#ecbd80;margin:0 8px}
 .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin:10px 0}
 .pcard{border-radius:14px;border:var(--bd);background:var(--field);box-shadow:var(--inset);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
-.pcard.off{border-style:dashed;align-items:center;justify-content:center;min-height:120px;cursor:pointer;opacity:.7}
-.pcard.off:hover{opacity:1}
 .pnum{font-size:30px;font-weight:800;color:var(--mute)}
-.ptap{font-size:13px;letter-spacing:.14em;color:var(--mute)}
 .phead{display:flex;align-items:center;gap:8px}
 .phead b{flex:1;font-size:14px;letter-spacing:.06em}
 .pbadge{display:inline-flex;width:22px;height:22px;border-radius:50%;align-items:center;justify-content:center;background:#3fe6ff;color:#06222a;font-size:14px;font-weight:800}
@@ -296,7 +293,6 @@ table.t td{padding:2px 8px 2px 0;vertical-align:middle}
 .pgens{display:flex;flex-direction:column;gap:4px;margin-top:4px}
 .pgrid{grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch}
 @media(max-width:1000px){.pgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.pcard.off{height:auto;min-height:110px}
 .seg.small .segb{padding:5px 10px;font-size:13px}
 .actwrap{max-height:232px;overflow-y:auto}
 
@@ -328,8 +324,6 @@ table.t td{padding:2px 8px 2px 0;vertical-align:middle}
 .lvchip:focus-visible,.tri:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (max-width:700px){.mon-sum{display:none}.mon-lvls{padding-left:10px}}
 
-.pgens.dis{opacity:.4;pointer-events:none;filter:grayscale(.6)}
-.pgens.dis *{cursor:default}
 
 /* number boxes: no old white browser spinner; empty override boxes look editable */
 input[type=number]{-moz-appearance:textfield;appearance:textfield}
@@ -518,7 +512,6 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 .ghead .lab{line-height:1;display:flex;align-items:center}
 .ghead .row{align-items:center}
 .btn.gv{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13px;line-height:1;padding:7px 11px}
-.btn.gv .gvi{font-size:11px;line-height:1;display:inline-block}
 
 /* jump to top / bottom */
 .main{position:relative}
@@ -802,7 +795,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 [data-pal="sage"][data-mode="dark"]{--accfg:#0f1e1b}
 :root .btn:disabled,:root .btn.greyed{opacity:1;color:var(--mute);background:var(--btn);border:var(--bd)}
 .status .l,.status .l *{opacity:1}
-.pcard.off{opacity:.88}
 
 /* the side-margin trick must never create a horizontal scrollbar */
 .pages{overflow-x:hidden}
@@ -810,11 +802,8 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 /* ---- audit round 2 (21 Oct): small text and greyed-out states stay readable ---- */
 :root .status .l{opacity:1}
 .tab.grp .chev{opacity:.9}
-.pgens.dis{opacity:.7;filter:grayscale(.3)}
-.pcard.off{opacity:.92}
 [data-mode="light"] .log .e,[data-mode="light"] .chip.e{color:var(--bad)}
 [data-pal="amber"][data-mode="light"]{--mute:#5c584f;--good:#2f6f43}
-.pgens.dis{opacity:.85}
 .tab.grp .chev{opacity:1}
 
 /* buttons whose icon is hidden (0 wide) must not keep the icon gap: text was 8px off-centre (left 20px vs right 12px) */
@@ -1260,7 +1249,6 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 /* ---- aligned form grid (ui-simple): label above field, equal widths ---- */
 .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,260px));gap:12px 20px;align-items:end}
 .fgrid .field input,.fgrid .field select{width:100%}
-.ptap{letter-spacing:0!important;text-transform:none}
 /* ---- sidebar (ui-simple): names are never cut; the status chip gives way instead ---- */
 .side{width:256px}
 .app.nosb .side{margin-left:-256px}
@@ -1453,7 +1441,6 @@ details.adv[open]>summary::before{transform:rotate(90deg)}
 :root[data-mode="light"] .state-pill.st-run,:root[data-mode="light"] .mon-pic{color:#047857}
 .tri.join{background:var(--accbtn,var(--accent));border-color:var(--accbtn,var(--accent));color:var(--accbtnfg,#fff)}
 :root[data-mode="light"] .insthead .mute{color:#4b5563}
-.pcard.off .ptap{color:var(--fg);opacity:.8}
 .tgview .hint{opacity:1}
 :root .status .sb-upd .ut{min-width:0;overflow:hidden;text-overflow:ellipsis}
 :root .status .sb-upd b{flex:none;font-weight:600;color:var(--accent2)}
@@ -1461,3 +1448,40 @@ details.adv[open]>summary::before{transform:rotate(90deg)}
 .status .sbl>span{overflow:hidden;text-overflow:ellipsis;min-width:0}
 .status .sbl>.sbrun,.status .sbl>#sbRam{flex:none}
 .status .sbdot{flex:none}
+/* presets & generals (23 Oct, Apple-level pass): chips, segmented choices, no big empty cards */
+.pgrid{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.pcard{background:var(--card);box-shadow:none;border:1px solid var(--line);gap:10px}
+.pcard .seg{align-self:flex-start}
+.pnote{margin:0;color:var(--mute)}
+:root .px{width:28px;height:28px;border-radius:8px;display:inline-grid;place-items:center;margin-left:auto;font-size:14px}
+:root .px:hover{background:var(--field);color:var(--fg)}
+.poff{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 0}
+.poff .lab{margin-right:4px}
+.pchip{min-height:30px;min-width:44px;padding:0 12px;border-radius:99px;border:1px dashed var(--off);background:transparent;color:var(--fg);font:inherit;font-size:13.5px;cursor:pointer}
+.pchip:hover{border-style:solid;border-color:var(--accent1);color:var(--accent2)}
+:root .armed{color:var(--mute);font-weight:500;font-size:13px}
+:root .seg.small .segb,:root .seg .segb{min-height:30px}
+.gchips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:34px}
+.gchip{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 4px 0 6px;border-radius:99px;border:1px solid var(--line);background:var(--field);font-size:13.5px;cursor:grab;max-width:100%}
+.gchip.dragging{opacity:.4}.gchip.over{border-color:var(--accent1)}
+.gchip img{width:22px;height:22px;border-radius:50%;object-fit:cover;object-position:50% 15%;flex:none}
+.gchip .gnum{font-size:11.5px;color:var(--mute);min-width:12px;text-align:center}
+.gchip .gnm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gchip .gx{width:24px;height:24px;border-radius:50%;border:0;background:transparent;color:var(--mute);cursor:pointer;font-size:11px;flex:none}
+.gchip .gx:hover{background:var(--line);color:var(--fg)}
+.gchips .gnone{color:var(--mute);font-size:13.5px;padding:0;margin:0}
+.gadd{min-height:30px}
+.gsearch2{display:grid;grid-template-columns:auto auto 1fr;gap:10px 18px;align-items:center;margin-top:16px;justify-items:start}
+.gsearch2 .rowlab{color:var(--fg);font-weight:500}
+.fgrid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 24px;margin-top:16px}
+.fgrid2 .field .seg{align-self:flex-start}
+@media (max-width:1100px){.gsearch2{grid-template-columns:auto 1fr}.gsearch2>span:first-child{display:none}.gsearch2 .lab:not(.rowlab){display:none}.fgrid2{grid-template-columns:minmax(0,1fr)}}
+.cardfoot{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.pgrid{align-items:start}
+.gen-body{grid-template-columns:minmax(0,1fr) 400px}.gen-body .seg{align-self:flex-start;flex-wrap:nowrap}
+/* lists of generals: picked row = soft tint + accent bar (not a solid fill); every empty state = title + what to do */
+.lst .li.sel{background:color-mix(in srgb,var(--accent1) 14%,transparent);color:var(--fg);box-shadow:inset 3px 0 0 var(--accent1)}
+.lst .li.sel .hint{color:var(--fg)}
+.empty{display:flex;flex-direction:column;align-items:center;gap:6px}
+.empty b{color:var(--fg);font-weight:600}
+.gen-body .empty{padding:60px 16px}

@@ -4,6 +4,7 @@ window.CHANGELOG = [
     new: ["Every screen shows when your changes are saved, with Undo (Ctrl+Z) for the last change.",
       "Dark mode is back (Settings > Appearance), with easier-to-read text everywhere.",
       "Simpler screens: one row of tabs, duties on one screen, duty settings in a side panel, Settings in plain words and shorter help.",
+      "Presets & generals redesigned: generals shown as cards with their picture (drag to reorder), clear choices for which tab to search and the favourites filter, and only the presets you use take space.",
       "Each instance in the list shows its full name and what it is doing, with play / pause right on the row.",
       "Daily duties show how they went over the last 7 days.",
       "Safety stop: if an account, log-out or gem-spending window appears, the bot stops that instance and alerts you instead of tapping."],
