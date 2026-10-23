@@ -485,8 +485,36 @@ def load_config():
     return migrate_cfg(cfg)
 
 
+def save_json(path, obj, indent=1, encoding="utf-8"):
+    """Write JSON safely: write a temp file next to it, flush it to disk, then swap it in. A crash or power cut
+    mid-write leaves the old file whole instead of a half-written one. Windows can refuse the swap for a moment
+    while another thread reads the file, so it retries a few times. Raises OSError like write_text did."""
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    data = json.dumps(obj, indent=indent)
+    try:
+        with open(tmp, "w", encoding=encoding) as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        for i in range(6):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if i == 5:
+                    raise
+                time.sleep(0.05 * (i + 1))
+    finally:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except OSError:
+            pass
+
+
 def save_config(cfg):
-    CONFIG.write_text(json.dumps(cfg, indent=2))
+    save_json(CONFIG, cfg, indent=2, encoding=None)
     set_game_reset(cfg)
 
 
@@ -3158,7 +3186,7 @@ def load_general_meta():
 
 def _save_general_meta(meta):
     (USER / "generals").mkdir(exist_ok=True)
-    _gen_meta_file().write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    save_json(_gen_meta_file(), meta, indent=2)
 
 
 def get_general_meta(name):
@@ -4372,7 +4400,7 @@ def merge_catalog(found, log=print):
             cv2.imwrite(str(root / "labels" / f"{safe}.png"), g["label"])
         have[safe] = {"name": safe, "region": g["region"], "troops": g["troops"], "art": f"{safe}.png"}
         added += 1
-    (root / "catalog.json").write_text(json.dumps({"built": time.strftime("%Y-%m-%d"), "generals": sorted(have.values(), key=lambda g: g["name"].lower())}, indent=1), encoding="utf-8")
+    save_json(root / "catalog.json", {"built": time.strftime("%Y-%m-%d"), "generals": sorted(have.values(), key=lambda g: g["name"].lower())}, indent=1)
     log(f"[+] General library: {added} new general(s) added, {len(have)} in total ({root})")
     return added
 
@@ -4414,7 +4442,7 @@ def save_catalog(found, log=print):
             (root / "labels").mkdir(exist_ok=True)
             cv2.imwrite(str(root / "labels" / f"{safe}.png"), g["label"])
         gens.append({"name": safe, "region": g["region"], "troops": g["troops"], "art": f"{safe}.png"})
-    (root / "catalog.json").write_text(json.dumps({"built": time.strftime("%Y-%m-%d"), "generals": gens}, indent=1), encoding="utf-8")
+    save_json(root / "catalog.json", {"built": time.strftime("%Y-%m-%d"), "generals": gens}, indent=1)
     log(f"[+] Saved {len(gens)} generals to {root}")
     return root
 
@@ -4711,6 +4739,29 @@ def memory_info():
     return info
 
 
+_MEM_SEEN = {"first": None, "peak": 0.0, "cpu": None}
+
+
+def memory_report(info=None):
+    """One '[mem]' log line: this app's memory now / at start / peak, PC free RAM, the app's CPU use since the
+    last line and threads. Logged every 10 min so a slow leak or creeping load is easy to spot."""
+    info = info or memory_info()
+    proc, free = info.get("proc_mb"), info.get("free_mb")
+    if proc:
+        _MEM_SEEN["first"] = _MEM_SEEN["first"] or proc
+        _MEM_SEEN["peak"] = max(_MEM_SEEN["peak"], proc)
+    t, now = os.times(), time.time()
+    cpu_s, cpu_txt = t.user + t.system, "?"
+    if _MEM_SEEN["cpu"]:
+        c0, w0 = _MEM_SEEN["cpu"]
+        cpu_txt = f"{100.0 * (cpu_s - c0) / max(now - w0, 1) / (os.cpu_count() or 1):.0f}%"
+    _MEM_SEEN["cpu"] = (cpu_s, now)
+    mb = lambda v: f"{v:.0f} MB" if v else "?"
+    return (f"[mem] app {mb(proc)} (start {mb(_MEM_SEEN['first'])}, peak {mb(_MEM_SEEN['peak'])}), "
+            f"PC free {mb(free)}, app CPU {cpu_txt}, threads {threading.active_count()}, "
+            f"alert keys {len(_notify_at)}")
+
+
 def trim_memory():
     """Give memory back: collect garbage and (Windows) ask the system to take unused pages out of this app's
     working set. They are loaded again on demand, so this only matters while the PC is short of RAM."""
@@ -4833,10 +4884,13 @@ def notify(cfg, serial, text, kind="problem"):
         return
     if not (cfg.get("discord_webhook") or (cfg.get("telegram_token") and cfg.get("telegram_chat"))):
         return
-    key = (serial, text)
-    if time.time() - _notify_at.get(key, 0) < 30:
+    key, now = (serial, text), time.time()
+    if now - _notify_at.get(key, 0) < 30:
         return
-    _notify_at[key] = time.time()
+    if len(_notify_at) > 200:                            # texts carry numbers/times, so keys never repeat: drop the old ones
+        for k in [k for k, t in list(_notify_at.items()) if now - t >= 30]:
+            _notify_at.pop(k, None)
+    _notify_at[key] = now
     name = (cfg.get("device_names") or {}).get(serial) or serial
     threading.Thread(target=send_alert, args=(cfg, f"[{name}] {text}"), daemon=True).start()
 
@@ -4922,7 +4976,7 @@ def save_profile(name, cfg):
     name = re.sub(r'[\\/:*?"<>|]', "", str(name)).strip()
     if not name:
         raise ValueError("Give the profile a name.")
-    (profiles_dir() / f"{name}.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    save_json(profiles_dir() / f"{name}.json", cfg, indent=2)
     return name
 
 
@@ -5148,9 +5202,7 @@ def remember_launch(serial, pid=None):
             return None
         mem = _launch_memory()
         mem[serial] = {"exe": exe, "instance": inst.group(1)}
-        tmp = _LAUNCH_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(mem, indent=1), encoding="utf-8")
-        os.replace(tmp, _LAUNCH_FILE)
+        save_json(_LAUNCH_FILE, mem, indent=1)
         return mem[serial]
     except Exception:
         return None
@@ -5797,8 +5849,7 @@ def set_bosses(items, source=""):
     with _boss_lock:
         _bosses[:] = items
         try:
-            BOSS_FILE.write_text(json.dumps({"updated": int(time.time()), "source": source, "items": items}, indent=1),
-                                 encoding="utf-8")
+            save_json(BOSS_FILE, {"updated": int(time.time()), "source": source, "items": items}, indent=1)
         except Exception:
             pass
 
@@ -5838,7 +5889,7 @@ def lib_add(items, chat, now):
                                 "chat": chat, "first": now, "last": now, "n": 1})
         del _lib[5000:]
         try:
-            LIB_FILE.write_text(json.dumps({"items": _lib}), encoding="utf-8")
+            save_json(LIB_FILE, {"items": _lib}, indent=None)
         except Exception:
             pass
 
@@ -5884,7 +5935,7 @@ def feed_add(items, chat="", keep_min=60):
                 _feed.insert(0, {**it, "chat": chat, "t": now})
         del _feed[500:]
         try:
-            FEED_FILE.write_text(json.dumps({"items": _feed}, indent=1), encoding="utf-8")
+            save_json(FEED_FILE, {"items": _feed}, indent=1)
         except Exception:
             pass
 
@@ -5909,7 +5960,7 @@ def feed_get(keep_min=60):
             _feed[:] = [f for f in _feed if now - f["t"] <= keep_min * 60]
             if len(_feed) != n:
                 try:
-                    FEED_FILE.write_text(json.dumps({"items": _feed}, indent=1), encoding="utf-8")
+                    save_json(FEED_FILE, {"items": _feed}, indent=1)
                 except Exception:
                     pass
         return list(_feed), dict(_feed_stats)
@@ -6698,7 +6749,7 @@ class FlowRecorder:
     def _save(self):
         data = {"name": self.name, "serial": self.serial, "screen": list(EXPECTED_SIZE), "touch_max": [self.maxx, self.maxy],
                 "recorded": time.strftime("%Y-%m-%d %H:%M"), "version": VERSION, "steps": self.steps}
-        (self.dir / "steps.json").write_text(json.dumps(data, indent=1), encoding="utf-8")
+        save_json(self.dir / "steps.json", data, indent=1)
 
     def stop(self):
         self.stop_ev.set()
@@ -7248,7 +7299,7 @@ def build_slots(items, merge=0):
 
 
 def save_slots(slots):
-    SLOT_FILE.write_text(json.dumps({"slots": slots}, indent=1), encoding="utf-8")
+    save_json(SLOT_FILE, {"slots": slots}, indent=1)
 
 
 def nearest_slot(slots, x, y, far=260, name=None, taken=()):
@@ -8508,10 +8559,7 @@ def bm_save(serial, **kw):
         data = load_duty_state()
         row = data.setdefault(serial or "default", {}).setdefault("black_market", {})
         row.update(kw)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def ce_save(serial, **kw):
@@ -8519,10 +8567,7 @@ def ce_save(serial, **kw):
         data = load_duty_state()
         row = data.setdefault(serial or "default", {}).setdefault("crazy_eggs", {})
         row.update(kw)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def ce_read_slot(img, i):
@@ -8800,10 +8845,7 @@ def ch_save(serial, **kw):
     with _DUTY_LOCK:
         data = load_duty_state()
         data.setdefault(serial or "default", {}).setdefault("champions", {}).update(kw)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def _ch_norm(s):
@@ -10234,10 +10276,7 @@ def rt_save(serial, **kw):
         data = load_duty_state()
         row = data.setdefault(serial or "default", {}).setdefault("royal_thief", {})
         row.update(kw)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def rt_row(serial):
@@ -10409,10 +10448,7 @@ def mr_save(serial, **kw):
         data = load_duty_state()
         row = data.setdefault(serial or "default", {}).setdefault("monster_rally", {})
         row.update(kw)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def mr_row(serial):
@@ -10801,6 +10837,7 @@ RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
 DUTY_FILE = USER / "duties_state.json"
 _DUTY_LOCK = threading.Lock()
+_DUTY_READ_LOCK = threading.Lock()
 DUTY_MAX_TRIES = 3                      # failures in a game day before the alert + report (the duty never gives up)
 DUTY_RETRY_MIN = 60                     # minutes between two tries of a duty that failed (rallies are joined meanwhile)
 # group, id, title, what it does, schedule text, every_min (0 = once per game day), target, steps.
@@ -10953,11 +10990,28 @@ def _game_day():
     return time.strftime("%Y-%m-%d", time.gmtime(time.time() - reset_min() * 60))     # the game day changes at Evony's reset (midnight US Pacific) unless a time is set
 
 
+_DUTY_CACHE = [None]                                     # duties_state.json kept in memory: read from disk once, written on change
+
+
 def load_duty_state():
+    """A private copy of the duty state (callers may change it; writers then pass it to save_duty_state)."""
+    with _DUTY_READ_LOCK:
+        if _DUTY_CACHE[0] is None:
+            try:
+                _DUTY_CACHE[0] = json.loads(DUTY_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                _DUTY_CACHE[0] = {}
+        return json.loads(json.dumps(_DUTY_CACHE[0]))
+
+
+def save_duty_state(data):
+    """Keep 'data' as the new duty state and write it to disk (atomic). Call with _DUTY_LOCK held."""
+    with _DUTY_READ_LOCK:
+        _DUTY_CACHE[0] = json.loads(json.dumps(data))
     try:
-        return json.loads(DUTY_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+        save_json(DUTY_FILE, data, indent=1)
+    except OSError:
+        pass
 
 
 def duty_record(serial, duty_id, ok, msg="", nothing=False):
@@ -10991,10 +11045,7 @@ def duty_record(serial, duty_id, ok, msg="", nothing=False):
             row["status"] = "retry"
             if row["tries"] == DUTY_MAX_TRIES:                   # the 3rd failure today: alert + report once (it keeps trying every hour)
                 row["status"] = "gaveup"
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
         return row.get("status")
 
 
@@ -11005,10 +11056,7 @@ def duty_retry(serial, duty_id):
         row = data.setdefault(serial or "default", {}).setdefault(duty_id, {})
         row["tries"], row["status"], row["next_at"] = 0, "retry", 0
         row["last_try"] = 0
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def run_now_list(serial):
@@ -11024,10 +11072,7 @@ def run_now_set(serial, ids):
             rn[serial or "default"] = list(dict.fromkeys(ids))
         else:
             rn.pop(serial or "default", None)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def run_now_done(serial, tid):

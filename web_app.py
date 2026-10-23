@@ -108,6 +108,7 @@ class Controller:
         self.last_poll = time.time()
         self._ram_warned = 0
         self._trim_n = 0
+        self._mem_log_at = time.time()
         self.sync_devices()
         threading.Thread(target=self._maintenance, daemon=True).start()
 
@@ -217,7 +218,7 @@ class Controller:
                 row.setdefault("monsters", {})[base] = row.get("monsters", {}).get(base, 0) + 1
             for old in sorted(per)[:-self.KEEP_DAYS]:
                 per.pop(old, None)
-            self.DAY_FILE.write_text(json.dumps(self._days), encoding="utf-8")
+            rb.save_json(self.DAY_FILE, self._days, indent=None)
         except Exception:
             pass
 
@@ -283,7 +284,7 @@ class Controller:
                     for old in sorted(have)[:-self.KEEP_DAYS]:
                         have.pop(old, None)
                 self.DAY_FILE.parent.mkdir(parents=True, exist_ok=True)
-                self.DAY_FILE.write_text(json.dumps(self._days), encoding="utf-8")
+                rb.save_json(self.DAY_FILE, self._days, indent=None)
             self.BACKFILL_DONE.write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
         except Exception:
             pass
@@ -822,10 +823,12 @@ class Controller:
                 self._ram_warned = time.time()
                 self.log(f"[!] The PC is low on memory: {info['free_mb']:.0f} MB free.")
                 rb.notify(self.cfg, "PC", f"Low on memory: {info['free_mb']:.0f} MB free.")
-        if self.cfg.get("low_memory"):
-            self._trim_n += 1
-            if self._trim_n % 24 == 0:
-                rb.trim_memory()
+        self._trim_n += 1
+        if self._trim_n % 24 == 0:                       # every ~2 min, for everyone (not only Low memory mode)
+            rb.trim_memory()
+        if time.time() - self._mem_log_at >= 600:        # one memory line every 10 min: a slow leak shows up over a long run
+            self._mem_log_at = time.time()
+            self.log(rb.memory_report(info))
 
     def _schedule_tick(self):
         self._maybe_restart()
@@ -1515,7 +1518,7 @@ class Controller:
         now = time.time()
         running = [s for s in self.dev if self.running(s)]
         try:
-            self.RESUME_FILE.write_text(json.dumps({"serials": running, "t": now}), encoding="utf-8")
+            rb.save_json(self.RESUME_FILE, {"serials": running, "t": now}, indent=None)
         except OSError:
             pass
         self.log(f"[+] Restarting to use the new version - {len(running)} emulator(s) start again by themselves")
@@ -2144,7 +2147,7 @@ class Api:
         for k in self.c.OWN_API_KEYS:                       # Duties / Crazy Eggs / Champions: always as saved
             if k in disk:
                 st[k] = disk[k]
-        (self._inst_dir() / f"{name}.json").write_text(json.dumps(st, indent=2), encoding="utf-8")
+        rb.save_json(self._inst_dir() / f"{name}.json", st, indent=2)
         return {"name": name, "profiles": self._inst_names()}
 
     def inst_profile_load(self, p):
@@ -2631,7 +2634,7 @@ def start_server(ctl):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     port = srv.server_address[1]
     try:
-        STATE_FILE.write_text(json.dumps({"port": port, "key": key, "pid": os.getpid()}), encoding="utf-8")
+        rb.save_json(STATE_FILE, {"port": port, "key": key, "pid": os.getpid()}, indent=None)
     except OSError:
         pass
     return port, key
