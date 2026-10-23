@@ -10279,7 +10279,12 @@ def _run_monster_rally(dev, cfg, log, stop):
             if not rd_tap(dev, stop, [f"{mode} minute(s)", f"{mode} minute"], region=(0, 460, 540, 180), cutoff=0.85, wait=(2.0, 2.5), shot=shot):
                 dev.tap(*MR_TIMES.get(mode, MR_TIMES["5"]))
                 _nap(stop, 2.0, 2.5)
-            shot = dev.screenshot()
+            for _ in range(6):                               # the troop page can take several seconds to open (owner 23 Oct)
+                shot = dev.screenshot()
+                if rd_seen(shot, ["Select a Preset"], region=(0, 0, 540, 180)) and not rd_seen(shot, ["rally time"], region=(0, 380, 540, 80)):
+                    break
+                _nap(stop, 1.5, 1.8)
+            rd_snap(shot, "mrally_preset_page")
             if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)) or rd_seen(shot, ["rally time"], region=(0, 380, 540, 80)):
                 rd_snap(shot, "mrally_nomarch")
                 dev.tap(504, 352)                                # X of the rally time popup
