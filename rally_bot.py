@@ -9588,8 +9588,8 @@ def run_resource_tax(dev, cfg, log, stop):
         dev.back()
         raise RuntimeError("the Tax popup does not show a cost of 0 - not pressed")
     if not rd_tap(dev, stop, ["Tax"], region=(160, 570, 240, 80), whole=True, wait=(2.0, 2.6), shot=shot):
-        dev.back()
-        raise RuntimeError("no Tax button in the popup")
+        dev.tap(270, 597)                                   # the popup's green Tax button (cost 0 was checked above)
+        _nap(stop, 2.0, 2.6)
     rd_close_reward(dev, stop)
     log(f"[+]  Resource Tax: free taxes used on {res}")
 
