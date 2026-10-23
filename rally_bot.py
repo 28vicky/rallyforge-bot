@@ -9695,7 +9695,8 @@ def activity_go(dev, cfg, log, stop, tile, probe=False):
     rd_snap(shot, "ago_1_more")
     if not rd_tap(dev, stop, ["Activity"], region=(0, 100, 540, 800), wait=(1.6, 2.0), shot=shot):
         raise RuntimeError("no Activity in the '...' menu")
-    words = [tile] + ([tile.rstrip("s")] if tile.endswith("s") else [tile + "s"])
+    key = max(tile.split(), key=len)                     # the game cuts tile labels ("eet Champion", "rade Carriage"): match the main word
+    words = [tile, key] + ([key.rstrip("s")] if key.endswith("s") else [])
     hit = None
     for i in range(8):                                   # 3 tiles a row, the grid scrolls
         shot = dev.screenshot()
@@ -9709,7 +9710,7 @@ def activity_go(dev, cfg, log, stop, tile, probe=False):
     if not hit:
         rd_snap(dev.screenshot(), "ago_2_notile")
         raise RuntimeError(f"no '{tile}' tile on the Activity page")
-    dev.tap(int(hit[0]), int(hit[1]))
+    dev.tap(int(hit[0]), min(int(hit[1]) + 45, 900))      # the tile picture under its label
     _nap(stop, 1.4, 1.8)
     shot = dev.screenshot()
     rd_snap(shot, "ago_3_tile")
