@@ -7998,7 +7998,7 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             toggled += 1
             say(f"[*] Recovery: showing the {v} view - switching to the {want} view")
             dev.tap(*VIEW_TOGGLE)
-            _nap(stop, 2.2, 3.0)
+            _nap(stop, 4.0, 5.0) if want == "world" else _nap(stop, 2.2, 3.0)   # the world map takes longer to draw
             continue
         if close_reward_panel(dev, stop, None):
             continue
@@ -8017,6 +8017,9 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             _nap(stop, 0.8, 1.2)
             continue
         unknown += 1
+        if want == "world" and toggled and unknown <= 3:   # just switched: the world map may still be loading - Back there asks to quit
+            _nap(stop, 2.0, 2.5)
+            continue
         cx = find_close_x(shot) if unknown % 2 == 1 else []
         if cx:
             dev.tap(cx[0][0], cx[0][1])
@@ -10054,6 +10057,8 @@ def mr_march_line(img, center=MR_CENTER):
 
 def mr_search(dev, stop, x, y):
     """Map shown: open the coordinate search, type X and Y, check them, Go. -> True when the map flew there."""
+    if cancel_quit_dialog(dev, dev.screenshot(), lambda *_: None):   # an 'exit the game?' box left open would eat the tap
+        _nap(stop, 0.8, 1.2)
     dev.tap(300, 845)                                       # the X: Y: box at the bottom of the map
     _nap(stop, 1.4, 1.8)
     shot = dev.screenshot()
