@@ -1,10 +1,21 @@
 """Release gate: run it BEFORE and AFTER pushing. Every file listed in version.json must be byte-identical (sha256)
 to what git holds for that ref - what GitHub serves is exactly that. Exit code 1 = do NOT announce the update.
   python check_release.py            -> checks the working tree against version.json
-  python check_release.py origin/main -> checks what is pushed (run git fetch first)"""
+  python check_release.py origin/main -> checks what is pushed (run git fetch first)
+First it runs the logic tests in tests/ (working tree); a failing test also gives exit code 1. --no-tests skips them."""
 import hashlib, json, subprocess, sys, urllib.parse
+from pathlib import Path
 
-ref = sys.argv[1] if len(sys.argv) > 1 else None
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+ref = args[0] if args else None
+if "--no-tests" not in sys.argv and (Path(__file__).parent / "tests").is_dir():
+    t = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-q"],
+                       cwd=Path(__file__).parent, capture_output=True, text=True)
+    last = (t.stderr.strip().splitlines() or ["?"])[-1]
+    print(f"tests: {'OK' if t.returncode == 0 else 'FAILED'} - {last}")
+    if t.returncode:
+        print(t.stderr[-3000:])
+        sys.exit(1)
 
 
 def read(name):
