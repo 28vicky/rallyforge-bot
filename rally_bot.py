@@ -9947,6 +9947,7 @@ def run_royal_thief(dev, cfg, log, stop):
 MR_POLL_MIN = 5                          # look for a new target this often
 MR_FORGET_MIN = 30                       # a target that was started / skipped is not tried again for this long
 MR_CENTER = (272, 480)                   # the searched tile sits in the middle of the map
+MR_ALLIANCE_WAR = (384, 768)              # Alliance War button on a monster page (Attack sits at 170)
 MR_EMPTY = (330, 250)                     # a map spot with no button: closes a ring (40,640 was the Quests button)
 MR_NEAR = [(0, 0), (0, -30), (-30, 10), (30, 10), (0, 35)]   # the monster's picture can sit a little off the tile centre
 MR_TIMES = {"5": (190, 512), "10": (395, 512), "30": (190, 590), "60": (395, 590)}   # Alliance War Rally! buttons (fallback spots)
@@ -10152,8 +10153,9 @@ def mr_open_monster(dev, stop, want):
             dev.back()
             _nap(stop, 0.8, 1.1)
             continue
-        head = " ".join(t for t, _ in rd_lines(page, (0, 150, 400, 120)))
-        if want and want.lower().split()[0] not in head.lower():
+        head = " ".join(t for t, _ in ocr_lines(page[120:300, 0:540], 2.5, bright=True))   # plain OCR garbled the name
+        words = [w for w in want.lower().split() if len(w) > 2]
+        if words and not any(w in head.lower() for w in words):
             dev.back()
             _nap(stop, 0.8, 1.1)
             return "other", head[:40]
@@ -10236,8 +10238,8 @@ def run_monster_rally(dev, cfg, log, stop):
             if got != "ok":
                 break
             if not rd_tap(dev, stop, ["Alliance War"], region=(270, 730, 270, 130), wait=(1.8, 2.2), shot=page):
-                dev.back()
-                raise RuntimeError("no Alliance War button on the monster's page")
+                dev.tap(*MR_ALLIANCE_WAR)                    # white-on-brown label is often not read: its fixed spot
+                _nap(stop, 1.8, 2.2)
             shot = dev.screenshot()
             rd_snap(shot, "mrally_time")
             if not rd_seen(shot, ["Alliance War Rally", "rally time"], region=(0, 300, 540, 160)):
