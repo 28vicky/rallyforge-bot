@@ -6112,6 +6112,72 @@ def _view_scale(a, b):
         return None
 
 
+def emu_window(dev, name=None):
+    """Windows handle of this emulator's game picture (MuMu: MuMuManager info render_wnd; else a window titled with the name)."""
+    if os.name != "nt":
+        return None
+    import ctypes
+    u32 = ctypes.windll.user32
+    m = re.fullmatch(r"127\.0\.0\.1:(\d+)", dev.serial)
+    mgr = mumu_manager(dev.adb) if m and int(m.group(1)) >= 16000 else None
+    if mgr:
+        try:
+            idx = mumu_index(dev.serial, dev.adb, name)
+            out = subprocess.run([str(mgr), "info", "-v", str(idx)], capture_output=True, text=True,
+                                 timeout=20, creationflags=NOWIN).stdout
+            info = json.loads(out)
+            for k in ("render_wnd", "main_wnd"):
+                v = str(info.get(k) or "")
+                if v and int(v, 16) and u32.IsWindow(int(v, 16)):
+                    return int(v, 16)
+        except Exception:
+            pass
+    if not name:
+        return None
+    want, hits = str(name).strip().lower(), []
+    proto = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+    def cb(h, _):
+        n = u32.GetWindowTextLengthW(h)
+        if n and u32.IsWindowVisible(h):
+            b = ctypes.create_unicode_buffer(n + 1)
+            u32.GetWindowTextW(h, b, n + 1)
+            if b.value.strip().lower() == want:
+                hits.append(h)
+        return True
+    u32.EnumWindows(proto(cb), 0)
+    return hits[0] if hits else None
+
+
+def wheel_zoom_out(dev, log, name=None, notches=6):
+    """Ctrl + mouse wheel down sent to the emulator window (owner 23 Oct: zooms the city out on MuMu and BlueStacks).
+    Window messages only - the owner's mouse and the window focus are not touched. -> True when sent."""
+    h = emu_window(dev, name)
+    if not h:
+        log("[i] Zoom out: emulator window not found for Ctrl+wheel")
+        return False
+    import ctypes
+    from ctypes import wintypes
+    u32 = ctypes.windll.user32
+    rc = wintypes.RECT()
+    u32.GetWindowRect(h, ctypes.byref(rc))
+    cx, cy = (rc.left + rc.right) // 2, (rc.top + rc.bottom) // 2
+    lp = ((cy & 0xFFFF) << 16) | (cx & 0xFFFF)
+    targets = [h]
+    proto = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    u32.EnumChildWindows(h, proto(lambda c, _: targets.append(c) or True), 0)
+    for t in targets:
+        u32.PostMessageW(t, 0x0100, 0x11, 0x001D0001)                  # WM_KEYDOWN Ctrl
+    for _ in range(notches):
+        for t in targets:
+            u32.PostMessageW(t, 0x020A, ((-120 & 0xFFFF) << 16) | 0x0008, lp)   # WM_MOUSEWHEEL down + MK_CONTROL
+        time.sleep(0.12)
+    for t in targets:
+        u32.PostMessageW(t, 0x0101, 0x11, 0xC01D0001)                  # WM_KEYUP Ctrl
+    log(f"[i] Zoom out: Ctrl+wheel x{notches} sent to window {h:#x} ({len(targets)} parts)")
+    return True
+
+
 def zoom_out_city(dev, stop, log, max_tries=3):
     """Zoom the city view out with a two-finger pinch (done once per emulator session). -> True when the view got wider."""
     if getattr(dev, "zoomed_out", False):
@@ -6136,6 +6202,21 @@ def zoom_out_city(dev, stop, log, max_tries=3):
         a = dev.screenshot()
         sc = _view_scale(b, a)
         log(f"[i] lab variant {vi} {var}: sent={ok} scale={sc} {getattr(dev, 'last_pinch', '')}")
+    name = (load_config().get("device_names") or {}).get(dev.serial)
+    for i in range(2):                                    # first way: Ctrl + wheel down on the emulator window
+        before = dev.screenshot()
+        if not wheel_zoom_out(dev, log, name):
+            break
+        _nap(stop, 1.2, 1.5)
+        sc = _view_scale(before, dev.screenshot())
+        log(f"[i] Zoom out (Ctrl+wheel) {i + 1}: view scale {sc:.2f}" if sc else f"[i] Zoom out (Ctrl+wheel) {i + 1}: scale not measurable")
+        if sc and sc < 0.93:
+            ok_any = True
+        elif sc and sc >= 0.97:
+            break
+    if ok_any:
+        dev.zoomed_out = True
+        return True
     for i in range(max_tries):
         if stop.is_set():
             return False
