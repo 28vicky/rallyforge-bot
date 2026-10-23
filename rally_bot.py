@@ -10110,16 +10110,26 @@ def mr_search(dev, stop, x, y):
     return True
 
 
+MR_EMPTY_RING = [False]                    # set by mr_attack_spot: the last ring was the empty-land one (Occupy / Teleport)
+
+
 def mr_attack_spot(shot):
     """The monster's ring menu: -> (x, y) of its 'Attack' label, or None. Plain OCR only reads 'Att' on the ring's
-    dark label (Kiravik 23 Oct) - read the ring area enlarged and bright."""
+    dark label (Kiravik 23 Oct) - read the ring area enlarged and bright. Empty land (Occupy / Teleport ring) sets
+    MR_EMPTY_RING[0] so the caller can skip the monster at once."""
+    MR_EMPTY_RING[0] = False
     try:
         for t, ws in ocr_lines(shot[250:700, 0:540], 2.5, bright=True):
             for w in ws:
-                if str(w[0]).lower().strip("|.,:;!() ") in ("attack", "attac", "atack"):
+                word = str(w[0]).lower().strip("|.,:;!() ")
+                if word in ("attack", "attac", "atack"):
                     return int(w[1]), int(w[2]) + 250
+                if word in ("occupy", "teleport"):
+                    MR_EMPTY_RING[0] = True
     except Exception:
         pass
+    if MR_EMPTY_RING[0]:
+        return None
     p = rd_find(shot, ["Attack"], region=(0, 250, 540, 450), cutoff=0.75)
     return (p[0], p[1]) if p else None
 
@@ -10136,6 +10146,8 @@ def mr_still_there(dev, stop):
         _nap(stop, 0.7, 0.9)
         if hit:
             return True
+        if MR_EMPTY_RING[0]:                                # empty land on the tile: the monster is dead
+            return False
     return False
 
 
@@ -10153,6 +10165,8 @@ def mr_open_monster(dev, stop, want):
         if not p:
             dev.tap(*MR_EMPTY)                              # empty map: close whatever ring opened
             _nap(stop, 0.8, 1.0)
+            if MR_EMPTY_RING[0]:                            # Occupy / Teleport = empty land: gone, no more taps
+                return "gone", None
             continue
         dev.tap(p[0], max(100, p[1] - 30))
         _nap(stop, 1.8, 2.3)
