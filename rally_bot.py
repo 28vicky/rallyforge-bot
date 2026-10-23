@@ -10417,6 +10417,11 @@ def run_map_city(dev, cfg, log, stop):
     views = []                                             # [(crop_bgr, gray, feats, est_x, est_y)]
     t0 = time.time()
     drags = [0]
+    gain = [1.3, 1.3]                                      # game px per finger px, per axis (measured as we go)
+
+    def known(px_, py_):
+        """Is this camera place within one third of a view of ground we already keep?"""
+        return any(abs(ex - px_) < 120 and abs(ey - py_) < 120 for _, _, _, ex, ey in views)
 
     def clean_shot(shot=None):
         shot = dev.screenshot() if shot is None else shot
@@ -10435,9 +10440,8 @@ def run_map_city(dev, cfg, log, stop):
         if d is None or len(k) < 700:
             log(f"[i]   view at {round(nav.cx)},{round(nav.cy)}: {0 if d is None else len(k)} points - countryside, not kept")
             return False
-        for _, _, _, ex, ey in views:                       # the same ground again (the edge slid the camera back)
-            if abs(ex - nav.cx) < 120 and abs(ey - nav.cy) < 120:
-                return False
+        if known(nav.cx, nav.cy):                          # the same ground again (the edge slid the camera back)
+            return False
         views.append((shot[y:y + h, x:x + w].copy(), g, (k, d), nav.cx, nav.cy))
         rd_snap(shot, f"map_v{len(views):02d}")
         log(f"[i]   map view {len(views)} at about {round(nav.cx)},{round(nav.cy)} ({len(k)} points)")
@@ -10450,6 +10454,9 @@ def run_map_city(dev, cfg, log, stop):
         drags[0] += 1
         nav.cx -= ddx
         nav.cy -= ddy
+        for a, f, m in ((0, dx, ddx), (1, dy, ddy)):       # learn the gain from full drags (not the edge's short ones)
+            if abs(f) >= 100 and abs(m) >= abs(f) / 2:
+                gain[a] = max(0.8, 0.7 * gain[a] + 0.3 * abs(m) / abs(f))
         return -ddx, -ddy
 
     def timed_out():
@@ -10465,12 +10472,14 @@ def run_map_city(dev, cfg, log, stop):
     STEP = ((STEPX, 0), (0, STEPY), (-STEPX, 0), (0, -STEPY))
     tried = [set()]                                        # per view: directions already tried from it
     at = 0                                                 # the view the camera is on (or nearest to)
-    idle = 0                                               # moves in a row that found no new ground
 
     def nearest():
         return min(range(len(views)), key=lambda i: abs(views[i][3] - nav.cx) + abs(views[i][4] - nav.cy))
 
-    while len(views) < 60 and idle < 8 and not timed_out():
+    # No "idle" stop: Kiravik 24 Oct 01:45 ended after 8 old-ground moves in a row at the diamond's edge with half the
+    # city unexplored (18 views, 13 min) while Stalds got the whole city (51 views, 28 min) only because its edge runs were
+    # shorter. The walk ends when every kept view has had its 4 directions; the time cap is the safety.
+    while len(views) < 60 and not timed_out():
         if len(tried[at]) == 4:                            # this view is done: go to the nearest view with directions left
             cand = [i for i in range(len(views)) if len(tried[i]) < 4]
             if not cand:
@@ -10482,15 +10491,25 @@ def run_map_city(dev, cfg, log, stop):
                     break
                 move(max(-STEPX, min(STEPX, rx)), max(-STEPY, min(STEPY, ry)))
             continue
-        sx, sy = min(STEP, key=lambda d: (d in tried[at], abs(d[0]) == 0))   # sideways first (the diamond is wider than tall)
+        # Directions whose landing (by the measured gain) is ground we already keep - the way we came, a neighbour's
+        # view - are marked tried without a drag: half of all moves landed on old ground before (Stalds: 137 moves, 56 views).
+        for d in STEP:
+            if d not in tried[at] and known(nav.cx + d[0] * gain[0], nav.cy + d[1] * gain[1]):
+                tried[at].add(d)
+        left = [d for d in STEP if d not in tried[at]]
+        if not left:
+            continue
+        # Outward first (away from the centre of what is mapped) so the walk sweeps to the edge instead of circling
+        # the start; sideways before up/down (the diamond is wider than tall).
+        cx0 = sum(v[3] for v in views) / len(views)
+        cy0 = sum(v[4] for v in views) / len(views)
+        sx, sy = max(left, key=lambda d: (d[0] / STEPX * (nav.cx - cx0) + d[1] / STEPY * (nav.cy - cy0), abs(d[0]) > 0))
         tried[at].add((sx, sy))
-        mx, my = move(sx, sy)
+        move(sx, sy)
         if keep(clean_shot()):
-            idle = 0
             tried.append(set())
             at = len(views) - 1
         else:                                              # old ground (the edge: did not move, slid, or sprang back)
-            idle += 1
             at = nearest()
     if len(views) < 2:
         log("[!]  Map my city: fewer than 2 views with buildings - nothing saved")
