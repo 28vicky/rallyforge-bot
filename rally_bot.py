@@ -3436,6 +3436,7 @@ def daily_checkin(dev, shot, log, stop):
 CITY_POPUP_WORDS = ["Event starts in", "Truce Agreement", "Server War is about to begin"]   # event pop-ups that sit over the city (the city is still recognised behind them)
 
 
+_STUCK_POPUPS = {}                         # serial -> times clear_popups ended still lost (3 in 10 min -> game restart)
 POPUP_LIB = USER / "popup_library"          # every unknown pop-up the bot meets: picture + what closed it (grows by itself)
 _poplib_lock = threading.Lock()
 _poplib_cache = {}
@@ -3679,6 +3680,24 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
                 tap_hit(dev, c)
                 log("[*] Back opened the quit dialog - cancelled it")
                 _nap(stop, 0.8, 1.2)
+    try:                                                   # still lost after everything: count it; 3 times in 10 min -> restart the game
+        _end = dev.screenshot()
+        _lost = screen_state(_end, cfg) == "unknown" and not world_map(_end) and tab_row(_end) is None
+    except Exception:
+        _lost = False
+    _now = time.time()
+    _hist = [t for t in _STUCK_POPUPS.get(dev.serial, []) if _now - t < 600] + ([_now] if _lost else [])
+    _STUCK_POPUPS[dev.serial] = [] if not _lost else _hist
+    if len(_hist) >= 3 and not stop.is_set():
+        _STUCK_POPUPS[dev.serial] = []
+        log("[!] Could not get past an unknown screen 3 times in 10 min - restarting the game")
+        try:
+            (USER / "debug").mkdir(exist_ok=True)
+            cv2.imwrite(str(USER / "debug" / "stuck_before_restart.png"), _end)
+        except Exception:
+            pass
+        force_restart_game(dev, cfg, log, stop)
+        closed += 1
     return closed
 
 
