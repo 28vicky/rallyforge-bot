@@ -10413,15 +10413,30 @@ def run_map_city(dev, cfg, log, stop):
     zoom_out_full(dev, cfg, stop, log)
     nav = CityNav(dev, stop, log, pause=0.6)
     x, y, w, h = CITY_VIEW
-    STEPX, STEPY = int(w * 0.65), 400                  # views overlap ~1/3 sideways, ~40 % downwards (one drag each)
-    views = []                                             # [(crop_bgr, gray, feats, est_x, est_y)]
-    t0 = time.time()
+    STEPX, STEPY = int(w * 0.67), int(h * 0.67)        # one step in GAME px: views overlap one third each way (the finger
+    views = []                                             # distance comes from the measured gain - a fixed 234 finger px moved
+    t0 = time.time()                                       # up to 340 game px sideways = 20 px overlap, no picture link)
     drags = [0]
     gain = [1.3, 1.3]                                      # game px per finger px, per axis (measured as we go)
 
     def known(px_, py_):
         """Is this camera place within one third of a view of ground we already keep?"""
         return any(abs(ex - px_) < 120 and abs(ey - py_) < 120 for _, _, _, ex, ey in views)
+
+    def anchor(k, d, g):
+        """Where the pictures say the camera is: median of the places implied by picture links to the kept views nearby
+        (by the running estimate). -> (x, y) or None when no nearby view links. The drag estimates drift (24 Oct 02:44:
+        164 moves put 3 'new' views on one edge spot and lost the west half as a separate group), the pictures do not."""
+        px_, py_ = [], []
+        for _, g2, f2, ex, ey in views:
+            if abs(ex - nav.cx) < w * 1.5 and abs(ey - nav.cy) < h * 1.5:
+                s = _kf_link(f2, (k, d), g2, g)
+                if s:
+                    px_.append(ex - s[0])
+                    py_.append(ey - s[1])
+        if not px_:
+            return None
+        return float(np.median(px_)), float(np.median(py_))
 
     def clean_shot(shot=None):
         shot = dev.screenshot() if shot is None else shot
@@ -10440,23 +10455,34 @@ def run_map_city(dev, cfg, log, stop):
         if d is None or len(k) < 700:
             log(f"[i]   view at {round(nav.cx)},{round(nav.cy)}: {0 if d is None else len(k)} points - countryside, not kept")
             return False
+        if views:
+            a = anchor(k, d, g)
+            if a is None:
+                log(f"[i]   view at {round(nav.cx)},{round(nav.cy)}: no picture link to a nearby view - not kept")
+                return False
+            nav.cx, nav.cy = a                             # the estimate follows the pictures from here on
         if known(nav.cx, nav.cy):                          # the same ground again (the edge slid the camera back)
             return False
         views.append((shot[y:y + h, x:x + w].copy(), g, (k, d), nav.cx, nav.cy))
         rd_snap(shot, f"map_v{len(views):02d}")
         log(f"[i]   map view {len(views)} at about {round(nav.cx)},{round(nav.cy)} ({len(k)} points)")
+        log("@act " + json.dumps({"k": "step", "text": f"Duty: Mapping {len(views)} views"}))   # progress in the instance chip
+        if len(views) % 5 == 0:
+            log(f"[i]   Map my city: {len(views)} views, {drags[0]} moves, {round((time.time() - t0) / 60)} min")
         return True
 
     def move(dx, dy):
         """ONE measured drag per step (pan() tops a step up with extra drags: 20 s per step on Kiravik 24 Oct 00:08).
         Wherever the camera lands is fine - the places come from the pictures, not from the steps."""
-        ddx, ddy, _ = nav._drag(270 + dx / 2, 440 + dy / 2, 270 - dx / 2, 440 - dy / 2)
+        fx = max(-300.0, min(300.0, dx / gain[0]))         # finger px for the wanted game px (kept inside the map area)
+        fy = max(-560.0, min(560.0, dy / gain[1]))
+        ddx, ddy, _ = nav._drag(270 + fx / 2, 440 + fy / 2, 270 - fx / 2, 440 - fy / 2)
         drags[0] += 1
         nav.cx -= ddx
         nav.cy -= ddy
-        for a, f, m in ((0, dx, ddx), (1, dy, ddy)):       # learn the gain from full drags (not the edge's short ones)
+        for a, f, m in ((0, fx, ddx), (1, fy, ddy)):       # learn the gain from full drags (not the edge's short ones)
             if abs(f) >= 100 and abs(m) >= abs(f) / 2:
-                gain[a] = max(0.8, 0.7 * gain[a] + 0.3 * abs(m) / abs(f))
+                gain[a] = max(0.8, min(2.0, 0.7 * gain[a] + 0.3 * abs(m) / abs(f)))
         return -ddx, -ddy
 
     def timed_out():
@@ -10494,7 +10520,7 @@ def run_map_city(dev, cfg, log, stop):
         # Directions whose landing (by the measured gain) is ground we already keep - the way we came, a neighbour's
         # view - are marked tried without a drag: half of all moves landed on old ground before (Stalds: 137 moves, 56 views).
         for d in STEP:
-            if d not in tried[at] and known(nav.cx + d[0] * gain[0], nav.cy + d[1] * gain[1]):
+            if d not in tried[at] and known(nav.cx + d[0], nav.cy + d[1]):
                 tried[at].add(d)
         left = [d for d in STEP if d not in tried[at]]
         if not left:
