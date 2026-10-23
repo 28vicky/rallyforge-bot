@@ -10492,6 +10492,7 @@ def run_map_city(dev, cfg, log, stop):
                 return ax, ay
         return None
 
+    nolink = [0]                                           # views in a row that linked to nothing (a window over the city?)
     last = [None]                                          # the settled picture the camera is on now (reused: one
                                                            # screenshot round per move instead of three)
 
@@ -10518,7 +10519,14 @@ def run_map_city(dev, cfg, log, stop):
             if a is None:
                 log(f"[i]   view at {round(nav.cx)},{round(nav.cy)}: no picture link to any kept view - not kept")
                 rd_snap(shot, f"map_x{drags[0]:03d}")       # debug: the view that did not link
+                nolink[0] += 1
+                if nolink[0] >= 2:                         # Stalds 24 Oct 05:14: a "Bounty Cave" sale window over the city (HUD
+                    nolink[0] = 0                          # still visible = looks like the city) - 7 unlinked views in 10 min
+                    log("[!]   two views in a row link to nothing - a window may be covering the city, closing pop-ups")
+                    clear_popups(dev, cfg, log, stop, rounds=3)
+                    last[0] = None
                 return False
+            nolink[0] = 0
             nav.cx, nav.cy = a                             # the estimate follows the pictures from here on
         if known(nav.cx, nav.cy):                          # the same ground again (the edge slid the camera back)
             return False
