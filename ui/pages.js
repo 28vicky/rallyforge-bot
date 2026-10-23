@@ -1112,11 +1112,16 @@ PAGES.schedule = function () {
 };
 PAGES.updates = function () {
   const c = S.cfg;
-  return panel(`Updates (this is version ${S.version})`,
-    grid2(fld("Update address (link to version.json)", inp(c, "update_url")), fld("When a new version is found", sel(c, "update_mode", ["off", "ask", "auto"])),
-      fld("Update key (optional, recommended)", inp(c, "update_key", { type: "password" }))),
-    h("div", { style: { marginTop: "14px", display: "flex", gap: "10px" } }, btn("Check for updates now", async () => { if (await act(api("check_updates", { cfg: c }))) toast("Checking for updates..."); }, "pri"), btn("What's new", () => showWhatsNew(true))),
-    note("off = never check, ask = ask before installing, auto = install by itself. The app checks when it opens and every few hours. A new version starts after the app restarts; if instances are running the restart waits until they are stopped. With an update key, only updates signed with the same key (make_update.py --key) are accepted. Updates only work when the app was started through launcher.py / the exe built from it."));
+  const modes = [["off", "Off"], ["ask", "Ask me"], ["auto", "Automatic"]];
+  const seg = h("div", { class: "seg", role: "radiogroup" }, ...modes.map(([v, l]) => h("button", { class: "segb" + ((c.update_mode || "ask") === v ? " on" : ""), role: "radio", onclick: () => { c.update_mode = v; rerender(); } }, l)));
+  const tip = { off: "Never checks for updates.", ask: "Shows \u201cUpdate available\u201d - you choose when to install.", auto: "Installs new versions by itself when no instance is in the middle of a join." }[c.update_mode || "ask"];
+  // the update address and key are for the developer build only - users never see where updates come from
+  const dev = S.dev ? panel("Developer", grid2(fld("Update address (link to version.json)", inp(c, "update_url")), fld("Update key", inp(c, "update_key", { type: "password" })))) : null;
+  return h("div", {}, panel(`Updates`,
+    h("div", { class: "row", style: { justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" } },
+      h("div", {}, h("b", {}, "Version " + S.version), h("small", { class: "sub", style: { display: "block", color: "var(--mute)" } }, "The app checks when it opens and every 30 minutes.")),
+      h("div", { class: "row", style: { gap: "10px" } }, btn("What's new", () => showWhatsNew(true)), btn("Check for updates now", async () => { if (await act(api("check_updates", { cfg: c }))) toast("Checking for updates..."); }, "pri"))),
+    h("div", { style: { marginTop: "18px" } }, h("div", { class: "lab", style: { marginBottom: "8px" } }, "When a new version is found"), seg, note(tip + " A new version starts after the app restarts; running instances are started again by themselves."))), dev);
 };
 
 // ====================================================================== themes
