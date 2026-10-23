@@ -6234,7 +6234,10 @@ def real_wheel_zoom_out(dev, log, name=None, notches=6):
         u32.ShowWindow(top, 9)                            # SW_RESTORE (does nothing when not minimised)
         send(key(0x12), key(0x12, True))                  # Alt tap: Windows then allows SetForegroundWindow
         u32.SetForegroundWindow(top)
+        u32.SetWindowPos(top, -1, 0, 0, 0, 0, 0x0043)     # HWND_TOPMOST for the scroll: other windows may cover it (PC 23 Oct)
         time.sleep(0.4)
+        if u32.WindowFromPoint(wintypes.POINT(cx, cy)) not in (h, top) and not u32.IsChild(top, u32.WindowFromPoint(wintypes.POINT(cx, cy))):
+            log("[i] Zoom out: another window still covers the emulator - scrolling anyway")
         u32.SetCursorPos(cx, cy)
         time.sleep(0.15)
         send(key(0x11))
@@ -6244,6 +6247,7 @@ def real_wheel_zoom_out(dev, log, name=None, notches=6):
         send(key(0x11, True))
         time.sleep(0.3)
         u32.SetCursorPos(old.x, old.y)
+        u32.SetWindowPos(top, -2, 0, 0, 0, 0, 0x0013)     # HWND_NOTOPMOST again, no move/size/activate
         if prev:
             u32.SetForegroundWindow(prev)
     log(f"[i] Zoom out: real Ctrl+wheel x{notches} over the emulator window ({cx},{cy})")
