@@ -5169,6 +5169,7 @@ def save_start_picture(dev, cfg, log, keep=30):
 
 KICKED = {}                       # serial -> time (epoch s) when the wait after being kicked ends (shown in the emulator list)
 TAKEBACK = {}                     # serial -> Event: set from the interface to end the wait after being kicked
+GAME_RESTART_REQ = set()          # serials whose Evony should be closed and opened again (Restart game from the interface)
 
 
 def reclaim_if_kicked(dev, cfg, log, stop, screen):
@@ -12063,6 +12064,11 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 if rep_txt:
                     log(rep_txt)
             emit_frame(screen)
+            if serial in GAME_RESTART_REQ:                       # Restart game asked from the interface
+                GAME_RESTART_REQ.discard(serial)
+                log("[*] Restart game asked - closing and opening Evony")
+                force_restart_game(dev, cfg, log, stop)
+                continue
             st = screen_state(screen, cfg)
             if st != "rally_list" and time.time() - kick_check[0] > 4:
                 kick_check[0] = time.time()
