@@ -10,6 +10,7 @@ window.CHANGELOG = [
     fixed: ["Stamina refill uses every item size you have before giving up.",
       "The bot no longer stays stuck on a window it does not know - it restarts the game.",
       "Behemoth King is never joined as a Behemoth rally.",
+      "When a general is not in the category it was saved under, the bot also looks for it in the All tab instead of giving up.",
       "More emulator instances are found when you press Detect.",
       "The update notice in the footer stays on one line.",
       "Settings are saved more safely."] },

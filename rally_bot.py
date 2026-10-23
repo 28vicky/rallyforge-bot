@@ -3974,32 +3974,56 @@ def choose_general(dev, name, cfg, log, stop, role="main"):
     def same(a, b):
         return float(np.mean(cv2.absdiff(a[200:900], b[200:900]))) < 1.5
 
-    prev = None
-    for _ in range(8):                                   # go to the top of the list
-        shot = dev.screenshot()
-        if prev is not None and same(prev, shot):
-            break
-        prev = shot
-        dev.swipe(270, 330, 270, 820, 500)
-        nap(0.7, 1.0)
-    hit, prev, busy, best_all, scans = None, None, False, 0.0, 0
-    log(f"[i] Looking for {role} general '{name}': tab {want}, favourites {fav or 'leave'}, {view} view")
-    for _ in range(int(cfg["general_max_scrolls"]) * (3 if view == "list" else 1) + 1):  # scan downwards
-        shot = dev.screenshot()
-        if view == "list":
-            hit = find_general_text(shot, name, idle_only=cfg.get("general_idle_only", True))
+    TAB_NAMES = {0: "the open tab", 1: "All", 2: "Military", 3: "Development", 4: "Duty", 5: "Subordinate City"}
+
+    def scan(tab_now):
+        """Scroll to the top of the list, then down, looking for the general. -> (hit, busy, best)"""
+        prev = None
+        for _ in range(8):                                   # go to the top of the list
+            shot = dev.screenshot()
+            if prev is not None and same(prev, shot):
+                break
+            prev = shot
+            dev.swipe(270, 330, 270, 820, 500)
+            nap(0.7, 1.0)
+        hit, prev, busy, best_all = None, None, False, 0.0
+        log(f"[i] Looking for {role} general '{name}': {TAB_NAMES.get(tab_now, tab_now)} tab, favourites {fav or 'leave'}, {view} view")
+        for _ in range(int(cfg["general_max_scrolls"]) * (3 if view == "list" else 1) + 1):  # scan downwards
+            shot = dev.screenshot()
+            if view == "list":
+                hit = find_general_text(shot, name, idle_only=cfg.get("general_idle_only", True))
+            else:
+                hit = find_general(shot, name, copy=gm.get("copy", "any"), idle_only=cfg.get("general_idle_only", True))
+            busy = busy or getattr(_TL, "busy_seen", False)
+            best_all = max(best_all, getattr(_TL, "best", 0.0))
+            if hit or (prev is not None and same(prev, shot)):
+                break
+            prev = shot
+            if view == "list":
+                dev.swipe(270, 800, 270, 500, 700)
+            else:
+                dev.swipe(270, 820, 270, 330, 700)
+            nap(0.8, 1.2)
+        return hit, busy, best_all
+
+    hit, busy, best_all = scan(want)
+    if not hit and not busy and 2 <= want <= 5 and not stop.is_set():
+        # not in the chosen tab (a general can sit in another category than the one saved for it): the All tab lists every general
+        log(f"[i] '{name}' is not in the {TAB_NAMES[want]} tab - looking in All")
+        switched = False
+        if tab_row(dev.screenshot()) is not None:
+            switched = select_gen_tab(dev, 1, log, stop)
         else:
-            hit = find_general(shot, name, copy=gm.get("copy", "any"), idle_only=cfg.get("general_idle_only", True))
-        busy = busy or getattr(_TL, "busy_seen", False)
-        best_all = max(best_all, getattr(_TL, "best", 0.0))
-        if hit or (prev is not None and same(prev, shot)):
-            break
-        prev = shot
-        if view == "list":
-            dev.swipe(270, 800, 270, 500, 700)
-        else:
-            dev.swipe(270, 820, 270, 330, 700)
-        nap(0.8, 1.2)
+            cur = selected_tab(dev.screenshot())
+            if cur is not None and cur != 1:
+                dev.tap(tab_centres(cur)[0], 104)
+                nap(1.2, 1.8)
+                switched = selected_tab(dev.screenshot()) == 1
+        if switched:
+            hit, busy2, best2 = scan(1)
+            busy, best_all = busy or busy2, max(best_all, best2)
+            if hit:
+                log(f"[i] Found '{name}' in the All tab - its saved tab ({TAB_NAMES[want]}) may be wrong; check it in Manage generals")
     if not hit:
         if busy:
             log(f"[!] {role.capitalize()} general '{name}' is busy (not Idle)")
