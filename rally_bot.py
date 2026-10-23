@@ -6632,8 +6632,8 @@ class CityNav:
             last = cur
         return last
 
-    def _drag(self, fx, fy, tx, ty):
-        before = self._settled()
+    def _drag(self, fx, fy, tx, ty, before=None):
+        before = self._settled() if before is None else before
         self.dev.swipe(int(fx), int(fy), int(tx), int(ty), 600)
         _nap(self.stop, self.pause, self.pause + 0.3)
         after = self._settled()
@@ -10249,8 +10249,9 @@ def run_map_city(dev, cfg, log, stop):
     views = []                                             # [(mapx, mapy, crop, feats)] placed views
     t0 = time.time()
 
-    def clean_shot():
-        shot = dev.screenshot()
+    def clean_shot(shot=None):
+        """The city, with no ring open; -> the same shot object when nothing had to be done."""
+        shot = dev.screenshot() if shot is None else shot
         if view_of(shot, cfg) != "city":
             leave_to_city(dev, cfg, stop, log)
             shot = nav._settled()
@@ -10284,33 +10285,44 @@ def run_map_city(dev, cfg, log, stop):
     keep(shot, 0.0, 0.0)
     nav.cx = nav.cy = 0.0
     seen, todo, dead = {(0, 0)}, [(1, 0), (0, 1), (0, -1), (-1, 0)], set()
-    while todo and len(seen) < 90:
+    tries = 0
+    while todo and len(seen) < 90 and tries < 150:
         if stop.is_set():
             return
+        tries += 1
         cur = (round(nav.cx / SX), round(nav.cy / SY))
         todo.sort(key=lambda c: abs(c[0] - cur[0]) + abs(c[1] - cur[1]))
         c = todo.pop(0)
         if c in seen or c in dead:
             continue
-        nav.pan(c[0] * SX - nav.cx, c[1] * SY - nav.cy)
-        shot = clean_shot()
+        # ONE measured drag towards the cell (at the diamond's slanted edge the game slides the camera sideways instead;
+        # pan() would spend 6 drags on that - Kiravik 21:25): wherever the camera lands is kept when it is new ground.
+        sx = max(-200, min(200, c[0] * SX - nav.cx))
+        sy = max(-300, min(300, c[1] * SY - nav.cy))
+        ln = (sx * sx + sy * sy) ** 0.5
+        if ln < 200:                                       # never a short drag (read as a tap on a building)
+            ux, uy = (sx / ln, sy / ln) if ln else (0.0, 1.0)
+            sx, sy = ux * 200, uy * 200
+        dx, dy, shot = nav._drag(270 + sx / 2, 440 + sy / 2, 270 - sx / 2, 440 - sy / 2, before=shot)
+        nav.cx -= dx
+        nav.cy -= dy
+        shot = clean_shot(shot)
         p = place(shot)
         if p is not None:
             nav.cx, nav.cy = p                             # the picture says where we are (the finger only estimated it)
-        else:
-            log(f"[i]   map view at {round(nav.cx)},{round(nav.cy)} overlaps no placed view - placed by the measured drags")
-        got = (round(nav.cx / SX), round(nav.cy / SY))
         near = min((abs(mx - nav.cx) + abs(my - nav.cy) for mx, my, _, _ in views), default=9e9)
-        if near < 60:                                      # the camera did not move (or barely): that cell is off the city
+        got = (round(nav.cx / SX), round(nav.cy / SY))
+        if near < 90:                                      # the camera did not move (or barely): that cell is off the city
             dead.add(c)
             continue
         if got != c:
-            dead.add(c)
+            dead.add(c)                                    # slid elsewhere: the cell asked for is not reachable this way
             if got in seen:
                 continue
             c = got
         seen.add(c)
         keep(shot, nav.cx, nav.cy)
+        log(f"[i]   map view {len(views)}: cell {c[0]},{c[1]} at {round(nav.cx)},{round(nav.cy)}" + ("" if p else " (by the drags)") + f", {len(todo)} to go")
         for n in ((c[0] + 1, c[1]), (c[0], c[1] + 1), (c[0] - 1, c[1]), (c[0], c[1] - 1)):
             if n not in seen and n not in dead and n not in todo:
                 todo.append(n)
@@ -10340,7 +10352,7 @@ def run_map_city(dev, cfg, log, stop):
                     p.write_text(json.dumps(m), encoding="utf-8")
             except Exception:
                 pass
-    log(f"[+]  City map built: {len(views)} views, {W}x{H} px, {len(dead)} cells off the city, {round(time.time() - t0)} s")
+    log(f"[+]  City map built: {len(views)} views, {W}x{H} px, {len(dead)} cells off the city, {tries} drags, {round(time.time() - t0)} s")
 
 
 def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
