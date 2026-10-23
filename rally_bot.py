@@ -9615,7 +9615,10 @@ def run_labor(dev, cfg, log, stop):
         log("[+]  Labor: on cooldown")
         return
     if not rd_tap(dev, stop, ["Labor"], region=(160, 600, 280, 100), whole=True, wait=(2.0, 2.5), shot=shot):
-        raise RuntimeError("no Labor button in the popup")
+        if not rd_seen(shot, ["instantly receive", "production"], region=(0, 300, 540, 200)):
+            raise RuntimeError("no Labor button in the popup")
+        dev.tap(270, 638)                                   # orange Labor button of the Labor popup, text not read
+        _nap(stop, 2.0, 2.5)
     rd_close_reward(dev, stop)
     log("[+]  Labor: captives put to work (4 h of production)")
 
