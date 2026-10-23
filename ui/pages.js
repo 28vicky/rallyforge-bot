@@ -1553,7 +1553,7 @@ function routinesCards(serial, ov, details) {
   const pills = h("div", { class: "rtnpills" });
   const listEl = h("div", { class: "rtnlist" });
   const head = h("div", { class: "rtnhead" });
-  const detail = h("div", { class: "rtndetail" });
+  const detail = h("div", { class: "rtndetail panel" });
   root.append(h("div", { class: "rtnleft panel" }, head, pills, listEl), detail);
   const visible = () => items().filter(pass);
   const paintHead = (all) => {
