@@ -92,7 +92,8 @@ class Controller:
         self.seq = 0
         self._acts_day = rb._game_day()
         self._load_acts()
-        self.events = collections.deque(maxlen=60)      # (id, kind, data) the interface should react to once
+        threading.Thread(target=self._backfill_days, daemon=True).start()
+        self.events = collections.deque(maxlen=60)     # (id, kind, data) the interface should react to once
         self.shots = collections.OrderedDict()          # token -> screenshot (540x960)
         self.scan_found = []
         self.city_jobs = {}                                   # serial -> {"running", "stop", "progress"}: every instance maps its own city, the others stay free
@@ -217,6 +218,73 @@ class Controller:
             for old in sorted(per)[:-self.KEEP_DAYS]:
                 per.pop(old, None)
             self.DAY_FILE.write_text(json.dumps(self._days), encoding="utf-8")
+        except Exception:
+            pass
+
+    BACKFILL_DONE = rb.USER / "daily_stats_backfill.done"
+
+    def _backfill_days(self):
+        """Once per PC: Reports gets the days from before it saved numbers (versions before 2.5.2),
+        rebuilt from the bot log files (kept 7 days). Only log lines older than daily_stats.json are counted."""
+        if self.BACKFILL_DONE.exists():
+            return
+        try:
+            cutoff = self.DAY_FILE.stat().st_ctime if self.DAY_FILE.exists() else time.time()
+            ids = {}
+            for d in self.devices:
+                ids[d["id"]] = d["id"]
+                if d.get("name"):
+                    ids[d["name"]] = d["id"]
+            line_re = re.compile(r"^(\d\d:\d\d:\d\d) \[([^\]]+)\] (.*)$")
+            add, last_mon = {}, {}
+            for f in sorted(rb.LOG_DIR.glob("bot_*.log")):
+                day = f.stem[4:]
+                if not (len(day) == 8 and day.isdigit()):
+                    continue
+                with open(f, encoding="utf-8", errors="replace") as fh:
+                    for line in fh:
+                        m = line_re.match(line)
+                        if not m or m.group(2) not in ids:
+                            continue
+                        hms, who, msg = m.groups()
+                        t = time.mktime(time.strptime(day + hms, "%Y%m%d%H:%M:%S"))
+                        if t >= cutoff:
+                            continue
+                        serial = ids[who]
+                        if msg.startswith("[*] Rally vs "):
+                            last_mon[serial] = msg[13:].split(" with ")[0].strip()
+                            continue
+                        if msg.startswith("[+] Joined rally #"):
+                            key = "joins"
+                        elif "-> skip (not enough time" in msg:
+                            key = "late"
+                        elif msg.startswith("[!]") and ("restarting evony" in msg.lower() or "restarting the emulator" in msg.lower()):
+                            key = "restarts"
+                        else:
+                            continue
+                        gday = time.strftime("%Y-%m-%d", time.gmtime(t - rb.reset_min(t) * 60))
+                        row = add.setdefault(serial, {}).setdefault(gday, {"joins": 0, "late": 0, "restarts": 0, "monsters": {}})
+                        row[key] += 1
+                        if key == "joins":
+                            mon = re.sub(r"\s+\d+$", "", last_mon.pop(serial, "") or "").strip()
+                            if mon:
+                                row["monsters"][mon] = row["monsters"].get(mon, 0) + 1
+            with self.lock:
+                self.day_rows("")
+                for serial, per in add.items():
+                    have = self._days.setdefault(serial, {})
+                    for gday, row in per.items():
+                        cur = have.setdefault(gday, {"joins": 0, "late": 0, "restarts": 0, "monsters": {}})
+                        for k in ("joins", "late", "restarts"):
+                            cur[k] = int(cur.get(k, 0) or 0) + row[k]
+                        mons = cur.setdefault("monsters", {})
+                        for mon, n in row["monsters"].items():
+                            mons[mon] = mons.get(mon, 0) + n
+                    for old in sorted(have)[:-self.KEEP_DAYS]:
+                        have.pop(old, None)
+                self.DAY_FILE.parent.mkdir(parents=True, exist_ok=True)
+                self.DAY_FILE.write_text(json.dumps(self._days), encoding="utf-8")
+            self.BACKFILL_DONE.write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
         except Exception:
             pass
 
