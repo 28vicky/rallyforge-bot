@@ -10500,8 +10500,8 @@ def run_map_city(dev, cfg, log, stop):
     edges = []
     for i in range(len(views)):
         for j in range(i + 1, len(views)):
-            if abs(views[i][3] - views[j][3]) > w * 1.3 or abs(views[i][4] - views[j][4]) > h * 1.3:
-                continue                                   # too far apart by the drags to overlap (solve 101 s -> ~40 s)
+            if abs(views[i][3] - views[j][3]) > w * 2.5 or abs(views[i][4] - views[j][4]) > h * 2.5:
+                continue                                   # far apart even allowing for drift of the drag estimates (1.3x lost links: 24 for 16 views)
             s = _kf_link(views[i][2], views[j][2], views[i][1], views[j][1])
             if s:
                 edges.append((i, j, s[0], s[1], s[2]))
