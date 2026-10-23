@@ -10232,6 +10232,52 @@ def _kf_link(fa, fb, ga, gb):
     return s
 
 
+def _kf_links_all(views, w, h, min_pts=KF_MIN_PTS):
+    """All picture links between the views at once: ONE feature index over every view, one search per view, consensus
+    per other view, winner checked by the pixels (the way locate() works). -> [(i, j, dx, dy, points)] with i < j.
+    The pairwise BFMatcher took 583 s for 48 views (Kiravik 24 Oct 04:55); this is the same search locate() does in
+    about 1 s per view."""
+    descs, labels, pts = [], [], []
+    for n, (g, (k, d)) in enumerate(views):
+        if d is None or len(k) < 30:
+            continue
+        descs.append(d)
+        labels.append(np.full(len(k), n))
+        pts.append(np.float32([q.pt for q in k]))
+    if len(descs) < 2:
+        return []
+    labels = np.concatenate(labels)
+    allpts = np.vstack(pts)
+    index = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=12, multi_probe_level=1), dict(checks=50))
+    index.add([np.vstack(descs)])
+    index.train()
+    edges = []
+    for i, (gi, (ki, di)) in enumerate(views):
+        if di is None or len(ki) < 30:
+            continue
+        pi = np.float32([q.pt for q in ki])
+        ms = index.knnMatch(di, k=4)
+        qi = np.array([m.queryIdx for mm in ms for m in mm], dtype=np.int64)
+        ti = np.array([m.trainIdx for mm in ms for m in mm], dtype=np.int64)
+        if len(qi) < min_pts:
+            continue
+        lab = labels[ti]
+        for j in np.unique(lab):
+            j = int(j)
+            if j <= i:                                     # each pair once (i < j); never a view with itself
+                continue
+            sel = lab == j
+            if sel.sum() < min_pts:
+                continue
+            s = _kf_consensus(allpts[ti[sel]] - pi[qi[sel]], min_pts)   # content of i found (dx, dy) further in j
+            if not s or abs(s[0]) >= w * 0.95 or abs(s[1]) >= h * 0.95:
+                continue
+            if _kf_ncc(gi, views[j][0], s[0], s[1]) < KF_MIN_NCC:
+                continue
+            edges.append((i, j, s[0], s[1], s[2]))
+    return edges
+
+
 def _kf_solve(n, edges):
     """Camera places from pairwise links (edge i->j with shift (dx, dy) means place_j = place_i - (dx, dy)). Weighted least
     squares with view 0 fixed; links whose residual is over 6 px (repeating art) are dropped and it is solved again;
@@ -10549,14 +10595,7 @@ def run_map_city(dev, cfg, log, stop):
         return
     # solve the places from the pictures
     t1 = time.time()
-    edges = []
-    for i in range(len(views)):
-        for j in range(i + 1, len(views)):
-            if abs(views[i][3] - views[j][3]) > w * 2.5 or abs(views[i][4] - views[j][4]) > h * 2.5:
-                continue                                   # far apart even allowing for drift of the drag estimates (1.3x lost links: 24 for 16 views)
-            s = _kf_link(views[i][2], views[j][2], views[i][1], views[j][1])
-            if s:
-                edges.append((i, j, s[0], s[1], s[2]))
+    edges = _kf_links_all([(v[1], v[2]) for v in views], w, h)
     kept, px, py = _kf_solve(len(views), edges)
     d = _map_dir(dev)
     d.mkdir(parents=True, exist_ok=True)
