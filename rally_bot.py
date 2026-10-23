@@ -9634,14 +9634,14 @@ def run_refining_card(dev, cfg, log, stop):
 
 
 # --- Activity > Go: reach a building without the city map ------------------------------------------------------------
-MORE_BTN = (495, 592)                       # the round "..." button in the right column (fallback; found above the word Alliance)
+MORE_BTN = (488, 648)                       # the round "..." button in the right column (fallback; normally 110 px above the word Alliance)
 
 
-def open_more_menu(dev, stop, log):
+def open_more_menu(dev, cfg, stop, log):
     """City screen: open the '...' (More) menu. -> screenshot with 'Activity' in it, or None."""
     shot = dev.screenshot()
     ab = find_text(shot, ["Alliance"], region=(400, 200, 140, 740), cutoff=0.7)
-    spots = ([(int(ab[0]), int(ab[1]) - 246)] if ab else []) + [MORE_BTN]
+    spots = ([(int(ab[0]) - 7, int(ab[1]) - 110)] if ab else []) + [MORE_BTN]
     for x, y in spots:
         dev.tap(x, y)
         _nap(stop, 1.2, 1.5)
@@ -9649,15 +9649,18 @@ def open_more_menu(dev, stop, log):
         if rd_seen(shot, ["Activity"], region=(0, 100, 540, 800)):
             return shot
         rd_snap(shot, "ago_more_miss")
-        dev.back()
-        _nap(stop, 0.8, 1.0)
+        if view_of(shot, cfg) != "city":                 # something else opened: close it; on the bare city Back would ask to quit
+            dev.back()
+            _nap(stop, 0.8, 1.0)
+        cancel_quit_dialog(dev, dev.screenshot(), lambda *_: None)
+        _nap(stop, 0.5, 0.7)
     return None
 
 
 def activity_go(dev, cfg, log, stop, tile, probe=False):
     """More > Activity > tap the daily's tile > Go. The game moves the camera to the building (any culture, any city
     layout). probe=True saves a picture at every step (debug/duty_ago_*.png) and logs what is read. -> True when Go was pressed."""
-    shot = open_more_menu(dev, stop, log)
+    shot = open_more_menu(dev, cfg, stop, log)
     if shot is None:
         raise RuntimeError("the '...' menu with Activity did not open")
     rd_snap(shot, "ago_1_more")
