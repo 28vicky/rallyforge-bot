@@ -1679,10 +1679,12 @@ class Api:
             _r = (rb.load_duty_state().get(serial or "default") or {}).get(d["id"]) or {}
             _h = list((_r.get("hist") or {}).values())
             week = {"ok": sum(int(x[0]) for x in _h), "fail": sum(int(x[1]) for x in _h), "last_error": _r.get("last_error", "")}
+            _lo = _r.get("last_ok", 0)
+            today = st == "done" or (bool(_lo) and time.strftime("%Y-%m-%d", time.gmtime(_lo - rb.reset_min() * 60)) == rb._game_day())
             rows.append({"id": d["id"], "week": week, "group": d["group"], "title": d["title"], "note": d["note"],
                          "on": bool(conf.get("on")), "every_min": int(conf.get("every_min", d["every_min"]) or 0),
                          "default_every": d["every_min"], "verified": bool(d.get("verified")),
-                         "status": st, "status_text": txt,
+                         "status": st, "status_text": txt, "today": today,
                          "opts": [dict(o, val=conf.get(o["k"], o.get("def"))) for o in (d.get("opts") or [])],
                          "gems": bool(d.get("gems")),
                          "schedule": ("When the next egg is ready" if d["id"] == "crazy_eggs" else "Once per game day" if not d["every_min"] else f"Every {d['every_min']} min")})

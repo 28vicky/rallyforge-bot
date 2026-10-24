@@ -435,7 +435,7 @@ function sideStatus(d) {
   if (d.state === "run" && d.kicked_at) return ["kicked · back in", "warn", T("data-at", d.kicked_at)];
   if (d.state === "run" && d.loading) return [d.loading, "warn", T("data-since", d.loading_since)];
   if (d.state === "run" && d.no_stamina) return ["no stamina", "warn"];
-  if (d.state === "run") return [busyTask(d.id, true) || "idle", busyTask(d.id) ? "ok" : ""];
+  if (d.state === "run") return [busyTask(d.id, true) || "running", "ok"];        // C7: same word as the header when nothing is busy
   if (d.start_at) return ["starts in", "", T("data-at", d.start_at)];
   if (d.queued) return ["queued", ""];
   if (d.state === "pause") return d.resume_at ? ["paused · resumes in", "warn", T("data-at", d.resume_at)] : ["paused", "warn"];
@@ -766,26 +766,21 @@ function todayModel(j, serial) {
   j = j || {};
   const nowText = ((S.now && S.now[serial]) || {}).text || "";
   const skew = (j.now || Date.now() / 1000) - Date.now() / 1000;             // server clock vs this window
-  const why = (m) => /city map|City Mapper/i.test(m || "") ? "no city map" : (m || "failed 3 times").replace(/^the /, "");
-  const order = { run: 0, due: 1, waiting: 2, retry: 2, gaveup: 3, done: 4 };
+  const order = { run: 0, gaveup: 1, retry: 2, due: 3, waiting: 4, done: 5 };
+  // same names and badge words as Routines (C7); the count is the server's one done / on number (C8)
   const items = (j.queue || []).map((q) => {
-    let k = q.status, sub;
-    if (nowText === "Duty: " + q.title) k = "run";
-    if (k === "run") sub = "running now";
-    else if (k === "done") sub = "done " + hhmm(q.last_ok);
-    else if (k === "waiting" || k === "retry") sub = (k === "retry" ? "retry " : "next ~") + String(q.text || "").replace(/^(Next|Retrying)\s*/, "");
-    else if (k === "gaveup") sub = "skipped - " + why(q.msg);
-    else sub = q.msg ? "next - after a failed try" : "next - waiting its turn";
-    return { k, title: q.title, sub, icon: { run: "▶", done: "✓", gaveup: "!" }[k] || "○" };
-  }).sort((a, b) => (order[a.k] ?? 2) - (order[b.k] ?? 2));
-  const total = items.length, left = items.filter((x) => x.k !== "done").length;
+    const k = nowText === "Duty: " + q.title ? "run" : q.status;
+    const tip = k === "gaveup" || k === "retry" ? (q.msg ? "Last problem: " + q.msg : q.text) : "";
+    return { k, title: dutyName(q.id, q.title), text: q.text, tip };
+  }).sort((a, b) => (order[a.k] ?? 3) - (order[b.k] ?? 3));
+  const cnt = j.count || { done: 0, on: items.length }, left = cnt.on - cnt.done;
   const resetIn = (j.reset_at || 0) - (Date.now() / 1000 + skew);
   let summary;
-  if (!total) summary = "No daily duty is switched on for this instance.";
-  else if (!left) summary = `All ${total} duties done for today`;
+  if (!cnt.on) summary = "";
+  else if (left <= 0) summary = `All ${cnt.on} done for today`;
   else {
     const need = left * 180;                                                // about 3 minutes per duty
-    summary = `${left} of ${total} duties left · ` + (need < resetIn ? `should all finish ${fmtHM(resetIn - need)} before reset` : "may not all finish before reset");
+    summary = `${cnt.done} of ${cnt.on} done · ` + (need < resetIn ? `the rest should finish ${fmtHM(resetIn - need)} before reset` : "may not all finish before reset");
   }
   const r = j.results || {}, mons = r.monsters || {}, w = j.week || {};
   const monList = Object.entries(mons).sort((a, b) => b[1] - a[1]);
@@ -795,7 +790,7 @@ function todayModel(j, serial) {
       ["Rallies joined", r.joins || 0, ""],
       ["Skipped (late)", r.late || 0, "Rallies left alone because too little time was left for the march"],
       ["Monsters hit", monList.length, monList.map(([m, n]) => `${m} ×${n}`).join(", ") || "none yet"],
-      ["Duties done", total ? `${r.duties_done || 0}/${total}` : String(r.duties_done || 0), ""],
+      ["Duties done", cnt.on ? `${cnt.done}/${cnt.on}` : "0", "Duties switched on that finished at least once today"],
       ["Restarts", r.restarts || 0, "Evony or the emulator restarted by the bot"],
     ],
     week: w.days ? `Last ${w.days} day${w.days > 1 ? "s" : ""}: ${w.joins || 0} joins · ${((w.restarts || 0) / w.days).toFixed(1).replace(/\.0$/, "")} restarts/day avg` : "Last 7 days: no data yet",

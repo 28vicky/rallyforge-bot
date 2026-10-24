@@ -1539,3 +1539,55 @@ a.lnk,.lnkb,.viewall,.vlink{display:inline-flex;align-items:center;min-height:28
 .whorow .whoami{flex:1;min-width:0}
 .whorow #modeBtn{width:32px;height:32px;box-shadow:none;background:transparent;border-color:transparent;color:var(--mute)}
 .whorow #modeBtn:hover{border-color:var(--line);color:var(--fg)}
+/* ===== T75 UI consistency (rules C1-C12, 24 Oct) ===== */
+/* C1 one duty list: header line, stats, points, footer */
+.dutypage .dhead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 14px}
+.dstat{font-size:13px;color:var(--mute);white-space:nowrap;font-variant-numeric:tabular-nums}
+.dstat b{color:var(--fg);font-weight:600;font-size:15px}
+.dline .dtx b .dpts{margin-left:8px;font-size:11.5px;font-weight:500;color:var(--mute);font-variant-numeric:tabular-nums}
+.dfoot{display:flex;flex-direction:column;gap:4px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.dfoot .hint{font-size:12.5px}
+.empty .lnk,.empty.sm .lnk{font-weight:600}
+.empty.sm{padding:10px 0;text-align:left;font-size:13.5px}
+/* C4 own / default line, C3 universal defaults header */
+.ownline{display:flex;align-items:center;gap:8px;font-size:13px;flex-wrap:wrap;margin:0 0 10px}
+.dhead .ownline{margin:0}
+.ownline .lnk{font-weight:600}
+.defhead{display:flex;align-items:center;gap:16px;margin:0 0 14px;padding:0 0 14px;border-bottom:1px solid var(--line)}
+.defhead>div{flex:1;display:flex;flex-direction:column;gap:2px}
+.defhead b{font-weight:600;font-size:15px}
+.applylist{display:flex;flex-direction:column;gap:10px;margin-top:12px;min-width:320px}
+/* C2 side panel header holds the switch too */
+.sph .tgl{margin-top:2px}
+.sph h3{font-family:inherit}
+.spf{gap:10px}
+.spf .hint{flex:1}
+.spb .fgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin-bottom:12px}
+.spb .fgrid .wide{grid-column:1/-1}
+.spb .fgrid label{display:flex;flex-direction:column;gap:4px}
+.spb .panel{border:0;padding:0;background:transparent;box-shadow:none}
+/* C7 one badge: same colours on every screen, never cut off, readable in dark mode */
+.dbadge{flex:none;white-space:nowrap}
+.dbadge.run{color:var(--accfg);background:var(--accent1);border-color:transparent}
+[data-mode="dark"] .dbadge.ok{color:#86efac;background:rgba(34,197,94,.14)}
+[data-mode="dark"] .dbadge.due{color:#fcd34d;background:rgba(245,158,11,.16)}
+[data-mode="dark"] .dbadge.next{color:#93c5fd;background:rgba(59,130,246,.16)}
+[data-mode="dark"] .dbadge.bad{color:#fca5a5;background:rgba(239,68,68,.16)}
+/* Today card: names + badges (read-only), link to Routines */
+.tdlab{display:flex;align-items:baseline;gap:8px}
+.tdlab .lnk{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:600;font-size:12.5px}
+.tdrow{grid-template-columns:minmax(0,1fr) auto}
+.itrow .dbadge{min-width:0}
+/* C10 Run a task now: one component */
+.runnow .runrow{display:flex;gap:8px;margin-top:12px}
+.runnow .runrow select{flex:1;min-width:0}
+/* C9 header: the main action is the only filled button; Stop is an outline with red text */
+:root .instbar .btn.stopb{background:var(--card);color:var(--bad);border:1px solid color-mix(in srgb,var(--bad) 45%,var(--line));font-weight:600}
+:root .instbar .btn.stopb:hover:not(:disabled){background:color-mix(in srgb,var(--bad) 10%,var(--card))}
+:root .instbar .btn.stopb.greyed,:root .instbar .btn.stopb:disabled{color:var(--mute);border:var(--bd);opacity:.6}
+:root .instbar .btn[data-act="pause"].pri{background:var(--accent);color:var(--accfg);border-color:transparent}
+/* C12 serif only for the page name (instance name / page title); card titles sans semibold; dialog titles ink */
+:root .panel h3,:root .cardhead h3,:root .sph h3,:root .rtndetail h2{font-family:var(--font);font-weight:600}
+.md .mh,:root .md .mh{color:var(--fg)}
+/* C11 / C12 tables: muted headers */
+:root table th{color:var(--mute)}
