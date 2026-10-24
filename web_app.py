@@ -2166,6 +2166,25 @@ class Api:
     def shot_take(self, p):
         return self.c.shot_from_device(p["serial"])
 
+    def dev_act(self, p):
+        """Owner tools: one tap / swipe / Back on an instance (used from a PC-linked chat to drive the game, e.g. change the
+        city culture, while the instance is paused). {"serial", "do": "tap"|"swipe"|"back", "x","y" [,"x2","y2","ms"]}"""
+        adb = rb.find_adb(self.c.cfg.get("adb_path") or "auto")
+        if not adb:
+            raise ApiError("ADB not found. Set the ADB path in Settings.")
+        dev = rb.Device(p["serial"], adb)
+        dev.connect()
+        do = p.get("do", "tap")
+        if do == "tap":
+            dev.tap(int(p["x"]), int(p["y"]))
+        elif do == "swipe":
+            dev.swipe(int(p["x"]), int(p["y"]), int(p["x2"]), int(p["y2"]), int(p.get("ms", 500)))
+        elif do == "back":
+            dev.back()
+        else:
+            raise ApiError("Unknown action.")
+        return {}
+
     def shot_upload(self, p):
         return self.c.shot_from_upload(p["data"])
 
