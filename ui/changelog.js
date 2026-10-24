@@ -1,5 +1,7 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.11", date: "2026-10-24",
+    fixed: ["Account or payment windows are closed safely (Cancel or Back, never confirmed) instead of stopping the instance or restarting the game."] },
   { v: "2.5.10", date: "2026-10-24",
     new: ["Stamina is filled up to the game's limit (9,999) with every item size you have - large first or small first, as you chose - without wasting any over the limit.",
       "An instance never stays stopped with a problem any more: if the bot cannot get going, it restarts the emulator and starts again by itself."],

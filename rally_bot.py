@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.5.10"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.5.11"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -3624,7 +3624,7 @@ def daily_checkin(dev, shot, log, stop):
 CITY_POPUP_WORDS = ["Event starts in", "Truce Agreement", "Server War is about to begin"]   # event pop-ups that sit over the city (the city is still recognised behind them)
 
 
-DANGER_PATTERNS = [                         # account / money dialogs: the bot never answers these, it stops the instance and alerts
+DANGER_PATTERNS = [                         # account / money dialogs: the bot never confirms these - it closes them with Cancel / X / Back
     r"switch\s*account", r"current\s*progress", r"delete\s*(your|the)?\s*(account|progress|data)", r"log\s*out",
     r"(bind|link|unlink)\s*(your|this|to|with)?\s*(account|facebook|apple|google|email)", r"apple\s*id",
     r"(use|spend|cost)\w*\s*[\d,]+\s*gems?", r"confirm\s*(the)?\s*(purchase|payment)",
@@ -3632,8 +3632,8 @@ DANGER_PATTERNS = [                         # account / money dialogs: the bot n
 
 
 def safety_stop(dev, shot, cfg, log, stop):
-    """A dangerous dialog (switch/link/delete account, log out, gem spend, payment) is on screen -> stop this instance,
-    alert the owner, keep the picture. Never taps anything. -> True if it stopped."""
+    """A dangerous dialog (switch/link/delete account, log out, gem spend, payment) is on screen -> close it with Cancel /
+    X / Back (never its confirm button), keep the picture. -> True if it was such a dialog."""
     try:
         txt = " ".join(t for t, _ in ocr_lines(shot[150:820, 20:520])).lower()
     except Exception:
@@ -3646,23 +3646,23 @@ def safety_stop(dev, shot, cfg, log, stop):
         cv2.imwrite(str(USER / "debug" / f"safety_stop_{dev.serial.replace(':', '_')}.png"), shot)
     except Exception:
         pass
-    log(f"[!] SAFETY: an account / payment window is open ({hit}) - pressing nothing in it; closing and reopening Evony instead (picture saved)")
+    log(f"[!] SAFETY: an account / payment window is open ({hit}) - closing it with Cancel / X / Back, never the confirm button (picture saved)")
+    # Owner 24 Oct: never stop, and do not restart the game for a pop-up either (Evony shows many) - just close it safely.
+    # If it keeps coming back, the usual 'unknown screen 3 times in 10 min' rule restarts the game.
     try:
-        notify(cfg, dev.serial, "Safety: an account or payment window opened. The bot pressed nothing in it and restarted the game - picture in debug.")
-    except Exception:
-        pass
-    if dev.serial not in _SAFETY_BUSY:                       # owner 24 Oct: never stop an instance - closing the game removes the
-        _SAFETY_BUSY.add(dev.serial)                         # window without a single tap (guard: the restart itself clears pop-ups)
-        try:
-            force_restart_game(dev, cfg, log, stop)
-        except Exception as _e:
-            quiet_err("safety_stop", _e)
-        finally:
-            _SAFETY_BUSY.discard(dev.serial)
+        cancel = find_text(shot, ["Cancel", "No", "Not now", "Later"], region=(20, 150, 500, 750), cutoff=0.85)
+        if cancel:
+            dev.tap(*cancel)
+        else:
+            x_btn = find(shot, "close_x", 0.8) if has_template("close_x") else None
+            if x_btn:
+                dev.tap(*x_btn)
+            else:
+                dev.back()                                   # Android Back = Cancel on Evony dialogs
+        _nap(stop, 0.8, 1.2)
+    except Exception as _e:
+        quiet_err("safety_stop", _e)
     return True
-
-
-_SAFETY_BUSY = set()
 
 
 _STUCK_POPUPS = {}                         # serial -> times clear_popups ended still lost (3 in 10 min -> game restart)
