@@ -1121,7 +1121,7 @@ PAGES.market = function () {
   };
   // ---- 1. Spending
   const nInp = inp(c, "market_refresh_n", { type: "int", cls: "short" });
-  const paidTog = tog(c, "market_paid_refresh", "Also refresh with gems when the free refreshes are used up (costs gems)", { after: () => draw() });
+  const paidTog = tog(c, "market_paid_refresh", "Paid refresh with gems after the free ones", { after: () => draw() });
   const lockSpend = () => {
     const m = c.market_refresh_mode || "none";
     const nIn = nInp.tagName === "INPUT" ? nInp : nInp.querySelector("input");
@@ -1130,12 +1130,12 @@ PAGES.market = function () {
     paidTog.classList.toggle("dim", m === "none");
   };
   const spend = panel("Spending",
-    grid2(fld("When none of your picks are in the shop", sel(c, "market_refresh_mode", REFRESH, { dropdown: true, after: () => draw() })),
-      fld("Free refreshes to use", nInp)),
+    grid2(fld("If no picks are in the shop", sel(c, "market_refresh_mode", REFRESH, { dropdown: true, after: () => draw() })),
+      fld("Free refreshes", nInp)),
     h("div", { class: "bmtog" }, paidTog),
-    grid2(fld("Keep at least this many gems (0 = no floor)", inp(c, "market_min_gems", { type: "int", cls: "short" })),
-      fld("Keep at least this much gold (0 = no floor)", inp(c, "market_min_gold", { type: "int", cls: "short" })),
-      fld("Most gems to spend per visit (0 = no limit)", inp(c, "market_max_gems", { type: "int", cls: "short" }))));
+    grid2(fld("Gem floor", inp(c, "market_min_gems", { type: "int", cls: "short" }), "Never go below this. 0 = no floor"),
+      fld("Gold floor", inp(c, "market_min_gold", { type: "int", cls: "short" }), "Never go below this. 0 = no floor"),
+      fld("Gem limit per visit", inp(c, "market_max_gems", { type: "int", cls: "short" }), "0 = no limit")));
   spend.addEventListener("input", () => drawSum());
   spend.addEventListener("change", () => drawSum());
   // ---- 2. Your picks
