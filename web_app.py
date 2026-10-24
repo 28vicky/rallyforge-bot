@@ -2197,6 +2197,12 @@ class Api:
             dev.swipe(int(p["x"]), int(p["y"]), int(p["x2"]), int(p["y2"]), int(p.get("ms", 500)))
         elif do == "back":
             dev.back()
+        elif do == "shot":                                 # save the screen to a file (for a chat that cannot see the window)
+            d = rb.USER / "debug"
+            d.mkdir(exist_ok=True)
+            f = d / ("owner_" + re.sub(r"\W", "_", p["serial"]) + ".png")
+            cv2.imwrite(str(f), dev.screenshot())
+            return {"file": str(f)}
         else:
             raise ApiError("Unknown action.")
         return {}
