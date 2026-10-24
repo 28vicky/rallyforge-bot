@@ -9747,12 +9747,20 @@ def run_wheel(dev, cfg, log, stop):
                 raise RuntimeError("could not get back to the Wheel of Fortune page after adding chips")
     done = 0
     fails = 0
+    closes = 0
     while not stop.is_set():
         shot = dev.screenshot()
-        if wheel_reward_panel(shot):                       # a reward panel is still up
-            dev.tap(270, 754)
+        if wheel_reward_panel(shot):                       # a reward panel is still up: its Continue button, else empty ground
+            closes += 1
+            if closes > 8:                                 # Rob 25 Oct 03:10: the x100 panel never closed -> 17 min without a log line
+                log(f"[!]  Wheel: the reward panel does not close - stopped after {done} spin(s)")
+                rd_snap(shot, "wheel_panel_stuck")
+                break
+            c = find_text(shot, ["Continue"], region=(30, 150, 480, 800), cutoff=0.7)
+            dev.tap(*(c if c and closes % 2 else ((270, 754) if closes % 3 else (270, 110))))
             _nap(stop, 0.8, 1.1)
             continue
+        closes = 0
         if not wheel_on_page(shot):
             log("[!]  Wheel: not on the Wheel of Fortune page any more - stopped")
             break
@@ -9791,7 +9799,8 @@ def run_wheel(dev, cfg, log, stop):
         done += pick
         log(f"[i]   Wheel: {done} spin(s) done ({coins - WHEEL_COST[pick]:,} coins left)")
         for _ in range(4 if shown else 0):                                 # close the panel: Continue, else empty ground
-            dev.tap(270, 754)
+            c = find_text(dev.screenshot(), ["Continue"], region=(30, 150, 480, 800), cutoff=0.7)
+            dev.tap(*(c or (270, 754)))
             _nap(stop, 0.8, 1.1)
             if not wheel_reward_panel(dev.screenshot()):
                 break
