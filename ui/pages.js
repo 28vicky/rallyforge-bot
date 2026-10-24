@@ -1945,7 +1945,8 @@ function cityMapCard(serial) {
       if (again && !(await confirmBox("Map again", "Map the city again? The bot first matches it to a culture map (a few seconds); only a city that matches none is walked (about 20 minutes). Found places are replaced."))) return;
       if (await act(api("run_now_add", { serial, id: "duty:map_city" }))) toast("Map my city runs next on this instance.", "ok");
     };
-    root.appendChild(h("div", { class: "row", style: { justifyContent: "flex-end", marginTop: "10px" } },
+    root.appendChild(h("div", { class: "row", style: { justifyContent: "flex-end", gap: "8px", marginTop: "10px" } },
+      S.dev ? btn("Pin buildings", () => pinBuildingsDialog(j.culture || "europe"), "sm") : null,
       mapping !== null ? null : btn(j.built ? "Map again" : "Map my city", () => run(j.built), j.built ? "sm" : "pri")));
   };
   const load = async () => {
@@ -1961,6 +1962,65 @@ function cityMapCard(serial) {
     if (j && JSON.stringify(j) + "|" + nowText() !== last) { last = JSON.stringify(j) + "|" + nowText(); paint(j); }
   }, 15000);
   return root;
+}
+
+// ---- Pin buildings (owner tool, 25 Oct): click each FIXED building once on every culture map; pins ship to every user
+//      of that culture (cultures/<c>/pins.json). Buildings players place themselves are not offered (their spot differs).
+const FIXED_BUILDINGS = ["Keep", "Tavern", "Shrine", "Pasture", "Academy", "Military Academy", "Ideal Land", "Triumphal Arch",
+  "Research Factory", "Wall", "Archer Tower", "Watchtower", "Rally Spot", "Bunker", "Victory Column", "Wonder",
+  "Fountain of the Gods", "Wisdom Dome", "Dragon Cliff", "Holy Palace", "Art Hall", "Council of Senate", "Subordinate City", "Battlefield"];
+function pinBuildingsDialog(culture) {
+  const st = { c: culture, sel: null, pins: {}, size: null };
+  const body = h("div", { class: "pinbox" });
+  const cap = (c) => c.charAt(0).toUpperCase() + c.slice(1);
+  const norm = (x) => x.toLowerCase().replace(/[^a-z]/g, "");
+  const pinOf = (b) => { const k = Object.keys(st.pins).find((k) => norm(k) === norm(b)); return k ? st.pins[k] : null; };
+  const save = async (name, xy) => {
+    const r = await act(api("culture_pin_set", { culture: st.c, name, map: xy }));
+    if (r) { st.pins = r.pins; draw(); }
+  };
+  const nextFree = () => FIXED_BUILDINGS.find((b) => !pinOf(b)) || null;
+  const draw = () => {
+    body.innerHTML = "";
+    const done = FIXED_BUILDINGS.filter(pinOf).length;
+    body.appendChild(h("div", { class: "seg small pinseg" }, ["europe", "russia", "china", "korea", "japan", "arabia", "america"].map((c) =>
+      h("button", { class: "segb" + (st.c === c ? " on" : ""), type: "button", onclick: () => load(c) }, cap(c)))));
+    body.appendChild(h("p", { class: "hint" }, st.sel ? "Click on the map where the " + st.sel + " is. Drag a pin to move it." :
+      done === FIXED_BUILDINGS.length ? "Every building is pinned on the " + cap(st.c) + " map." : "Pick a building on the left, then click it on the map."));
+    const list = h("div", { class: "pinlist" }, FIXED_BUILDINGS.map((b) => {
+      const p = pinOf(b);
+      return h("div", { class: "pinrow" + (st.sel === b ? " on" : ""), onclick: () => { st.sel = b; draw(); } },
+        h("span", {}, b),
+        p ? h("span", { class: "row", style: { gap: "6px" } }, h("span", { class: "dbadge ok" }, "Pinned"),
+          h("button", { class: "pinx", type: "button", title: "Remove pin", onclick: (e) => { e.stopPropagation(); save(b, null); } }, "\u00d7"))
+          : h("span", { class: "dbadge todo" }, "To pin"));
+    }));
+    const img = h("img", { class: "pinimg", src: "/api/culture_img?c=" + st.c + "&k=" + encodeURIComponent(window.KEY), alt: cap(st.c) + " map", draggable: false });
+    const wrap = h("div", { class: "pinwrap" + (st.sel ? " picking" : "") }, img);
+    const toMap = (e) => { const r = img.getBoundingClientRect();
+      return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * st.size[0], Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * st.size[1]]; };
+    img.onclick = (e) => { if (!st.sel || !st.size) return; const b = st.sel; st.sel = null; save(b, toMap(e)).then(() => { st.sel = nextFree(); draw(); }); };
+    if (st.size) for (const b of FIXED_BUILDINGS) {
+      const p = pinOf(b); if (!p) continue;
+      const dot = h("span", { class: "pindot", title: b, style: { left: (p[0] * 100 / st.size[0]) + "%", top: (p[1] * 100 / st.size[1]) + "%" } }, h("em", {}, b));
+      dot.onmousedown = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const move = (ev) => { const m = toMap(ev); dot.style.left = (m[0] * 100 / st.size[0]) + "%"; dot.style.top = (m[1] * 100 / st.size[1]) + "%"; };
+        const up = (ev) => { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); save(b, toMap(ev)); };
+        document.addEventListener("mousemove", move); document.addEventListener("mouseup", up);
+      };
+      wrap.appendChild(dot);
+    }
+    body.appendChild(h("div", { class: "pingrid" }, list, wrap));
+    body.appendChild(h("p", { class: "hint" }, done + " of " + FIXED_BUILDINGS.length + " pinned on the " + cap(st.c) + " map. Pins are saved at once and used by every instance matched to this culture."));
+  };
+  const load = async (c) => {
+    const r = await act(api("culture_pins_get", { culture: c }));
+    if (!r) return;
+    st.c = c; st.pins = r.pins; st.size = r.size; st.sel = nextFree(); draw();
+  };
+  modal({ title: "Pin buildings", wide: true, body, buttons: [{ label: "Done", cls: "pri" }] });
+  load(culture);
 }
 
 function runNowCard(serial) {

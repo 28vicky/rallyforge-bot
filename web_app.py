@@ -2290,6 +2290,33 @@ class Api:
     def shot_take(self, p):
         return self.c.shot_from_device(p["serial"])
 
+    def culture_pins_get(self, p):
+        """Owner tool (Pin buildings): one culture map's size and its fixed-building pins."""
+        c = str(p.get("culture") or "").lower()
+        d = rb.culture_dir(c)
+        if not d:
+            raise ApiError("That culture map is not on this PC.")
+        meta = json.loads((d / "map.json").read_text(encoding="utf-8"))
+        return {"culture": c, "size": meta.get("size"), "pins": rb.culture_pins(c), "cultures": list(rb.CULTURES)}
+
+    def culture_pin_set(self, p):
+        """Owner tool: set (map [x, y]) or remove (map null) one building's pin on a culture map -> cultures/<c>/pins.json."""
+        if not (rb.USER / "admin.txt").exists():
+            raise ApiError("Only the owner can pin buildings.")
+        c = str(p.get("culture") or "").lower()
+        name = str(p.get("name") or "").strip()
+        d = rb.culture_dir(c)
+        if not d or not name:
+            raise ApiError("Pick a culture and a building first.")
+        pins = rb.culture_pins(c)
+        xy = p.get("map")
+        if xy:
+            pins[name] = [round(float(xy[0])), round(float(xy[1]))]
+        else:
+            pins.pop(name, None)
+        (d / "pins.json").write_text(json.dumps(pins, indent=1), encoding="utf-8")
+        return self.culture_pins_get({"culture": c})
+
     def city_map_info(self, p):
         """The instance's city map for the City map card: built? views / date, mapping progress, and the buildings the
         duties need - found (pinned on the map), seen (picture only) or not yet. Only buildings, no small markers (owner)."""
@@ -2796,6 +2823,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/shot":
             img = c.shot(q["token"][0])
             return self._send(200, jpg_bytes(img, 85), "image/jpeg")
+        if path == "/api/culture_img":                  # a shipped culture map picture (owner's Pin buildings tool)
+            d = rb.culture_dir(str(q["c"][0]).lower())
+            img = cv2.imread(str(d / "map.jpg")) if d else None
+            if img is None:
+                return self._send(404, "no map", "text/plain")
+            return self._send(200, jpg_bytes(img, 85), "image/jpeg", {"Cache-Control": "max-age=60"})
         if path == "/api/city_map_img":                 # the instance's stitched city map (for the City map card)
             dv = types.SimpleNamespace(serial=q["serial"][0])
             cult = rb.city_culture(dv)
