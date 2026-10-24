@@ -1914,6 +1914,7 @@ function cityMapCard(serial) {
         mapping !== null ? "Mapping now" : j.culture ? "Culture: " + j.culture.charAt(0).toUpperCase() + j.culture.slice(1) + " (matched " + (j.at || "") + ")"
           : j.built ? "Mapped " + (j.at || "") + " · " + j.views + " views" : "Not mapped yet")),
       mapping !== null ? h("span", { class: "dbadge run" }, "Mapping · " + mapping + " views")
+        : j.culture && !found ? h("span", { class: "dbadge ok" }, "\u2713 Matched")
         : j.built ? h("span", { class: "dbadge ok" }, found + " of " + total + " buildings · " + pct + "%")
         : h("span", { class: "dbadge" }, "Run Map my city"));
     root.appendChild(head);
