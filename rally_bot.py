@@ -8574,10 +8574,9 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         leave_to_city(dev, cfg, stop, log)
         if find_learned_building(dev, cfg, log, stop, bname.strip()):     # learned from an earlier Go (tile gone today)
             return True
-        if city_map(dev) is not None:                      # with a keyframe map there is no name reading (owner 24 Oct): the
-            log(f"[!]   {bname.strip()}: no tile today and not pinned on the city map yet - will try again later")
-            return False                                   # building gets pinned the next time a tile or picture opens it
-        leave_to_city(dev, cfg, stop, log)
+        if city_map(dev) is not None:                      # not pinned yet (fresh map / culture without this pin): find it by its
+            log(f"[i]   {bname.strip()}: no tile today and not pinned on the city map yet - looking for it by name once")
+        leave_to_city(dev, cfg, stop, log)                 # name this once; opening it pins it on the map (owner 25 Oct)
         return city_task_target(dev, cfg, log, stop, {**task, "target": "building:" + bname.strip()}, nav_state)
     if kind == "xy":
         x, y = [float(v) for v in name.split(",")[:2]]
@@ -10803,9 +10802,11 @@ LEARN_DIR = USER / "city_learn"
 def _pinned(dev, bname):
     """Does this building have a place on the instance's keyframe map (learned at an earlier open)?"""
     try:
-        return bool(json.loads(_learn_path(dev, bname).with_suffix(".json").read_text(encoding="utf-8")).get("map"))
+        if json.loads(_learn_path(dev, bname).with_suffix(".json").read_text(encoding="utf-8")).get("map"):
+            return True
     except Exception:
-        return False
+        pass
+    return culture_pin(dev, bname) is not None
 
 
 def _learn_path(dev, bname):
@@ -10865,13 +10866,19 @@ def find_learned_building(dev, cfg, log, stop, bname):
     all 0.3), so: look here -> top-left corner -> the spot where it was found before -> sweep the whole city row by row
     (each move measured from the pictures). The spot found is saved for next time. -> True when its ring menu is open."""
     p = _learn_path(dev, bname)
+    pin = culture_pin(dev, bname)
     if not p.exists():
-        return False
+        if pin is None:
+            return False
+        log(f"[i]   {bname}: culture pin ({city_culture(dev)['culture'].title()}) at {round(pin[0])},{round(pin[1])}")
+        return bool(find_on_map(dev, cfg, log, stop, bname, None, {"map": pin, "dx": 0, "dy": 0}, p))
     try:
         tpl = cv2.imread(str(p))
         meta = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
     except Exception:
         return False
+    if not meta.get("map") and pin is not None:
+        meta["map"] = pin
     tag = "learn_" + re.sub(r"[^a-z]+", "_", bname.lower())
     r = find_on_map(dev, cfg, log, stop, bname, tpl, meta, p)   # the own city map: a few measured drags (owner 23 Oct)
     if r:
@@ -11243,6 +11250,11 @@ class CityMap:
 def city_map(dev):
     """The instance's own map, or None when 'Map my city' has not been run yet (or the old stitched-only map is there)."""
     key = str(getattr(dev, "serial", "default"))
+    cult = city_culture(dev)
+    if cult:                                               # matched to a shipped culture map (owner 25 Oct: no 20-min walk)
+        cm = culture_map(cult["culture"])
+        if cm is not None:
+            return cm
     m = _CITY_MAPS.get(key)
     p = _map_dir(dev) / "map.png"
     if m is None or (p.exists() and m.path.stat().st_mtime != m.meta.get("_mtime")):
@@ -11280,6 +11292,103 @@ def culture_map(name):
     return _CULTURE_MAPS[name]
 
 
+CULTURE_MARGIN = 1.5                                       # the best culture needs this many times the 2nd best's points
+                                                           # (false hits on another culture share walls/terrain - 24 Oct test)
+
+
+def match_culture(shot):
+    """Which shipped culture map does this widest-zoom city screenshot belong to? Located on ALL cultures, the one with
+    the most agreeing points wins only with a clear margin. -> (culture, cx, cy, points, second_best) or None."""
+    hits = []
+    for c in CULTURES:
+        m = culture_map(c)
+        loc = m.locate(shot) if m is not None else None
+        if loc:
+            hits.append((loc[2], c, loc[0], loc[1]))
+    if not hits:
+        return None
+    hits.sort(reverse=True)
+    second = hits[1][0] if len(hits) > 1 else 0
+    if hits[0][0] < KF_MIN_PTS or hits[0][0] < second * CULTURE_MARGIN:
+        return None
+    return hits[0][1], hits[0][2], hits[0][3], hits[0][0], second
+
+
+def city_culture(dev):
+    """The culture this instance's city was matched to (city_learn/<serial>/culture.json), or None."""
+    try:
+        c = json.loads((_map_dir(dev) / "culture.json").read_text(encoding="utf-8"))
+        return c if c.get("culture") in CULTURES else None
+    except Exception:
+        return None
+
+
+def culture_pins(name):
+    """Fixed-building places on a culture map: cultures/<c>/pins.json {building: [x, y]} (map coordinates)."""
+    d = culture_dir(name) if name else None
+    try:
+        return {str(k): [float(v[0]), float(v[1])] for k, v in json.loads((d / "pins.json").read_text(encoding="utf-8")).items()}
+    except Exception:
+        return {}
+
+
+def culture_pin(dev, bname):
+    """The shipped pin of a building for this instance's matched culture, or None."""
+    cult = city_culture(dev)
+    if not cult:
+        return None
+    pins = culture_pins(cult["culture"])
+    want = re.sub(r"[^a-z]+", "", str(bname).lower())
+    return next((v for k, v in pins.items() if re.sub(r"[^a-z]+", "", k.lower()) == want), None)
+
+
+def _drop_own_places(dev):
+    """Learned buildings' map places belong to one map: forget them when the instance changes map."""
+    for p in _map_dir(dev).glob("*.json"):
+        if p.stem not in ("map", "culture") and not p.stem.endswith("_prev"):
+            try:
+                m = json.loads(p.read_text(encoding="utf-8"))
+                if "map" in m:
+                    m.pop("map", None)
+                    p.write_text(json.dumps(m), encoding="utf-8")
+            except Exception:
+                pass
+
+
+def try_culture_match(dev, cfg, log, stop, nav=None):
+    """Map my city, culture first: up to 3 widest-zoom screenshots (moved between) located on every culture map.
+    A clear winner is saved as culture.json and used as the instance's city map. -> culture name or None."""
+    if not any(culture_map(c) is not None for c in CULTURES):
+        log("[i]   Map my city: no culture maps on this PC - walking the city")
+        return None
+    seen = []
+    for i, move in enumerate(((0, 0), (300, 0), (-300, 400))):
+        if stop.is_set():
+            return None
+        if i and nav is not None:
+            nav.pan(*move)
+        shot = dev.screenshot()
+        if view_of(shot, cfg) != "city":
+            leave_to_city(dev, cfg, stop, log)
+            shot = dev.screenshot()
+        r = match_culture(shot)
+        if r:
+            name, cx, cy, pts, second = r
+            d = _map_dir(dev)
+            d.mkdir(parents=True, exist_ok=True)
+            was = city_culture(dev)
+            if not was or was.get("culture") != name or (d / "map.json").exists():
+                _drop_own_places(dev)                      # places learned on another map do not fit this one
+            (d / "culture.json").write_text(json.dumps({"culture": name, "score": pts, "second": second,
+                                                        "at": time.strftime("%Y-%m-%d %H:%M")}), encoding="utf-8")
+            _CITY_MAPS.pop(str(getattr(dev, "serial", "default")), None)
+            log(f"[+]  Map my city: the city matches the {name.title()} culture map ({pts} points, next best {second}) - no walk needed")
+            return name
+        seen.append("no clear match")
+    log(f"[i]   Map my city: no culture map matched clearly ({len(seen)} views) - walking the city")
+    return None
+
+
 def zoom_out_full(dev, cfg, stop, log):
     """All the way out: Ctrl+wheel until the picture stops getting smaller (Kiravik 23 Oct: the two-notch zoom of the duties
     left the city 1.8x bigger than the game's own widest view, so the map needed 56 views instead of ~8)."""
@@ -11307,6 +11416,8 @@ def run_map_city(dev, cfg, log, stop):
     leave_to_city(dev, cfg, stop, log)
     zoom_out_full(dev, cfg, stop, log)
     nav = CityNav(dev, stop, log, pause=0.6)
+    if try_culture_match(dev, cfg, log, stop, nav):
+        return
     x, y, w, h = CITY_VIEW
     STEPX, STEPY = int(w * 0.5), int(h * 0.6)          # one step in GAME px: views overlap half sideways, 40 % up/down. The
     views = []                                             # finger distance comes from the measured gain (a fixed 234 finger px
@@ -11480,6 +11591,10 @@ def run_map_city(dev, cfg, log, stop):
     meta = {"at": time.strftime("%Y-%m-%d %H:%M"), "views": len(kept), "size": [W, H], "keyframes": kfs,
             "links": len(edges), "zoomed_out": True}
     (d / "map.json").write_text(json.dumps(meta), encoding="utf-8")
+    try:
+        (d / "culture.json").unlink()                      # the own walked map is used from now on
+    except Exception:
+        pass
     _CITY_MAPS.pop(str(getattr(dev, "serial", "default")), None)
     for p in d.glob("*.json"):                             # learned buildings' map places belonged to the old map
         if p.stem != "map" and not p.stem.endswith("_prev"):
@@ -11537,7 +11652,7 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
     if at is None:
         return None
     shot = dev.screenshot()
-    mv, ml, f = _learn_match(shot, tpl)
+    mv, ml, f = _learn_match(shot, tpl) if tpl is not None else (0.0, None, 1.0)
     ex, ey = at
     if ml:
         x, y = ml[0] + int(meta["dx"] * f), ml[1] + int(meta["dy"] * f)
@@ -11545,12 +11660,13 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
         spot = (x, y)
     else:
         spot = (int(ex), int(ey))                          # trust the map place (the picture may have changed: upgrade, decoration)
-        log(f"[i]   {bname}: picture match {mv:.2f} near the map place - tapping the map place")
+        if tpl is not None:
+            log(f"[i]   {bname}: picture match {mv:.2f} near the map place - tapping the map place")
     if not (60 <= spot[0] <= 470 and 150 <= spot[1] <= 820):
         return None
     if open_building_here(dev, cfg, log, stop, bname, spots=[spot], how=f"the city map (match {mv:.2f})"):
         try:                                               # refresh the place and the picture (open_building_here learned it)
-            m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
+            m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8")) if p.with_suffix(".json").exists() else {"dx": 0, "dy": 0}
             m2["map"] = [round(nav.cx + spot[0]), round(nav.cy + spot[1])]
             p.with_suffix(".json").write_text(json.dumps(m2), encoding="utf-8")
         except Exception:

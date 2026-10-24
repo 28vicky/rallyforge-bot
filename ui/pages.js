@@ -1905,11 +1905,12 @@ function cityMapCard(serial) {
     root.innerHTML = "";
     const m = /Mapping (\d+) views/.exec(nowText());
     const mapping = m ? parseInt(m[1], 10) : null;
-    const total = j.buildings.length, found = j.buildings.filter((b) => b.state === "found").length;
+    const total = j.buildings.length, found = j.buildings.filter((b) => b.state === "found" || b.state === "pinned").length;
     const pct = total ? Math.round(found * 100 / total) : 0;
     const head = h("div", { class: "cardhead" },
       h("div", {}, h("h3", {}, "City map"), h("small", { class: "sub" },
-        mapping !== null ? "Mapping now" : j.built ? "Mapped " + (j.at || "") + " · " + j.views + " views" : "Not mapped yet")),
+        mapping !== null ? "Mapping now" : j.culture ? "Culture: " + j.culture.charAt(0).toUpperCase() + j.culture.slice(1) + " (matched " + (j.at || "") + ")"
+          : j.built ? "Mapped " + (j.at || "") + " · " + j.views + " views" : "Not mapped yet")),
       mapping !== null ? h("span", { class: "dbadge run" }, "Mapping · " + mapping + " views")
         : j.built ? h("span", { class: "dbadge ok" }, found + " of " + total + " buildings · " + pct + "%")
         : h("span", { class: "dbadge" }, "Run Map my city"));
@@ -1917,7 +1918,7 @@ function cityMapCard(serial) {
     if (mapping !== null) {                               // a city at the widest zoom is ~50 views: the bar is a guide, not a promise
       const est = Math.min(96, Math.round(mapping * 100 / Math.max(50, mapping + 4)));
       root.appendChild(h("div", { class: "cmbar" }, h("div", { class: "cmfill", style: { width: est + "%" } })));
-      root.appendChild(h("p", { class: "hint" }, "The bot walks over the whole city once (about 20 minutes). The buildings below are pinned as the daily tasks open them."));
+      root.appendChild(h("p", { class: "hint" }, "No culture map matched this city, so the bot walks over it once (about 20 minutes). Buildings are pinned as the tasks open them."));
     }
     if (j.built && j.img) {
       const img = h("img", { class: "cmimg", src: "/api/city_map_img?serial=" + encodeURIComponent(serial) + "&k=" + encodeURIComponent(window.KEY) + "&t=" + (j.at || ""), alt: "City map" });
@@ -1929,14 +1930,14 @@ function cityMapCard(serial) {
     }
     if (!total) root.appendChild(h("p", { class: "hint" }, "No duty needs a building yet."));
     else {
-      const STATE = { found: ["Found", "ok"], seen: ["Seen", "next"], none: ["Not yet", ""] };
+      const STATE = { found: ["Found", "ok"], pinned: ["Pinned", "ok"], seen: ["Seen", "next"], none: ["Not yet", ""] };
       root.appendChild(h("div", { class: "cmlist" }, j.buildings.map((b) => h("div", { class: "cmrow" + (b.on ? "" : " off"), title: "Needed by: " + b.duties.join(", ") + (b.on ? "" : " (switched off)") },
         h("span", { class: "cmname" }, b.name), h("span", { class: "dbadge " + STATE[b.state][1] }, STATE[b.state][0])))));
       root.appendChild(h("p", { class: "hint" }, found === total && total ? "Every building the duties need is on the map." :
-        "Found = the bot knows where it is on the map and goes straight there. Not yet = pinned the first time a daily task opens it (the Activity tile does that)."));
+        "Found = reached on this city. Pinned = known from the culture map, checked on the first visit. Not yet = pinned the first time a task opens it."));
     }
     const run = async (again) => {
-      if (again && !(await confirmBox("Map again", "Map the city again? The current map and the found places are replaced (about 20 minutes)."))) return;
+      if (again && !(await confirmBox("Map again", "Map the city again? The bot first matches it to a culture map (a few seconds); only a city that matches none is walked (about 20 minutes). Found places are replaced."))) return;
       if (await act(api("run_now_add", { serial, id: "duty:map_city" }))) toast("Map my city runs next on this instance.", "ok");
     };
     root.appendChild(h("div", { class: "row", style: { justifyContent: "flex-end", marginTop: "10px" } },
