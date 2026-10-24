@@ -6561,11 +6561,39 @@ def wheel_zoom_out(dev, log, name=None, notches=6):
 _INPUT_LOCK = threading.Lock()
 
 
-def real_wheel_zoom_out(dev, log, name=None, notches=6, up=False):
+def user_idle_s():
+    """Seconds since the owner last touched the keyboard or mouse on this PC (Windows), or a large number elsewhere."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class LII(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+        li = LII()
+        li.cbSize = ctypes.sizeof(LII)
+        if ctypes.windll.user32.GetLastInputInfo(ctypes.byref(li)):
+            return max(0.0, (ctypes.windll.kernel32.GetTickCount() - li.dwTime) / 1000.0)
+    except Exception:
+        pass
+    return 1e9
+
+
+def real_wheel_zoom_out(dev, log, name=None, notches=6, up=False, stop=None):
     """Real Ctrl + wheel down over the emulator window (SendInput): brings the window to the front for ~2 s, moves the
-    mouse over it, scrolls, puts the mouse back. Used when window messages are ignored (MuMu, 23 Oct). -> True when sent."""
+    mouse over it, scrolls, puts the mouse back. Used when window messages are ignored (MuMu, 23 Oct). -> True when sent.
+    Never while the owner is using the PC (24 Oct 15:05: the emulator window popped up and the mouse moved under his
+    hands): waits up to 2 min for 20 s without keyboard / mouse input, else gives up."""
     h = emu_window(dev, name)
     if not h:
+        return False
+    waited = 0.0
+    while user_idle_s() < 20 and waited < 120:
+        if stop is not None and stop.is_set():
+            return False
+        time.sleep(3)
+        waited += 3
+    if user_idle_s() < 20:
+        log("[i] Zoom: you are using the PC - the bot leaves the mouse alone (zoom with the real wheel skipped)")
         return False
     import ctypes
     from ctypes import wintypes
@@ -6655,6 +6683,13 @@ def zoom_out_city(dev, stop, log, max_tries=3):
     """Zoom the city view out with a two-finger pinch (done once per emulator session). -> True when the view got wider."""
     if getattr(dev, "zoomed_out", False):
         return True
+    try:                                                  # a city with a keyframe map: the screen locating on it means the
+        cmap = city_map(dev)                              # city IS at the map's zoom (the widest) - nothing to do, no mouse
+        if cmap is not None and cmap.locate(dev.screenshot()):
+            dev.zoomed_out = True
+            return True
+    except Exception as _e:
+        quiet_err("zoom_out_city", _e)
     ok_any = False
     lab = {}
     try:                                                  # developer aid: %APPDATA%\\RallyForgeBot\\pinch_lab.json
@@ -6690,7 +6725,7 @@ def zoom_out_city(dev, stop, log, max_tries=3):
     if not ok_any and load_config().get("zoom_foreground", False):     # window messages ignored: real mouse + keyboard (opt-in)
         for i in range(2):
             before = dev.screenshot()
-            if not real_wheel_zoom_out(dev, log, name):
+            if not real_wheel_zoom_out(dev, log, name, stop=stop):
                 break
             _nap(stop, 1.2, 1.5)
             sc = _view_scale(before, dev.screenshot())
@@ -6701,12 +6736,12 @@ def zoom_out_city(dev, stop, log, max_tries=3):
                 break
         if not ok_any:                                    # nothing changed: already as far out as it goes, or the input is ignored?
             before = dev.screenshot()
-            if real_wheel_zoom_out(dev, log, name, notches=2, up=True):
+            if real_wheel_zoom_out(dev, log, name, notches=2, up=True, stop=stop):
                 _nap(stop, 1.2, 1.5)
                 sc = _view_scale(before, dev.screenshot())
                 if sc and sc > 1.03:
                     log(f"[+] Zoom: zooming IN works (scale {sc:.2f}) - the city was already fully zoomed out; zooming back out")
-                    real_wheel_zoom_out(dev, log, name, notches=6)
+                    real_wheel_zoom_out(dev, log, name, notches=6, stop=stop)
                     _nap(stop, 1.0, 1.3)
                     ok_any = True
                 else:
