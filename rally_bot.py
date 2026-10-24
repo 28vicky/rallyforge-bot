@@ -13579,6 +13579,16 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 return True
         if x_ok and tap_alliance_war_row(dev, screen, log):
             return True
+        if x_ok:                                          # a shop / package page (24 Oct: 'Ariadne's Journey - Purchase Packages',
+            try:                                          # opened by a shifted button): leave it with Back, never tap inside it
+                if find_text(screen, ["Purchase Packages", "Purchase Package"], region=(0, 300, 540, 200), cutoff=0.8) or \
+                        find_text(screen, ["Buy"], region=(120, 860, 300, 90), cutoff=0.9):
+                    log("[!] A purchase page is open - leaving it with Back (nothing tapped inside it)")
+                    rd_snap(screen, "shop_page")
+                    dev.back()
+                    return True
+            except Exception as _e:
+                quiet_err("dismiss_popup", _e)
         if x_ok:                                          # no saved picture: look for the round X button of any pop-up
             cx = find_close_x(screen)
             if cx:
