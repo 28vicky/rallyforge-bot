@@ -9153,9 +9153,21 @@ def ch_find_greet(img):
     """The Greet button by its word (24 Oct: a new event button pushed Greet up and a 'buy packs' button took its old
     place - a fixed spot would have tapped that). -> (tap (x, y), label box (x, y, w, h)) or (None, None)."""
     t = find_text(img, ["Greet"], region=CH_GREET_SEARCH, cutoff=0.75)
-    if not t:
-        return None, None
-    return (int(t[0]), int(t[1]) - 12), (max(0, int(t[0]) - 75), max(0, int(t[1]) - 20), 150, 70)
+    pic = find(img, "ch_greet", 0.82, CH_GREET_SEARCH) if has_template("ch_greet") else None   # the button's own picture (icon + word), learned at the first find
+    if t and pic and (abs(pic[0] - t[0]) > 60 or abs(pic[1] - t[1]) > 60):
+        t = None                                           # word and picture disagree: trust neither
+    if t:
+        x, y = int(t[0]), int(t[1])
+        if not pic:
+            try:                                           # learn the button picture: 110 x 60 around the word (icon above it)
+                save_template("ch_greet", img[max(0, y - 40):y + 20, max(0, x - 55):x + 55])
+            except Exception as _e:
+                quiet_err("ch_find_greet", _e)
+        return (x, y - 12), (max(0, x - 75), max(0, y - 20), 150, 70)
+    if pic:
+        x, y = int(pic[0]), int(pic[1])
+        return (x, y), (max(0, x - 75), max(0, y - 10), 150, 70)
+    return None, None
 
 
 def ch_greet_label(img, box=None):
