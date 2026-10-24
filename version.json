@@ -1,9 +1,9 @@
 {
-  "version": "2.5.11",
-  "notes": "Account or payment windows are closed safely (Cancel/Back) instead of stopping or restarting.",
+  "version": "2.5.12",
+  "notes": "Black Market: Pay with applies to all picked items; the duty says why it stopped and how many gems it saw.",
   "files": {
     "rally_bot.py": {
-      "sha256": "aa7c09215c9b81d0d68fee774068f40e0a3f5211361b1fd9c48d09a321df8ead"
+      "sha256": "b7dec0aeea22e7c70717853a4ae91a33233e23b5e1f20e7185ab3695e65251b6"
     },
     "web_app.py": {
       "sha256": "45bc32c1366e6023cca5f1ea3c053559a8e1f217fe15507206d3a58a081ae948"
@@ -18,7 +18,7 @@
       "sha256": "9e4be6ae10e966a20e8839d258cbd03e94c4b503d346087328560d1044418010"
     },
     "ui/changelog.js": {
-      "sha256": "21b88afad92a88e3913678f135da443e0d86c6bf9cdf6560f67455a6ddc9be05"
+      "sha256": "27dcd22dd2a384876f3c174fb6baf9858144b2b747e316b942715437c81433eb"
     },
     "ui/dialogs.js": {
       "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "a464632e93fdf8e8b2c5df1b1cddb065d14ab13e123e033dbe8f8108ab17c836"
+      "sha256": "42a3be9189d7fe6dbdf1f4d9237d98677b7f28669d4577935a0fe7fd1b743536"
     },
     "ui/tour.js": {
       "sha256": "3a4ca195aed40a7b56c7158ce844a5879f327325f7486a59c8e8814eed318da0"
@@ -1709,5 +1709,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "f758c387eb496f30d29550a8382b37fffb67abd9d39557b1c1e8914ae5768bc4"
+  "sig": "4a0e69f0244b47ab4f61963d47d0d1e7e10705daacb93f7af88845ca2aa70369"
 }
