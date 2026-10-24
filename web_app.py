@@ -2166,6 +2166,22 @@ class Api:
     def shot_take(self, p):
         return self.c.shot_from_device(p["serial"])
 
+    def dev_find(self, p):
+        """Owner tool: run the bot's own building finder on a PAUSED instance and leave the building's ring menu open
+        (e.g. the Keep, to change the city culture from a PC-linked chat). {"serial", "name"} -> {"found"}"""
+        adb = rb.find_adb(self.c.cfg.get("adb_path") or "auto")
+        if not adb:
+            raise ApiError("ADB not found. Set the ADB path in Settings.")
+        serial = p["serial"]
+        dev = rb.Device(serial, adb)
+        dev.connect()
+        cfg = rb.merge_device_cfg(self.c.cfg, serial)
+        log = lambda m: self.c.log(m, serial)
+        stop = threading.Event()
+        rb.leave_to_city(dev, cfg, stop, log)
+        found = bool(rb.find_learned_building(dev, cfg, log, stop, str(p.get("name", "Keep"))))
+        return {"found": found}
+
     def dev_act(self, p):
         """Owner tools: one tap / swipe / Back on an instance (used from a PC-linked chat to drive the game, e.g. change the
         city culture, while the instance is paused). {"serial", "do": "tap"|"swipe"|"back", "x","y" [,"x2","y2","ms"]}"""
