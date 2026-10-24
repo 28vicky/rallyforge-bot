@@ -94,7 +94,7 @@ Starter prompt for any chat: "Read CLAUDE.md and HANDOFF.md (section PARALLEL WO
 6. Owner's PC is shared: only ONE chat deploys / reopens the app at a time, and only after asking the owner. Write "PC: <task id> testing" in the PC line below while testing, clear it after.
 7. Low effort by default. Ask the owner before anything costly (live tests, screenshots, long reads, subagents, high-effort debugging).
 
-PC: T75 testing (24 Oct 14:00 IST - UI files from feat/ui-consistency copied into the dev copy; owner checks the app himself)
+PC: e9401a9 + T75 web_app + UI files (24 Oct 14:18 IST, T75 testing). Dev copy app2.4.99: rally_bot.py = feat/city-go e9401a9 (city mapper runs there, untouched); web_app.py = e9401a9 + T75 server lines (3-way merge, NOT committed anywhere - city-go owns that file); ui/app.css app.js dialogs.js pages.js tour.js = feat/ui-consistency aaf7819. Start-with-Windows switch (T71) has no server here. Owner reopens only between map runs.
 
 RELEASE PREP 2.5.7 (23 Oct 23:30 IST, owner asked): branch release/2.5.7 = main + T56 T57 T58 T60 T61 T63 T64 T67 T68 T69 T70 (not T55 city-go). Conflicts T69 vs T61/T68 fixed (kept new code + quiet_err); tests reset the in-memory duty state; 31 tests pass; compiles; UI boots in preview. VERSION 2.5.7 + What's new done. NOT PUBLISHED: needs a smoke test on the PC (one instance, ~30 min) and make_update with UPDATE_KEY from a PC-linked chat.
 
