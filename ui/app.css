@@ -1526,3 +1526,12 @@ a.lnk,.lnkb,.viewall,.vlink{display:inline-flex;align-items:center;min-height:28
 .tdall td small.bad{color:var(--bad)}
 .app:not(.nosb) .status .sbl>.sbrun+span::before{content:none}
 .side h4 .cnt:empty{display:none}
+/* Auto-Join: its own top-level switch (instance header, Control bar, Dashboard table) - feat/autojoin-switch */
+.ajsw{font-size:14px;font-weight:600;gap:8px;white-space:nowrap}
+.ajsw.sm{gap:0}
+.ajsw .ajcnt{font-weight:400;color:var(--mute)}
+.ajsw.greyed{opacity:.5;cursor:default}
+.tdall td .ajsw{vertical-align:middle}
+.ajsw .ajcnt::before{content:"\00b7\00a0"}
+.ajsw .ajcnt:empty{display:none}
+@media (max-width:1600px){.insthead .iserial{display:none}}   /* narrow windows: the address moves into the name's tooltip so the header stays on one line */
