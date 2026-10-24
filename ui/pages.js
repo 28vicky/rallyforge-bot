@@ -1075,7 +1075,7 @@ PAGES.tasks = function (fixed, inPanel, redraw) {
 
 // ====================================================================== market
 const PAY = [["gems", "Gems only"], ["resources", "Resources only"], ["both", "Gems or resources"]];
-const REFRESH = [["none", "Do not refresh"], ["count", "Refresh this many times"], ["all", "Until the gem floor (keeps refreshing and buying)"]];
+const REFRESH = [["none", "Never"], ["count", "A set number of times"], ["all", "Until the gem floor"]];
 // Black Market pictures that ship with the app (templates mk_BM_NN.png, cut from a real shop recording): plain name + category.
 // The item keeps its "BM NN" name in the settings (that is the picture the bot looks for); only the label shown changes.
 const BM_CATS = [["all", "All"], ["stamina", "Stamina"], ["res", "Resources"], ["speed", "Speed-ups"], ["chest", "Chests"], ["gear", "Gear & materials"], ["other", "Other"]];
@@ -1125,13 +1125,13 @@ PAGES.market = function () {
   const lockSpend = () => {
     const m = c.market_refresh_mode || "none";
     const nIn = nInp.tagName === "INPUT" ? nInp : nInp.querySelector("input");
-    if (nIn) { nIn.disabled = m !== "count"; nIn.title = m === "count" ? "" : "Only used with 'Refresh this many times'"; }
+    if (nIn) { nIn.disabled = m !== "count"; nIn.title = m === "count" ? "" : "Only used with 'A set number of times'"; }
     const pIn = paidTog.querySelector("input"); if (pIn) pIn.disabled = m === "none";
     paidTog.classList.toggle("dim", m === "none");
   };
   const spend = panel("Spending",
-    grid2(fld("If no picks are in the shop", sel(c, "market_refresh_mode", REFRESH, { dropdown: true, after: () => draw() })),
-      fld("Free refreshes", nInp)),
+    grid2(fld("Refresh the shop", sel(c, "market_refresh_mode", REFRESH, { dropdown: true, after: () => draw() })),
+      fld("How many times", nInp)),
     h("div", { class: "bmtog" }, paidTog),
     grid2(fld("Gem floor", inp(c, "market_min_gems", { type: "int", cls: "short" }), "Never go below this. 0 = no floor"),
       fld("Gold floor", inp(c, "market_min_gold", { type: "int", cls: "short" }), "Never go below this. 0 = no floor"),
