@@ -1559,6 +1559,7 @@ const DUTY_UI = {
 const DUTY_COMING = ["Construction", "Research", "Material composing", "General enhancing", "Patrol", "Relic exploration", "Resource gathering"];
 const DUTY_TEST = new Set(["reach_keep_tavern", "market_capture", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy"]);   // developer builds only (C12)
 const ACT_MAX = 145;                                                     // the game's last Activity chest
+const DUTY_ORDER = (id) => { const i = Object.keys(DUTY_UI).indexOf(id); return i < 0 ? 999 : i; };   // the game's Activity order
 const dutyName = (id, t) => (DUTY_UI[id] ? DUTY_UI[id][1] : t);
 const dutyGroup = (id, g) => (DUTY_UI[id] ? DUTY_UI[id][0] : g === "Reward claims" ? g : "City");
 const dutyShown = (id) => S.dev || !DUTY_TEST.has(id);
@@ -1607,7 +1608,7 @@ PAGES.duties = function (fixed) {
   const list = () => rows.filter((r) => dutyShown(r.id)).map((r) => {
     const run = serial && r.on && nowText() && nowText().includes(String(r.title).toLowerCase());
     return Object.assign({}, r, { g: dutyGroup(r.id, r.group), t: dutyName(r.id, r.title), pts: DUTY_UI[r.id] ? DUTY_UI[r.id][2] : 0, status: run ? "run" : r.status });
-  }).concat([{ id: "@tasks", g: "My tasks", t: "My tasks", pts: 0, on: tasksOn(), status: "off",
+  }).sort((a, b) => DUTY_ORDER(a.id) - DUTY_ORDER(b.id)).concat([{ id: "@tasks", g: "My tasks", t: "My tasks", pts: 0, on: tasksOn(), status: "off",
     schedule: nTasks() ? nTasks() + " tap list" + (nTasks() > 1 ? "s" : "") + ", run when no rally is waiting" : "Your own tap lists - none yet" }]);
   const setOn = async (r, v) => {
     if (r.id === "@tasks") { if (ov) ov.city_enabled = v; else S.cfg.city_enabled = v; draw(); return; }   // page autosave
