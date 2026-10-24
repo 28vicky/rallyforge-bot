@@ -1576,8 +1576,12 @@ function applyToDialog(what, run) {
   const picked = new Set();
   const list = h("div", { class: "applylist" }, devs.map((d) => h("label", { class: "tgl" },
     h("input", { type: "checkbox", onchange: (e) => { if (e.target.checked) picked.add(d.id); else picked.delete(d.id); okBtn.disabled = !picked.size; } }), h("span", { class: "sw" }), d.name || short(d.id))));
+  // C14: more than 8 instances -> a search box above the list (names or addresses)
+  const find = devs.length > 8 ? h("input", { type: "search", class: "dsearch", placeholder: "Search instances", "aria-label": "Search instances", autocomplete: "off",
+    style: { width: "100%", marginBottom: "8px" },
+    oninput: (e) => { const t = e.target.value.trim().toLowerCase(); [...list.children].forEach((el, i) => { el.hidden = !!t && !((devs[i].name || "") + " " + devs[i].id).toLowerCase().includes(t); }); } }) : null;
   const m = modal({ title: "Apply the universal " + what, body: h("div", {},
-    h("p", { class: "note" }, "The instances you pick drop their own " + what + " and use these defaults from now on. Other instances are not changed."), list),
+    h("p", { class: "note" }, "The instances you pick drop their own " + what + " and use these defaults from now on. Other instances are not changed."), find, list),
     buttons: [{ label: "Cancel" }, { label: "Apply", cls: "pri", onclick: async () => { if (!picked.size) return false; await run([...picked]); toast("Applied to " + picked.size + " instance" + (picked.size > 1 ? "s" : "") + ".", "ok"); } }] });
   const okBtn = m.el.querySelector(".mf .btn.pri"); okBtn.disabled = true;
 }
@@ -1690,7 +1694,10 @@ PAGES.duties = function (fixed) {
     serial && r.on ? dutyBadge(r.status, r.status_text, r.week && r.week.last_error ? "Last problem: " + r.week.last_error : "") : null,
     serial && r.on && r.status === "gaveup" ? h("button", { class: "btn sm", type: "button", onclick: async () => { take(await act(api("duty_retry", { serial, id: r.id }))); toast("It runs again shortly.", "ok"); } }, "Retry") : null,
     hasSet(r) ? h("button", { class: "btn sm dset" + (sideId === r.id ? " on" : ""), type: "button", "data-id": r.id, "aria-label": r.t + " settings", onclick: () => openSide(r.id) }, "Settings") : null);
+  let q = "";                                     // C14: search, across every group (typing clears the group chip)
+  const qHit = (r) => { const t = q.trim().toLowerCase(); return !t || (r.t + " " + (r.title || "") + " " + r.g).toLowerCase().includes(t); };
   const draw = () => {
+    const had = document.activeElement && document.activeElement.classList.contains("dsearch") && root.contains(document.activeElement);
     root.innerHTML = "";
     const L = list(), onCount = L.filter((r) => r.on).length;
     const view = (S.dutyView = S.dutyView || {});
@@ -1699,8 +1706,11 @@ PAGES.duties = function (fixed) {
     if (view.group && !DUTY_GROUPS.includes(view.group)) view.group = "";
     const v = { show: view.show || "all", group: view.group || "" };
     const segBtn = (lab, on, fn) => h("button", { class: "segb" + (on ? " on" : ""), type: "button", onclick: fn }, lab);
-    const pass = (r) => v.show === "all" || r.on;
-    const filters = h("div", { class: "dfilter" },
+    const pass = (r) => (q.trim() ? qHit(r) : v.show === "all" || r.on);
+    const search = h("input", { type: "search", class: "dsearch", placeholder: "Search duties", "aria-label": "Search duties", value: q, autocomplete: "off",
+      oninput: (e) => { q = e.target.value; if (q.trim()) view.group = ""; draw(); },
+      onkeydown: (e) => { if (e.key === "Escape" && q) { e.preventDefault(); e.stopPropagation(); q = ""; draw(); } } });
+    const filters = h("div", { class: "dfilter" }, search,
       h("div", { class: "seg small" }, segBtn("On (" + onCount + ")", v.show === "on", () => { view.show = "on"; draw(); }), segBtn("All (" + L.length + ")", v.show === "all", () => { view.show = "all"; draw(); })),
       h("div", { class: "rtnpills" }, [["", "All groups"]].concat(DUTY_GROUPS.map((g) => [g, g])).map(([g, l]) =>
         h("button", { class: "rtnpill" + (v.group === g ? " on" : ""), type: "button", onclick: () => { view.group = g; draw(); } }, l, h("span", { class: "pc" }, String(L.filter((r) => (!g || r.g === g) && pass(r)).length))))));
@@ -1716,10 +1726,19 @@ PAGES.duties = function (fixed) {
     if (v.show === "all" && (!v.group || v.group === "Army") && serial) foot.push("Monster killing and stamina points come from the rallies the bot joins (Rally setup).");
     if (v.show === "all" && !v.group) foot.push(DUTY_COMING.length + " more activities coming: " + DUTY_COMING.join(", ") + ".");
     root.appendChild(panel(null, head(), filters,
-      body.length ? body : h("div", { class: "empty" }, v.show === "on" ? h("span", {}, "Nothing is switched on here yet. ", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); view.show = "all"; draw(); } }, "Show all duties")) : "No duties in this group."),
+      body.length ? body : h("div", { class: "empty" }, q.trim() ? h("span", {}, "No duties match \u201c" + q.trim() + "\u201d. ", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); q = ""; draw(); } }, "Clear the search"))
+        : v.show === "on" ? h("span", {}, "Nothing is switched on here yet. ", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); view.show = "all"; draw(); } }, "Show all duties")) : "No duties in this group."),
       foot.length ? h("div", { class: "dfoot" }, foot.map((t) => h("small", { class: "hint" }, t))) : null));
     lastKey = JSON.stringify(rows.map((r) => [r.on, r.status, r.status_text]));
+    if (had) { search.focus({ preventScroll: true }); search.setSelectionRange(q.length, q.length); }
   };
+  // "/" jumps to the search box, as in Mac apps (not while typing somewhere else)
+  const slash = (e) => {
+    if (!root.isConnected) { document.removeEventListener("keydown", slash); return; }
+    if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "") || document.querySelector(".ov, .pick")) return;
+    const box = root.querySelector(".dsearch"); if (box) { e.preventDefault(); box.focus(); }
+  };
+  document.addEventListener("keydown", slash);
   const load = async () => take(await act(api("duties", { serial })));
   // keep today's states fresh (instances only) without touching an open side panel
   if (serial) {
