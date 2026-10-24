@@ -1154,7 +1154,7 @@ PAGES.market = function () {
     h("div", { class: "bmbar" }, pills, search),
     holder);
   const opts = panel("Buying and refreshing",
-    grid2(fld("Pay with (for new items)", sel(c, "market_pay", PAY)), fld("When the shop has none of them", sel(c, "market_refresh_mode", REFRESH)),
+    grid2(fld("Pay with (all chosen items - each card can still differ)", sel(c, "market_pay", PAY, { after: () => { (c.market_items || []).forEach((i) => { i.pay = c.market_pay; }); draw(); } })), fld("When the shop has none of them", sel(c, "market_refresh_mode", REFRESH)),
       fld("How many refreshes", inp(c, "market_refresh_n", { type: "int", cls: "short" })), fld("Most gems to spend per visit (0 = keep going until the gems run out)", inp(c, "market_max_gems", { type: "int", cls: "short" }))),
     grid2(fld("Keep at least this many gems (0 = no floor)", inp(c, "market_min_gems", { type: "int", cls: "short" })),
       fld("Keep at least this much gold (0 = no floor)", inp(c, "market_min_gold", { type: "int", cls: "short" }))),

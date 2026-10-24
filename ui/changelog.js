@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.12", date: "2026-10-24",
+    fixed: ["Black Market: \"Pay with\" now changes every item you picked (each card can still be set on its own).",
+      "Black Market: the duty now says why it stopped for the day - your gem floor, the daily gem limit or out of gems - and how many gems it saw."] },
   { v: "2.5.11", date: "2026-10-24",
     fixed: ["Account or payment windows are closed safely (Cancel or Back, never confirmed) instead of stopping the instance or restarting the game."] },
   { v: "2.5.10", date: "2026-10-24",

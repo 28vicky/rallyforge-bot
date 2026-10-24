@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.5.11"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.5.12"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -8107,6 +8107,11 @@ def run_market(dev, cfg, log, stop):
     end = None                                               # why the run ended: "floor" / "limit" / "nogems" = nothing more to do today
     bought, failed = {}, set()                              # failed: slot numbers that did not sell (until the next refresh)
     gold, gems = market_totals(img)
+    try:                                                     # the shop with its gold / gem row, to check the numbers read (a 6-digit
+        (USER / "debug").mkdir(exist_ok=True)               # gem total was read as 32,750 on Manhattan 24 Oct - first digit lost?)
+        cv2.imwrite(str(USER / "debug" / f"bm_totals_{str(getattr(dev, 'serial', '')).replace(':', '_')}.png"), img)
+    except Exception as _e:
+        quiet_err("bm_totals_pic", _e)
     log(f"[*] Black Market: looking for {', '.join(w[0] for w in wanted)}; gold {gold if gold is not None else '?'}, "
         f"gems {gems if gems is not None else '?'} (keep at least {min_gold:,} gold, {min_gems:,} gems)")
     need_totals = bool(min_gems or min_gold or budget)   # totals are only read every round when a floor / limit needs them
@@ -8271,7 +8276,7 @@ def run_market(dev, cfg, log, stop):
     if bm_keep_going(cfg) and not stop.is_set():             # keeps coming back all day until the gems reach the floor / run out
         serial = getattr(dev, "serial", "")
         if end:
-            bm_save(serial, end_day=_game_day(), next_at=0)
+            bm_save(serial, end_day=_game_day(), next_at=0, end_why=end, end_gems=gems)
             log("[i] Black Market: " + {"floor": "gem floor reached", "limit": "gem limit reached",
                                        "nogems": "out of gems"}[end] + " - done until the game reset")
         else:
@@ -12536,7 +12541,11 @@ def duty_status(serial, duty_id, cfg):
         return "due", "Due"
     if duty_id == "black_market" and bm_keep_going(cfg):     # runs all day until the gems reach the floor / run out
         if row.get("end_day") == day:
-            return "done", "Gems used up " + time.strftime("%H:%M", time.localtime(row.get("last_ok", 0) or now))
+            why = {"floor": "Stopped at your gem floor", "limit": "Gem limit for the day reached", "nogems": "Out of gems"}.get(
+                row.get("end_why"), "Gems used up")
+            g = row.get("end_gems")
+            return "done", why + (f" (gems read: {g:,})" if isinstance(g, int) else "") + " " + \
+                time.strftime("%H:%M", time.localtime(row.get("last_ok", 0) or now))
         fs = _duty_fail_state(row, tries, now)
         if fs:
             return fs
