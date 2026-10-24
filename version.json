@@ -1,27 +1,27 @@
 {
-  "version": "2.5.7",
-  "notes": "UI pass, dark mode, save status, safety stop, stamina, unknown windows, Behemoth King, task stats, detect, stability",
+  "version": "2.5.8",
+  "notes": "2.5.8: Map my city (keyframe city map, City map card with building progress), Auto-Join switch, Start with Windows, consistent UI; fixes: frozen game, purchase page, Appearance, Stop, mouse, restart lock, Exit box, Champions Greet",
   "files": {
     "rally_bot.py": {
-      "sha256": "3e99d7ae82d0113b2ea26a995962f5ed79f80f0c641272dbfa4716ba75cdfc99"
+      "sha256": "6c38b03aec90362452bb0b5fa5f16f6a82378a91bde908c90b8314679141af49"
     },
     "web_app.py": {
-      "sha256": "617cc0e09a6884dbae1d5d3e3676526ee919b41379edccb77ead54a0c027fe50"
+      "sha256": "45bc32c1366e6023cca5f1ea3c053559a8e1f217fe15507206d3a58a081ae948"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "cc2e892b541ba48f950efecdf41a2098bff1f9691295474ae557263ff0556e12"
+      "sha256": "1b79fc768564025852391f95c00ff97cde16c677944a280af335cd949227ca79"
     },
     "ui/app.js": {
-      "sha256": "15d13e5100c7d04b3f6b123e280920c7451fbbb308a322cd1f34e35b11018a1c"
+      "sha256": "9e4be6ae10e966a20e8839d258cbd03e94c4b503d346087328560d1044418010"
     },
     "ui/changelog.js": {
-      "sha256": "ef682b5c4c5006cfcb3e2572882de06a5b08277d39c5f250dcc5e81ce9f4f3b1"
+      "sha256": "ab13ce7908cd4eb6b7e09bdf2188f9c3ff4e758314dcaaed409bda78eb8049b9"
     },
     "ui/dialogs.js": {
-      "sha256": "9a7fd0dcede3c0a5cc8b284e6d5ba4be9690dc5dba2d5ed4f4fe3cfe8fd6cb5c"
+      "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
     },
     "ui/fonts.css": {
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
@@ -30,10 +30,10 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "a06dce27e498a24e629d9cfb535b9515a519974b11ed09e7c615a54a3247e3c2"
+      "sha256": "a464632e93fdf8e8b2c5df1b1cddb065d14ab13e123e033dbe8f8108ab17c836"
     },
     "ui/tour.js": {
-      "sha256": "97832158ac492e07b26ebeedf630bcd55ce7e70353d19df386aa183616bcac2a"
+      "sha256": "3a4ca195aed40a7b56c7158ce844a5879f327325f7486a59c8e8814eed318da0"
     }
   },
   "mode": "ask",
@@ -1519,6 +1519,75 @@
     }
   },
   "templates": {
+    "act_alliance_donation.png": {
+      "sha256": "cf3a1aeca6e388916c9d7e3105630594d85516e00c130dadfdc5f09b2579a537"
+    },
+    "act_alliance_help.png": {
+      "sha256": "c8111fef3ddf4b28eb14028820151b7f6a4ca2c6a39a52114178710b02a75eb6"
+    },
+    "act_black_market.png": {
+      "sha256": "9520cfcd566f50c913fefd1e1293e9256611aff748965855f702fe4b53dbd3d6"
+    },
+    "act_construction.png": {
+      "sha256": "23def6b5080fc2fe781860dc529a974514a774432438c5ca59608a9450e45d03"
+    },
+    "act_done_chest.png": {
+      "sha256": "18ed244a93be68cfbe601c3828aa7c3063d4499cd4289845adb1bc76fa314797"
+    },
+    "act_general_enhancing.png": {
+      "sha256": "51004fe8fed2f2b70d6a49251be36f834995e86d502ee7f8f692317c25af85f3"
+    },
+    "act_gold_levy.png": {
+      "sha256": "849f590ba3a0f8b10b7594b669c34ab50e32f5fe55bd4f41b8814302c9e357d9"
+    },
+    "act_greet_champion.png": {
+      "sha256": "1e604636e34b352084f929ecc4bce391392347744948ba31d19016450744f213"
+    },
+    "act_labor.png": {
+      "sha256": "a79e263420cfa0f619b435f7b0f10104b1ee8da758ca056014c40032944c1527"
+    },
+    "act_material_composing.png": {
+      "sha256": "c1905ffcd016b28794f1f0685c66733635bbc0fd9fc3709ea03bcf41c2cc63b4"
+    },
+    "act_offering.png": {
+      "sha256": "7c68b1199d1ce0d5ff1c284aa0237f063245fe0e0127e68e6b9c329189a13841"
+    },
+    "act_patrol.png": {
+      "sha256": "0272f137dfbedeb6aac8f26e4765424a80ad700915d9a2c56095ea582e55720e"
+    },
+    "act_ranger_knight.png": {
+      "sha256": "cfd21d68e11173a3a73bace6162df86f207cdd3269dfc912e522669525e3944a"
+    },
+    "act_relic_exploration.png": {
+      "sha256": "1eb5c11289792f26c7e4a360bc4d16fba4e1415a8b5f2153ac238e5c9c12108e"
+    },
+    "act_research.png": {
+      "sha256": "4ce79c275ffb684e93a89ad9c085b6ba61da7f26d2be7a3f1590d06aa735bb93"
+    },
+    "act_resource_gathering.png": {
+      "sha256": "96f1fc3e6922255d680c3291c74c7071df31349ea9571cdabf66544604978b3c"
+    },
+    "act_resource_tax.png": {
+      "sha256": "c3783c0df150af9ceb8c776c77f9cef0ea8499f46537a7e9be028b1b8f522acf"
+    },
+    "act_trade_carriage.png": {
+      "sha256": "6e7f12d1df68d56965e5fad18595109affa0dea25155a642f239b023a0105fdd"
+    },
+    "act_trap_building.png": {
+      "sha256": "13e8d80ebd4c754991c3b661ecac4361e5d9112202b101b83b048b43943397ac"
+    },
+    "act_troop_healing.png": {
+      "sha256": "c953f81c0234647cc2c10d3e3adf70c32e2cc4a3c71bdce0db11bf5424bc667e"
+    },
+    "act_troop_killing.png": {
+      "sha256": "0160fee61b35d42b3b15991385b97b6fad67623fe7c3d28cfa140a67fc0684f3"
+    },
+    "act_troop_training.png": {
+      "sha256": "972a37b4260fa675d0774181115ff37ba9d8903180fa0e9803777d0fb0bb4c8a"
+    },
+    "act_wheel_of_fortune.png": {
+      "sha256": "f74a5ad07774fa69b233ba21186ec4e5d695c86bdbed8cc94fa13f7fa3420c34"
+    },
     "city_whole.png": {
       "sha256": "84b36804a615b75d99646a369dae9f526d4c28a90f7494ba85277d4431aff5aa"
     },
@@ -1640,5 +1709,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "fd1c0a702a35d3fd7e193d4143a6ed9ee2c0e3c7a41a4377a0fedadc77c3d028"
+  "sig": "195160ec38f92c048e376b7f3c6759ae39a52dfc8a4abca642d768773cde68bf"
 }
