@@ -104,7 +104,7 @@ const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", mon
 
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
-  ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram & Discord"], ["reliability", "Reliability"],
+  ["tasks", "My tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram coordinates"], ["reliability", "Reliability"],
   ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Appearance"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
@@ -625,8 +625,8 @@ const TAB_GROUPS = [
   ["dashboard", "Dashboard", null],
   ["presets", "Presets & generals", null],
   ["monsters", "Monsters", null],
-  ["tasks", "Tasks", null],
   ["duties", "Duties", null],
+  ["tasks", "My tasks", null],
   ["market", "Market", null],
   // one row only (ui-simple): the rarely used pages live under More, grouped by small headings ("#...")
   ["more", "More", ["logs", "reports", "#Setup", "settings", "reliability", "schedule", "#App", "updates", "themes", "telegram", "license"]],
