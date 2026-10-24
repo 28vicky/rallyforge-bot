@@ -1688,13 +1688,51 @@ class Api:
                          "schedule": ("When the next egg is ready" if d["id"] == "crazy_eggs" else "Once per game day" if not d["every_min"] else f"Every {d['every_min']} min")})
         return rows
 
+    # test duties: never shown to users and never counted (C8 / C12)
+    TEST_DUTIES = ("reach_keep_tavern", "market_capture", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy")
+
+    def _duty_count(self, serial, cfg=None):
+        """The one 'done / on' count every screen shows (C8): duties switched on (test duties left out) and how many of
+        them finished at least once this game day."""
+        cfg = cfg if cfg is not None else self._eff(serial)
+        state = rb.load_duty_state().get(serial or "default") or {}
+        day = rb._game_day()
+        on = done = 0
+        for d in rb.DUTY_LIBRARY:
+            if d["id"] in self.TEST_DUTIES or not ((cfg.get("duties") or {}).get(d["id"]) or {}).get("on"):
+                continue
+            on += 1
+            last_ok = (state.get(d["id"]) or {}).get("last_ok", 0)
+            ok_today = bool(last_ok) and time.strftime("%Y-%m-%d", time.gmtime(last_ok - rb.reset_min() * 60)) == day
+            done += bool(ok_today or rb.duty_status(serial, d["id"], cfg)[0] == "done")
+        return {"done": done, "on": on}
+
     def _own(self, scope):
         ov = (self.c.cfg.get("per_device") or {}).get(scope, {}) if scope else {}
         return {"duties": "duties" in ov, "crazy_eggs": "crazy_eggs" in ov, "champions": "champions" in ov, "wheel": "wheel" in ov}
 
     def duties(self, p):
         scope = self._scope(p)
-        return {"duties": self._duty_rows(scope), "serial": scope, "own": self._own(scope)}
+        return {"duties": self._duty_rows(scope), "serial": scope, "own": self._own(scope),
+                "count": self._duty_count(scope) if scope else None}
+
+    def duties_copy(self, p):
+        """'Copy from another instance...' on Routines: this instance gets the other one's duties and their settings
+        (Crazy Eggs, Champions, Wheel). Same per_device keys the switches write; nothing else changes."""
+        scope, src = self._scope(p), str(p.get("from", ""))
+        ids = [d["id"] for d in self.c.devices]
+        if not scope or src not in ids or src == scope:
+            raise ApiError("Pick another instance.")
+        src_cfg = self._eff(src)
+        per = {s: dict(v) for s, v in (self.c.cfg.get("per_device") or {}).items()}
+        mine = per.setdefault(scope, {})
+        for k in self.OWN_KEYS_COPY:
+            if k in src_cfg:
+                mine[k] = json.loads(json.dumps(src_cfg[k]))
+        self.c.save({"per_device": per}, managed=True)
+        return self.duties({"serial": scope})
+
+    OWN_KEYS_COPY = ("duties", "crazy_eggs", "champions", "wheel")
 
     def today(self, p):
         """Today card for one instance: reset time, duty queue (Daily activities + Reward claims that are on),
@@ -1706,9 +1744,9 @@ class Api:
         reset_at = ((now - rm) // 86400 + 1) * 86400 + rm
         state = (rb.load_duty_state().get(serial) or {})
         day = rb._game_day()
-        queue, done_n = [], 0
+        queue = []
         for d in rb.DUTY_LIBRARY:
-            if d["group"] not in ("Daily activities", "Reward claims"):
+            if d["id"] in self.TEST_DUTIES:
                 continue
             conf = (cfg.get("duties") or {}).get(d["id"]) or {}
             if not conf.get("on"):
@@ -1717,7 +1755,6 @@ class Api:
             st, txt = rb.duty_status(serial, d["id"], cfg)
             last_ok = row.get("last_ok", 0)
             ok_today = bool(last_ok) and time.strftime("%Y-%m-%d", time.gmtime(last_ok - rb.reset_min() * 60)) == day
-            done_n += ok_today
             queue.append({"id": d["id"], "title": d["title"], "group": d["group"], "status": st, "text": txt,
                           "last_ok": last_ok if ok_today else 0, "msg": row.get("msg", "") if row.get("day") == day else "",
                           "every": int(conf.get("every_min", d["every_min"]) or 0)})
@@ -1728,7 +1765,8 @@ class Api:
         return {"serial": serial, "name": name, "now": now, "reset_at": reset_at, "tasks_on": bool(cfg.get("city_enabled")) or any(q for q in queue),
                 "queue": queue,
                 "results": {"joins": int(t.get("joins", 0)), "late": int(t.get("late", 0)), "restarts": int(t.get("restarts", 0)),
-                            "monsters": t.get("monsters") or {}, "duties_done": done_n},
+                            "monsters": t.get("monsters") or {}, "duties_done": self._duty_count(serial, cfg)["done"]},
+                "count": self._duty_count(serial, cfg),
                 "week": {"days": len(week), "joins": sum(int(w.get("joins", 0)) for w in week),
                          "restarts": sum(int(w.get("restarts", 0)) for w in week)}}
 
@@ -1741,7 +1779,7 @@ class Api:
                 continue
             t = self.today({"serial": d["id"]})
             q = t["queue"]
-            rows.append({"serial": d["id"], "name": t["name"], "duties_done": t["results"]["duties_done"], "duties_total": len(q),
+            rows.append({"serial": d["id"], "name": t["name"], "duties_done": t["count"]["done"], "duties_total": t["count"]["on"],
                          "joins": t["results"]["joins"], "late": t["results"]["late"]})
             if not ((self._eff(d["id"]).get("duties") or {}).get("crazy_eggs") or {}).get("on"):
                 ce_off.append(t["name"])
@@ -1821,11 +1859,14 @@ class Api:
         matrix = []
         for d in self.c.devices:
             eff = rb.merge_device_cfg(self.c.cfg, d["id"])
-            row = {"emu": names[d["id"]], "tasks": bool(eff.get("city_enabled")), "duties": []}
+            row = {"id": d["id"], "emu": names[d["id"]], "tasks": bool(eff.get("city_enabled")), "duties": [],
+                   "count": self._duty_count(d["id"], eff)}
             for du in rb.DUTY_LIBRARY:
+                if du["id"] in self.TEST_DUTIES:
+                    continue
                 st, txt = rb.duty_status(d["id"], du["id"], eff)
                 if st != "off":
-                    row["duties"].append({"title": du["title"], "status": st, "text": txt})
+                    row["duties"].append({"id": du["id"], "title": du["title"], "status": st, "text": txt})
             matrix.append(row)
         return {"events": events, "matrix": matrix}
 
