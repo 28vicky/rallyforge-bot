@@ -1,5 +1,11 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.8", date: "2026-10-24",
+    new: ["Map my city (Routines > Common tasks): the bot explores your whole city once, at the widest zoom, and keeps a picture map of it. Takes about 25 minutes; run it once per instance, and again after you change culture or move buildings.",
+      "With a city map, the bot goes straight to a building it has visited before - a few short drags, no searching. Buildings are remembered as the daily tasks open them.",
+      "The instance shows the mapping progress while it runs."],
+    fixed: ["A game that stops reacting to taps is restarted instead of being tapped forever; if it freezes again soon after, the emulator is restarted.",
+      "A sale or event window over the city is closed during mapping and city tasks."] },
   { v: "2.5.7", date: "2026-10-24",
     new: ["Every screen shows when your changes are saved, with Undo (Ctrl+Z) for the last change.",
       "Dark mode is back (Settings > Appearance), with easier-to-read text everywhere.",
