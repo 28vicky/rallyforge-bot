@@ -1595,3 +1595,10 @@ a.lnk,.lnkb,.viewall,.vlink{display:inline-flex;align-items:center;min-height:28
 .mrhead .mrtitle{flex:1;min-width:0}
 .mrlhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .mrlhead .mrtime{flex:none;font-weight:500}
+.actempty{display:none;padding:14px 4px;color:var(--mute);font-size:13.5px}
+.actsplit:has(.acttable tbody:empty) .actempty{display:block}
+.actsplit:has(.acttable tbody:empty) .acttable thead{display:none}
+.sumline{margin:4px 0 6px;font-size:14px}
+.monbar{gap:12px;margin-bottom:12px;flex-wrap:wrap}
+:root .tlist th{color:var(--mute);letter-spacing:0}
+.ithead{color:var(--fg)}

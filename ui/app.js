@@ -856,7 +856,8 @@ function activityBox(serial, title) {
   now.textContent = actNow(serial); paintStats(stats, serial);
   return h("div", { class: "actsplit" },
     h("div", { class: "actleft" }, h("h3", {}, title || "Activity"), h("div", { class: "actbar" }, h("span", { class: "actlab" }, "Now"), now), stats),
-    h("div", { class: "actright" }, h("h3", {}, "Monster joins"), wrap));
+    h("div", { class: "actright" }, h("h3", {}, "Monster joins"), wrap,
+      h("div", { class: "actempty" }, "No rally joined yet today. Each join shows here as it happens.")));
 }
 function pushActs(list) {
   for (const l of list || []) {

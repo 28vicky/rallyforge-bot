@@ -1790,15 +1790,6 @@ class Api:
         return {"now": now, "reset_at": ((now - rm) // 86400 + 1) * 86400 + rm, "rows": rows,
                 "crazy_eggs": {"total": len(rows), "off": ce_off}}
 
-    def crazy_eggs_on_all(self, p):
-        """'turn on' link of the Crazy Eggs alert: switch the crazy_eggs duty on in the universal list
-        and in every instance that has its own duties copy. Nothing else in the settings changes."""
-        self.duty_set({"id": "crazy_eggs", "on": True})
-        own = [s for s, v in (self.c.cfg.get("per_device") or {}).items() if "duties" in (v or {})]
-        for s in own:
-            if s in [d["id"] for d in self.c.devices]:
-                self.duty_set({"id": "crazy_eggs", "on": True, "serial": s})
-        return self.today_all(p)
     def duty_retry(self, p):
         """'Retry' on a duty that failed 3 times today: run it again now (one instance, or every instance)."""
         did = str(p.get("id", ""))

@@ -290,7 +290,7 @@ PAGES.dashboard = function () {
     h("span", { id: "instN" }, n + (n === 1 ? " instance" : " instances")), h("span", { class: "sep" }, "·"),
     h("button", { class: "lnkb imanage", type: "button", title: "Names, addresses, add or remove instances", onclick: openSide }, "Manage"));
   const log = panel(null, activityBox(null, "Activity - all instances"));
-  return none ? h("div", {}, first, found) : h("div", {}, renderEventCards(), renderTodayAll(), line, found, log);
+  return none ? h("div", {}, first, found) : h("div", {}, renderEventCards(), renderTodayAll(), runNowCard(""), line, found, log);
 };
 async function poll1() { try { const j = await api("poll", { since: S.seq }, { quiet: true }); S.devStatus = j.devs; renderSide(); } catch (e) {} }
 
@@ -1246,8 +1246,9 @@ PAGES.telegram = function () {
     try { localStorage.setItem("rf_tg_view", id); } catch (e) {}
     views.forEach(([k, , el]) => el.classList.toggle("on", k === id));
   };
-  const vst = { v: cur };                                      // the four views: one segmented control (rule 15), not four buttons
-  bar.appendChild(segPick(vst, "v", views.map(([k, t]) => [k, t]), { label: "Telegram view", after: (v) => show(v) }));
+  const pills = h("div", { class: "subnav", style: { margin: "0" } }, views.map(([k, t]) => h("button", { class: "sub" + (k === cur ? " on" : ""), type: "button", "data-k": k,
+    onclick: (e) => { [...pills.children].forEach((x) => x.classList.toggle("on", x === e.currentTarget)); show(k); } }, t)));   // sections = pills (C5)
+  bar.appendChild(pills);
   views.forEach(([, , el]) => area.appendChild(el));
   bar.appendChild(h("div", { style: { flex: 1 } }));
   bar.appendChild(maxToggle(win));
@@ -1477,11 +1478,8 @@ function renderTodayAll() {
     head.textContent = `Daily reset in ${fmtHM(j.reset_at - (Date.now() / 1000 + skew()))} \u00b7 ${hhmm(j.reset_at)} your time`;
   };
   const open = (serial) => { S.sel = serial; S.instTab = "ov"; renderSide(); renderTabs(); renderPage(); };
-  const turnOn = async (e) => {
-    e.preventDefault();
-    const r = await act(api("crazy_eggs_on_all"));
-    if (r) { j = r; last = ""; paint(); toast("Crazy Eggs switched on for every instance.", "ok"); }
-  };
+  // C10: duties are switched in each instance's Routines - the alert links there instead of switching from here
+  const toRoutines = (serial) => { S.dutyView = { show: "all", group: "Events" }; S.sel = serial; S.instTab = "routines"; renderSide(); renderTabs(); renderPage(); };
   const paint = () => {
     if (!j) return;
     const st = {}; (S.devStatus || []).forEach((d) => (st[d.id] = d.state));
@@ -1494,8 +1492,10 @@ function renderTodayAll() {
     ce.append(h("b", {}, "Crazy Eggs"), " ");
     if (!c.total) ce.append(h("span", {}, "no instances yet"));
     else if (!c.off.length) ce.append(h("span", {}, `on for all ${c.total} instance${c.total > 1 ? "s" : ""}`));
-    else ce.append(h("span", { title: "Off on: " + c.off.join(", ") }, `\u26a0 off on ${c.off.length} of ${c.total}`), " \u00b7 ",
-      h("a", { href: "#", class: "lnk", title: "Switch the Crazy Eggs duty on for every instance", onclick: turnOn }, "turn on"));
+    else {
+      ce.append(h("span", {}, `\u26a0 off on ${c.off.length} of ${c.total}: `));
+      c.off.forEach((n, i) => { const r = j.rows.find((x) => x.name === n); ce.append(i ? ", " : "", r ? h("a", { href: "#", class: "lnk", title: "Open " + n + " \u203a Routines", onclick: (e) => { e.preventDefault(); toRoutines(r.serial); } }, n) : n); });
+    }
     // Shield / Buff appear only once the bot reads them from the game (a row carries shield / buff)
     const sb = j.rows.some((r) => r.shield != null || r.buff != null);
     const want = ["Instance"].concat(sb ? ["Shield", "Buff"] : [], ["Auto-Join", "Duties", "Joins", "Skipped (late)"]);
