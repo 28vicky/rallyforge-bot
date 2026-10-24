@@ -2068,6 +2068,35 @@ def read_stamina(shot):
     return None
 
 
+def _stamina_use_button(shot, y0, y1):
+    """The green 'Use (n)' button of a stamina item row between y0 and y1 -> (x, y) centre, or None. OCR of the whole
+    screen cannot read white text on green (24 Oct: 'Use (1,220)' never found, every refill skipped), so: find the green
+    button, then read its white label on its own. A gem-price button never says 'Use', so it is never returned."""
+    try:
+        y0, y1 = max(0, int(y0)), min(shot.shape[0], int(y1))
+        band = shot[y0:y1, 340:520]
+        if band.size == 0:
+            return None
+        m = cv2.inRange(cv2.cvtColor(band, cv2.COLOR_BGR2HSV), (45, 120, 60), (85, 255, 255))
+        n, lab, st, cen = cv2.connectedComponentsWithStats(m)
+        for i in sorted(range(1, n), key=lambda i: -st[i, cv2.CC_STAT_AREA]):
+            x, y, w, h, a = st[i]
+            if w < 70 or h < 25 or a < 1200:
+                continue
+            c = band[y:y + h, x:x + w]
+            g = cv2.resize(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY), None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+            for t in (170, 150, 190):
+                b = 255 - cv2.threshold(g, t, 255, cv2.THRESH_BINARY)[1]
+                b = cv2.copyMakeBorder(b, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=255)
+                txt = pytesseract.image_to_string(b, config="--psm 7").lower()
+                if re.search(r"\bu[s5]e\b|^u[s5]e", txt.strip()):
+                    return int(340 + x + w // 2), int(y0 + y + h // 2)
+        return None
+    except Exception as _e:
+        quiet_err("_stamina_use_button", _e)
+        return None
+
+
 def refill_stamina(dev, cfg, log, stop, needed):
     """Use stamina items. 'full' presses the game's Max button (the game itself limits how much one use can add)."""
     return _refill_once(dev, cfg, log, stop, needed)
@@ -2107,6 +2136,7 @@ def _refill_once(dev, cfg, log, stop, needed):
         log("[!] Stamina: the Use Item screen did not open")
         return False
     on_items = True
+    scrolled = False
     try:                                                     # the sizes the item list shows, so a size the
         _sh = dev.screenshot()                               # bot cannot read shows up in the log; picture kept as debug/stamina_list.png
         _stamina_snap(_sh, "list")
@@ -2155,19 +2185,29 @@ def _refill_once(dev, cfg, log, stop, needed):
                 log("[!] Stamina: the Use Item screen did not open again")
                 break
             on_items = True
+            scrolled = False
         shot = dev.screenshot()
         if size == "any":                                   # the size labels could not be read (e.g. '100' misread): every row on this
             _stamina_snap(shot, "items_list")               # screen is a stamina item, so any 'Use' button (never a gem price) is fine
-            use = find_text(shot, ["Use"], region=(330, 300, 200, 640))
+            use = _stamina_use_button(shot, 300, 940)
             if not use:
                 log("[i] Stamina: no Use button on the stamina item list - no items owned")
                 break
             size = "other"
         else:
             ry = _row_y(shot, size)
+            if not ry:                                      # 4 sizes do not fit on the screen (the 100 row sits below): look at the
+                if scrolled:                                # other end of the list once - top if we scrolled down, bottom if not
+                    dev.swipe(270, 560, 270, 880, 700)
+                else:
+                    dev.swipe(270, 880, 270, 560, 700)
+                nap(0.8, 1.1)
+                scrolled = not scrolled
+                shot = dev.screenshot()
+                ry = _row_y(shot, size)
             if not ry:
                 continue                                    # the account has none of this size / not a size we know
-            use = find_text(shot, ["Use"], region=(330, ry + 10, 200, 80))
+            use = _stamina_use_button(shot, ry + 5, ry + 95)
             if not use:                                     # no 'Use' = none owned; the button shows a gem price - never tap it
                 log(f"[i] Stamina: no {size}-stamina items (only a gem price) - next size")
                 continue
