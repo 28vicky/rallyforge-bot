@@ -2172,7 +2172,20 @@ def _refill_once(dev, cfg, log, stop, needed):
             shot = dev.screenshot()
         if not _dialog_open(shot):
             _stamina_snap(shot, "no_dialog")
-            log(f"[i] Stamina: the amount window for {size} did not open - trying the next size")
+            # The tap may have used the item at once (no amount window - seen 24 Oct on Skip: 6 -> 29 stamina while the bot
+            # said the window did not open, then skipped the rally). Check the march screen before trying the next size.
+            _to_march()
+            on_items = False
+            nap(0.6, 0.9)
+            st_now = read_stamina(dev.screenshot())
+            if st_now and before and st_now[0] > before[0]:
+                used_any = True
+                log(f"[+] Stamina: {size}-stamina item used without the amount window ({before[0]:,} -> {st_now[0]:,})")
+                if st_now[0] >= needed:
+                    break
+                before = st_now
+            else:
+                log(f"[i] Stamina: the amount window for {size} did not open - trying the next size")
             continue
         _stamina_snap(shot, "dialog")
         mode = str(cfg.get("stamina_amount", "full (Max)"))
@@ -2252,7 +2265,7 @@ def _refill_once(dev, cfg, log, stop, needed):
     st = read_stamina(shot_end)
     log(f"[i] Stamina after using items: {st[0]:,} (needs {needed:,})" if st else "[i] Stamina after using items: not readable")
     _stamina_snap(shot_end, "march_after")
-    if used_any and st and st[0] >= needed:
+    if st and st[0] >= needed:                              # the number on the march screen decides, however the items got used
         return True
     if used_any and (st is None or st[0] == before[0] if before else True) and screen_state(shot_end, cfg) == "march":
         log("[i] The stamina number did not change after using items - it may be misread, marching anyway")
