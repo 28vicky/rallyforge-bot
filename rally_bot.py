@@ -3615,13 +3615,23 @@ def safety_stop(dev, shot, cfg, log, stop):
         cv2.imwrite(str(USER / "debug" / f"safety_stop_{dev.serial.replace(':', '_')}.png"), shot)
     except Exception:
         pass
-    log(f"[!] SAFETY STOP: an account / payment window is open ({hit}) - the bot will not touch it. Instance stopped; please check it by hand.")
+    log(f"[!] SAFETY: an account / payment window is open ({hit}) - pressing nothing in it; closing and reopening Evony instead (picture saved)")
     try:
-        notify(cfg, dev.serial, "Safety stop: an account or payment window opened. The bot stopped this instance and pressed nothing - please check it.")
+        notify(cfg, dev.serial, "Safety: an account or payment window opened. The bot pressed nothing in it and restarted the game - picture in debug.")
     except Exception:
         pass
-    stop.set()
+    if dev.serial not in _SAFETY_BUSY:                       # owner 24 Oct: never stop an instance - closing the game removes the
+        _SAFETY_BUSY.add(dev.serial)                         # window without a single tap (guard: the restart itself clears pop-ups)
+        try:
+            force_restart_game(dev, cfg, log, stop)
+        except Exception as _e:
+            quiet_err("safety_stop", _e)
+        finally:
+            _SAFETY_BUSY.discard(dev.serial)
     return True
+
+
+_SAFETY_BUSY = set()
 
 
 _STUCK_POPUPS = {}                         # serial -> times clear_popups ended still lost (3 in 10 min -> game restart)
@@ -13110,8 +13120,9 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     res = read_square(dev, cfg, log, stop, (px, py), name, levels)
     if res and res[2] and nav.absolute:                      # the camera place is read from the picture each time: only close the ring
         if not close_ring(dev, stop, res[2]):
-            log("[!]   the ring menu would not close - stopping so nothing is pressed by mistake")
-            stop.set()
+            log("[!]   the ring menu would not close - restarting Evony so nothing is pressed by mistake")
+            force_restart_game(dev, cfg, log, stop)
+            return None
     elif res and res[2]:                                     # the label shows where the building really is on the screen: re-anchor the camera
         lx, ly = res[2]
         fo = FIXED_OFFSETS_FROM_SHRINE.get(name)
@@ -13120,8 +13131,9 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
         else:
             nav.cx, nav.cy = tx - lx, ty - (ly - 35)
         if not close_ring(dev, stop, res[2]):
-            log("[!]   the ring menu would not close - stopping so nothing is pressed by mistake")
-            stop.set()
+            log("[!]   the ring menu would not close - restarting Evony so nothing is pressed by mistake")
+            force_restart_game(dev, cfg, log, stop)
+            return None
     elif levels or res is not None:                          # read on the Detail page (i icon): back out to the city and make sure the ring is gone
         leave_to_city(dev, cfg, stop)
         _nap(stop, 0.6, 0.9)
@@ -13284,9 +13296,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         if auto:
             if not bring_online(dev, cfg, log, stop, check_ready=True):
                 if not stop.is_set():
-                    notify(cfg, serial, "Could not get the emulator and the game ready - this instance stopped.")
+                    notify(cfg, serial, "Could not get the emulator and the game ready - restarting the emulator.")
                 return log("[+] Stopped.") if stop.is_set() else \
-                    log("[!] Could not get the emulator and the game ready - stopping this instance.")
+                    log("[!] Could not get the emulator and the game ready - restarting the emulator.")
         else:
             dev.connect()
         dev.screenshot()
@@ -14644,8 +14656,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     log(f"[!] {e3}")
                 continue
             if errors >= 15:
-                log("[!] Too many errors in a row - stopping this instance.")
-                notify(cfg, serial, "Too many errors in a row - this instance stopped.")
+                log("[!] Too many errors in a row - restarting the emulator.")
+                notify(cfg, serial, "Too many errors in a row - restarting the emulator.")
                 return
             if errors % 5 == 0:
                 try:
