@@ -8738,6 +8738,10 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
         if ring:
             close_ring(dev, stop, (270, 430))
             continue
+        if v not in ("city", "landscape") and find_text(shot, ["disconnected", "someone login", "logged in elsewhere", "another device"],
+                                                           region=(60, 250, 360, 300), cutoff=0.8):
+            say("[!] Recovery: the game was opened on another device - not pressing anything (the main loop waits and reclaims it)")
+            return False                                     # the duty fails; the main loop's kicked handling takes over
         if v == "world" and want == "city":                 # the world map: the globe button goes back to the city (Back would ask to quit)
             say("[*] Recovery: on the world map - tapped the globe to go to the city")
             dev.tap(*VIEW_TOGGLE)
@@ -10945,6 +10949,8 @@ def run_map_city(dev, cfg, log, stop):
     def clean_shot(shot=None):
         shot = dev.screenshot() if shot is None else shot
         if view_of(shot, cfg) != "city":
+            if find_text(shot, ["disconnected", "someone login", "logged in elsewhere", "another device"], region=(60, 250, 360, 300), cutoff=0.8):
+                raise RuntimeError("the game was opened on another device - mapping stopped (the bot waits and reclaims it, then maps again)")
             leave_to_city(dev, cfg, stop, log)
             shot = nav._settled()
         if find_detail_icon(shot):
