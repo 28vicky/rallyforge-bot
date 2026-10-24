@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.5.9"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.5.10"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -2068,6 +2068,9 @@ def read_stamina(shot):
     return None
 
 
+STAMINA_CAP = 9999                                       # the game's limit: stamina items over it are lost (Use Item screen text)
+
+
 def _stamina_use_button(shot, y0, y1):
     """The green 'Use (n)' button of a stamina item row between y0 and y1 -> (x, y) centre, or None. OCR of the whole
     screen cannot read white text on green (24 Oct: 'Use (1,220)' never found, every refill skipped), so: find the green
@@ -2112,6 +2115,7 @@ def _refill_once(dev, cfg, log, stop, needed):
     if not sizes:
         return False
     before = read_stamina(dev.screenshot())
+    cur_st = before[0] if before else None
 
     def _open_use_item():
         for xy in (tuple(cfg["stamina_xy"]), (478, 853), (345, 853)):  # the saved spot, then the round "+" button, then the number
@@ -2211,6 +2215,9 @@ def _refill_once(dev, cfg, log, stop, needed):
             if not use:                                     # no 'Use' = none owned; the button shows a gem price - never tap it
                 log(f"[i] Stamina: no {size}-stamina items (only a gem price) - next size")
                 continue
+        if isinstance(size, int) and cur_st is not None and STAMINA_CAP - cur_st < size \
+                and str(cfg.get("stamina_amount", "full (Max)")).startswith("full"):
+            continue                                        # not even one of this size fits under the limit
         dev.tap(*use)
         nap(1.0, 1.4)
         shot = dev.screenshot()
@@ -2232,7 +2239,8 @@ def _refill_once(dev, cfg, log, stop, needed):
             if st_now and before and st_now[0] > before[0]:
                 used_any = True
                 log(f"[+] Stamina: {size}-stamina item used without the amount window ({before[0]:,} -> {st_now[0]:,})")
-                if st_now[0] >= needed:
+                cur_st = st_now[0]
+                if st_now[0] >= needed and not str(cfg.get("stamina_amount", "full (Max)")).startswith("full"):
                     break
                 before = st_now
             else:
@@ -2249,20 +2257,34 @@ def _refill_once(dev, cfg, log, stop, needed):
             except Exception as _e:
                 quiet_err("_refill_once._count", _e)
             return None
-        if mode.startswith("full"):                          # slide the bar all the way to the right end. NOT the game's Max button: it stops at 100 stamina
-            for _sw in range(4):
-                _shot_max = dev.screenshot()
-                cnt = _count(_shot_max)
+        if mode.startswith("full"):                          # fill up to the game's limit (9,999): as many items of this size as fit
+            room = STAMINA_CAP - (cur_st if cur_st is not None else 0)
+            fit = room // size if isinstance(size, int) else None
+            _shot_max = dev.screenshot()
+            cnt = _count(_shot_max)
+            for _sw in range(4):                             # first the whole bar (NOT the game's Max button: it stops at 100 stamina)
                 if cnt and cnt[0] >= cnt[1]:
                     break
                 dev.swipe(137, 503, 440, 503, 700 if _sw % 2 == 0 else 1300)   # a slower drag when a quick one did not move the thumb
                 nap(0.6, 0.9)
                 _shot_max = dev.screenshot()
                 cnt = _count(_shot_max)
-                if cnt and cnt[0] >= cnt[1]:
-                    break
+            if cnt and fit is not None and cnt[1] > fit:    # more items than fit under the limit: the rest would be lost
+                want = max(1, fit)
+                if cnt[1] - want > 12:                      # far off: drag the thumb close, then fine-tune with - / +
+                    dev.swipe(137, 503, int(137 + 303 * want / cnt[1]), 503, 900)
+                    nap(0.6, 0.9)
+                    cnt = _count(dev.screenshot()) or cnt
+                for _t in range(40):
+                    if not cnt or cnt[0] == want or stop.is_set():
+                        break
+                    dev.tap(*((83, 505) if cnt[0] > want else (451, 505)))
+                    nap(0.2, 0.35)
+                    cnt = _count(dev.screenshot()) or cnt
+                _shot_max = dev.screenshot()
             _stamina_snap(_shot_max, "after_slide")
-            log(f"[i] Stamina: slid to the end - using {cnt[0] if cnt else '?'} of {cnt[1] if cnt else '?'} item(s)")
+            log(f"[i] Stamina: using {cnt[0] if cnt else '?'} of {cnt[1] if cnt else '?'} item(s)"
+                + (f" (room for {fit} under the {STAMINA_CAP:,} limit)" if fit is not None else ""))
         elif mode.startswith("exact"):
             want = max(1, int(cfg.get("stamina_count", 2) or 1))
             def _count(sh):
@@ -2305,6 +2327,15 @@ def _refill_once(dev, cfg, log, stop, needed):
         on_items = False
         nap(0.6, 0.9)
         st_now = read_stamina(dev.screenshot())
+        if st_now:
+            cur_st = st_now[0]
+        if str(cfg.get("stamina_amount", "full (Max)")).startswith("full"):
+            small = min(x for x in sizes if isinstance(x, int))  # owner 24 Oct: fill FULL with every size, not just enough for this march
+            if st_now and STAMINA_CAP - st_now[0] < small:
+                break
+            if st_now:
+                log(f"[i] Stamina: {st_now[0]:,} - filling on with the next size (limit {STAMINA_CAP:,})")
+            continue
         if st_now and st_now[0] >= needed:
             break
         if st_now:

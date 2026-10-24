@@ -1,5 +1,9 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.10", date: "2026-10-24",
+    new: ["Stamina is filled up to the game's limit (9,999) with every item size you have - large first or small first, as you chose - without wasting any over the limit.",
+      "An instance never stays stopped with a problem any more: if the bot cannot get going, it restarts the emulator and starts again by itself."],
+    fixed: ["Stamina items are found and used again (the bot could not see the Use button and skipped rallies)."] },
   { v: "2.5.9", date: "2026-10-24",
     fixed: ["Stamina items are used reliably again, every size (10, 25, 50, 100), so rallies are no longer skipped while you still have stamina items.",
       "The \"no stamina\" mark on an instance goes away as soon as stamina is refilled."] },
