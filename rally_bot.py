@@ -41,7 +41,7 @@ try:
     import ctypes
     ctypes.windll.kernel32.SetErrorMode(0x8007)
 except Exception:
-    pass
+    pass                                    # not Windows; runs before the log exists
 _OCR_SLOTS = threading.Semaphore(3)         # at most 3 tesseract processes at the same time (8 emulators would flood Windows)
 
 
@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.5.6"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.5.7"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -318,7 +318,25 @@ def log_to_file(line):
                 for old in sorted(LOG_DIR.glob("bot_*.log"))[:-7]:
                     old.unlink(missing_ok=True)
     except Exception:
-        pass
+        pass                                             # the logger itself: nowhere left to report to
+
+
+_quiet_seen = {}
+
+
+def quiet_err(where, e):
+    """An error the bot can carry on after: one '[dbg]' line in the log file instead of nothing.
+    The same place + error type is written at most once a minute, so a loop cannot flood the log."""
+    try:
+        now, key = time.time(), (where, type(e).__name__)
+        if now - _quiet_seen.get(key, 0) < 60:
+            return
+        if len(_quiet_seen) > 500:
+            _quiet_seen.clear()
+        _quiet_seen[key] = now
+        log_to_file(f"[dbg] {where}: {type(e).__name__}: {str(e)[:200]}")
+    except Exception:
+        pass                                             # never let error reporting break the caller
 
 
 def recent_log(max_lines=2000):
@@ -355,8 +373,8 @@ def log_names(hours=168):
                 m = _LOG_LINE.match(ln)
                 if m and m.group(4) and len(m.group(4)) > 1 and m.group(4) not in ("perf",):
                     names.add(m.group(4))
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("log_names", _e)
     return sorted(names, key=str.lower)
 
 
@@ -406,8 +424,8 @@ def build_report(path, include_debug=True, description="", devices=None):
         ms.l = ctypes.sizeof(_MS)
         ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(ms))
         info += f"PC memory: {ms.tp // 2**20} MB total, {ms.ap // 2**20} MB free\n"
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("build_report", _e)
     info += f"CPU threads: {os.cpu_count()}\nSaved at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
     if devices:
         info += "Emulators: " + ", ".join(f"{d.get('name') or d.get('id')} ({d.get('id')})" for d in devices) + "\n"
@@ -446,8 +464,8 @@ def migrate_cfg(cfg):
                     ms[nm] = [l for l, _p in vs[nm]]
                 elif nm == "Viking (Easy)" and set(int(x) for x in lv) == set(VIKING_EASY_MEASURED):
                     ms[nm] = [l for l, _p in vs[nm]]          # Easy used to list only 6 levels: "skip all" stays "skip all" with 1-50
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("migrate_cfg", _e)
     try:                                             # 'Junior Hydra' used to be its own monster: it is a level of 'Hydra'
         for box in [cfg] + list((cfg.get("per_device") or {}).values()):
             if not isinstance(box, dict):
@@ -459,8 +477,8 @@ def migrate_cfg(cfg):
                 if isinstance(d, dict) and "Junior Hydra" in d:
                     v = d.pop("Junior Hydra")
                     d.setdefault("Hydra", v)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("migrate_cfg", _e)
     for box in [cfg] + [v for v in (cfg.get("per_device") or {}).values() if isinstance(v, dict)]:
         if box.get("march_timer_source") == "join_button":    # nothing is there to read (always 'march ?'); 'Spare time' covers the march
             box["march_timer_source"] = ""
@@ -479,14 +497,42 @@ def load_config():
         if path.exists():
             try:
                 cfg.update(json.loads(path.read_text()))
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("load_config", _e)
     set_game_reset(cfg)
     return migrate_cfg(cfg)
 
 
+def save_json(path, obj, indent=1, encoding="utf-8"):
+    """Write JSON safely: write a temp file next to it, flush it to disk, then swap it in. A crash or power cut
+    mid-write leaves the old file whole instead of a half-written one. Windows can refuse the swap for a moment
+    while another thread reads the file, so it retries a few times. Raises OSError like write_text did."""
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    data = json.dumps(obj, indent=indent)
+    try:
+        with open(tmp, "w", encoding=encoding) as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        for i in range(6):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if i == 5:
+                    raise
+                time.sleep(0.05 * (i + 1))
+    finally:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except OSError:
+            pass
+
+
 def save_config(cfg):
-    CONFIG.write_text(json.dumps(cfg, indent=2))
+    save_json(CONFIG, cfg, indent=2, encoding=None)
     set_game_reset(cfg)
 
 
@@ -562,6 +608,9 @@ def setup_tesseract():
     return shutil.which("tesseract") is not None
 
 
+TAP_JITTER_PX = 3                           # random offset of every tap (pixels at 540x960)
+
+
 _BS_DEFAULT = (r"C:\ProgramData\BlueStacks_nxt\bluestacks.conf",
                r"C:\ProgramData\BlueStacks_nxt_cn\bluestacks.conf",
                r"C:\ProgramData\BlueStacks\bluestacks.conf")
@@ -580,8 +629,8 @@ def bluestacks_confs():
         for root in roots:                                   # BlueStacks can keep its data on another drive (e.g. E:\ProgramData)
             if os.path.isdir(root):
                 out += glob.glob(os.path.join(root, "BlueStacks*", "bluestacks.conf"))
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("bluestacks_confs", _e)
     try:
         import winreg
         for key in ("SOFTWARE\\BlueStacks_nxt", "SOFTWARE\\BlueStacks_nxt_cn", "SOFTWARE\\BlueStacks", "SOFTWARE\\BlueStacks_msi5"):
@@ -592,12 +641,12 @@ def bluestacks_confs():
                             try:
                                 d = winreg.QueryValueEx(k, val)[0]
                                 out += [os.path.join(d, "bluestacks.conf"), os.path.join(os.path.dirname(d.rstrip("\\/")), "bluestacks.conf")]
-                            except OSError:
-                                pass
-                except OSError:
-                    pass
-    except Exception:
-        pass
+                            except OSError as _e:
+                                quiet_err("bluestacks_confs", _e)
+                except OSError as _e:
+                    quiet_err("bluestacks_confs", _e)
+    except Exception as _e:
+        quiet_err("bluestacks_confs", _e)
     seen, res = set(), []
     for c in out:
         if c.lower() not in seen and os.path.isfile(c):
@@ -633,8 +682,8 @@ def mumu_names(adb=None):
         out = subprocess.run([str(mgr), "info", "-v", "all"], capture_output=True, text=True,
                              timeout=20, creationflags=NOWIN).stdout
         walk(json.loads(out))
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("mumu_names", _e)
     return found
 
 
@@ -677,12 +726,12 @@ def candidate_ports():
     for conf in bluestacks_confs():
         try:
             ports |= {int(p) for p in re.findall(r'adb_port="(\d+)"', Path(conf).read_text(errors="ignore"))}
-        except Exception:
-            pass
-    ports |= {5555, 5565, 5575, 5585, 5595}               # BlueStacks / generic
+        except Exception as _e:
+            quiet_err("candidate_ports", _e)
+    ports |= {5555 + 10 * i for i in range(12)}            # BlueStacks / generic (12 instances)
     ports |= {62001, 62025, 62026, 62027}                 # Nox
-    ports |= {21503 + 10 * i for i in range(6)}           # MEmu
-    ports |= {7555} | {16384 + 32 * i for i in range(8)}  # MuMu
+    ports |= {21503 + 10 * i for i in range(12)}          # MEmu
+    ports |= {7555} | {16384 + 32 * i for i in range(16)}  # MuMu (16 instances - 8 was too few for big farms)
     # LDPlayer registers itself as emulator-5554, 5556... and shows up in `adb devices` by itself.
     return sorted(ports)
 
@@ -691,8 +740,8 @@ def _try_connect(adb, port):
     try:
         subprocess.run([adb, "connect", f"127.0.0.1:{port}"], capture_output=True,
                        creationflags=NOWIN, timeout=4)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("_try_connect", _e)
 
 
 def detect_devices(adb):
@@ -774,8 +823,8 @@ class Device:
                     return self.screenshot()
             else:
                 self._guard_unknown = 0
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("Device._guard_check", _e)
         finally:
             self._guard_busy = False
         return img
@@ -819,8 +868,8 @@ class Device:
                 found = re.findall(r"(?:Override|Physical) density:\s*(\d+)", out)
                 if found:
                     dens = int(found[-1])
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("ensure_screen.read", _e)
             return size, dens
 
         want_size, want_dpi = EXPECTED_SIZE, 240
@@ -831,8 +880,8 @@ class Device:
         try:
             self._run("shell", "wm", "size", f"{want_size[0]}x{want_size[1]}", timeout=10)
             self._run("shell", "wm", "density", str(want_dpi), timeout=10)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("Device.ensure_screen", _e)
         time.sleep(2.0)
         size, dens = read()
         if size == want_size and dens == want_dpi:
@@ -941,6 +990,8 @@ class Device:
 
     def tap(self, x, y):
         self.acted = time.time()
+        j = TAP_JITTER_PX                                   # a few pixels off each time, like a finger (never the exact same pixel)
+        x, y = x + random.randint(-j, j), y + random.randint(-j, j)
         self._run("shell", "input", "tap", str(int(x * self.sx)), str(int(y * self.sy)))
 
     def swipe(self, x1, y1, x2, y2, ms=300):
@@ -1407,7 +1458,7 @@ def read_monster_label(strip):
             t = " ".join(t.split())
             if len(t) > len(best_raw):
                 best_raw = t
-            for nm in MONSTER_NAMES + list(_MONSTER_ALIASES):
+            for nm in MONSTER_NAMES + list(_MONSTER_ALIASES) + WORLD_BOSS_NAMES:   # world bosses too: "Behemoth King" must not read as "Behemoth"
                 nn = re.sub(r"[^a-z ]", " ", nm.lower())
                 nn = " ".join(nn.split())
                 r = difflib.SequenceMatcher(None, t.lower(), nn).ratio()
@@ -1467,8 +1518,8 @@ def collect_unknown_monster(screen, hit, cfg, log=None):
                         for g in (f, f.with_name(f.stem + "_name.png")):
                             try:
                                 g.unlink()
-                            except OSError:
-                                pass
+                            except OSError as _e:
+                                quiet_err("collect_unknown_monster", _e)
                     else:
                         _unknown_seen.append(v)
                         img0 = cv2.imread(str(f))
@@ -1491,8 +1542,8 @@ def collect_unknown_monster(screen, hit, cfg, log=None):
             cv2.imwrite(str(d / f"{label}__{key}_name.png"), strip)
         if log:
             log(f"[+] New monster saved to the unknown_monsters folder: {label.replace('_', ' ')}")
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("collect_unknown_monster", _e)
 
 
 def monster_levels(name):
@@ -1617,8 +1668,8 @@ def read_monster_power(screen, hit, hard=False):
         for f in old[:max(0, len(old) - 19)]:
             f.unlink()
         cv2.imwrite(str(d / f"power_fail_{int(time.time())}.png"), crop)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("read_monster_power", _e)
     return None, raw
 
 
@@ -1668,6 +1719,10 @@ def viking_resolve(power, level=None):
 # Point bosses: hit once for alliance points, nobody needs to join them. World bosses (owner 23 Oct): they show on the
 # rally list but cannot be joined as alliance rallies. Never joined, whatever the monster list says.
 NEVER_JOIN = {"silver lionheart knight", "thunder scorpion", "bird of hurricane", "behemoth king", "lord of lava"}
+WORLD_BOSS_NAMES = [" ".join(w.capitalize() for w in n.split()) for n in sorted(NEVER_JOIN)]
+# A world boss whose picture is close to a normal monster (owner 23 Oct: Behemoth King was joined as "Behemoth"):
+# when the picture says one of these, the name under the portrait is read as well.
+WORLD_BOSS_LOOKALIKE = {"Behemoth"}
 
 
 def never_join_present():
@@ -2024,20 +2079,30 @@ def _refill_once(dev, cfg, log, stop, needed):
     if not sizes:
         return False
     before = read_stamina(dev.screenshot())
-    opened = False
-    for xy in (tuple(cfg["stamina_xy"]), (478, 853), (345, 853)):      # the saved spot, then the round "+" button, then the number
-        dev.tap(*xy)
-        nap(1.0, 1.5)
-        shot = dev.screenshot()
-        if find_text(shot, ["Use Item"], region=(120, 20, 300, 90)):
-            opened = True
-            break
-        if screen_state(shot, cfg) != "march":                 # something else opened: back to the march screen, then try the next spot
+
+    def _open_use_item():
+        for xy in (tuple(cfg["stamina_xy"]), (478, 853), (345, 853)):  # the saved spot, then the round "+" button, then the number
+            dev.tap(*xy)
+            nap(1.0, 1.5)
+            sh = dev.screenshot()
+            if find_text(sh, ["Use Item"], region=(120, 20, 300, 90)):
+                return True
+            if screen_state(sh, cfg) != "march":             # something else opened: back to the march screen, then try the next spot
+                dev.back()
+                nap(0.8, 1.2)
+        return False
+
+    def _to_march():
+        for _ in range(3):
+            if screen_state(dev.screenshot(), cfg) == "march":
+                return
             dev.back()
             nap(0.8, 1.2)
-    if not opened:
+
+    if not _open_use_item():
         log("[!] Stamina: the Use Item screen did not open")
         return False
+    on_items = True
     used_any = False
     ROW_Y = {10: 442, 50: 604, 100: 766}                     # the title line of each item row on the Use Item screen (the Use button is ~49 px lower)
 
@@ -2053,8 +2118,8 @@ def _refill_once(dev, cfg, log, stop, needed):
                         seen_rows = True
                         if re.sub(r"\D", "", w[0]) == str(size):
                             return int(w[2]) + 300
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("_refill_once._row_y", _e)
         return None if seen_rows else ROW_Y.get(size)
 
     def _dialog_open(shot):
@@ -2065,22 +2130,30 @@ def _refill_once(dev, cfg, log, stop, needed):
         return bool(find_text(shot, ["Own:", "Own"], region=(60, 310, 300, 80), cutoff=0.6)) and \
             bool(find_text(shot, ["Max", "Minimum"], region=(60, 650, 420, 70), cutoff=0.8))
 
-    for size in sizes:
+    for size in sizes:                                       # every size in the chosen order until the march has enough
         if stop.is_set():
             break
+        if not on_items:
+            if not _open_use_item():
+                log("[!] Stamina: the Use Item screen did not open again")
+                break
+            on_items = True
         shot = dev.screenshot()
         ry = _row_y(shot, size)
         if not ry:
             continue                                        # the account has none of this size / not a size we know
         use = find_text(shot, ["Use"], region=(330, ry + 10, 200, 80))
-        dev.tap(*(use if use else (426, ry + 49)))
+        if not use:                                         # no 'Use' = none owned; the button shows a gem price - never tap it
+            log(f"[i] Stamina: no {size}-stamina items (only a gem price) - next size")
+            continue
+        dev.tap(*use)
         nap(1.0, 1.4)
         shot = dev.screenshot()
         if not _dialog_open(shot):                          # slow emulator: look again, then tap Use once more before giving up
             nap(1.0, 1.4)
             shot = dev.screenshot()
         if not _dialog_open(shot) and screen_state(shot, cfg) != "march" and _row_y(shot, size):
-            dev.tap(*(use if use else (426, ry + 49)))
+            dev.tap(*use)
             nap(1.2, 1.6)
             shot = dev.screenshot()
         if not _dialog_open(shot):
@@ -2095,8 +2168,8 @@ def _refill_once(dev, cfg, log, stop, needed):
                     m = re.search(r"(\d+)\s*/\s*(\d+)", " ".join(w[0] for w in ws))
                     if m:
                         return int(m.group(1)), int(m.group(2))
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("_refill_once._count", _e)
             return None
         if mode.startswith("full"):                          # slide the bar all the way to the right end. NOT the game's Max button: it stops at 100 stamina
             for _sw in range(4):
@@ -2120,8 +2193,8 @@ def _refill_once(dev, cfg, log, stop, needed):
                         m = re.search(r"(\d+)\s*/\s*(\d+)", " ".join(w[0] for w in ws))
                         if m:
                             return int(m.group(1)), int(m.group(2))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    quiet_err("_refill_once._count", _e)
                 return None
             cnt = _count(shot)
             for _t in range(60):
@@ -2133,27 +2206,33 @@ def _refill_once(dev, cfg, log, stop, needed):
                 nap(0.25, 0.4)
                 cnt = _count(dev.screenshot())
             log(f"[i] Stamina: using {cnt[0] if cnt else '?'} item(s) (wanted {want})")
+        used = False
         for attempt in range(3):                            # the slider already sits at 2 items; press the green Use inside the window
             dev.tap(383 + random.randint(-12, 12), 685 + random.randint(-6, 6))
             nap(1.2, 1.7)
             shot = dev.screenshot()
             if not _dialog_open(shot):
-                used_any = True
+                used = True
                 break
             log(f"[i] Stamina: the amount window is still open - pressing Use again ({attempt + 2})")
         _stamina_snap(shot, "after_use")
-        if used_any:
-            log(f"[+] Stamina: used {size}-stamina items")
-        else:
-            log("[!] Stamina: the Use button did not close the window")
+        if not used:
+            log("[!] Stamina: the Use button did not close the window - next size")
             dev.tap(502, 273)                               # the red X of the amount window
             nap(0.8, 1.2)
-        break
-    for _ in range(3):                                      # back to the march screen
-        if screen_state(dev.screenshot(), cfg) == "march":
+            continue
+        used_any = True
+        log(f"[+] Stamina: used {size}-stamina items")
+        _to_march()                                         # check the march screen: enough now? else open Use Item again for the next size
+        on_items = False
+        nap(0.6, 0.9)
+        st_now = read_stamina(dev.screenshot())
+        if st_now and st_now[0] >= needed:
             break
-        dev.back()
-        nap(0.8, 1.2)
+        if st_now:
+            log(f"[i] Stamina: {st_now[0]:,} still under {needed:,} - trying the next size")
+    if on_items:
+        _to_march()
     nap(0.8, 1.2)
     shot_end = dev.screenshot()
     st = read_stamina(shot_end)
@@ -2172,8 +2251,8 @@ def _stamina_snap(img, tag):
         d = USER / "debug"
         d.mkdir(exist_ok=True)
         cv2.imwrite(str(d / f"stamina_{tag}.png"), img)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("_stamina_snap", _e)
 
 
 def preset_xy(cfg, n):
@@ -2189,8 +2268,8 @@ def save_debug(serial, screen, limit=40):
     for old in shots[:max(0, len(shots) - limit + 1)]:            # keep the newest ones: drop the oldest instead of never saving again
         try:
             old.unlink()
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("save_debug", _e)
     safe = re.sub(r"\W", "_", serial)
     cv2.imwrite(str(d / f"{safe}_{int(time.time())}.png"), screen)
 
@@ -2211,8 +2290,8 @@ def housekeeping(log=None):
                     freed += st.st_size
                     f.unlink()
                     n += 1
-            except OSError:
-                pass
+            except OSError as _e:
+                quiet_err("housekeeping", _e)
     try:
         cur = (APP_DIR / "current.txt").read_text().strip() if (APP_DIR / "current.txt").exists() else ""
         prev = (APP_DIR / "previous.txt").read_text().strip() if (APP_DIR / "previous.txt").exists() else ""
@@ -2223,8 +2302,8 @@ def housekeeping(log=None):
                 n += 1
         for t in APP_DIR.glob(".tmp-*"):                    # half-finished downloads
             shutil.rmtree(t, ignore_errors=True)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("housekeeping", _e)
     if log and n:
         log(f"[i] Cleaned up {n} old file(s)/version(s), {freed / 1048576:.0f} MB freed")
     return freed
@@ -2256,8 +2335,8 @@ def set_pacing(cfg):
     _TL.perf = {"shots": 0, "shot_ms": 0.0, "ocr": 0, "ocr_ms": 0.0, "hits": 0, "loops": 0, "t0": time.time()}
     try:
         cv2.setNumThreads(max(1, int(cfg.get("cv_threads", 1))))
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("set_pacing", _e)
 
 
 def pace(seconds):
@@ -2295,8 +2374,8 @@ def perf_report():
     try:
         import gc
         gc.collect()                                     # hand freed memory back regularly (8 bots share one process)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("perf_report", _e)
     return txt
 
 
@@ -3129,7 +3208,7 @@ def load_general_meta():
 
 def _save_general_meta(meta):
     (USER / "generals").mkdir(exist_ok=True)
-    _gen_meta_file().write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    save_json(_gen_meta_file(), meta, indent=2)
 
 
 def get_general_meta(name):
@@ -3433,7 +3512,121 @@ def daily_checkin(dev, shot, log, stop):
     return True
 
 
-def clear_popups(dev, cfg, log, stop, rounds=5):
+CITY_POPUP_WORDS = ["Event starts in", "Truce Agreement", "Server War is about to begin"]   # event pop-ups that sit over the city (the city is still recognised behind them)
+
+
+DANGER_PATTERNS = [                         # account / money dialogs: the bot never answers these, it stops the instance and alerts
+    r"switch\s*account", r"current\s*progress", r"delete\s*(your|the)?\s*(account|progress|data)", r"log\s*out",
+    r"(bind|link|unlink)\s*(your|this|to|with)?\s*(account|facebook|apple|google|email)", r"apple\s*id",
+    r"(use|spend|cost)\w*\s*[\d,]+\s*gems?", r"confirm\s*(the)?\s*(purchase|payment)",
+]
+
+
+def safety_stop(dev, shot, cfg, log, stop):
+    """A dangerous dialog (switch/link/delete account, log out, gem spend, payment) is on screen -> stop this instance,
+    alert the owner, keep the picture. Never taps anything. -> True if it stopped."""
+    try:
+        txt = " ".join(t for t, _ in ocr_lines(shot[150:820, 20:520])).lower()
+    except Exception:
+        return False
+    hit = next((p for p in DANGER_PATTERNS if re.search(p, txt)), None)
+    if not hit:
+        return False
+    try:
+        (USER / "debug").mkdir(exist_ok=True)
+        cv2.imwrite(str(USER / "debug" / f"safety_stop_{dev.serial.replace(':', '_')}.png"), shot)
+    except Exception:
+        pass
+    log(f"[!] SAFETY STOP: an account / payment window is open ({hit}) - the bot will not touch it. Instance stopped; please check it by hand.")
+    try:
+        notify(cfg, dev.serial, "Safety stop: an account or payment window opened. The bot stopped this instance and pressed nothing - please check it.")
+    except Exception:
+        pass
+    stop.set()
+    return True
+
+
+_STUCK_POPUPS = {}                         # serial -> times clear_popups ended still lost (3 in 10 min -> game restart)
+POPUP_LIB = USER / "popup_library"          # every unknown pop-up the bot meets: picture + what closed it (grows by itself)
+_poplib_lock = threading.Lock()
+_poplib_cache = {}
+
+
+def _pop_hash(shot):
+    """64-bit picture fingerprint of the middle of the screen (small changes like timers keep it nearly the same)."""
+    try:
+        g = cv2.resize(cv2.cvtColor(shot[100:860, 20:520], cv2.COLOR_BGR2GRAY), (9, 8), interpolation=cv2.INTER_AREA)
+        return int("".join("1" if b else "0" for b in (g[:, 1:] > g[:, :-1]).flatten()), 2)
+    except Exception:
+        return None
+
+
+def _poplib_load():
+    if not _poplib_cache:
+        try:
+            _poplib_cache.update(json.loads((POPUP_LIB / "index.json").read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    return _poplib_cache
+
+
+def _poplib_find(h):
+    """The library entry for this pop-up (fingerprint within 8 bits), or (None, None)."""
+    if h is None:
+        return None, None
+    for k, v in _poplib_load().items():
+        if bin(int(k, 16) ^ h).count("1") <= 8:
+            return k, v
+    return None, None
+
+
+def _poplib_save():
+    try:
+        POPUP_LIB.mkdir(parents=True, exist_ok=True)
+        (POPUP_LIB / "index.json").write_text(json.dumps(_poplib_cache, indent=1), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _poplib_seen(h, shot, log):
+    """Save a pop-up the bot has not met before (picture + entry). -> its entry."""
+    with _poplib_lock:
+        k, v = _poplib_find(h)
+        if v is None and h is not None:
+            k = f"{h:016x}"
+            v = {"fix": None, "xy": None, "seen": 0, "first": time.strftime("%Y-%m-%d %H:%M"), "file": f"popup_{k}.png"}
+            if len(_poplib_cache) < 500:
+                _poplib_cache[k] = v
+                try:
+                    POPUP_LIB.mkdir(parents=True, exist_ok=True)
+                    cv2.imwrite(str(POPUP_LIB / v["file"]), shot)
+                except Exception:
+                    pass
+                log(f"[i] New pop-up saved to the library ({v['file']})")
+        if v is not None:
+            v["seen"] = v.get("seen", 0) + 1
+            v["last"] = time.strftime("%Y-%m-%d %H:%M")
+            _poplib_save()
+        return v
+
+
+def _poplib_learn(pending, shot, log):
+    """After a tap on an unknown pop-up: if the screen changed, remember that tap as the fix for that pop-up."""
+    if not pending:
+        return
+    h0, how, xy = pending
+    h1 = _pop_hash(shot)
+    if h1 is None or bin(h0 ^ h1).count("1") <= 8:
+        return                                              # still the same window: that tap did not close it
+    with _poplib_lock:
+        k, v = _poplib_find(h0)
+        if v is not None and v.get("fix") != how:
+            v["fix"], v["xy"] = how, [int(xy[0]), int(xy[1])]
+            _poplib_save()
+            log(f"[i] Learned how to close pop-up {k}: {how} at {tuple(v['xy'])}")
+
+
+def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
     """Close whatever covers the game (offers, event pop-ups, full-screen sales, dialogs) so the bot can carry on with
     what it was doing. Uses your popup_* pictures first; on a screen it does not know it presses Back, but only when it
     can recognise the city (Back on the city would open the quit dialog). -> number of things closed."""
@@ -3442,13 +3635,29 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
     outside_done = False
     x_spot_done = False
     back_arrow_taps = 0
+    pending = None                                         # (fingerprint, how, xy) of the last tap on an unknown pop-up
+    known_done = set()
     for _ in range(rounds):
         if stop.is_set():
             break
         shot = dev.screenshot()
+        _poplib_learn(pending, shot, log)
+        pending = None
+        if screen_state(shot, cfg) == "unknown" and safety_stop(dev, shot, cfg, log, stop):
+            return closed
         if cancel_quit_dialog(dev, shot, log):
             closed += 1
             continue
+        if find_text(shot, ["new game updates", "restart the game"], region=(20, 300, 500, 300), cutoff=0.75):
+            rs = find_text(shot, ["Restart"], region=(60, 380, 420, 320), cutoff=0.8) or find_text(shot, ["Restart"], cutoff=0.8)
+            if not rs:
+                log("[!] Game update window - the Restart button could not be read")
+                return closed
+            dev.tap(*rs)                                    # the game's 'new updates, please restart' window: only Restart closes it
+            LOADING[dev.serial] = ("restart", time.time())
+            log("[*] Game update window - tapped Restart, the game reloads")
+            _nap(stop, 8, 10)
+            return closed + 1
         hit = None
         for name in list_templates("popup_"):
             if name == "popup_exit_cancel":
@@ -3466,6 +3675,18 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         if tab_row(shot) is not None:                      # a Generals screen: nothing in the way
             break
         st = screen_state(shot, cfg)
+        if st in ("city", "unknown") and find_text(shot, CITY_POPUP_WORDS, region=(30, 90, 480, 720), cutoff=0.8):
+            cx = find_close_x(shot[90:810, 30:510])        # an event pop-up over the city (e.g. Server War): its X if it has one, else tap outside it
+            if cx:
+                dev.tap(cx[0][0] + 30, cx[0][1] + 90)
+                log("[*] Closed an event pop-up over the city with its X button")
+            else:
+                ox, oy = cfg.get("popup_outside_tap") or (8, 480)
+                dev.tap(int(ox), int(oy))
+                log(f"[*] Event pop-up over the city has no X - tapped outside it ({ox},{oy})")
+            closed += 1
+            _nap(stop, 1.0, 1.5)
+            continue
         if st != "unknown" or not has_template("city_screen"):
             break
         if daily_checkin(dev, shot, log, stop):            # the game's Daily Rewards window: claim today's sign-in reward first
@@ -3474,7 +3695,10 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
         if tap_alliance_war_row(dev, shot, log):          # the Alliance page is not a pop-up: go on into Alliance War
             _nap(stop, 1.5, 2.2)
             break
-        if world_map(shot):                                # the world map: the globe goes to the city (Back / the portrait would loop)
+        if world_map(shot):                                # the world map: go to the city only when the caller needs it
+            if not want_city:
+                log("[*] On the world map - working from here")
+                break
             dev.tap(*VIEW_TOGGLE)
             log("[*] On the world map - tapped the globe to go to the city")
             closed += 1
@@ -3489,21 +3713,33 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
                 _gold = 0
         except Exception:
             _gold = 0
-        if _gold > 250 and back_arrow_taps < 6:
+        full_page = _gold > 250
+        if _gold > 250 and back_arrow_taps < 6:            # a full page, not a pop-up: its Back arrow
             back_arrow_taps += 1
             dev.tap(*cfg.get("city_to_tap", (35, 35)))
             log("[*] A full page is open (not a pop-up) - tapped the Back arrow")
             closed += 1
             _nap(stop, 1.2, 1.8)
             continue
-        cx = find_close_x(shot)
-        if cx:                                             # any pop-up with a round X button: tap it (works on every instance)
+        _ph = _pop_hash(shot)
+        _pe = None if full_page else _poplib_seen(_ph, shot, log)        # every unknown pop-up goes into the library
+        if _pe and _pe.get("fix") and _pe.get("xy") and _ph not in known_done:
+            known_done.add(_ph)                            # met before: use the tap that closed it last time
+            dev.tap(*_pe["xy"])
+            pending = (_ph, _pe["fix"], _pe["xy"])
+            log(f"[*] Known pop-up - closing it the way that worked before ({_pe['fix']} at {tuple(_pe['xy'])})")
+            closed += 1
+            _nap(stop, 1.0, 1.5)
+            continue
+        cx = find_close_x(shot)                            # unknown window, step 1: its round X button
+        if cx:
             dev.tap(cx[0][0], cx[0][1])
+            pending = (_ph, "x", cx[0][:2]) if _ph is not None else None
             log(f"[*] Closed a pop-up with its X button ({cx[0][0]},{cx[0][1]})")
             closed += 1
             _nap(stop, 0.8, 1.3)
             continue
-        if not outside_done:                               # an unknown dialog: wait until it is steady, tap beside it first
+        if not outside_done and not full_page:             # step 2: no X - wait until it is steady, tap outside it
             outside_done = True
             prev = shot
             for _w in range(6):
@@ -3514,14 +3750,16 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
                 prev = cur
             ox, oy = cfg.get("popup_outside_tap") or (8, 480)
             dev.tap(int(ox), int(oy))
-            log(f"[*] Unknown pop-up - waited until it was steady, tapped outside it ({ox},{oy})")
+            pending = (_ph, "outside", (ox, oy)) if _ph is not None else None
+            log(f"[*] Unknown pop-up - no X button, tapped outside it ({ox},{oy})")
             closed += 1
             _nap(stop, 1.0, 1.5)
             continue
-        if not x_spot_done:                                # tapping outside did not close it: try the usual X spot once (offer pop-ups with a round X on the corner)
+        if not x_spot_done and not full_page:              # tapping outside did not close it: try the usual X spot once
             x_spot_done = True
             ox, oy = cfg.get("popup_x_tap") or (477, 141)
             dev.tap(int(ox), int(oy))
+            pending = (_ph, "x spot", (ox, oy)) if _ph is not None else None
             log(f"[*] Unknown pop-up - tapping outside did not close it, tapped the usual X spot ({ox},{oy})")
             closed += 1
             _nap(stop, 1.0, 1.5)
@@ -3554,6 +3792,24 @@ def clear_popups(dev, cfg, log, stop, rounds=5):
                 tap_hit(dev, c)
                 log("[*] Back opened the quit dialog - cancelled it")
                 _nap(stop, 0.8, 1.2)
+    try:                                                   # still lost after everything: count it; 3 times in 10 min -> restart the game
+        _end = dev.screenshot()
+        _lost = screen_state(_end, cfg) == "unknown" and not world_map(_end) and tab_row(_end) is None
+    except Exception:
+        _lost = False
+    _now = time.time()
+    _hist = [t for t in _STUCK_POPUPS.get(dev.serial, []) if _now - t < 600] + ([_now] if _lost else [])
+    _STUCK_POPUPS[dev.serial] = [] if not _lost else _hist
+    if len(_hist) >= 3 and not stop.is_set():
+        _STUCK_POPUPS[dev.serial] = []
+        log("[!] Could not get past an unknown screen 3 times in 10 min - restarting the game")
+        try:
+            (USER / "debug").mkdir(exist_ok=True)
+            cv2.imwrite(str(USER / "debug" / "stuck_before_restart.png"), _end)
+        except Exception:
+            pass
+        force_restart_game(dev, cfg, log, stop)
+        closed += 1
     return closed
 
 
@@ -3718,32 +3974,64 @@ def choose_general(dev, name, cfg, log, stop, role="main"):
     def same(a, b):
         return float(np.mean(cv2.absdiff(a[200:900], b[200:900]))) < 1.5
 
-    prev = None
-    for _ in range(8):                                   # go to the top of the list
-        shot = dev.screenshot()
-        if prev is not None and same(prev, shot):
-            break
-        prev = shot
-        dev.swipe(270, 330, 270, 820, 500)
-        nap(0.7, 1.0)
-    hit, prev, busy, best_all, scans = None, None, False, 0.0, 0
-    log(f"[i] Looking for {role} general '{name}': tab {want}, favourites {fav or 'leave'}, {view} view")
-    for _ in range(int(cfg["general_max_scrolls"]) * (3 if view == "list" else 1) + 1):  # scan downwards
-        shot = dev.screenshot()
-        if view == "list":
-            hit = find_general_text(shot, name, idle_only=cfg.get("general_idle_only", True))
+    TAB_NAMES = {0: "the open tab", 1: "All", 2: "Military", 3: "Development", 4: "Duty", 5: "Subordinate City"}
+
+    def scan(tab_now):
+        """Scroll to the top of the list, then down, looking for the general. -> (hit, busy, best)"""
+        prev = None
+        for _ in range(8):                                   # go to the top of the list
+            shot = dev.screenshot()
+            if prev is not None and same(prev, shot):
+                break
+            prev = shot
+            dev.swipe(270, 330, 270, 820, 500)
+            nap(0.7, 1.0)
+        hit, prev, busy, best_all = None, None, False, 0.0
+        log(f"[i] Looking for {role} general '{name}': {TAB_NAMES.get(tab_now, tab_now)} tab, favourites {fav or 'leave'}, {view} view")
+        for _ in range(int(cfg["general_max_scrolls"]) * (3 if view == "list" else 1) + 1):  # scan downwards
+            shot = dev.screenshot()
+            if view == "list":
+                hit = find_general_text(shot, name, idle_only=cfg.get("general_idle_only", True))
+            else:
+                hit = find_general(shot, name, copy=gm.get("copy", "any"), idle_only=cfg.get("general_idle_only", True))
+            busy = busy or getattr(_TL, "busy_seen", False)
+            best_all = max(best_all, getattr(_TL, "best", 0.0))
+            if hit or (prev is not None and same(prev, shot)):
+                break
+            prev = shot
+            if view == "list":
+                dev.swipe(270, 800, 270, 500, 700)
+            else:
+                dev.swipe(270, 820, 270, 330, 700)
+            nap(0.8, 1.2)
+        return hit, busy, best_all
+
+    tab_now = want
+    if not 1 <= want <= 5:                               # 'Leave as is': the game shows the tab it had open last (often Development)
+        try:
+            _tr = tab_row(dev.screenshot())
+            tab_now = _tr[0] if _tr is not None else (selected_tab(dev.screenshot()) or 0)
+        except Exception as _e:
+            quiet_err("choose_general.tab_now", _e)
+            tab_now = 0
+    hit, busy, best_all = scan(tab_now)
+    if not hit and not busy and 2 <= tab_now <= 5 and not stop.is_set():
+        # not in the chosen tab (a general can sit in another category than the one saved for it): the All tab lists every general
+        log(f"[i] '{name}' is not in the {TAB_NAMES[tab_now]} tab - looking in All")
+        switched = False
+        if tab_row(dev.screenshot()) is not None:
+            switched = select_gen_tab(dev, 1, log, stop)
         else:
-            hit = find_general(shot, name, copy=gm.get("copy", "any"), idle_only=cfg.get("general_idle_only", True))
-        busy = busy or getattr(_TL, "busy_seen", False)
-        best_all = max(best_all, getattr(_TL, "best", 0.0))
-        if hit or (prev is not None and same(prev, shot)):
-            break
-        prev = shot
-        if view == "list":
-            dev.swipe(270, 800, 270, 500, 700)
-        else:
-            dev.swipe(270, 820, 270, 330, 700)
-        nap(0.8, 1.2)
+            cur = selected_tab(dev.screenshot())
+            if cur is not None and cur != 1:
+                dev.tap(tab_centres(cur)[0], 104)
+                nap(1.2, 1.8)
+                switched = selected_tab(dev.screenshot()) == 1
+        if switched:
+            hit, busy2, best2 = scan(1)
+            busy, best_all = busy or busy2, max(best_all, best2)
+            if hit:
+                log(f"[i] Found '{name}' in the All tab" + (f" - its saved tab ({TAB_NAMES[want]}) may be wrong; check it in Manage generals" if want == tab_now else ""))
     if not hit:
         if busy:
             log(f"[!] {role.capitalize()} general '{name}' is busy (not Idle)")
@@ -3752,8 +4040,8 @@ def choose_general(dev, name, cfg, log, stop, role="main"):
                 f"(check its tab / favourites setting; best picture match {best_all:.2f} over the whole list)")
         try:
             save_debug("general_" + name, dev.screenshot())
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("choose_general", _e)
         return False
 
     pressed = False
@@ -3766,8 +4054,8 @@ def choose_general(dev, name, cfg, log, stop, role="main"):
         if not sb:
             try:                                           # keep the screen so the list-view Select button can be fixed
                 save_debug("general_list_" + re.sub(r"\W", "_", name), shot0)
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("choose_general", _e)
         if sb:
             tap_hit(dev, sb)
             pressed = True
@@ -4166,7 +4454,7 @@ def merge_catalog(found, log=print):
             cv2.imwrite(str(root / "labels" / f"{safe}.png"), g["label"])
         have[safe] = {"name": safe, "region": g["region"], "troops": g["troops"], "art": f"{safe}.png"}
         added += 1
-    (root / "catalog.json").write_text(json.dumps({"built": time.strftime("%Y-%m-%d"), "generals": sorted(have.values(), key=lambda g: g["name"].lower())}, indent=1), encoding="utf-8")
+    save_json(root / "catalog.json", {"built": time.strftime("%Y-%m-%d"), "generals": sorted(have.values(), key=lambda g: g["name"].lower())}, indent=1)
     log(f"[+] General library: {added} new general(s) added, {len(have)} in total ({root})")
     return added
 
@@ -4208,7 +4496,7 @@ def save_catalog(found, log=print):
             (root / "labels").mkdir(exist_ok=True)
             cv2.imwrite(str(root / "labels" / f"{safe}.png"), g["label"])
         gens.append({"name": safe, "region": g["region"], "troops": g["troops"], "art": f"{safe}.png"})
-    (root / "catalog.json").write_text(json.dumps({"built": time.strftime("%Y-%m-%d"), "generals": gens}, indent=1), encoding="utf-8")
+    save_json(root / "catalog.json", {"built": time.strftime("%Y-%m-%d"), "generals": gens}, indent=1)
     log(f"[+] Saved {len(gens)} generals to {root}")
     return root
 
@@ -4293,13 +4581,13 @@ def sync_monster_pack(log=print):
             _mon_cache.clear()
         try:
             list_monsters(refresh=True)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("sync_monster_pack", _e)
         log(f"[+] {n} new monster picture(s) added to your library.")
     try:
         sync_catalog_pack(log)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("sync_monster_pack", _e)
     return n
 
 
@@ -4315,8 +4603,8 @@ def clean_catalog_junk(log=print):
             if not is_known_general(p.stem):
                 p.unlink()
                 n += 1
-        except OSError:
-            pass
+        except OSError as _e:
+            quiet_err("clean_catalog_junk", _e)
     if n:
         with _cache_lock:
             _gen_cache.clear()
@@ -4367,8 +4655,8 @@ def sync_catalog_pack(log=print):
             _gen_cache.clear()
         try:
             list_generals(refresh=True)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("sync_catalog_pack", _e)
         log(f"[+] General catalogue updated ({n} file(s)).")
     return n
 
@@ -4500,9 +4788,32 @@ def memory_info():
             info["proc_mb"] = rss / 1024
         if info["total_mb"]:
             info["used_pct"] = 100.0 * (1 - info["free_mb"] / info["total_mb"])
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("memory_info", _e)
     return info
+
+
+_MEM_SEEN = {"first": None, "peak": 0.0, "cpu": None}
+
+
+def memory_report(info=None):
+    """One '[mem]' log line: this app's memory now / at start / peak, PC free RAM, the app's CPU use since the
+    last line and threads. Logged every 10 min so a slow leak or creeping load is easy to spot."""
+    info = info or memory_info()
+    proc, free = info.get("proc_mb"), info.get("free_mb")
+    if proc:
+        _MEM_SEEN["first"] = _MEM_SEEN["first"] or proc
+        _MEM_SEEN["peak"] = max(_MEM_SEEN["peak"], proc)
+    t, now = os.times(), time.time()
+    cpu_s, cpu_txt = t.user + t.system, "?"
+    if _MEM_SEEN["cpu"]:
+        c0, w0 = _MEM_SEEN["cpu"]
+        cpu_txt = f"{100.0 * (cpu_s - c0) / max(now - w0, 1) / (os.cpu_count() or 1):.0f}%"
+    _MEM_SEEN["cpu"] = (cpu_s, now)
+    mb = lambda v: f"{v:.0f} MB" if v else "?"
+    return (f"[mem] app {mb(proc)} (start {mb(_MEM_SEEN['first'])}, peak {mb(_MEM_SEEN['peak'])}), "
+            f"PC free {mb(free)}, app CPU {cpu_txt}, threads {threading.active_count()}, "
+            f"alert keys {len(_notify_at)}")
 
 
 def trim_memory():
@@ -4517,8 +4828,8 @@ def trim_memory():
             k32.GetCurrentProcess.restype = wintypes.HANDLE
             k32.SetProcessWorkingSetSize.argtypes = [wintypes.HANDLE, ctypes.c_size_t, ctypes.c_size_t]
             k32.SetProcessWorkingSetSize(k32.GetCurrentProcess(), ctypes.c_size_t(-1).value, ctypes.c_size_t(-1).value)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("trim_memory", _e)
 
 
 def lower_priority():
@@ -4533,8 +4844,8 @@ def lower_priority():
             k32.SetPriorityClass(k32.GetCurrentProcess(), 0x00004000)         # BELOW_NORMAL_PRIORITY_CLASS
         else:
             os.nice(5)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("lower_priority", _e)
 
 
 def configure_resources(cfg):
@@ -4627,10 +4938,13 @@ def notify(cfg, serial, text, kind="problem"):
         return
     if not (cfg.get("discord_webhook") or (cfg.get("telegram_token") and cfg.get("telegram_chat"))):
         return
-    key = (serial, text)
-    if time.time() - _notify_at.get(key, 0) < 30:
+    key, now = (serial, text), time.time()
+    if now - _notify_at.get(key, 0) < 30:
         return
-    _notify_at[key] = time.time()
+    if len(_notify_at) > 200:                            # texts carry numbers/times, so keys never repeat: drop the old ones
+        for k in [k for k, t in list(_notify_at.items()) if now - t >= 30]:
+            _notify_at.pop(k, None)
+    _notify_at[key] = now
     name = (cfg.get("device_names") or {}).get(serial) or serial
     threading.Thread(target=send_alert, args=(cfg, f"[{name}] {text}"), daemon=True).start()
 
@@ -4716,7 +5030,7 @@ def save_profile(name, cfg):
     name = re.sub(r'[\\/:*?"<>|]', "", str(name)).strip()
     if not name:
         raise ValueError("Give the profile a name.")
-    (profiles_dir() / f"{name}.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    save_json(profiles_dir() / f"{name}.json", cfg, indent=2)
     return name
 
 
@@ -4747,8 +5061,8 @@ def auto_backup(reason, log=None, keep=10):
             for f in old:
                 try:
                     f.unlink()
-                except OSError:
-                    pass
+                except OSError as _e:
+                    quiet_err("auto_backup", _e)
         if log:
             log(f"[i] Settings backed up as profile '{name}' (Profiles > Load to restore)")
         return name
@@ -4770,8 +5084,8 @@ def backup_before_new_version(log=None):
         try:
             marker.parent.mkdir(exist_ok=True)
             marker.write_text(VERSION)
-        except OSError:
-            pass
+        except OSError as _e:
+            quiet_err("backup_before_new_version", _e)
 
 
 def delete_profile(name):
@@ -4797,8 +5111,8 @@ def device_online(adb, serial):
     if ":" in serial:
         try:
             subprocess.run([adb, "connect", serial], capture_output=True, creationflags=NOWIN, timeout=10)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("device_online", _e)
     try:
         out = subprocess.run([adb, "devices"], capture_output=True, text=True,
                              creationflags=NOWIN, timeout=15).stdout
@@ -4900,10 +5214,10 @@ def bluestacks_player(adb=None):
                 try:
                     with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key, 0, winreg.KEY_READ | view) as k:
                         cands.append(Path(winreg.QueryValueEx(k, "InstallDir")[0]) / "HD-Player.exe")
-                except OSError:
-                    pass
-    except Exception:
-        pass
+                except OSError as _e:
+                    quiet_err("bluestacks_player", _e)
+    except Exception as _e:
+        quiet_err("bluestacks_player", _e)
     return next((c for c in cands if c.exists()), None)
 
 
@@ -4942,9 +5256,7 @@ def remember_launch(serial, pid=None):
             return None
         mem = _launch_memory()
         mem[serial] = {"exe": exe, "instance": inst.group(1)}
-        tmp = _LAUNCH_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(mem, indent=1), encoding="utf-8")
-        os.replace(tmp, _LAUNCH_FILE)
+        save_json(_LAUNCH_FILE, mem, indent=1)
         return mem[serial]
     except Exception:
         return None
@@ -5009,8 +5321,8 @@ def mumu_index(serial, adb, name=None):
             hits = [x for x in hits if x not in ("None", "")]
             if len(set(hits)) == 1:
                 return hits[0]
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("mumu_index", _e)
     if 16384 <= port <= 16384 + 32 * 99 and (port - 16384) % 32 == 0:      # MuMu 12 default ports
         return str((port - 16384) // 32)
     return None
@@ -5195,8 +5507,8 @@ def reclaim_if_kicked(dev, cfg, log, stop, screen):
         try:
             log("@act " + json.dumps({"k": "step", "text": f"KICKED - the game was opened on another device. "
                                       f"Taking it back in {left // 60}:{left % 60:02d}  (or press 'Take game back now')"}))
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("reclaim_if_kicked", _e)
         ev.wait(2)
     KICKED.pop(dev.serial, None)
     if stop.is_set():
@@ -5205,8 +5517,8 @@ def reclaim_if_kicked(dev, cfg, log, stop, screen):
         log("[*] 'Take game back now' pressed - not waiting any longer")
     try:
         log("@act " + json.dumps({"k": "step", "text": "Taking the game back..."}))
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("reclaim_if_kicked", _e)
     hit = find_text(dev.screenshot(), ["Restart"], cutoff=0.8)
     if hit:
         dev.tap(hit[0], hit[1])
@@ -5472,8 +5784,8 @@ def _restart_emulator(dev, cfg, log, stop, why=""):
         stop.wait(4)
     try:
         subprocess.run([adb, "disconnect", serial], capture_output=True, timeout=10, creationflags=NOWIN)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("_restart_emulator", _e)
     if stop.is_set():
         return False
     stop.wait(5)
@@ -5528,8 +5840,8 @@ def missed_rallies(serial, cfg):
                 lv = _RALLY_LEVEL.get((m, round(e / 15))) or _RALLY_LEVEL.get((m, round(e / 15) - 1)) or _RALLY_LEVEL.get((m, round(e / 15) + 1))
                 if not monster_allowed(m, cfg, lv)[0]:
                     continue
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("missed_rallies", _e)
             seen.add((m, round(e / 15)))
             out.append((m, int(e - now)))
     return out
@@ -5591,10 +5903,9 @@ def set_bosses(items, source=""):
     with _boss_lock:
         _bosses[:] = items
         try:
-            BOSS_FILE.write_text(json.dumps({"updated": int(time.time()), "source": source, "items": items}, indent=1),
-                                 encoding="utf-8")
-        except Exception:
-            pass
+            save_json(BOSS_FILE, {"updated": int(time.time()), "source": source, "items": items}, indent=1)
+        except Exception as _e:
+            quiet_err("set_bosses", _e)
 
 
 FEED_FILE = USER / "coords_feed.json"
@@ -5611,8 +5922,8 @@ def _lib_load():
         _lib_loaded[0] = True
         try:
             _lib[:] = json.loads(LIB_FILE.read_text(encoding="utf-8")).get("items", [])
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("_lib_load", _e)
 
 
 def lib_add(items, chat, now):
@@ -5632,9 +5943,9 @@ def lib_add(items, chat, now):
                                 "chat": chat, "first": now, "last": now, "n": 1})
         del _lib[5000:]
         try:
-            LIB_FILE.write_text(json.dumps({"items": _lib}), encoding="utf-8")
-        except Exception:
-            pass
+            save_json(LIB_FILE, {"items": _lib}, indent=None)
+        except Exception as _e:
+            quiet_err("lib_add", _e)
 
 
 def lib_get(name=None, min_level=0):
@@ -5678,9 +5989,9 @@ def feed_add(items, chat="", keep_min=60):
                 _feed.insert(0, {**it, "chat": chat, "t": now})
         del _feed[500:]
         try:
-            FEED_FILE.write_text(json.dumps({"items": _feed}, indent=1), encoding="utf-8")
-        except Exception:
-            pass
+            save_json(FEED_FILE, {"items": _feed}, indent=1)
+        except Exception as _e:
+            quiet_err("feed_add", _e)
 
 
 def feed_note(chat, had_coords):
@@ -5696,16 +6007,16 @@ def feed_get(keep_min=60):
         if not _feed and FEED_FILE.exists():
             try:
                 _feed[:] = json.loads(FEED_FILE.read_text(encoding="utf-8")).get("items", [])
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("feed_get", _e)
         if keep_min:
             n = len(_feed)
             _feed[:] = [f for f in _feed if now - f["t"] <= keep_min * 60]
             if len(_feed) != n:
                 try:
-                    FEED_FILE.write_text(json.dumps({"items": _feed}, indent=1), encoding="utf-8")
-                except Exception:
-                    pass
+                    save_json(FEED_FILE, {"items": _feed}, indent=1)
+                except Exception as _e:
+                    quiet_err("feed_get", _e)
         return list(_feed), dict(_feed_stats)
 
 
@@ -5715,8 +6026,8 @@ def feed_clear():
         _feed_stats.update({"messages": 0, "with_coords": 0})
         try:
             FEED_FILE.unlink(missing_ok=True)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("feed_clear", _e)
 
 
 def get_bosses():
@@ -5724,8 +6035,8 @@ def get_bosses():
         if not _bosses and BOSS_FILE.exists():
             try:
                 _bosses[:] = json.loads(BOSS_FILE.read_text(encoding="utf-8")).get("items", [])
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("get_bosses", _e)
         return list(_bosses)
 
 
@@ -5806,8 +6117,8 @@ class TgLink:
             return None
         try:
             return await self.client.get_entity(int(n) if re.fullmatch(r"-?\d+", n) else n)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("TgLink._resolve", _e)
         async for d in self.client.iter_dialogs():
             if (d.name or "").strip().lower() == n.lower():
                 return d.entity
@@ -5902,12 +6213,12 @@ class TgLink:
             if self.client is not None:
                 try:
                     await self.client.log_out()
-                except Exception:
-                    pass
+                except Exception as _e:
+                    quiet_err("log_out.go", _e)
         try:
             self._call(go(), 20)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("TgLink.log_out", _e)
         for f in USER.glob("tg_session*"):
             f.unlink(missing_ok=True)
 
@@ -5917,8 +6228,8 @@ class TgLink:
                 await self.client.disconnect()
         try:
             self._call(go(), 10)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("TgLink.close", _e)
         self.loop.call_soon_threadsafe(self.loop.stop)
 
 
@@ -6118,11 +6429,22 @@ def tap_alliance_war_row(dev, shot, log):
             if h:
                 row = (int(h[0]), int(h[1]))
         if row:
+            # loop guard (DD 23 Oct: 43 taps in 3.5 min, every 5 s, nothing logged as a problem): 6 taps in 2 min means
+            # this is not really the Alliance page or the row does not open - stop tapping so recovery / restart takes over
+            now = time.time()
+            taps = [t for t in getattr(dev, "war_row_times", []) if now - t < 120]
+            if len(taps) >= 6:
+                if now - getattr(dev, "war_row_warned", 0) > 120:
+                    dev.war_row_warned = now
+                    log(f"[!] Tapped the 'Alliance War' row {len(taps)} times in 2 min without reaching the rally list - not tapping it again for now")
+                dev.war_row_times = taps
+                return False
+            dev.war_row_times = taps + [now]
             dev.tap(int(row[0]), int(row[1]))
             log(f"[*] On the Alliance page - tapped the 'Alliance War' row ({int(row[0])},{int(row[1])})")
             return True
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("tap_alliance_war_row", _e)
     return False
 
 
@@ -6188,8 +6510,8 @@ def emu_window(dev, name=None):
                 v = str(info.get(k) or "")
                 if v and int(v, 16) and u32.IsWindow(int(v, 16)):
                     return int(v, 16)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("emu_window", _e)
     if not name:
         return None
     want, hits = str(name).strip().lower(), []
@@ -6539,8 +6861,8 @@ class FlowRecorder:
             try:
                 a = cv2.resize(self.dev.screenshot(), (270, 480), interpolation=cv2.INTER_AREA)
                 cv2.imwrite(str(self.dir / f"{n:02d}_after.jpg"), a, [cv2.IMWRITE_JPEG_QUALITY, 70])
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("_step.after", _e)
         threading.Thread(target=after, daemon=True).start()
         self.log(f"[*] Flow step {n}: {kind} at {x1},{y1}" + (f" -> {x2},{y2}" if kind == "swipe" else ""))
         self._save()
@@ -6548,15 +6870,15 @@ class FlowRecorder:
     def _save(self):
         data = {"name": self.name, "serial": self.serial, "screen": list(EXPECTED_SIZE), "touch_max": [self.maxx, self.maxy],
                 "recorded": time.strftime("%Y-%m-%d %H:%M"), "version": VERSION, "steps": self.steps}
-        (self.dir / "steps.json").write_text(json.dumps(data, indent=1), encoding="utf-8")
+        save_json(self.dir / "steps.json", data, indent=1)
 
     def stop(self):
         self.stop_ev.set()
         try:
             if self.proc:
                 self.proc.kill()
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("FlowRecorder.stop", _e)
         time.sleep(1.6)                      # let the last "after" picture land
         self._save()
         self.log(f"[+] Flow '{self.name}' saved: {len(self.steps)} steps in {self.dir}")
@@ -6756,8 +7078,8 @@ def learn_corner(nav, log):
         if sc:
             try:
                 CORNER_FILE.write_text(json.dumps({"x": round(nav.cx, 1), "y": round(nav.cy, 1), "score": round(sc, 2)}), encoding="utf-8")
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("learn_corner", _e)
             log(f"[i] City corner learned at {round(nav.cx)},{round(nav.cy)} (match {sc:.2f})")
             return
         _nap(nav.stop, 0.6, 0.9)
@@ -6846,8 +7168,8 @@ def ring_label_free(shot, centre=(270, 450)):
                 cx = sum(w[1] for w in ws2) / len(ws2) / 2.5 + x0
                 txt, gx = t3, int(cx)
                 break
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("ring_label_free", _e)
     nm = match_building(txt, cutoff=0.85)                   # only to repair an OCR typo of a name the bot already spells
     if not nm:                                              # a long name read only in part ("Vict", "of State"): finish it from the names the bot knows
         tw = [w.lower() for w in txt.split() if len(w) >= 2]
@@ -7116,7 +7438,7 @@ def build_slots(items, merge=0):
 
 
 def save_slots(slots):
-    SLOT_FILE.write_text(json.dumps({"slots": slots}, indent=1), encoding="utf-8")
+    save_json(SLOT_FILE, {"slots": slots}, indent=1)
 
 
 def nearest_slot(slots, x, y, far=260, name=None, taken=()):
@@ -7197,8 +7519,8 @@ def scan_city(dev, cfg, log, stop, progress=None):
             progress({"phase": phase, "pct": pct, "left": left, "text": stats["text"], "stops": stats["stops"], "total": max(est_total, stats["stops"] + 1),
                       "row": stats["row"], "mapped": mapped, "missing": missing, "expected": expected_buildings(found),
                       "seconds": int(time.time() - t_start)})
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("scan_city.report", _e)
 
     log("[*] City mapper: going to the top-left corner")
     report()
@@ -7407,8 +7729,8 @@ def market_totals(img):
                     d = re.sub(r"\D", "", w[0])
                     if len(d) >= 3 and (best is None or len(d) > len(str(best))):
                         best = int(d)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("market_totals.num", _e)
         return best
     gold, gems = num(0, 275), num(265, 540)              # each half on its own: read together, one of them is often lost
     return gold, gems
@@ -7423,8 +7745,8 @@ def market_dialog(img):
             return "rebuy"
         if "sure" in lines or "purchase" in lines:
             return "buy"
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("market_dialog", _e)
     if not market_on_screen(img):                          # text unread: tell them apart by the green button's height
         gb = _green_button(img, (60, 470, 420, 240))
         if gb and 530 <= gb[1] <= 605:
@@ -7805,8 +8127,8 @@ def run_step(dev, cfg, log, stop, step):
         shot = dev.screenshot()
         try:
             cv2.imwrite(str(USER / "debug" / f"ring_{(arg or 'x').replace(' ', '_')}.png"), shot)
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("run_step", _e)
         got = ring_building_name(shot)
         log(f"[i]   the menu that opened is called: {got[0] if got else 'no name read'}" + (f" (expected {arg})" if arg else ""))
         return
@@ -8057,8 +8379,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                     pre = dev.screenshot()
                     cv2.circle(pre, (int(px), int(py + float(task.get("tap_dy", 0)))), 14, (0, 0, 255), 2)
                     cv2.imwrite(str(USER / "debug" / "before_tap.png"), pre)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    quiet_err("city_task_target", _e)
                 dev.expect_city = False                     # from the tap on, a window opening is expected
                 lower = ((-115, -150, -90) if nav_state["mode"] == "labels" else (int(cfg.get("city_tap_dy", 22) or 0), 44, 0))[attempt]      # labels sit at the building's foot; picture mode aims at the LOWER part so a tall Keep does not move the tap off it
                 dev.tap(int(px) + ((55, 70, 30)[attempt] if nav_state["mode"] == "labels" and k.startswith("Keep") else 0), int(py + float(task.get("tap_dy", 0)) + lower))
@@ -8273,8 +8595,8 @@ def world_map(shot):
             _WM_NOTE[0] = time.time()
             try:
                 cv2.imwrite(str(USER / "debug" / "not_world_map.png"), shot)
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("world_map", _e)
             _WM_NOTE[1] = joined[:120]
         return hit
     except Exception:
@@ -8446,10 +8768,7 @@ def bm_save(serial, **kw):
         data = load_duty_state()
         row = data.setdefault(serial or "default", {}).setdefault("black_market", {})
         row.update(kw)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def ce_save(serial, **kw):
@@ -8457,10 +8776,7 @@ def ce_save(serial, **kw):
         data = load_duty_state()
         row = data.setdefault(serial or "default", {}).setdefault("crazy_eggs", {})
         row.update(kw)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def ce_read_slot(img, i):
@@ -8503,8 +8819,8 @@ def ce_snap(img, tag):
         d = USER / "debug"
         d.mkdir(exist_ok=True)
         cv2.imwrite(str(d / f"crazy_eggs_{tag}.png"), img)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("ce_snap", _e)
 
 
 def ce_on_screen(img):
@@ -8738,10 +9054,7 @@ def ch_save(serial, **kw):
     with _DUTY_LOCK:
         data = load_duty_state()
         data.setdefault(serial or "default", {}).setdefault("champions", {}).update(kw)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def _ch_norm(s):
@@ -9026,8 +9339,8 @@ def ch_snap(img, tag):
         d = USER / "debug"
         d.mkdir(exist_ok=True)
         cv2.imwrite(str(d / f"champions_{tag}.png"), img)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("ch_snap", _e)
 
 
 def ch_open_page(dev, stop, log):
@@ -9282,8 +9595,8 @@ def as_remaining(img):
             m = re.search(r"(\d{1,2})\s*[/\\l|]\s*(\d{1,2})", t)
             if m and int(m.group(1)) <= int(m.group(2)) <= 50:
                 return int(m.group(1)), int(m.group(2))
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("as_remaining", _e)
     return None
 
 
@@ -9307,8 +9620,8 @@ def as_snap(img, tag):
     try:
         (USER / "debug").mkdir(exist_ok=True)
         cv2.imwrite(str(USER / "debug" / f"alliance_science_{tag}.png"), img)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("as_snap", _e)
 
 
 def run_alliance_science(dev, cfg, log, stop):
@@ -9409,8 +9722,8 @@ def rd_snap(img, tag):
     try:
         (USER / "debug").mkdir(exist_ok=True)
         cv2.imwrite(str(USER / "debug" / f"duty_{tag}.png"), img)
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("rd_snap", _e)
 
 
 def rd_opt(cfg, duty_id, key, default=None):
@@ -11129,10 +11442,7 @@ def rt_save(serial, **kw):
         data = load_duty_state()
         row = data.setdefault(serial or "default", {}).setdefault("royal_thief", {})
         row.update(kw)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def rt_row(serial):
@@ -11304,10 +11614,7 @@ def mr_save(serial, **kw):
         data = load_duty_state()
         row = data.setdefault(serial or "default", {}).setdefault("monster_rally", {})
         row.update(kw)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def mr_row(serial):
@@ -11464,8 +11771,8 @@ def mr_attack_spot(shot):
                     return int(w[1]), int(w[2]) + 250
                 if word in ("occupy", "teleport"):
                     MR_EMPTY_RING[0] = True
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("mr_attack_spot", _e)
     if MR_EMPTY_RING[0]:
         return None
     p = rd_find(shot, ["Attack"], region=(0, 250, 540, 450), cutoff=0.75)
@@ -11703,6 +12010,7 @@ RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor
 # ------------------------------------------------------------ duties (ready-made, scheduled, tracked)
 DUTY_FILE = USER / "duties_state.json"
 _DUTY_LOCK = threading.Lock()
+_DUTY_READ_LOCK = threading.Lock()
 DUTY_MAX_TRIES = 3                      # failures in a game day before the alert + report (the duty never gives up)
 DUTY_RETRY_MIN = 60                     # minutes between two tries of a duty that failed (rallies are joined meanwhile)
 # group, id, title, what it does, schedule text, every_min (0 = once per game day), target, steps.
@@ -11864,11 +12172,28 @@ def _game_day():
     return time.strftime("%Y-%m-%d", time.gmtime(time.time() - reset_min() * 60))     # the game day changes at Evony's reset (midnight US Pacific) unless a time is set
 
 
+_DUTY_CACHE = [None]                                     # duties_state.json kept in memory: read from disk once, written on change
+
+
 def load_duty_state():
+    """A private copy of the duty state (callers may change it; writers then pass it to save_duty_state)."""
+    with _DUTY_READ_LOCK:
+        if _DUTY_CACHE[0] is None:
+            try:
+                _DUTY_CACHE[0] = json.loads(DUTY_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                _DUTY_CACHE[0] = {}
+        return json.loads(json.dumps(_DUTY_CACHE[0]))
+
+
+def save_duty_state(data):
+    """Keep 'data' as the new duty state and write it to disk (atomic). Call with _DUTY_LOCK held."""
+    with _DUTY_READ_LOCK:
+        _DUTY_CACHE[0] = json.loads(json.dumps(data))
     try:
-        return json.loads(DUTY_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+        save_json(DUTY_FILE, data, indent=1)
+    except OSError as _e:
+        quiet_err("save_duty_state", _e)
 
 
 def duty_record(serial, duty_id, ok, msg="", nothing=False):
@@ -11881,6 +12206,13 @@ def duty_record(serial, duty_id, ok, msg="", nothing=False):
         row["tries"] = int(row.get("tries", 0)) + 1
         row["last_try"] = time.time()
         row["msg"] = msg
+        hist = row.setdefault("hist", {})                        # per game day: [done, failed] - kept 7 days (task success stats)
+        hd = hist.setdefault(str(day), [0, 0])
+        hd[0 if ok else 1] += 1
+        for k in sorted(hist)[:-7]:
+            hist.pop(k, None)
+        if not ok:
+            row["last_error"], row["last_error_at"] = msg, time.time()
         if ok:
             row["last_ok"], row["status"] = time.time(), "done"
             row["tries"] = 0                                     # fulfilled: failures start counting again from 0
@@ -11895,10 +12227,7 @@ def duty_record(serial, duty_id, ok, msg="", nothing=False):
             row["status"] = "retry"
             if row["tries"] == DUTY_MAX_TRIES:                   # the 3rd failure today: alert + report once (it keeps trying every hour)
                 row["status"] = "gaveup"
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
         return row.get("status")
 
 
@@ -11909,10 +12238,7 @@ def duty_retry(serial, duty_id):
         row = data.setdefault(serial or "default", {}).setdefault(duty_id, {})
         row["tries"], row["status"], row["next_at"] = 0, "retry", 0
         row["last_try"] = 0
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def run_now_list(serial):
@@ -11928,10 +12254,7 @@ def run_now_set(serial, ids):
             rn[serial or "default"] = list(dict.fromkeys(ids))
         else:
             rn.pop(serial or "default", None)
-        try:
-            DUTY_FILE.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        save_duty_state(data)
 
 
 def run_now_done(serial, tid):
@@ -12549,8 +12872,8 @@ def read_square(dev, cfg, log, stop, pos, expected="", levels=False):
     try:                                                     # learn this PC's real i icon once
         if result and not template_path("detail_icon"):
             save_template("detail_icon", ring[ic[1] - 24:ic[1] + 24, ic[0] - 24:ic[0] + 24])
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("read_square", _e)
     for _ in range(4):                                       # close the panel / Detail page, back to the city
         if screen_state(dev.screenshot(), cfg) == "city":
             break
@@ -12630,8 +12953,8 @@ def task_event(serial, task, ok, msg=""):
             if TASK_LOG.stat().st_size > 400000:
                 lines = TASK_LOG.read_text(encoding="utf-8").splitlines()[-1500:]
                 TASK_LOG.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as _e:
+        quiet_err("task_event", _e)
 
 
 def read_task_events(n=150):
@@ -12643,8 +12966,8 @@ def read_task_events(n=150):
     for l in reversed(lines):
         try:
             out.append(json.loads(l))
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("read_task_events", _e)
     return out
 
 
@@ -12759,8 +13082,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         try:                                              # warn only: the bot keeps running on another screen size, but it can fail there
             ok_screen, msg_screen = dev.ensure_screen(log)
             log(("[+] " if ok_screen else "[!] ") + msg_screen + ("" if ok_screen else " The bot can fail on a different screen size."))
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("run_device", _e)
     except Exception as e:
         notify(cfg, serial, f"Could not start: {e}")
         return log(f"[!] {e}")
@@ -12878,8 +13201,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         """Structured activity line for the Activity screen (the GUI hides these from the log)."""
         try:
             log("@act " + json.dumps({"k": kind, **kw}))
-        except Exception:
-            pass
+        except Exception as _e:
+            quiet_err("run_device.act", _e)
 
     def act_skip(mon, why, rally=None, march=None):
         key = f"{mon}|{why}"
@@ -12995,8 +13318,17 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                                 mcx, mcy, mh = int(hit[0] + mdx), int(hit[1] + mdy), MON_SIZE // 2
                                 if mcy - mh >= MON_TOP + 10 and mcx - mh >= 0 and mcx + mh <= screen.shape[1] and mcy + mh <= screen.shape[0]:
                                     learn_monster(lab, screen[mcy - mh:mcy + mh, mcx - mh:mcx + mh].copy(), cfg, log)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        quiet_err("run_device.find_target", _e)
+                if mon and _base_monster(mon) in WORLD_BOSS_LOOKALIKE:   # Behemoth or Behemoth King? the picture alone cannot tell
+                    try:
+                        nx0, ny0 = int(hit[0] - 21), int(hit[1] - 113)
+                        lab = read_monster_label(screen[max(ny0 - 18, 0):ny0 + 18, max(nx0 - 150, 0):nx0 + 150])
+                        if str(lab).lower() in NEVER_JOIN or "king" in str(lab).lower().split():
+                            say(f"[{mon}] name reads '{lab}' - world boss, never joined")
+                            mon = lab if str(lab).lower() in NEVER_JOIN else f"{mon} King"
+                    except Exception as _e:
+                        quiet_err("run_device.find_target.label", _e)
                 if mon == "Viking":                                   # which set is it? level on the card + power decide
                     nx, ny = int(hit[0] - 21), int(hit[1] - 113)
                     st = screen[max(ny - 18, 0):ny + 18, max(nx - 150, 0):nx + 150]
@@ -13058,8 +13390,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             try:                                              # only slow presets left: count their general search too
                 if not any(not preset_picks(cfg, n) for n in active_presets(cfg)):
                     need += lat_pick[0] if lat_pick[0] is not None else 30.0
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("run_device.find_target", _e)
             rally, march, ok, why = judge(screen, hit, cfg, need)
             last_march[0] = march
             if mon and mon != "hidden" and rally:
@@ -13113,8 +13445,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             last_frame[0] = time.time()
             try:
                 on_frame(serial, img)
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("run_device.emit_frame", _e)
 
     def wait_state(want, timeout):
         end = time.time() + timeout
@@ -13424,8 +13756,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 rows = [f"{d['title']}: {duty_status(serial, d['id'], cfg)[1]}" for d in DUTY_LIBRARY if (cfg.get('duties') or {}).get(d['id'], {}).get('on')]
                 if rows:
                     log("[i] Duties - " + "; ".join(rows) + ("" if tasks_active(cfg, serial) else "  (not running: tasks off)"))
-            except Exception:
-                pass
+            except Exception as _e:
+                quiet_err("run_device", _e)
         if ctl is not None and not ctl.run.is_set():          # paused from the GUI (only between actions)
             log("[i] Paused")
             while not ctl.run.is_set() and not stop.is_set():
@@ -13499,8 +13831,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 try:
                     (USER / "debug").mkdir(exist_ok=True)
                     cv2.imwrite(str(USER / "debug" / ("idle_" + re.sub(r"\W", "_", serial) + ".png")), screen)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    quiet_err("run_device", _e)
                 log(f"[!] Nothing to do on this screen for 90s ({st}) - pressing Back")
                 dev.acted = time.time()
                 dev.back()
@@ -13529,15 +13861,15 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     if cv2.countNonZero(_g) > 150:
                         _RALLY_SEEN[serial] = now
                         stale_hits[0] = 0
-                except Exception:
-                    pass
+                except Exception as _e:
+                    quiet_err("run_device", _e)
             if not moving and st in ("rally_list", "unknown"):      # rally countdown bars (green) on the list: their numbers tick every second
                 try:
                     hsv = cv2.cvtColor(screen[150:800:3, ::3], cv2.COLOR_BGR2HSV)
                     green = cv2.inRange(hsv, (40, 140, 90), (85, 255, 255))
                     moving = cv2.countNonZero(green) > 150
-                except Exception:
-                    pass
+                except Exception as _e:
+                    quiet_err("run_device", _e)
             sig = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
             changed = 9999 if still["sig"] is None else \
                 cv2.countNonZero(cv2.threshold(cv2.absdiff(sig, still["sig"]), 10, 255, cv2.THRESH_BINARY)[1])
@@ -13872,6 +14204,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     slower("The march screen did not open")
                     continue
 
+            t_open = time.time()                               # join speed: the march screen is open
             # Take the next preset in the rotation. A preset that has no general (or does not march) is
             # skipped and the next preset is tried straight away, on the same march screen.
             preset, plain_fails, gave_up = None, [], False
@@ -13997,6 +14330,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
 
             log(f"[+] Preset {preset} marched")
+            if t_march:                                        # join speed: where the seconds went (to find the slow step)
+                _o, _m = t_open - t_join, t_march - t_open
+                log(f"[i] Join timing: march screen {_o:.1f}s + preset/checks {_m:.1f}s = {t_march - t_join:.1f}s")
             mt = last_march[0] or 0
             back_at[preset] = time.time() + max(left, 0) + 2 * (mt if mt else 90) + 60   # march time unknown: count 90 s each way
             if t_march:
@@ -14069,8 +14405,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             else:
                 try:
                     recover()
-                except Exception:
-                    pass
+                except Exception as _e:
+                    quiet_err("run_device", _e)
             nap(3)
 
     log("[+] Stopped.")
