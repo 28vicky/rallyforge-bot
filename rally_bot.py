@@ -9723,6 +9723,20 @@ def wheel_add_chips(dev, conf, coins, log, stop):
         _nap(stop, 1.2, 1.6)
 
 
+def wheel_spun_today(serial, add=0):
+    """Spins already done today on this instance (a retried Wheel duty does not spin the same spins twice). -> count."""
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        row = data.setdefault(serial or "default", {}).setdefault("wheel_spins", {})
+        if row.get("day") != _game_day():
+            row.clear()
+            row["day"], row["n"] = _game_day(), 0
+        if add:
+            row["n"] = int(row.get("n", 0)) + add
+            save_duty_state(data)
+        return int(row.get("n", 0))
+
+
 def run_wheel(dev, cfg, log, stop):
     """Tavern's ring menu is open: open the Wheel of Fortune and spin with the button the user picked until the number
     of spins is done, the coins run out (or fall to the reserve to keep) or something unexpected is on the screen.
@@ -9730,6 +9744,12 @@ def run_wheel(dev, cfg, log, stop):
     conf = wheel_conf(cfg)
     big = int(conf["button"]) if int(conf["button"]) in WHEEL_BTN else 100
     target = int(conf["spins"] or 0) * big                 # "spins" = presses of the chosen button (owner 25 Oct); 0 = until the coins are used up
+    serial = getattr(dev, "serial", "")
+    before = wheel_spun_today(serial) if target else 0
+    if target and before >= target:
+        log(f"[+]  Wheel: {before} spin(s) already done today - nothing to spin")
+        return before
+    target -= before                                       # Rob 25 Oct 03:28: the retry after a stuck panel would spin 100 more
     reserve = int(conf["reserve"] or 0)
     shot = dev.screenshot()
     if not wheel_on_page(shot):
@@ -9754,21 +9774,18 @@ def run_wheel(dev, cfg, log, stop):
         if wheel_reward_panel(shot):                       # a reward panel is still up: its Continue button, else empty ground
             closes += 1
             if closes > 8:                                 # Rob 25 Oct 03:10: the x100 panel never closed -> 17 min without a log line
-                log(f"[!]  Wheel: the reward panel does not close - stopped after {done} spin(s)")
                 rd_snap(shot, "wheel_panel_stuck")
-                break
+                raise RuntimeError(f"the Wheel reward panel does not close (after {done} spin(s))")
             dev.tap(*(WHEEL_BTN[last_pick] if closes % 2 else (270, 110)))   # owner 25 Oct: the spin button's own spot or
                                                            # outside closes it (tapped only while the panel is seen = no extra spin)
             _nap(stop, 0.8, 1.1)
             continue
         closes = 0
         if not wheel_on_page(shot):
-            log("[!]  Wheel: not on the Wheel of Fortune page any more - stopped")
-            break
+            raise RuntimeError(f"left the Wheel of Fortune page (after {done} spin(s))")   # failed = tried again later, not 'done'
         coins = wheel_coins(shot)
         if coins is None:
-            log("[!]  Wheel: could not read the coins - stopped")
-            break
+            raise RuntimeError(f"could not read the Wheel coins (after {done} spin(s))")
         left = (target - done) if target else None
         if left is not None and left <= 0:
             log(f"[+]  Wheel: {done} spin(s) done")
@@ -9795,10 +9812,11 @@ def run_wheel(dev, cfg, log, stop):
             fails += 1
             log(f"[i]   Wheel: the {pick}-spin button did not spin ({fails}/3)")
             if fails >= 3:
-                break
+                raise RuntimeError(f"the {pick}-spin button did not spin 3 times (after {done} spin(s))")
             continue
         fails = 0
         done += pick
+        wheel_spun_today(serial, pick)
         log(f"[i]   Wheel: {done} spin(s) done ({coins - WHEEL_COST[pick]:,} coins left)")
         for _ in range(4 if shown else 0):                                 # close the panel: the button's own spot (owner 25 Oct)
             if not wheel_reward_panel(dev.screenshot()):
@@ -13631,6 +13649,10 @@ def read_task_events(n=150):
     return out
 
 
+DUTY_BUDGET_MIN = 8      # owner 25 Oct: a duty that cannot finish is left after 8 min (was 20 - Rob missed rallies for 18 min on
+                         # a stuck Wheel panel); it is retried later and the instance goes back to joining rallies
+
+
 def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
     """From the city screen: run each due task (open it, run its steps, go back)."""
     nav_state = {}
@@ -13662,7 +13684,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                     nav_state.clear()
                 # time budget per duty (Kiravik 24 Oct 15:14: Champions sat on a purchase page for 10+ min with no log line):
                 # 20 min, 50 for the city map; over it, the next tap aborts the duty and the attempt-2 path takes over
-                _TL.duty_deadline = time.time() + (50 if duty_id == "map_city" else 20) * 60
+                _TL.duty_deadline = time.time() + (50 if duty_id == "map_city" else DUTY_BUDGET_MIN) * 60
                 if not ensure_view(dev, cfg, stop, log, "city") and not stop.is_set():
                     log("[!] Could not get back to the city view")
                 clear_popups(dev, cfg, log, stop)            # close offers / pop-ups first, then do the task
