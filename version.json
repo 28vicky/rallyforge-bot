@@ -1,9 +1,9 @@
 {
-  "version": "2.5.10",
-  "notes": "Stamina is filled to the 9,999 limit with every item size (Use button found again); instances restart their emulator by themselves instead of stopping with a problem.",
+  "version": "2.5.11",
+  "notes": "Account or payment windows are closed safely (Cancel/Back) instead of stopping or restarting.",
   "files": {
     "rally_bot.py": {
-      "sha256": "543cdf66d20826ff13a5c48843b054f8a8355c2c1efa0d5a13641bfde32d2c74"
+      "sha256": "aa7c09215c9b81d0d68fee774068f40e0a3f5211361b1fd9c48d09a321df8ead"
     },
     "web_app.py": {
       "sha256": "45bc32c1366e6023cca5f1ea3c053559a8e1f217fe15507206d3a58a081ae948"
@@ -18,7 +18,7 @@
       "sha256": "9e4be6ae10e966a20e8839d258cbd03e94c4b503d346087328560d1044418010"
     },
     "ui/changelog.js": {
-      "sha256": "c9ad8970ce1c6e1d6f8460903d1c5f433cf5a38a759334a3de9b153597820387"
+      "sha256": "21b88afad92a88e3913678f135da443e0d86c6bf9cdf6560f67455a6ddc9be05"
     },
     "ui/dialogs.js": {
       "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
@@ -1709,5 +1709,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "7a60de156298942090741d710559584c180af33302d7750b372585268edb164a"
+  "sig": "f758c387eb496f30d29550a8382b37fffb67abd9d39557b1c1e8914ae5768bc4"
 }
