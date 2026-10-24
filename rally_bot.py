@@ -9146,9 +9146,21 @@ def ch_taps_used(img):
     return int(m.group(1)) if m else None
 
 
-def ch_greet_label(img):
+CH_GREET_SEARCH = (0, 640, 300, 300)                # where the Greet button can be (the game shifts it when it adds a button)
+
+
+def ch_find_greet(img):
+    """The Greet button by its word (24 Oct: a new event button pushed Greet up and a 'buy packs' button took its old
+    place - a fixed spot would have tapped that). -> (tap (x, y), label box (x, y, w, h)) or (None, None)."""
+    t = find_text(img, ["Greet"], region=CH_GREET_SEARCH, cutoff=0.75)
+    if not t:
+        return None, None
+    return (int(t[0]), int(t[1]) - 12), (max(0, int(t[0]) - 75), max(0, int(t[1]) - 20), 150, 70)
+
+
+def ch_greet_label(img, box=None):
     """-> {"pack": bool, "n": greets used or None, "wait": seconds left on the timer}"""
-    x, y, w, h = CH_GREET_BOX
+    x, y, w, h = box or CH_GREET_BOX
     txt = " ".join(t for t, _ in ocr_lines(img[y:y + h, x:x + w], 3.0)).lower().replace(";", ":")
     out = {"pack": bool(re.search(r"x\s*10", txt)), "n": None, "wait": 0}
     m = re.search(r"(\d{1,2})\s*/\s*10", txt)
@@ -9481,7 +9493,7 @@ def ch_dialogue(dev, stop):
             return
         dev.tap(*CH_DIALOG_TAP)
         _nap(stop, 1.6, 2.2)
-        if find_text(dev.screenshot(), ["Greet"], region=CH_GREET_BOX, cutoff=0.7):
+        if find_text(dev.screenshot(), ["Greet"], region=CH_GREET_SEARCH, cutoff=0.7):
             return
 
 
@@ -9491,7 +9503,13 @@ def ch_do_greets(dev, stop, log, name, want, serial, day):
     for _ in range(want + 4):
         if done >= want or stop.is_set():
             break
-        lab = ch_greet_label(dev.screenshot())
+        shot = dev.screenshot()
+        spot, box = ch_find_greet(shot)
+        if spot is None:                                   # no Greet word on the page: never tap blind (a pack / buy button may sit there)
+            log("[!]   Champions: no Greet button found on the page - not tapping anything")
+            rd_snap(shot, "champ_nogreet")
+            break
+        lab = ch_greet_label(shot, box)
         if lab["n"] is not None and lab["n"] >= CH_GREETS:
             log("[i]   Champions: the 10 daily greetings are used up")
             break
@@ -9499,7 +9517,10 @@ def ch_do_greets(dev, stop, log, name, want, serial, day):
             log(f"[i]   Champions: greet timer, waiting {lab['wait']} s")
             if stop.wait(min(lab["wait"], 75) + 3):
                 break
-        dev.tap(*CH_GREET)
+            spot, box = ch_find_greet(dev.screenshot())
+            if spot is None:
+                break
+        dev.tap(*spot)
         _nap(stop, 1.6, 2.2)
         ch_dialogue(dev, stop)
         done += 1
