@@ -1839,20 +1839,22 @@ PAGES.duties = function (fixed) {
         h("span", { class: "hint" }, "When all four eggs are done, it stops for the day."))));
   };
   const loadCe = async () => { const j = await act(api("crazy_eggs", { serial })); if (j) drawCe(j); };
-  // Wheel of Fortune: which spin button, how many spins, coins to keep
+  // Wheel of Fortune: which spin button, how many presses of it, coins to keep
   const wh = h("div", {});
+  const whTotal = (n, b) => { n = parseInt(n, 10) || 0; b = b || 1; return n > 0 ? "= " + (n * b).toLocaleString() + " spins \u00b7 " + (n * ({ 1: 100, 10: 900, 100: 9000 }[b] || 100)).toLocaleString() + " coins" : "Empty or 0 = until the coins run out."; };
   const drawWh = (j) => {
     wh.innerHTML = "";
     const c = j.conf;
     const set = async (o) => { const r = await act(api("wheel_set", { serial, ...o })); if (r) drawWh(r); };
     wh.appendChild(subset("Wheel of Fortune",
-      note("Tavern > Wheel of Fortune. Each spin costs coins. The bot presses only the Spin buttons and closes the reward panel after every spin. With a big button it still finishes with smaller ones so the number of spins is exact."),
+      note("Tavern > Wheel of Fortune. Each spin costs coins. The bot presses only the Spin buttons and closes the reward panel after every spin. Presses = how many times the chosen button is pressed (1 press of \u00d7100 = 100 spins). If the coins run short it finishes with smaller buttons."),
       h("div", { class: "fgrid eggf" },
         h("div", { class: "wide" }, h("span", { class: "lab" }, "Spin button"),
           h("div", { class: "seg small" }, [1, 10, 100].map((b) => h("button", { class: "segb" + (c.button === b ? " on" : ""), type: "button", onclick: () => set({ button: b }) }, "Spin " + (b === 1 ? "once" : "\u00d7" + b))))),
-        h("label", {}, h("span", { class: "lab" }, "Number of spins"),
-          h("input", { type: "number", min: 0, value: c.spins || "", placeholder: "Until out of coins", onchange: (ev) => set({ spins: ev.target.value }) }),
-          h("small", { class: "hint" }, "Empty or 0 = until the coins run out.")),
+        h("label", {}, h("span", { class: "lab" }, "Presses"),
+          h("input", { type: "number", min: 0, value: c.spins || "", placeholder: "Until out of coins", onchange: (ev) => set({ spins: ev.target.value }),
+            oninput: (ev) => { const t = ev.target.parentNode.querySelector(".hint"); if (t) t.textContent = whTotal(ev.target.value, c.button); } }),
+          h("small", { class: "hint" }, whTotal(c.spins, c.button))),
         h("label", {}, h("span", { class: "lab" }, "Coins to keep"),
           h("input", { type: "number", min: 0, value: c.reserve || "", placeholder: "0", onchange: (ev) => set({ reserve: ev.target.value }) }),
           h("small", { class: "hint" }, "Never go below this many.")),
