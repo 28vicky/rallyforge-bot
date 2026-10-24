@@ -832,6 +832,10 @@ class Device:
     def _run(self, *a, timeout=20):
         if len(a) > 1 and a[0] == "shell" and a[1] == "input":      # a tap / swipe / text: never while the instance is paused
             pause_gate()
+            dl = getattr(_TL, "duty_deadline", None)         # a duty over its time budget: its next action aborts it (the runner
+            if dl and time.time() > dl:                       # then closes pop-ups, leaves to the city and tries once more)
+                _TL.duty_deadline = None
+                raise RuntimeError("took too long - stopped (a window or page it does not know?)")
         return subprocess.run([self.adb, "-s", self.serial, *a], capture_output=True,
                               timeout=timeout, creationflags=NOWIN)
 
@@ -13083,6 +13087,9 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                 if attempt:
                     log(f"[*] Restarting '{shown}' from the city view (attempt {attempt + 1})")
                     nav_state.clear()
+                # time budget per duty (Kiravik 24 Oct 15:14: Champions sat on a purchase page for 10+ min with no log line):
+                # 20 min, 50 for the city map; over it, the next tap aborts the duty and the attempt-2 path takes over
+                _TL.duty_deadline = time.time() + (50 if duty_id == "map_city" else 20) * 60
                 if not ensure_view(dev, cfg, stop, log, "city") and not stop.is_set():
                     log("[!] Could not get back to the city view")
                 clear_popups(dev, cfg, log, stop)            # close offers / pop-ups first, then do the task
@@ -13104,6 +13111,8 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
             except Exception as e:
                 log(f"[!] {'Duty' if duty_id else 'City task'} '{shown}' failed: {e}")
                 result = (False, str(e)[:120])
+            finally:
+                _TL.duty_deadline = None
             if stop.is_set() or (result and result[0]):
                 break
             dev.expect_city = False
