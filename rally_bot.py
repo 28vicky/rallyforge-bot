@@ -8518,6 +8518,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         elif r == "complete":
             rd_nothing()
             return None                                    # this daily is already complete today: nothing to open
+        if r and task.get("go_page") == "wheel" and wheel_on_page(dev.screenshot()):
+            return True                                    # Go on the Wheel tile opens the Wheel page itself (no Tavern menu)
         if r and (not bname or open_building_here(dev, cfg, log, stop, bname.strip())):
             return True
         if not bname:
@@ -9639,7 +9641,8 @@ def wheel_add_chips(dev, conf, coins, log, stop):
     """Wheel page is open: top up the coins from chip items the account already owns (setting "needed" or "all").
     "needed" adds 1K items for the spins still to do (+ the coins to keep); with "until out" it uses them all."""
     mode = conf.get("chips", "off")
-    target, big = int(conf["spins"] or 0), int(conf["button"])
+    big = int(conf["button"])
+    target = int(conf["spins"] or 0) * big                 # presses x button = spins
     if mode == "off":
         return
     need = None
@@ -9678,7 +9681,7 @@ def run_wheel(dev, cfg, log, stop):
     The reward panel is closed by tapping its Continue / empty ground. Only the three Spin buttons are ever pressed."""
     conf = wheel_conf(cfg)
     big = int(conf["button"]) if int(conf["button"]) in WHEEL_BTN else 100
-    target = int(conf["spins"] or 0)                       # 0 = until the coins are used up
+    target = int(conf["spins"] or 0) * big                 # "spins" = presses of the chosen button (owner 25 Oct); 0 = until the coins are used up
     reserve = int(conf["reserve"] or 0)
     shot = dev.screenshot()
     if not wheel_on_page(shot):
@@ -9718,22 +9721,28 @@ def run_wheel(dev, cfg, log, stop):
             log(f"[+]  Wheel: stopped after {done} spin(s) - {coins:,} coins left (cost/keep-at-least {reserve:,})")
             break
         dev.tap(*WHEEL_BTN[pick])
-        shown = False
+        shown = spent = False
         for _ in range(14):
             _nap(stop, 0.5, 0.7)
-            if wheel_reward_panel(dev.screenshot()):
+            s2 = dev.screenshot()
+            if wheel_reward_panel(s2):
                 shown = True
                 break
-        if not shown:
+            c2 = wheel_coins(s2) if wheel_on_page(s2) else None
+            if c2 is not None and coins - c2 >= WHEEL_COST[pick]:      # Spin once shows no panel: the coins dropping = it spun
+                spent = True
+                _nap(stop, 1.5, 2.0)                       # let the wheel stop turning
+                break
+        if not (shown or spent):
             fails += 1
-            log(f"[i]   Wheel: no reward panel after the {pick}-spin button ({fails}/3)")
+            log(f"[i]   Wheel: the {pick}-spin button did not spin ({fails}/3)")
             if fails >= 3:
                 break
             continue
         fails = 0
         done += pick
         log(f"[i]   Wheel: {done} spin(s) done ({coins - WHEEL_COST[pick]:,} coins left)")
-        for _ in range(4):                                 # close the panel: Continue, else empty ground
+        for _ in range(4 if shown else 0):                                 # close the panel: Continue, else empty ground
             dev.tap(270, 754)
             _nap(stop, 0.8, 1.1)
             if not wheel_reward_panel(dev.screenshot()):
@@ -12453,8 +12462,8 @@ DUTY_LIBRARY = [
      "note": "Keep > Champions: 15 taps and 10 greetings a day on the champions you pick (only active ones). Needs the city map (Keep).",
      "target": "go:Greet Champion|Keep", "tap_dy": 0, "steps": ["wait 1.2", "champions"]},
     {"id": "wheel", "group": "Daily activities", "title": "Wheel of Fortune", "every_min": 0, "verified": False,
-     "note": "Tavern > Wheel of Fortune: spins with the button you pick (1 / 10 / 100) for the number of spins you set, or until the coins are used up. Needs the city map (Tavern).",
-     "target": "go:Wheel of Fortune|Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "wheel"]},
+     "note": "Tavern > Wheel of Fortune: presses the Spin button you pick (once / x10 / x100) the number of times you set, or until the coins are used up. Needs the city map (Tavern).",
+     "target": "go:Wheel of Fortune|Tavern", "tap_dy": 0, "no_tile": True, "go_page": "wheel", "steps": ["wait 1.5", "ring_name Tavern", "wheel"]},
     {"id": "crazy_eggs", "group": "Common tasks", "title": "Crazy Eggs", "every_min": 1, "verified": False,
      "note": "Smashes the ready eggs, closes the reward panel, comes back when each timer ends; Lucky Hammer once a day on the egg you pick.",
      "target": "tpl:event_center_icon|Center",
