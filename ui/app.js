@@ -43,7 +43,25 @@ async function api(name, body, opts) {
     if (!opts.quiet) toast(j.error || "Something went wrong.", "error");
     throw new Error(j.error || "error");
   }
+  if (j._saved) syncSaved(j._saved);
   return j;
+}
+// The duty APIs save on the server; copy what they stored into the page's settings, so the page autosave never writes an
+// older copy back (an unticked duty came back on, owner 24 Oct). Unsaved edits elsewhere on the page stay as they are.
+function syncSaved(sv) {
+  if (!S.cfg) return;
+  const clean = typeof AUTO !== "undefined" && cfgSnap() === AUTO.saved;
+  let tgt = S.cfg;
+  if (sv.serial) {
+    S.cfg.per_device = S.cfg.per_device || {};
+    tgt = S.cfg.per_device[sv.serial];
+    if (!tgt) { if (!Object.keys(sv.vals).length) return; tgt = S.cfg.per_device[sv.serial] = {}; }
+  }
+  for (const k of ["duties", "crazy_eggs", "champions", "wheel"]) {
+    if (k in sv.vals) tgt[k] = sv.vals[k];
+    else if (sv.serial) delete tgt[k];
+  }
+  if (clean) AUTO.saved = AUTO.seen = cfgSnap();
 }
 const act = (p) => p.catch(() => null);          // swallow: the error was already shown as a toast
 
@@ -1132,4 +1150,127 @@ function undoLast() {
     scan(p);
   };
   start();
+})();
+
+// ====================================================================== C13: the app's own dropdown (no native popup)
+// Every <select> keeps working as before (its value, options and change handlers are untouched - saved settings never
+// change); only the open list is ours: the app's surface and colours, tinted group headers, a search box on long lists,
+// keyboard support. The native popup is white on the ivory app and its group headers cannot be styled (owner 24 Oct).
+(() => {
+  let open = null;                                     // { sel, panel, items, active, onKey }
+  const SEARCH_AT = 9;                                 // lists this long get a search box
+  const close = (refocus) => {
+    if (!open) return;
+    const { sel, panel } = open;
+    panel.remove(); document.removeEventListener("keydown", open.onKey, true);
+    sel.classList.remove("pick-open"); sel.setAttribute("aria-expanded", "false");
+    open = null;
+    if (refocus) sel.focus({ preventScroll: true });
+  };
+  const choose = (sel, v) => {
+    close(true);
+    if (sel.value === v) return;
+    sel.value = v;
+    sel.dispatchEvent(new Event("input", { bubbles: true }));
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  const setActive = (i) => {
+    const vis = open.items.filter((it) => !it.el.hidden && !it.dis);
+    if (!vis.length) { open.active = null; return; }
+    const cur = vis.indexOf(open.active), n = vis.length;
+    const next = i === "first" ? vis[0] : i === "last" ? vis[n - 1] : vis[Math.max(0, Math.min(n - 1, (cur < 0 ? (i > 0 ? -1 : n) : cur) + i))];
+    open.items.forEach((it) => it.el.classList.toggle("act", it === next));
+    open.active = next; next.el.scrollIntoView({ block: "nearest" });
+  };
+  const openPick = (sel) => {
+    if (open && open.sel === sel) { close(true); return; }
+    close(false);
+    if (sel.disabled) return;
+    const list = h("div", { class: "pick-list", role: "listbox" });
+    const items = [];
+    const addOpt = (o, inGroup) => {
+      const it = { v: o.value, t: o.textContent, dis: o.disabled, el: null, head: null };
+      it.el = h("div", { class: "pick-o" + (inGroup ? " ing" : "") + (o.value === sel.value ? " cur" : "") + (o.disabled ? " dis" : ""), role: "option",
+        "aria-selected": o.value === sel.value ? "true" : "false",
+        onmousedown: (e) => e.preventDefault(), onclick: () => { if (!it.dis) choose(sel, it.v); },
+        onmousemove: () => { if (open && open.active !== it && !it.dis) { open.items.forEach((x) => x.el.classList.toggle("act", x === it)); open.active = it; } } },
+        h("span", { class: "pick-t" }, o.textContent), o.value === sel.value ? h("span", { class: "pick-ck", "aria-hidden": "true" }, "✓") : null);
+      items.push(it); list.appendChild(it.el); return it;
+    };
+    for (const c of sel.children) {
+      if (c.tagName === "OPTGROUP") {
+        const head = h("div", { class: "pick-h", role: "presentation" }, c.label);
+        list.appendChild(head);
+        for (const o of c.children) addOpt(o, true).head = head;
+      } else if (c.tagName === "OPTION") addOpt(c, false);
+    }
+    const empty = h("div", { class: "pick-empty", hidden: true }, "No matches");
+    list.appendChild(empty);
+    let search = null;
+    if (items.length >= SEARCH_AT) {
+      search = h("input", { type: "search", class: "pick-s", placeholder: "Search…", "aria-label": "Search the list", autocomplete: "off" });
+      search.addEventListener("input", () => {
+        const q = search.value.trim().toLowerCase();
+        const heads = new Map();
+        for (const it of items) {
+          const hit = !q || it.t.toLowerCase().includes(q);
+          it.el.hidden = !hit;
+          if (it.head) heads.set(it.head, (heads.get(it.head) || false) || hit);
+        }
+        heads.forEach((any, hd) => { hd.hidden = !any; });
+        empty.hidden = items.some((it) => !it.el.hidden);
+        if (!empty.hidden) empty.textContent = "No matches for “" + search.value.trim() + "”";
+        open.active = null; setActive("first");
+      });
+    }
+    const panel = h("div", { class: "pick", role: "dialog", "aria-label": sel.getAttribute("aria-label") || "Choose" }, search, list);
+    document.body.appendChild(panel);
+    // place it under the box (or above when there is no room), at least as wide as the box
+    const r = sel.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    const w = Math.min(Math.max(r.width, 220), vw - 16);
+    panel.style.width = w + "px";
+    panel.style.left = Math.max(8, Math.min(r.left, vw - w - 8)) + "px";
+    const below = vh - r.bottom - 12, above = r.top - 12;
+    const up = below < 240 && above > below;
+    const room = Math.max(160, Math.min(420, up ? above : below));
+    panel.style.maxHeight = room + "px";
+    if (up) panel.style.bottom = (vh - r.top + 6) + "px"; else panel.style.top = (r.bottom + 6) + "px";
+    sel.classList.add("pick-open"); sel.setAttribute("aria-expanded", "true");
+    const onKey = (e) => {
+      if (!open) return;
+      const k = e.key;
+      if (k === "Escape") { e.preventDefault(); e.stopPropagation(); close(true); }
+      else if (k === "Tab") close(false);
+      else if (k === "ArrowDown") { e.preventDefault(); setActive(1); }
+      else if (k === "ArrowUp") { e.preventDefault(); setActive(-1); }
+      else if (k === "Home" && !search) { e.preventDefault(); setActive("first"); }
+      else if (k === "End" && !search) { e.preventDefault(); setActive("last"); }
+      else if (k === "Enter") { e.preventDefault(); if (open.active) choose(sel, open.active.v); }
+      else if (!search && k.length === 1 && /\S/.test(k)) {        // short lists: jump to the next item starting with the letter
+        const vis = items.filter((it) => !it.dis), from = vis.indexOf(open.active);
+        const hit = vis.slice(from + 1).concat(vis.slice(0, from + 1)).find((it) => it.t.trim().toLowerCase().startsWith(k.toLowerCase()));
+        if (hit) { items.forEach((x) => x.el.classList.toggle("act", x === hit)); open.active = hit; hit.el.scrollIntoView({ block: "nearest" }); }
+      }
+    };
+    open = { sel, panel, items, active: null, onKey };
+    document.addEventListener("keydown", onKey, true);
+    const cur = items.find((it) => it.v === sel.value && !it.dis);
+    if (cur) { open.active = cur; cur.el.classList.add("act"); cur.el.scrollIntoView({ block: "center" }); } else setActive("first");
+    (search || panel).focus({ preventScroll: true });
+    if (!search) panel.tabIndex = -1, panel.focus({ preventScroll: true });
+  };
+  const ours = (t) => t && t.tagName === "SELECT" && !t.multiple && !(t.size > 1);
+  document.addEventListener("mousedown", (e) => {
+    if (open && !open.panel.contains(e.target) && e.target !== open.sel) close(false);
+    if (e.button !== 0 || !ours(e.target)) return;
+    e.preventDefault();                                // no native popup
+    e.target.focus({ preventScroll: true });
+    openPick(e.target);
+  }, true);
+  document.addEventListener("keydown", (e) => {
+    if (open || !ours(e.target)) return;
+    if ([" ", "Enter", "ArrowDown", "ArrowUp"].includes(e.key) || (e.altKey && e.key === "ArrowDown")) { e.preventDefault(); openPick(e.target); }
+  }, true);
+  window.addEventListener("resize", () => close(false));
+  document.addEventListener("scroll", (e) => { if (open && !open.panel.contains(e.target)) close(false); }, true);
 })();

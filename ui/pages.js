@@ -1549,12 +1549,13 @@ const DUTY_UI = {
   activity_chests: ["Reward claims", "Activity chests", 0],
 };
 const DUTY_COMING = ["Construction", "Research", "Material composing", "General enhancing", "Patrol", "Relic exploration", "Resource gathering"];
-const DUTY_TEST = new Set(["reach_keep_tavern", "market_capture", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy"]);   // developer builds only (C12)
+const DUTY_TEST = new Set(["reach_keep_tavern", "market_capture", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy", "test_learned_keep", "test_activity_go"]);   // developer builds only (C12)
 const ACT_MAX = 145;                                                     // the game's last Activity chest
 const DUTY_ORDER = (id) => { const i = Object.keys(DUTY_UI).indexOf(id); return i < 0 ? 999 : i; };   // the game's Activity order
 const dutyName = (id, t) => (DUTY_UI[id] ? DUTY_UI[id][1] : t);
 const dutyGroup = (id, g) => (DUTY_UI[id] ? DUTY_UI[id][0] : g === "Reward claims" ? g : "City");
 const dutyShown = (id) => S.dev || !DUTY_TEST.has(id);
+const RUN_SETUP = new Set(["map_city"]);              // one-time jobs: Run now lists them under Setup, on top
 // C7: one status badge, one vocabulary (Done 07:23 · Done for today · Due · Next 08:01 · Retrying 08:30 · Gave up · Running now)
 const BADGE_CLS = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad", run: "run" };
 function dutyBadge(status, text, tip) {
@@ -1591,19 +1592,20 @@ PAGES.duties = function (fixed) {
   const serial = fixed || "";                     // "" = the universal defaults (Control settings); an instance id = its Routines
   const root = h("div", { class: "dutypage" });
   let rows = [], own = {}, count = null, lastKey = "";
-  const ov = serial ? ((S.cfg.per_device = S.cfg.per_device || {})[serial] = S.cfg.per_device[serial] || {}) : null;
+  const ovGet = () => (serial ? ((S.cfg.per_device || {})[serial] || null) : null);     // read only: opening the page writes nothing
+  const ovMake = () => ((S.cfg.per_device = S.cfg.per_device || {})[serial] = S.cfg.per_device[serial] || {});
   const take = (j) => { if (!j) return; rows = j.duties; own = j.own || {}; count = j.count || null; draw(); };
   const nowText = () => (((S.now && S.now[serial]) || {}).text || "").toLowerCase();
   // My tasks (your own tap lists) is one more row in the same list; its switch is the old 'Do the tasks' (city_enabled)
-  const tasksOn = () => (ov && ov.city_enabled !== undefined ? ov.city_enabled : S.cfg.city_enabled) !== false;
-  const nTasks = () => ((ov && ov.city_tasks) || S.cfg.city_tasks || []).length;
-  const list = () => rows.filter((r) => dutyShown(r.id)).map((r) => {
+  const tasksOn = () => { const ov = ovGet(); return (ov && ov.city_enabled !== undefined ? ov.city_enabled : S.cfg.city_enabled) !== false; };
+  const nTasks = () => { const ov = ovGet(); return ((ov && ov.city_tasks) || S.cfg.city_tasks || []).length; };
+  const list = () => rows.filter((r) => dutyShown(r.id) && !RUN_SETUP.has(r.id)).map((r) => {     // one-time jobs live in Run now, not as switches
     const run = serial && r.on && nowText() && nowText().includes(String(r.title).toLowerCase());
     return Object.assign({}, r, { g: dutyGroup(r.id, r.group), t: dutyName(r.id, r.title), pts: DUTY_UI[r.id] ? DUTY_UI[r.id][2] : 0, status: run ? "run" : r.status });
   }).sort((a, b) => DUTY_ORDER(a.id) - DUTY_ORDER(b.id)).concat([{ id: "@tasks", g: "My tasks", t: "My tasks", pts: 0, on: tasksOn(), status: "off",
     schedule: nTasks() ? nTasks() + " tap list" + (nTasks() > 1 ? "s" : "") + ", run when no rally is waiting" : "Your own tap lists - none yet" }]);
   const setOn = async (r, v) => {
-    if (r.id === "@tasks") { if (ov) ov.city_enabled = v; else S.cfg.city_enabled = v; draw(); return; }   // page autosave
+    if (r.id === "@tasks") { if (serial) ovMake().city_enabled = v; else S.cfg.city_enabled = v; draw(); return; }   // page autosave
     take(await act(api("duty_set", { serial, id: r.id, on: v })));
   };
   // a duty's own settings (Resource Tax resource, training amount, speed-ups ...), saved with the duty
@@ -1826,12 +1828,13 @@ function runNowCard(serial) {
     for (const t of j.tasks || []) {
       const id = t.id.startsWith("duty:") ? t.id.slice(5) : "";
       if (id && !dutyShown(id)) continue;
-      const g = id ? dutyGroup(id, t.group) : "My tasks";
+      // one-time jobs on top (Setup), developer test duties in their own group at the bottom - never mixed into City
+      const g = !id ? "My tasks" : RUN_SETUP.has(id) ? "Setup" : DUTY_TEST.has(id) ? "Testing (developer)" : dutyGroup(id, t.group);
       (groups[g] = groups[g] || []).push([t.id, id ? dutyName(id, t.title) : t.title]);
     }
-    const go = h("button", { class: "btn", type: "button", disabled: !pick, onclick: () => { if (pick) set("run_now_add", { id: pick }); } }, "Run now");
+    const go = h("button", { class: "btn", type: "button", disabled: !pick, onclick: () => { if (pick) { const id = pick; pick = ""; set("run_now_add", { id }); } } }, "Run now");
     const s = h("select", { "aria-label": "Task to run", onchange: (e) => { pick = e.target.value; go.disabled = !pick; } }, h("option", { value: "" }, "Pick a task\u2026"),
-      DUTY_GROUPS.filter((g) => groups[g]).map((g) => h("optgroup", { label: g }, groups[g].map(([v, t]) => h("option", { value: v, selected: v === pick }, t)))));
+      ["Setup", ...DUTY_GROUPS, "Testing (developer)"].filter((g) => groups[g]).map((g) => h("optgroup", { label: g }, groups[g].map(([v, t]) => h("option", { value: v, selected: v === pick }, t)))));
     root.append(...[h("div", { class: "cardhead" }, h("h3", {}, "Run a task now")),
       h("small", { class: "sub" }, serial ? "Runs once, before anything else, then the bot carries on." : "Runs once on every instance, before anything else."),
       h("div", { class: "runrow" }, s, go),

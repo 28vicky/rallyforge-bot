@@ -1603,3 +1603,26 @@ a.lnk,.lnkb,.viewall,.vlink{display:inline-flex;align-items:center;min-height:28
 :root .tlist th{color:var(--mute);letter-spacing:0}
 .ithead{color:var(--fg)}
 .spb .fgrid label.tgl{flex-direction:row;align-items:center;gap:10px}
+
+/* ---------- C13: the app's own dropdown list (ui/app.js) - same surface as the app, never a white system popup */
+.pick{position:fixed;z-index:9500;display:flex;flex-direction:column;background:var(--bgc);color:var(--fg);border:var(--bd);
+  border-radius:var(--r2);box-shadow:0 14px 36px rgba(31,41,55,.18),0 2px 6px rgba(31,41,55,.08);overflow:hidden;outline:none;
+  animation:pickIn .12s ease-out}
+@keyframes pickIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.pick [hidden]{display:none!important}
+.pick-s{margin:8px 8px 4px;width:auto!important;font-size:14px}
+.pick-list{overflow-y:auto;padding:4px 6px 6px;scrollbar-width:thin;scrollbar-color:var(--off) transparent;overscroll-behavior:contain}
+.pick-list::-webkit-scrollbar{width:8px}
+.pick-list::-webkit-scrollbar-thumb{background:var(--off);border-radius:8px;border:2px solid var(--bgc)}
+.pick-list::-webkit-scrollbar-track{background:transparent}
+.pick-h{position:sticky;top:-4px;z-index:1;margin:6px -6px 2px;padding:6px 14px;background:var(--side);border-top:var(--bd);border-bottom:var(--bd);
+  font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
+.pick-h:first-child{margin-top:-4px;border-top:0}
+.pick-o{display:flex;align-items:center;gap:10px;min-height:34px;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:14px;line-height:1.3}
+.pick-o .pick-t{flex:1;min-width:0}
+.pick-o.act{background:var(--line)}
+.pick-o.cur{color:var(--accent);font-weight:600}
+.pick-o .pick-ck{color:var(--accent);font-weight:700}
+.pick-o.dis{opacity:.45;cursor:default}
+.pick-empty{padding:14px 10px;color:var(--mute);font-size:13.5px;text-align:center}
+select.pick-open{border-color:var(--accent1)}

@@ -1691,7 +1691,8 @@ class Api:
         return rows
 
     # test duties: never shown to users and never counted (C8 / C12)
-    TEST_DUTIES = ("reach_keep_tavern", "market_capture", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy")
+    TEST_DUTIES = ("reach_keep_tavern", "market_capture", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy",
+                   "test_learned_keep", "test_activity_go")
 
     def _duty_count(self, serial, cfg=None):
         """The one 'done / on' count every screen shows (C8): duties switched on (test duties left out) and how many of
@@ -1713,10 +1714,16 @@ class Api:
         ov = (self.c.cfg.get("per_device") or {}).get(scope, {}) if scope else {}
         return {"duties": "duties" in ov, "crazy_eggs": "crazy_eggs" in ov, "champions": "champions" in ov, "wheel": "wheel" in ov}
 
+    def _saved(self, scope):
+        """What is stored now for this scope's own keys - the page copies it into its settings so the page autosave
+        never writes an older copy back over a switch saved here (duty switch came back on, owner 24 Oct)."""
+        src = ((self.c.cfg.get("per_device") or {}).get(scope) or {}) if scope else self.c.cfg
+        return {"serial": scope, "vals": {k: src[k] for k in self.OWN_KEYS_COPY if k in src}}
+
     def duties(self, p):
         scope = self._scope(p)
         return {"duties": self._duty_rows(scope), "serial": scope, "own": self._own(scope),
-                "count": self._duty_count(scope) if scope else None}
+                "count": self._duty_count(scope) if scope else None, "_saved": self._saved(scope)}
 
     def duties_copy(self, p):
         """'Copy from another instance...' on Routines: this instance gets the other one's duties and their settings
@@ -1877,7 +1884,7 @@ class Api:
         c = rb.ce_conf(self._eff(scope))
         serial = scope or (self.c.devices[0]["id"] if self.c.devices else "default")
         row = rb.ce_row(serial)
-        return {"conf": c, "costs": rb.CE_COSTS, "lucky_used": row.get("lucky_day") == rb._game_day(), "own": self._own(scope),
+        return {"conf": c, "costs": rb.CE_COSTS, "lucky_used": row.get("lucky_day") == rb._game_day(), "own": self._own(scope), "_saved": self._saved(scope),
                 "smashes": row.get("smashes") if row.get("smash_day") == rb._game_day() else {}}
 
     def crazy_eggs_set(self, p):
@@ -1935,7 +1942,7 @@ class Api:
 
     def wheel(self, p):
         scope = self._scope(p)
-        return {"conf": rb.wheel_conf(self._eff(scope)), "own": self._own(scope)}
+        return {"conf": rb.wheel_conf(self._eff(scope)), "own": self._own(scope), "_saved": self._saved(scope)}
 
     def wheel_set(self, p):
         scope = self._scope(p)
@@ -1952,7 +1959,7 @@ class Api:
         serial = scope or (self.c.devices[0]["id"] if self.c.devices else "default")
         row = rb.ch_row(serial)
         day = rb._game_day()
-        return {"plan": conf["plan"], "names": rb.CHAMPIONS, "max_taps": rb.CH_TAPS, "max_greets": rb.CH_GREETS, "own": self._own(scope),
+        return {"plan": conf["plan"], "names": rb.CHAMPIONS, "max_taps": rb.CH_TAPS, "max_greets": rb.CH_GREETS, "own": self._own(scope), "_saved": self._saved(scope),
                 "taps": row.get("taps") if row.get("taps_day") == day else {}, "greets": row.get("greets") if row.get("greets_day") == day else {}}
 
     def champions_set(self, p):
