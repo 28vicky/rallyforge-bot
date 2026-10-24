@@ -2134,8 +2134,10 @@ def _refill_once(dev, cfg, log, stop, needed):
         return bool(find_text(shot, ["Own:", "Own"], region=(60, 310, 300, 80), cutoff=0.6)) and \
             bool(find_text(shot, ["Max", "Minimum"], region=(60, 650, 420, 70), cutoff=0.8))
 
-    for size in sizes:                                       # every size in the chosen order until the march has enough
+    for size in sizes + ["any"]:                             # every size in the chosen order, then any Use button left
         if stop.is_set():
+            break
+        if size == "any" and used_any:
             break
         if not on_items:
             if not _open_use_item():
@@ -2143,20 +2145,28 @@ def _refill_once(dev, cfg, log, stop, needed):
                 break
             on_items = True
         shot = dev.screenshot()
-        ry = _row_y(shot, size)
-        if not ry:
-            continue                                        # the account has none of this size / not a size we know
-        use = find_text(shot, ["Use"], region=(330, ry + 10, 200, 80))
-        if not use:                                         # no 'Use' = none owned; the button shows a gem price - never tap it
-            log(f"[i] Stamina: no {size}-stamina items (only a gem price) - next size")
-            continue
+        if size == "any":                                   # the size labels could not be read (e.g. '100' misread): every row on this
+            _stamina_snap(shot, "items_list")               # screen is a stamina item, so any 'Use' button (never a gem price) is fine
+            use = find_text(shot, ["Use"], region=(330, 300, 200, 640))
+            if not use:
+                log("[i] Stamina: no Use button on the stamina item list - no items owned")
+                break
+            size = "other"
+        else:
+            ry = _row_y(shot, size)
+            if not ry:
+                continue                                    # the account has none of this size / not a size we know
+            use = find_text(shot, ["Use"], region=(330, ry + 10, 200, 80))
+            if not use:                                     # no 'Use' = none owned; the button shows a gem price - never tap it
+                log(f"[i] Stamina: no {size}-stamina items (only a gem price) - next size")
+                continue
         dev.tap(*use)
         nap(1.0, 1.4)
         shot = dev.screenshot()
         if not _dialog_open(shot):                          # slow emulator: look again, then tap Use once more before giving up
             nap(1.0, 1.4)
             shot = dev.screenshot()
-        if not _dialog_open(shot) and screen_state(shot, cfg) != "march" and _row_y(shot, size):
+        if not _dialog_open(shot) and screen_state(shot, cfg) != "march" and (size == "other" or _row_y(shot, size)):
             dev.tap(*use)
             nap(1.2, 1.6)
             shot = dev.screenshot()
@@ -14452,7 +14462,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     sta = read_stamina(dev.screenshot())
                     if sta and sta[0] < sta[1]:
                         log(f"[!] Not enough stamina ({sta[0]:,} of {sta[1]:,}) - using stamina items")
-                        if not refill_stamina(dev, cfg, log, stop, sta[1]):
+                        if refill_stamina(dev, cfg, log, stop, sta[1]):
+                            if ctl is not None:
+                                ctl.no_stamina = 0           # refilled: the "no stamina" chip must go away at once
+                        else:
                             log("[!] Could not get enough stamina - skipping this rally")
                             if ctl is not None:
                                 ctl.no_stamina += 1
