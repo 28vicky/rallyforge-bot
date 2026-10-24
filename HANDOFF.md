@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## LATEST (24 Oct 22:35 IST) - 2.5.12 PUBLISHED: Black Market 'Pay with' now sets every chosen item (was: default for new items only -> 'all 3 tabs look the same'); duty status says why BM stopped + gems read; debug/bm_totals_<serial>.png saved each visit. OPEN: Manhattan's gems read as 32,750 (owner: ~400k) -> market_totals crop x 265-540 probably cuts the first digit of a 6-digit total; fix from bm_totals picture. GG (tester PC) same symptom - get their log/picture.
+
 ## LATEST (24 Oct 22:15 IST) - 2.5.11 PUBLISHED: account/payment window (DANGER_PATTERNS) is closed with Cancel / No / X / Back - never confirmed, no game restart (owner: Evony has many pop-ups). Everything else as 2.5.10.
 
 ## LATEST (24 Oct 22:10 IST) - 2.5.10 PUBLISHED (check_release OK). Stamina: 2.5.9 could not see the green 'Use (n)' button (white text on green, full-screen OCR reads nothing) -> _stamina_use_button finds it by colour + reads its own label; full mode fills to STAMINA_CAP 9,999 with every size (slider set to what fits, -/+ fine-tune, then next size; simulated K 18 -> 9,998). Live 22:04: Rory + K used items (owner confirmed). Self-healing: start_instance never ends on its own - restarts the emulator (1..10 min backoff); safety window / ring menu restart Evony instead of stopping; only Stop / max joins end an instance. NOTE for PC deploys: the app auto-installs updates into app\v<version>\ and switches current.txt - deploy into the folder current.txt names (kiravik PC ran v2.5.9 while fixes went to v2.4.99).
