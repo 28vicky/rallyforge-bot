@@ -3630,6 +3630,21 @@ def _poplib_learn(pending, shot, log):
             log(f"[i] Learned how to close pop-up {k}: {how} at {tuple(v['xy'])}")
 
 
+def popup_seen(dev, shot, how):
+    """Keep the picture of every pop-up / page the bot closed WITHOUT knowing it (by X, by a tap outside, by Back): the
+    library in debug\\popups grows by itself and recurring ones become popup_* pictures (owner 24 Oct). Newest 300 kept."""
+    try:
+        d = USER / "debug" / "popups"
+        d.mkdir(parents=True, exist_ok=True)
+        serial = re.sub(r"\W", "_", str(getattr(dev, "serial", "")))
+        cv2.imwrite(str(d / f"{time.strftime('%Y%m%d_%H%M%S')}_{serial}_{how}.png"), shot)
+        old = sorted(d.glob("*.png"), key=lambda q: q.stat().st_mtime)
+        for q in old[:-300]:
+            q.unlink()
+    except Exception as _e:
+        quiet_err("popup_seen", _e)
+
+
 def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
     """Close whatever covers the game (offers, event pop-ups, full-screen sales, dialogs) so the bot can carry on with
     what it was doing. Uses your popup_* pictures first; on a screen it does not know it presses Back, but only when it
@@ -3683,10 +3698,12 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
             cx = find_close_x(shot[90:810, 30:510])        # an event pop-up over the city (e.g. Server War): its X if it has one, else tap outside it
             if cx:
                 dev.tap(cx[0][0] + 30, cx[0][1] + 90)
+                popup_seen(dev, shot, "x")
                 log("[*] Closed an event pop-up over the city with its X button")
             else:
                 ox, oy = cfg.get("popup_outside_tap") or (8, 480)
                 dev.tap(int(ox), int(oy))
+                popup_seen(dev, shot, "outside")
                 log(f"[*] Event pop-up over the city has no X - tapped outside it ({ox},{oy})")
             closed += 1
             _nap(stop, 1.0, 1.5)
@@ -3721,6 +3738,7 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
         if _gold > 250 and back_arrow_taps < 6:            # a full page, not a pop-up: its Back arrow
             back_arrow_taps += 1
             dev.tap(*cfg.get("city_to_tap", (35, 35)))
+            popup_seen(dev, shot, "back")
             log("[*] A full page is open (not a pop-up) - tapped the Back arrow")
             closed += 1
             _nap(stop, 1.2, 1.8)
@@ -3739,6 +3757,7 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
         if cx:
             dev.tap(cx[0][0], cx[0][1])
             pending = (_ph, "x", cx[0][:2]) if _ph is not None else None
+            popup_seen(dev, shot, "x")
             log(f"[*] Closed a pop-up with its X button ({cx[0][0]},{cx[0][1]})")
             closed += 1
             _nap(stop, 0.8, 1.3)
@@ -3755,6 +3774,7 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
             ox, oy = cfg.get("popup_outside_tap") or (8, 480)
             dev.tap(int(ox), int(oy))
             pending = (_ph, "outside", (ox, oy)) if _ph is not None else None
+            popup_seen(dev, shot, "outside")
             log(f"[*] Unknown pop-up - no X button, tapped outside it ({ox},{oy})")
             closed += 1
             _nap(stop, 1.0, 1.5)
@@ -3764,6 +3784,7 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
             ox, oy = cfg.get("popup_x_tap") or (477, 141)
             dev.tap(int(ox), int(oy))
             pending = (_ph, "x spot", (ox, oy)) if _ph is not None else None
+            popup_seen(dev, shot, "xspot")
             log(f"[*] Unknown pop-up - tapping outside did not close it, tapped the usual X spot ({ox},{oy})")
             closed += 1
             _nap(stop, 1.0, 1.5)
