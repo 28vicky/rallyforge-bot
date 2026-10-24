@@ -14623,6 +14623,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 notify(cfg, serial, f"Joined rally #{joins}", "join")
                 if cfg["max_joins"] and joins >= cfg["max_joins"]:
                     log("[+] Reached max joins, stopping this instance.")
+                    stop.set()                               # a wanted stop: the instance must not start again by itself
                     return
                 nap(*cfg["cooldown_after_join"])
             else:
@@ -14690,23 +14691,32 @@ def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
 
     def work():
         try:
-            crashes = 0
-            while True:
+            fails = 0
+            while not ctl.stop.is_set():
+                # Owner rule (24 Oct): an instance never stays stopped with "Problem - see the log". Whenever the bot loop
+                # ends by itself (could not connect, gave up, crashed), restart the emulator and start again - waiting a
+                # little longer each time (1, 2, 3 ... 10 min) so a broken emulator cannot hammer the PC.
+                t_run = time.time()
                 try:
                     run_device(serial, adb, cfg, log, ctl.stop, on_frame, ctl)
-                    break
+                    if ctl.stop.is_set():
+                        break
+                    why = "the bot stopped by itself"
                 except Exception as e:                       # e.g. the PC ran out of memory for a moment: do not die silently
                     log(f"[!] {e}")
-                    crashes += 1
-                    if ctl.stop.is_set() or crashes > 6:
-                        if crashes > 6:
-                            log("[!] This instance crashed too many times - stopped.")
+                    if ctl.stop.is_set():
                         break
-                    import gc
-                    gc.collect()
-                    log(f"[*] This instance crashed - starting it again in 60 s ({crashes}/6)")
-                    if ctl.stop.wait(60):
-                        break
+                    why = f"it crashed ({type(e).__name__})"
+                fails = 1 if time.time() - t_run > 1800 else fails + 1     # a long good run starts the count again
+                import gc
+                gc.collect()
+                log(f"[!] This instance stopped ({why}) - restarting the emulator and starting again (try {fails})")
+                try:
+                    restart_emulator(Device(serial, adb), merge_device_cfg(cfg, serial), log, ctl.stop, why)
+                except Exception as e2:
+                    log(f"[!] Emulator restart did not work ({e2}) - trying again later")
+                if ctl.stop.wait(min(600, 60 * fails)):
+                    break
             merged = merge_device_cfg(cfg, serial)
             if merged.get("close_emulator_on_stop") and ctl.stop.is_set():      # stopped on purpose: free its RAM
                 close_emulator(Device(serial, adb), merged, log)
