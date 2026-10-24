@@ -105,7 +105,7 @@ const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", mon
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
   ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram & Discord"], ["reliability", "Reliability"],
-  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Themes"], ["license", "Account"],
+  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Appearance"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
 
@@ -200,7 +200,8 @@ function layout() {
       h("div", { class: "instfilter", id: "instFilter" }),
       h("div", { class: "inst-list", id: "instList" }),
       h("div", { class: "install", id: "instAll" }),
-      h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }),
+      h("div", { class: "sidefoot" }, h("div", { class: "whorow" }, h("div", { class: "whoami", id: "whoami" }),
+        DARK_ON ? h("button", { type: "button", class: "iconbtn", id: "modeBtn", onclick: quickMode }) : null),     // light / dark in one click from any screen
         // (ui-simple) Pause all / Stop all live only in the page header - one place for run controls
         h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
     h("div", { class: "main" },
@@ -208,8 +209,7 @@ function layout() {
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
         saveStEl(),
         h("button", { class: "btn sm newbtn", id: "newBtn", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "What\u2019s new"),
-        h("span", { class: "sum", id: "sum" }),
-        h("div", { class: "iconbtn", id: "modeBtn", title: "Dark / light", onclick: quickMode })),
+        h("span", { class: "sum", id: "sum" })),
       h("div", { class: "ribbon", id: "ribbon" }),
       h("div", { class: "tabs", id: "tabs" }),
       h("div", { class: "pages", id: "pages" })),
@@ -247,6 +247,7 @@ function renderModeIcon() {
   const dark = resolvedMode() === "dark";
   const b = $("#modeBtn");
   if (!b) return;
+  b.title = dark ? "Switch to light mode" : "Switch to dark mode"; b.setAttribute("aria-label", b.title);
   b.innerHTML = dark
     ? '<svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'
     : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
@@ -254,7 +255,7 @@ function renderModeIcon() {
 function quickMode() {
   setTheme(null, resolvedMode() === "dark" ? "light" : "dark");
   renderModeIcon();
-  if (S.sel === "control" && S.tab === "settings") renderPage();
+  if (S.sel === "control" && (S.tab === "settings" || S.tab === "themes")) rerender();       // the Light / Dark choice on the page follows
 }
 
 // ------------------------------------------------------------------ ribbon
@@ -628,7 +629,7 @@ const TAB_GROUPS = [
   ["duties", "Duties", null],
   ["market", "Market", null],
   // one row only (ui-simple): the rarely used pages live under More, grouped by small headings ("#...")
-  ["more", "More", ["logs", "reports", "#Setup", "settings", "reliability", "schedule", "#App", "updates", "telegram", "license"]],
+  ["more", "More", ["logs", "reports", "#Setup", "settings", "reliability", "schedule", "#App", "updates", "themes", "telegram", "license"]],
 ];
 function closeTabMenu() { const m = document.getElementById("tabmenu"); if (m) m.remove(); document.removeEventListener("mousedown", tabMenuOutside, true); document.removeEventListener("keydown", tabMenuKey, true); }
 function tabMenuOutside(e) { const m = document.getElementById("tabmenu"); if (m && !m.contains(e.target) && !e.target.closest(".tab.grp")) closeTabMenu(); }
