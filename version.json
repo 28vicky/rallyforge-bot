@@ -1,9 +1,9 @@
 {
-  "version": "2.5.8",
-  "notes": "2.5.8: Map my city (keyframe city map, City map card with building progress), Auto-Join switch, Start with Windows, consistent UI; fixes: frozen game, purchase page, Appearance, Stop, mouse, restart lock, Exit box, Champions Greet",
+  "version": "2.5.9",
+  "notes": "Stamina items are used reliably again (all sizes), so rallies are no longer skipped while you still have stamina items.",
   "files": {
     "rally_bot.py": {
-      "sha256": "6c38b03aec90362452bb0b5fa5f16f6a82378a91bde908c90b8314679141af49"
+      "sha256": "1e4f200ce668b1e5712a98d04fdd511125302fe0db4a9f0aafdac85650531ecf"
     },
     "web_app.py": {
       "sha256": "45bc32c1366e6023cca5f1ea3c053559a8e1f217fe15507206d3a58a081ae948"
@@ -18,7 +18,7 @@
       "sha256": "9e4be6ae10e966a20e8839d258cbd03e94c4b503d346087328560d1044418010"
     },
     "ui/changelog.js": {
-      "sha256": "ab13ce7908cd4eb6b7e09bdf2188f9c3ff4e758314dcaaed409bda78eb8049b9"
+      "sha256": "9be5658aa90966d4d4850cf761e43732c2009c36bc1360cba550e56e5b3b792e"
     },
     "ui/dialogs.js": {
       "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
@@ -1709,5 +1709,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "195160ec38f92c048e376b7f3c6759ae39a52dfc8a4abca642d768773cde68bf"
+  "sig": "3e9737c37588b994b850917f5fae35e8a9f1595d19a55d066e96a5b3340ffd49"
 }
