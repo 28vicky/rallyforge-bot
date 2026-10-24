@@ -4613,6 +4613,55 @@ def sync_monster_pack(log=print):
         sync_catalog_pack(log)
     except Exception as _e:
         quiet_err("sync_monster_pack", _e)
+    try:
+        sync_culture_pack(log)
+    except Exception as _e:
+        quiet_err("sync_monster_pack", _e)
+    return n
+
+
+_NAME_CUL = re.compile(r"^(?P<c>[a-z]{2,20})/(map\.json|pins\.json|feats\.npz|map\.jpg|kf_\d{2,3}\.jpg)$")
+
+
+def sync_culture_pack(log=print):
+    """The published list can carry the culture reference maps (cultures/<culture>/...). Only missing or changed files
+    are fetched; a culture whose map.json changed is reloaded."""
+    import urllib.parse
+    got = _LAST_MANIFEST[0]
+    if not got:
+        return 0
+    man, base = got
+    pack = man.get("cultures") or {}
+    root = USER / "cultures"
+    n, changed = 0, set()
+    for name, meta in pack.items():
+        try:
+            mm = _NAME_CUL.match(name)
+            if not mm or mm.group("c") not in CULTURES:
+                continue
+            want = str((meta or {}).get("sha256", ""))
+            target = root / name
+            if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == want:
+                continue
+            data = _download(urllib.parse.urljoin(base, (meta or {}).get("url", "cultures/" + urllib.parse.quote(name))), 8_000_000)
+            if hashlib.sha256(data).hexdigest() != want:
+                continue
+            if name.endswith(".jpg") and not data.startswith(b"\xff\xd8"):
+                continue
+            if name.endswith(".npz") and not data.startswith(b"PK"):
+                continue
+            if name.endswith(".json"):
+                json.loads(data.decode("utf-8"))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            changed.add(mm.group("c"))
+            n += 1
+        except Exception:
+            continue
+    for c in changed:
+        _CULTURE_MAPS.pop(c, None)
+    if n:
+        log(f"[+] City culture maps updated ({', '.join(sorted(changed))}).")
     return n
 
 
@@ -10819,13 +10868,29 @@ class CityMap:
         self.kf = []                                       # [(x, y, gray, keypoints)]
         self.index = None
         self.labels = self.pts = None
+        self.half = bool(self.meta.get("half"))            # shipped culture map: half-size pictures + precomputed features
         try:
             for v in self.meta.get("keyframes", []):
                 im = cv2.imread(str(path.parent / v["file"]), cv2.IMREAD_GRAYSCALE)
                 if im is not None:
+                    if self.half:                          # back to the view size for the pixel check (the shot is blurred the same way)
+                        im = cv2.resize(im, (CITY_VIEW[2], CITY_VIEW[3]), interpolation=cv2.INTER_LINEAR)
                     self.kf.append((float(v["x"]), float(v["y"]), im, None))
+            if self.meta.get("feats"):
+                self._load_feats(path.parent / self.meta["feats"])
         except Exception:
             self.kf = []
+
+    def _load_feats(self, p):
+        """Features computed at full size when the culture map was packed (cultures/<c>/feats.npz: pts, desc, label)."""
+        with np.load(str(p), allow_pickle=False) as z:
+            pts, desc, lab = z["pts"].astype(np.float32), z["desc"].astype(np.uint8), z["label"].astype(np.int64)
+        if len(desc) != len(pts) or len(desc) != len(lab) or not len(desc) or lab.max() >= len(self.kf):
+            raise ValueError("feats.npz does not fit map.json")
+        self.labels, self.pts = lab, pts
+        self.index = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=12, multi_probe_level=1), dict(checks=50))
+        self.index.add([desc])
+        self.index.train()
 
     def ok(self):
         return len(self.kf) >= 2
@@ -10876,6 +10941,9 @@ class CityMap:
                 if s:
                     cands.append((s[2], int(n), s[0], s[1]))
             cands.sort(reverse=True)
+            if self.half:                                  # same blur as the half-size keyframes
+                g = cv2.resize(cv2.resize(g, (g.shape[1] // 2, g.shape[0] // 2), interpolation=cv2.INTER_AREA),
+                               (g.shape[1], g.shape[0]), interpolation=cv2.INTER_LINEAR)
             for npts, n, dx, dy in cands[:4]:
                 if _kf_ncc(self.kf[n][2], g, dx, dy) >= KF_MIN_NCC:
                     return self.kf[n][0] - dx, self.kf[n][1] - dy, npts
@@ -10896,6 +10964,32 @@ def city_map(dev):
         m.meta["_mtime"] = p.stat().st_mtime
         _CITY_MAPS[key] = m
     return m if m.ok() else None
+
+
+# --- culture reference maps (24 Oct): one keyframe map per city culture, packed from the owner's own accounts and shipped
+#     with the app (cultures/<culture>/: map.json + feats.npz + kf_NN.jpg half-size grey + map.jpg). Read-only. -----------
+CULTURES = ("europe", "russia", "china", "korea", "japan", "arabia", "america")
+_CULTURE_MAPS = {}                                         # culture -> CityMap or None
+
+
+def culture_dir(name):
+    """The newest copy of a culture map: the one the update downloaded (USER) wins over the one in the installer (RES)."""
+    for root in (USER / "cultures", RES / "cultures"):
+        if (root / name / "map.json").exists():
+            return root / name
+    return None
+
+
+def culture_map(name):
+    """The shipped reference map of one culture (cached), or None when it is not on this PC."""
+    name = str(name or "").lower()
+    if name not in CULTURES:
+        return None
+    if name not in _CULTURE_MAPS:
+        d = culture_dir(name)
+        m = CityMap(d / "map.png") if d else None          # CityMap reads map.json next to it; map.png itself is not needed
+        _CULTURE_MAPS[name] = m if m is not None and m.ok() and m.index is not None else None
+    return _CULTURE_MAPS[name]
 
 
 def zoom_out_full(dev, cfg, stop, log):

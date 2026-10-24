@@ -29,7 +29,7 @@ def read(name):
 
 man = json.loads(read("version.json") or b"{}")
 bad = []
-for group in ("files", "templates", "monsters", "catalog"):
+for group in ("files", "templates", "monsters", "catalog", "cultures"):
     for name, meta in (man.get(group) or {}).items():
         data = read(urllib.parse.unquote(meta.get("url", name) if isinstance(meta, dict) else name))
         if not data or hashlib.sha256(data).hexdigest() != (meta or {}).get("sha256"):
