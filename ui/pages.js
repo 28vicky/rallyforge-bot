@@ -602,7 +602,7 @@ function instancePage(serial) {
         segPick(how, "m", [["game", "The game's Auto-Join", AJ_TIP], ["bot", "The bot joins with your presets", "The bot opens each rally and marches with your presets."]],
           { label: "How it joins", after: (v) => { ajSetOne(serial, v === "game"); rerender(); } }),
         h("p", { class: "hint", style: { marginTop: "8px" } }, "Have the Rally Monthly Card? Pick Auto-Join - no presets needed. You can change it any time with the Auto-Join switch at the top."));
-      return [lead, renderTodayCard(serial), h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, runNowCard(serial)))];
+      return [lead, renderTodayCard(serial), h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, cityMapCard(serial), runNowCard(serial)))];
     }],
     ["routines", "Routines", () => [PAGES.duties(serial)]],
     ["rally", "Rally setup", () => sections("rally", [
@@ -1837,6 +1837,68 @@ PAGES.duties = function (fixed) {
 
 // ====================================================================== Run a task now (C10): one component - instance Overview (this
 // instance) and Control > Dashboard (every instance). The bot does the picked task next, once, before everything else.
+// ---- City map card (instance Overview): is the city mapped, mapping progress, and the buildings the duties need -
+//      found (pinned on the map) / seen (picture only) / not yet - with a percentage. Buildings only, no small markers (owner 24 Oct).
+function cityMapCard(serial) {
+  const root = h("div", { class: "panel citymap" });
+  let last = null;
+  const nowText = () => (((S.now && S.now[serial]) || {}).text || "");
+  const paint = (j) => {
+    root.innerHTML = "";
+    const m = /Mapping (\d+) views/.exec(nowText());
+    const mapping = m ? parseInt(m[1], 10) : null;
+    const total = j.buildings.length, found = j.buildings.filter((b) => b.state === "found").length;
+    const pct = total ? Math.round(found * 100 / total) : 0;
+    const head = h("div", { class: "cardhead" },
+      h("div", {}, h("h3", {}, "City map"), h("small", { class: "sub" },
+        mapping !== null ? "Mapping now" : j.built ? "Mapped " + (j.at || "") + " · " + j.views + " views" : "Not mapped yet")),
+      mapping !== null ? h("span", { class: "dbadge run" }, "Mapping · " + mapping + " views")
+        : j.built ? h("span", { class: "dbadge ok" }, found + " of " + total + " buildings · " + pct + "%")
+        : h("span", { class: "dbadge" }, "Run Map my city"));
+    root.appendChild(head);
+    if (mapping !== null) {                               // a city at the widest zoom is ~50 views: the bar is a guide, not a promise
+      const est = Math.min(96, Math.round(mapping * 100 / Math.max(50, mapping + 4)));
+      root.appendChild(h("div", { class: "cmbar" }, h("div", { class: "cmfill", style: { width: est + "%" } })));
+      root.appendChild(h("p", { class: "hint" }, "The bot walks over the whole city once (about 20 minutes). The buildings below are pinned as the daily tasks open them."));
+    }
+    if (j.built && j.img) {
+      const img = h("img", { class: "cmimg", src: "/api/city_map_img?serial=" + encodeURIComponent(serial) + "&k=" + encodeURIComponent(window.KEY) + "&t=" + (j.at || ""), alt: "City map" });
+      const wrap = h("div", { class: "cmwrap" }, img);
+      if (j.size) for (const b of j.buildings) if (b.map) {
+        wrap.appendChild(h("span", { class: "cmpin", title: b.name, style: { left: (b.map[0] * 100 / j.size[0]) + "%", top: (b.map[1] * 100 / j.size[1]) + "%" } }));
+      }
+      root.appendChild(wrap);
+    }
+    if (!total) root.appendChild(h("p", { class: "hint" }, "No duty needs a building yet."));
+    else {
+      const STATE = { found: ["Found", "ok"], seen: ["Seen", "next"], none: ["Not yet", ""] };
+      root.appendChild(h("div", { class: "cmlist" }, j.buildings.map((b) => h("div", { class: "cmrow" + (b.on ? "" : " off"), title: "Needed by: " + b.duties.join(", ") + (b.on ? "" : " (switched off)") },
+        h("span", { class: "cmname" }, b.name), h("span", { class: "dbadge " + STATE[b.state][1] }, STATE[b.state][0])))));
+      root.appendChild(h("p", { class: "hint" }, found === total && total ? "Every building the duties need is on the map." :
+        "Found = the bot knows where it is on the map and goes straight there. Not yet = pinned the first time a daily task opens it (the Activity tile does that)."));
+    }
+    const run = async (again) => {
+      if (again && !(await confirmBox("Map again", "Map the city again? The current map and the found places are replaced (about 20 minutes)."))) return;
+      if (await act(api("run_now_add", { serial, id: "duty:map_city" }))) toast("Map my city runs next on this instance.", "ok");
+    };
+    root.appendChild(h("div", { class: "row", style: { justifyContent: "flex-end", marginTop: "10px" } },
+      mapping !== null ? null : btn(j.built ? "Map again" : "Map my city", () => run(j.built), j.built ? "sm" : "pri")));
+  };
+  const load = async () => {
+    const j = await api("city_map_info", { serial }).catch(() => null);
+    if (!j || !root.isConnected) return;
+    last = JSON.stringify(j) + "|" + nowText();
+    paint(j);
+  };
+  load();
+  const tick = setInterval(async () => {                 // refresh while mapping or when the map changed
+    if (!root.isConnected) { clearInterval(tick); return; }
+    const j = await api("city_map_info", { serial }).catch(() => null);
+    if (j && JSON.stringify(j) + "|" + nowText() !== last) { last = JSON.stringify(j) + "|" + nowText(); paint(j); }
+  }, 15000);
+  return root;
+}
+
 function runNowCard(serial) {
   const root = h("div", { class: "panel runnow" });
   let pick = "", last = "";

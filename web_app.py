@@ -20,6 +20,7 @@ import secrets
 import subprocess
 import sys
 import threading
+import types
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -2289,6 +2290,45 @@ class Api:
     def shot_take(self, p):
         return self.c.shot_from_device(p["serial"])
 
+    def city_map_info(self, p):
+        """The instance's city map for the City map card: built? views / date, mapping progress, and the buildings the
+        duties need - found (pinned on the map), seen (picture only) or not yet. Only buildings, no small markers (owner)."""
+        serial = p["serial"]
+        dev = types.SimpleNamespace(serial=serial)
+        d = rb._map_dir(dev)
+        meta = {}
+        try:
+            meta = json.loads((d / "map.json").read_text(encoding="utf-8"))
+        except Exception:
+            meta = {}
+        built = bool(meta.get("keyframes"))
+        rows = self._duty_rows(serial)                      # (the live "Mapping N views" progress is read by the page from the chip text)
+        on_ids = {r["id"] for r in rows if r["on"]}
+        need = {}                                          # building -> [duty titles]
+        for duty in rb.DUTY_LIBRARY:
+            t = str(duty.get("target", ""))
+            name = t.split("|")[-1].strip() if t.startswith(("go:", "via:")) and "|" in t else (t[8:].strip() if t.startswith("learned:") else "")
+            if name and not duty["id"].startswith("test_") and duty["id"] not in ("map_city",):
+                need.setdefault(name, {"on": False, "duties": []})
+                need[name]["duties"].append(duty["title"])
+                if duty["id"] in on_ids:
+                    need[name]["on"] = True
+        buildings = []
+        for name, info in sorted(need.items(), key=lambda kv: (not kv[1]["on"], kv[0])):
+            pth = rb._learn_path(dev, name)
+            state = "none"
+            place = None
+            try:
+                bm = json.loads(pth.with_suffix(".json").read_text(encoding="utf-8"))
+                place = bm.get("map")
+                state = "found" if place else ("seen" if pth.exists() else "none")
+            except Exception:
+                state = "seen" if pth.exists() else "none"
+            buildings.append({"name": name, "state": state, "map": place, "on": info["on"], "duties": info["duties"]})
+        return {"built": built, "at": meta.get("at", ""), "views": len(meta.get("keyframes") or []), "size": meta.get("size"),
+                "buildings": buildings,
+                "img": bool((d / "map.png").exists())}
+
     def dev_find(self, p):
         """Owner tool: run the bot's own building finder on a PAUSED instance and leave the building's ring menu open
         (e.g. the Keep, to change the city culture from a PC-linked chat). {"serial", "name"} -> {"found"}"""
@@ -2741,6 +2781,17 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/shot":
             img = c.shot(q["token"][0])
             return self._send(200, jpg_bytes(img, 85), "image/jpeg")
+        if path == "/api/city_map_img":                 # the instance's stitched city map (for the City map card)
+            d = rb._map_dir(types.SimpleNamespace(serial=q["serial"][0])) / "map.png"
+            if not d.exists():
+                return self._send(404, "no map", "text/plain")
+            img = cv2.imread(str(d))
+            if img is None:
+                return self._send(404, "no map", "text/plain")
+            h0, w0 = img.shape[:2]
+            if w0 > 900:
+                img = cv2.resize(img, (900, int(h0 * 900 / w0)), interpolation=cv2.INTER_AREA)
+            return self._send(200, jpg_bytes(img, 80), "image/jpeg", {"Cache-Control": "max-age=60"})
         if path == "/api/general_img":
             img = rb.general_image(q["name"][0])
             if img is None:

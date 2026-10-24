@@ -1634,3 +1634,15 @@ select.pick-open{border-color:var(--accent1)}
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a958a' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E")}
 :root .pick .pick-s{padding-left:32px;background-repeat:no-repeat;background-position:10px 50%;background-size:14px 14px;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a958a' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E")}
+
+/* City map card (instance Overview) */
+.citymap .cmbar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:8px 0 6px}
+.citymap .cmfill{height:100%;background:var(--accent1,#c2410c);border-radius:3px;transition:width .4s}
+.citymap .cmwrap{position:relative;margin:10px 0;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.citymap .cmimg{display:block;width:100%;height:auto}
+.citymap .cmpin{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;border:3px solid var(--accent1,#c2410c);box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+.citymap .cmlist{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;margin-top:8px}
+@media (max-width:1100px){.citymap .cmlist{grid-template-columns:1fr}}
+.citymap .cmrow{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--line);gap:8px}
+.citymap .cmrow.off{opacity:.55}
+.citymap .cmname{font-size:13px}
