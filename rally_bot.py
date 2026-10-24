@@ -13148,6 +13148,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         return False
 
     war_streak = [0]                          # 'Alliance War' taps since the rally list was last reached (across recover() calls)
+    frozen = {"shot": None, "n": 0, "last": 0.0}   # unchanged picture after our close/tap rounds in a row (frozen game guard)
 
     def recover():
         """Get back to the rally list: close pop-ups, follow the navigation steps, use Back where it is safe."""
@@ -13442,8 +13443,30 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     lost_since[0] = None
                     continue
             if st != "rally_list" and dismiss_popup(screen, st in ("unknown", "city")):
+                # The game does not react: the same close/tap on a picture that does not change, again and again (Rory
+                # 24 Oct 05:05-05:44: 'Alliance War' row tapped 229 times, the game frozen after a kick/kick-back clash).
+                # 20 such rounds (~3 min) = restart Evony; a second freeze within 15 min = leave it 10 min, then the emulator.
+                same = frozen["shot"] is not None and float(cv2.absdiff(frozen["shot"], screen).mean()) < 2.0
+                frozen["shot"] = screen
+                frozen["n"] = frozen["n"] + 1 if same else 0
+                if frozen["n"] >= 20:
+                    frozen["n"] = 0
+                    frozen["shot"] = None
+                    save_debug(serial, screen)
+                    if time.time() - frozen["last"] < 900:
+                        log("[!] The game froze again within 15 min - leaving it alone for 10 min, then restarting the emulator")
+                        _nap(stop, 600)
+                        if stop.is_set():
+                            break
+                        restart_emulator(dev, cfg, log, stop, "the game froze twice (does not react to taps)")
+                    else:
+                        log("[!] The game does not react (same screen after 20 taps, ~3 min) - restarting Evony")
+                        force_restart_game(dev, cfg, log, stop)
+                    frozen["last"] = time.time()
+                    continue
                 nap(1.0, 1.5)
                 continue
+            frozen["n"] = 0
 
             rallies_on = cfg.get("rally_enabled", True)
             if getattr(dev, "acted", None) is None:
