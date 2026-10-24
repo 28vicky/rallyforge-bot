@@ -2107,6 +2107,17 @@ def _refill_once(dev, cfg, log, stop, needed):
         log("[!] Stamina: the Use Item screen did not open")
         return False
     on_items = True
+    try:                                                     # the sizes the item list shows, so a size the
+        _sh = dev.screenshot()                               # bot cannot read shows up in the log; picture kept as debug/stamina_list.png
+        _stamina_snap(_sh, "list")
+        _seen = []
+        for _, ws in ocr_lines(_sh[300:940, 0:340]):
+            for k, w in enumerate(ws):
+                if k + 1 < len(ws) and ws[k + 1][0].lower().startswith("stam") and re.sub(r"\D", "", w[0]):
+                    _seen.append(re.sub(r"\D", "", w[0]))
+        log(f"[i] Stamina items on the list: {', '.join(_seen) or 'sizes not readable'}")
+    except Exception as _e:
+        quiet_err("_refill_once.list", _e)
     used_any = False
     ROW_Y = {10: 442, 50: 604, 100: 766}                     # the title line of each item row on the Use Item screen (the Use button is ~49 px lower)
 
