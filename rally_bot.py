@@ -9748,6 +9748,7 @@ def run_wheel(dev, cfg, log, stop):
     done = 0
     fails = 0
     closes = 0
+    last_pick = big
     while not stop.is_set():
         shot = dev.screenshot()
         if wheel_reward_panel(shot):                       # a reward panel is still up: its Continue button, else empty ground
@@ -9756,8 +9757,8 @@ def run_wheel(dev, cfg, log, stop):
                 log(f"[!]  Wheel: the reward panel does not close - stopped after {done} spin(s)")
                 rd_snap(shot, "wheel_panel_stuck")
                 break
-            c = find_text(shot, ["Continue"], region=(30, 150, 480, 800), cutoff=0.7)
-            dev.tap(*(c if c and closes % 2 else ((270, 754) if closes % 3 else (270, 110))))
+            dev.tap(*(WHEEL_BTN[last_pick] if closes % 2 else (270, 110)))   # owner 25 Oct: the spin button's own spot or
+                                                           # outside closes it (tapped only while the panel is seen = no extra spin)
             _nap(stop, 0.8, 1.1)
             continue
         closes = 0
@@ -9777,6 +9778,7 @@ def run_wheel(dev, cfg, log, stop):
             log(f"[+]  Wheel: stopped after {done} spin(s) - {coins:,} coins left (cost/keep-at-least {reserve:,})")
             break
         dev.tap(*WHEEL_BTN[pick])
+        last_pick = pick
         shown = spent = False
         for _ in range(14):
             _nap(stop, 0.5, 0.7)
@@ -9798,9 +9800,10 @@ def run_wheel(dev, cfg, log, stop):
         fails = 0
         done += pick
         log(f"[i]   Wheel: {done} spin(s) done ({coins - WHEEL_COST[pick]:,} coins left)")
-        for _ in range(4 if shown else 0):                                 # close the panel: Continue, else empty ground
-            c = find_text(dev.screenshot(), ["Continue"], region=(30, 150, 480, 800), cutoff=0.7)
-            dev.tap(*(c or (270, 754)))
+        for _ in range(4 if shown else 0):                                 # close the panel: the button's own spot (owner 25 Oct)
+            if not wheel_reward_panel(dev.screenshot()):
+                break
+            dev.tap(*WHEEL_BTN[pick])
             _nap(stop, 0.8, 1.1)
             if not wheel_reward_panel(dev.screenshot()):
                 break
