@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.5.8"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.5.13"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -1400,6 +1400,7 @@ def fmt_hms(sec):
 
 
 AJ_LEFT = {}                                  # serial -> (seconds left on the game's Auto-Join, time it was read)
+AJ_ASK = {}                                   # serial -> True: check Auto-Join at the next look at the rally list (Black Market left the shop for it)
 
 
 def auto_join_renew(dev, cfg, log, stop, act):
@@ -2068,6 +2069,38 @@ def read_stamina(shot):
     return None
 
 
+STAMINA_CAP = 9999                                       # the game's limit: stamina items over it are lost (Use Item screen text)
+
+
+def _stamina_use_button(shot, y0, y1):
+    """The green 'Use (n)' button of a stamina item row between y0 and y1 -> (x, y) centre, or None. OCR of the whole
+    screen cannot read white text on green (24 Oct: 'Use (1,220)' never found, every refill skipped), so: find the green
+    button, then read its white label on its own. A gem-price button never says 'Use', so it is never returned."""
+    try:
+        y0, y1 = max(0, int(y0)), min(shot.shape[0], int(y1))
+        band = shot[y0:y1, 340:520]
+        if band.size == 0:
+            return None
+        m = cv2.inRange(cv2.cvtColor(band, cv2.COLOR_BGR2HSV), (45, 120, 60), (85, 255, 255))
+        n, lab, st, cen = cv2.connectedComponentsWithStats(m)
+        for i in sorted(range(1, n), key=lambda i: -st[i, cv2.CC_STAT_AREA]):
+            x, y, w, h, a = st[i]
+            if w < 70 or h < 25 or a < 1200:
+                continue
+            c = band[y:y + h, x:x + w]
+            g = cv2.resize(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY), None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+            for t in (170, 150, 190):
+                b = 255 - cv2.threshold(g, t, 255, cv2.THRESH_BINARY)[1]
+                b = cv2.copyMakeBorder(b, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=255)
+                txt = pytesseract.image_to_string(b, config="--psm 7").lower()
+                if re.search(r"\bu[s5]e\b|^u[s5]e", txt.strip()):
+                    return int(340 + x + w // 2), int(y0 + y + h // 2)
+        return None
+    except Exception as _e:
+        quiet_err("_stamina_use_button", _e)
+        return None
+
+
 def refill_stamina(dev, cfg, log, stop, needed):
     """Use stamina items. 'full' presses the game's Max button (the game itself limits how much one use can add)."""
     return _refill_once(dev, cfg, log, stop, needed)
@@ -2083,6 +2116,7 @@ def _refill_once(dev, cfg, log, stop, needed):
     if not sizes:
         return False
     before = read_stamina(dev.screenshot())
+    cur_st = before[0] if before else None
 
     def _open_use_item():
         for xy in (tuple(cfg["stamina_xy"]), (478, 853), (345, 853)):  # the saved spot, then the round "+" button, then the number
@@ -2107,6 +2141,18 @@ def _refill_once(dev, cfg, log, stop, needed):
         log("[!] Stamina: the Use Item screen did not open")
         return False
     on_items = True
+    scrolled = False
+    try:                                                     # the sizes the item list shows, so a size the
+        _sh = dev.screenshot()                               # bot cannot read shows up in the log; picture kept as debug/stamina_list.png
+        _stamina_snap(_sh, "list")
+        _seen = []
+        for _, ws in ocr_lines(_sh[300:940, 0:340]):
+            for k, w in enumerate(ws):
+                if k + 1 < len(ws) and ws[k + 1][0].lower().startswith("stam") and re.sub(r"\D", "", w[0]):
+                    _seen.append(re.sub(r"\D", "", w[0]))
+        log(f"[i] Stamina items on the list: {', '.join(_seen) or 'sizes not readable'}")
+    except Exception as _e:
+        quiet_err("_refill_once.list", _e)
     used_any = False
     ROW_Y = {10: 442, 50: 604, 100: 766}                     # the title line of each item row on the Use Item screen (the Use button is ~49 px lower)
 
@@ -2134,35 +2180,72 @@ def _refill_once(dev, cfg, log, stop, needed):
         return bool(find_text(shot, ["Own:", "Own"], region=(60, 310, 300, 80), cutoff=0.6)) and \
             bool(find_text(shot, ["Max", "Minimum"], region=(60, 650, 420, 70), cutoff=0.8))
 
-    for size in sizes:                                       # every size in the chosen order until the march has enough
+    for size in sizes + ["any"]:                             # every size in the chosen order, then any Use button left
         if stop.is_set():
+            break
+        if size == "any" and used_any:
             break
         if not on_items:
             if not _open_use_item():
                 log("[!] Stamina: the Use Item screen did not open again")
                 break
             on_items = True
+            scrolled = False
         shot = dev.screenshot()
-        ry = _row_y(shot, size)
-        if not ry:
-            continue                                        # the account has none of this size / not a size we know
-        use = find_text(shot, ["Use"], region=(330, ry + 10, 200, 80))
-        if not use:                                         # no 'Use' = none owned; the button shows a gem price - never tap it
-            log(f"[i] Stamina: no {size}-stamina items (only a gem price) - next size")
-            continue
+        if size == "any":                                   # the size labels could not be read (e.g. '100' misread): every row on this
+            _stamina_snap(shot, "items_list")               # screen is a stamina item, so any 'Use' button (never a gem price) is fine
+            use = _stamina_use_button(shot, 300, 940)
+            if not use:
+                log("[i] Stamina: no Use button on the stamina item list - no items owned")
+                break
+            size = "other"
+        else:
+            ry = _row_y(shot, size)
+            if not ry:                                      # 4 sizes do not fit on the screen (the 100 row sits below): look at the
+                if scrolled:                                # other end of the list once - top if we scrolled down, bottom if not
+                    dev.swipe(270, 560, 270, 880, 700)
+                else:
+                    dev.swipe(270, 880, 270, 560, 700)
+                nap(0.8, 1.1)
+                scrolled = not scrolled
+                shot = dev.screenshot()
+                ry = _row_y(shot, size)
+            if not ry:
+                continue                                    # the account has none of this size / not a size we know
+            use = _stamina_use_button(shot, ry + 5, ry + 95)
+            if not use:                                     # no 'Use' = none owned; the button shows a gem price - never tap it
+                log(f"[i] Stamina: no {size}-stamina items (only a gem price) - next size")
+                continue
+        if isinstance(size, int) and cur_st is not None and STAMINA_CAP - cur_st < size \
+                and str(cfg.get("stamina_amount", "full (Max)")).startswith("full"):
+            continue                                        # not even one of this size fits under the limit
         dev.tap(*use)
         nap(1.0, 1.4)
         shot = dev.screenshot()
         if not _dialog_open(shot):                          # slow emulator: look again, then tap Use once more before giving up
             nap(1.0, 1.4)
             shot = dev.screenshot()
-        if not _dialog_open(shot) and screen_state(shot, cfg) != "march" and _row_y(shot, size):
+        if not _dialog_open(shot) and screen_state(shot, cfg) != "march" and (size == "other" or _row_y(shot, size)):
             dev.tap(*use)
             nap(1.2, 1.6)
             shot = dev.screenshot()
         if not _dialog_open(shot):
             _stamina_snap(shot, "no_dialog")
-            log(f"[i] Stamina: the amount window for {size} did not open - trying the next size")
+            # The tap may have used the item at once (no amount window - seen 24 Oct on Skip: 6 -> 29 stamina while the bot
+            # said the window did not open, then skipped the rally). Check the march screen before trying the next size.
+            _to_march()
+            on_items = False
+            nap(0.6, 0.9)
+            st_now = read_stamina(dev.screenshot())
+            if st_now and before and st_now[0] > before[0]:
+                used_any = True
+                log(f"[+] Stamina: {size}-stamina item used without the amount window ({before[0]:,} -> {st_now[0]:,})")
+                cur_st = st_now[0]
+                if st_now[0] >= needed and not str(cfg.get("stamina_amount", "full (Max)")).startswith("full"):
+                    break
+                before = st_now
+            else:
+                log(f"[i] Stamina: the amount window for {size} did not open - trying the next size")
             continue
         _stamina_snap(shot, "dialog")
         mode = str(cfg.get("stamina_amount", "full (Max)"))
@@ -2175,20 +2258,34 @@ def _refill_once(dev, cfg, log, stop, needed):
             except Exception as _e:
                 quiet_err("_refill_once._count", _e)
             return None
-        if mode.startswith("full"):                          # slide the bar all the way to the right end. NOT the game's Max button: it stops at 100 stamina
-            for _sw in range(4):
-                _shot_max = dev.screenshot()
-                cnt = _count(_shot_max)
+        if mode.startswith("full"):                          # fill up to the game's limit (9,999): as many items of this size as fit
+            room = STAMINA_CAP - (cur_st if cur_st is not None else 0)
+            fit = room // size if isinstance(size, int) else None
+            _shot_max = dev.screenshot()
+            cnt = _count(_shot_max)
+            for _sw in range(4):                             # first the whole bar (NOT the game's Max button: it stops at 100 stamina)
                 if cnt and cnt[0] >= cnt[1]:
                     break
                 dev.swipe(137, 503, 440, 503, 700 if _sw % 2 == 0 else 1300)   # a slower drag when a quick one did not move the thumb
                 nap(0.6, 0.9)
                 _shot_max = dev.screenshot()
                 cnt = _count(_shot_max)
-                if cnt and cnt[0] >= cnt[1]:
-                    break
+            if cnt and fit is not None and cnt[1] > fit:    # more items than fit under the limit: the rest would be lost
+                want = max(1, fit)
+                if cnt[1] - want > 12:                      # far off: drag the thumb close, then fine-tune with - / +
+                    dev.swipe(137, 503, int(137 + 303 * want / cnt[1]), 503, 900)
+                    nap(0.6, 0.9)
+                    cnt = _count(dev.screenshot()) or cnt
+                for _t in range(40):
+                    if not cnt or cnt[0] == want or stop.is_set():
+                        break
+                    dev.tap(*((83, 505) if cnt[0] > want else (451, 505)))
+                    nap(0.2, 0.35)
+                    cnt = _count(dev.screenshot()) or cnt
+                _shot_max = dev.screenshot()
             _stamina_snap(_shot_max, "after_slide")
-            log(f"[i] Stamina: slid to the end - using {cnt[0] if cnt else '?'} of {cnt[1] if cnt else '?'} item(s)")
+            log(f"[i] Stamina: using {cnt[0] if cnt else '?'} of {cnt[1] if cnt else '?'} item(s)"
+                + (f" (room for {fit} under the {STAMINA_CAP:,} limit)" if fit is not None else ""))
         elif mode.startswith("exact"):
             want = max(1, int(cfg.get("stamina_count", 2) or 1))
             def _count(sh):
@@ -2231,6 +2328,15 @@ def _refill_once(dev, cfg, log, stop, needed):
         on_items = False
         nap(0.6, 0.9)
         st_now = read_stamina(dev.screenshot())
+        if st_now:
+            cur_st = st_now[0]
+        if str(cfg.get("stamina_amount", "full (Max)")).startswith("full"):
+            small = min(x for x in sizes if isinstance(x, int))  # owner 24 Oct: fill FULL with every size, not just enough for this march
+            if st_now and STAMINA_CAP - st_now[0] < small:
+                break
+            if st_now:
+                log(f"[i] Stamina: {st_now[0]:,} - filling on with the next size (limit {STAMINA_CAP:,})")
+            continue
         if st_now and st_now[0] >= needed:
             break
         if st_now:
@@ -2242,7 +2348,7 @@ def _refill_once(dev, cfg, log, stop, needed):
     st = read_stamina(shot_end)
     log(f"[i] Stamina after using items: {st[0]:,} (needs {needed:,})" if st else "[i] Stamina after using items: not readable")
     _stamina_snap(shot_end, "march_after")
-    if used_any and st and st[0] >= needed:
+    if st and st[0] >= needed:                              # the number on the march screen decides, however the items got used
         return True
     if used_any and (st is None or st[0] == before[0] if before else True) and screen_state(shot_end, cfg) == "march":
         log("[i] The stamina number did not change after using items - it may be misread, marching anyway")
@@ -3519,7 +3625,7 @@ def daily_checkin(dev, shot, log, stop):
 CITY_POPUP_WORDS = ["Event starts in", "Truce Agreement", "Server War is about to begin"]   # event pop-ups that sit over the city (the city is still recognised behind them)
 
 
-DANGER_PATTERNS = [                         # account / money dialogs: the bot never answers these, it stops the instance and alerts
+DANGER_PATTERNS = [                         # account / money dialogs: the bot never confirms these - it closes them with Cancel / X / Back
     r"switch\s*account", r"current\s*progress", r"delete\s*(your|the)?\s*(account|progress|data)", r"log\s*out",
     r"(bind|link|unlink)\s*(your|this|to|with)?\s*(account|facebook|apple|google|email)", r"apple\s*id",
     r"(use|spend|cost)\w*\s*[\d,]+\s*gems?", r"confirm\s*(the)?\s*(purchase|payment)",
@@ -3527,8 +3633,8 @@ DANGER_PATTERNS = [                         # account / money dialogs: the bot n
 
 
 def safety_stop(dev, shot, cfg, log, stop):
-    """A dangerous dialog (switch/link/delete account, log out, gem spend, payment) is on screen -> stop this instance,
-    alert the owner, keep the picture. Never taps anything. -> True if it stopped."""
+    """A dangerous dialog (switch/link/delete account, log out, gem spend, payment) is on screen -> close it with Cancel /
+    X / Back (never its confirm button), keep the picture. -> True if it was such a dialog."""
     try:
         txt = " ".join(t for t, _ in ocr_lines(shot[150:820, 20:520])).lower()
     except Exception:
@@ -3541,12 +3647,22 @@ def safety_stop(dev, shot, cfg, log, stop):
         cv2.imwrite(str(USER / "debug" / f"safety_stop_{dev.serial.replace(':', '_')}.png"), shot)
     except Exception:
         pass
-    log(f"[!] SAFETY STOP: an account / payment window is open ({hit}) - the bot will not touch it. Instance stopped; please check it by hand.")
+    log(f"[!] SAFETY: an account / payment window is open ({hit}) - closing it with Cancel / X / Back, never the confirm button (picture saved)")
+    # Owner 24 Oct: never stop, and do not restart the game for a pop-up either (Evony shows many) - just close it safely.
+    # If it keeps coming back, the usual 'unknown screen 3 times in 10 min' rule restarts the game.
     try:
-        notify(cfg, dev.serial, "Safety stop: an account or payment window opened. The bot stopped this instance and pressed nothing - please check it.")
-    except Exception:
-        pass
-    stop.set()
+        cancel = find_text(shot, ["Cancel", "No", "Not now", "Later"], region=(20, 150, 500, 750), cutoff=0.85)
+        if cancel:
+            dev.tap(*cancel)
+        else:
+            x_btn = find(shot, "close_x", 0.8) if has_template("close_x") else None
+            if x_btn:
+                dev.tap(*x_btn)
+            else:
+                dev.back()                                   # Android Back = Cancel on Evony dialogs
+        _nap(stop, 0.8, 1.2)
+    except Exception as _e:
+        quiet_err("safety_stop", _e)
     return True
 
 
@@ -7860,8 +7976,18 @@ def market_totals(img):
         best = None
         try:
             for _t, ws in ocr_lines(img[282:330, x0:x1], 3.0):
-                for w in ws:
-                    d = re.sub(r"\D", "", w[0])
+                runs, cur = [], ""                         # neighbouring number pieces belong together: OCR can split
+                for w in ws:                               # '432,750' into '4' + '32,750' (Kulim 24 Oct: ~400k read as 32,750)
+                    if re.fullmatch(r"[\d.,']+", w[0].strip()):
+                        cur += w[0]
+                    else:
+                        if cur:
+                            runs.append(cur)
+                        cur = ""
+                if cur:
+                    runs.append(cur)
+                for r in runs:
+                    d = re.sub(r"\D", "", r)
                     if len(d) >= 3 and (best is None or len(d) > len(str(best))):
                         best = int(d)
         except Exception as _e:
@@ -7928,7 +8054,7 @@ def market_confirm(dev, log, stop):
         log("[i] Black Market: this would use a Rebuy Chance - closed the box, not bought")
         dev.tap(*REBUY_CLOSE)
         _nap(stop, 0.9, 1.2)
-        return False
+        return None                                         # None = refused rebuy (the caller logs nothing more)
     for _ in range(2):
         p = find_text(shot, ["Confirm"], region=(60, 470, 420, 200), cutoff=0.6) or _green_button(shot, (60, 470, 420, 200))
         if not p:
@@ -8038,16 +8164,40 @@ def run_market(dev, cfg, log, stop):
     min_gold = int(cfg.get("market_min_gold", 0) or 0)
     spent = refreshes = 0
     no_change = 0
-    end = None                                               # why the run ended: "floor" / "limit" / "nogems" = nothing more to do today
+    end = None                                               # why the run ended: "floor" / "nogems" (wait for gems) / "limit" (this visit)
+    keep = bm_keep_going(cfg)                                # 'until the gem floor' + paid refresh: no time limit, other tasks go in between
+    serial = getattr(dev, "serial", "")
+    left_for = None                                          # keep-going: the shop was left for another task (or a frozen shop)
+    last_prog = last_look = time.time()                      # last buy / refresh, last look at the other tasks
+    pend = 0                                                 # gems spent since the gem total was last believed
     bought, failed = {}, set()                              # failed: slot numbers that did not sell (until the next refresh)
     gold, gems = market_totals(img)
+    try:                                                     # the shop with its gold / gem row, to check the numbers read (a 6-digit
+        (USER / "debug").mkdir(exist_ok=True)               # gem total was read as 32,750 on Kulim (tester system) 24 Oct)
+        cv2.imwrite(str(USER / "debug" / f"bm_totals_{str(getattr(dev, 'serial', '')).replace(':', '_')}.png"), img)
+    except Exception as _e:
+        quiet_err("bm_totals_pic", _e)
     log(f"[*] Black Market: looking for {', '.join(w[0] for w in wanted)}; gold {gold if gold is not None else '?'}, "
         f"gems {gems if gems is not None else '?'} (keep at least {min_gold:,} gold, {min_gems:,} gems)")
     need_totals = bool(min_gems or min_gold or budget)   # totals are only read every round when a floor / limit needs them
     free_left = None                                     # once the free refreshes are used up they stay at 0: no more reading them
     cost_seen = None                                     # the paid refresh cost, read once and re-checked every 10 refreshes
     next_img = None                                      # the picture taken right after a refresh is reused (one screenshot less)
-    while not stop.is_set():
+    if keep:
+        _TL.duty_deadline = None                             # no 20-min budget: the stall check below takes its place
+        left_for = bm_leave_for(cfg, serial)                 # e.g. Auto-Join not checked yet since the start: that goes first
+    while not stop.is_set() and not left_for:
+        if keep:
+            now = time.time()
+            if now - last_prog > BM_STALL_MIN * 60:          # nothing bought or refreshed for minutes: the shop / game froze
+                log(f"[!] Black Market: nothing happened for {BM_STALL_MIN} min - restarting Evony, then back to the shop")
+                left_for = "stall"
+                break
+            if now - last_look >= 20:
+                last_look = now
+                left_for = bm_leave_for(cfg, serial)
+                if left_for:
+                    break
         img = next_img if next_img is not None else dev.screenshot()
         next_img = None
         for _w in range(4):                                  # a confirm dialog / reward pop-up can sit over the shop for a moment
@@ -8066,9 +8216,12 @@ def run_market(dev, cfg, log, stop):
             cv2.imwrite(str(USER / "debug" / "black_market_closed.png"), img)
             log("[!] Black Market: the shop is no longer on screen (picture saved: debug/black_market_closed.png)")
             break
-        g2, m2 = market_totals(img) if need_totals else (None, None)
-        gold = g2 if g2 is not None else gold
-        gems = m2 if m2 is not None else gems
+        if need_totals:
+            g2, m2, fresh_read = bm_gems_checked(dev, img, gems, pend, log)
+            gold = g2 if g2 is not None else gold
+            gems = m2 if m2 is not None else gems
+            if fresh_read:
+                pend = 0
         again = False
         for si, slot in enumerate(market_slots(img)):
             if si in failed:
@@ -8107,7 +8260,9 @@ def run_market(dev, cfg, log, stop):
                     paid = (slot["gem"] and m0 is not None and m1 is not None and m1 < m0) or \
                            ((not slot["gem"]) and g0 is not None and g1 is not None and g1 < g0)
                     gone = market_on_screen(after) and market_match(after, slot, tname, th) < th
-                    if not ok_buy or not (paid or (gone and (m1 is None or m0 is None))):
+                    if ok_buy is None:                       # a refused Rebuy Chance box: already logged, not a failure
+                        failed.add(si)
+                    elif not ok_buy or not (paid or (gone and (m1 is None or m0 is None))):
                         failed.add(si)                       # the purchase did not go through
                         log(f"[!] {name}: not bought (confirm {'tapped' if ok_buy else 'not found'}; "
                             f"{'gems' if slot['gem'] else 'gold'} {m0 if slot['gem'] else g0} -> {m1 if slot['gem'] else g1})")
@@ -8115,8 +8270,10 @@ def run_market(dev, cfg, log, stop):
                             cv2.imwrite(str(USER / "debug" / "black_market_not_bought.png"), after)
                     else:
                         bought[name] = bought.get(name, 0) + 1
+                        last_prog = time.time()
                         if slot["gem"] and price:
                             spent += price
+                            pend += price
                         log(f"[+] Bought {name} for {price if price is not None else '?'} "
                             f"{'gems' if slot['gem'] else 'resources'}")
                     again = True
@@ -8191,26 +8348,53 @@ def run_market(dev, cfg, log, stop):
             if no_change >= 2:
                 log("[!] Black Market: the shop did not change after refreshing (out of gems?) - stopping")
                 end = "nogems" if (gems is not None and cost_seen and gems < 2 * cost_seen) else None
+                if keep and not end:
+                    left_for = "stall"                       # gems left but the shop does not move: frozen -> restart Evony
                 break
             continue
         no_change = 0
         next_img = shot
         if not free:
             spent += cost
+            pend += cost
         refreshes += 1
+        last_prog = time.time()
         failed.clear()
         log(f"[*] Black Market: refresh {refreshes}" + (f" of {limit}" if mode == "count" else ""))
     total = ", ".join(f"{n} x{c}" for n, c in bought.items()) or "nothing"
     log(f"[+] Black Market done: bought {total}; {refreshes} refresh(es)")
-    if bm_keep_going(cfg) and not stop.is_set():             # keeps coming back all day until the gems reach the floor / run out
-        serial = getattr(dev, "serial", "")
-        if end:
-            bm_save(serial, end_day=_game_day(), next_at=0)
-            log("[i] Black Market: " + {"floor": "gem floor reached", "limit": "gem limit reached",
-                                       "nogems": "out of gems"}[end] + " - done until the game reset")
-        else:
-            bm_save(serial, next_at=time.time() + BM_AGAIN_MIN * 60)
-            log(f"[i] Black Market: gems left above the floor - back in {BM_AGAIN_MIN} min")
+    sg, si, sr = bm_spend_add(serial, spent, sum(bought.values()), refreshes)
+    if bought or refreshes:
+        log(f"[*] Black Market today: {sg:,} gems -> items x{si}, {sr} refreshes")
+    if not keep or stop.is_set():
+        return
+    now = time.time()
+    # owner 24 Oct: never 'done for the day' - low gems = an hour of normal work, then a shop visit reads the gems again
+    if left_for == "stall":
+        bm_save(serial, next_at=0, wait_gems=False)
+        try:
+            force_restart_game(dev, cfg, log, stop)
+        except Exception as e:
+            log(f"[!] Black Market: restarting Evony failed: {e}")
+    elif left_for:
+        bm_save(serial, next_at=0, wait_gems=False)
+        log(f"[i] Black Market: leaving the shop for {left_for} - back right after")
+    elif end in ("floor", "nogems"):
+        nxt = now + BM_LOW_WAIT_MIN * 60
+        row = (load_duty_state().get(serial or "default") or {}).get("black_market") or {}
+        bm_save(serial, next_at=nxt, wait_gems=True, end_why=end, end_gems=gems)
+        log(f"[i] Black Market: {'gem floor reached' if end == 'floor' else 'out of gems'}"
+            f"{f' (gems {gems:,})' if isinstance(gems, int) else ''} - normal work until "
+            f"{time.strftime('%H:%M', time.localtime(nxt))}, then a look at the gems")
+        if not row.get("wait_gems"):                         # once per low spell, not every hour
+            notify(cfg, serial, f"Black Market: {'gem floor reached' if end == 'floor' else 'out of gems'}"
+                                f"{f' ({gems:,} gems)' if isinstance(gems, int) else ''} - looking again every hour")
+    elif end == "limit":                                     # 'most gems in one visit': this visit only
+        bm_save(serial, next_at=now + BM_AGAIN_MIN * 60, wait_gems=False)
+        log(f"[i] Black Market: gem limit for this visit reached - next visit in {BM_AGAIN_MIN} min")
+    else:                                                    # the shop closed / a dialog: straight back soon
+        bm_save(serial, next_at=now + 120, wait_gems=False)
+        log("[i] Black Market: visit ended early - back in 2 min")
 
 
 def fix_building_name(text):
@@ -8367,13 +8551,20 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             if find_learned_building(dev, cfg, log, stop, bname.strip()):
                 return True
             log(f"[i]   {bname.strip()}: not reached by the map - trying the Activity route")
+        elif bname and task.get("no_tile"):                   # Black Market keep-going: the learned building picture first
+            leave_to_city(dev, cfg, stop, log)
+            if find_learned_building(dev, cfg, log, stop, bname.strip()):
+                return True
         try:
             r = activity_go(dev, cfg, log, stop, tile.strip(), route=(kind == "via"))
         except Exception as e:
             log(f"[i]   Activity route to {bname or tile}: {e} - using the city map instead")
             leave_to_city(dev, cfg, stop, log)
             r = None
-        if r == "complete":
+        if r == "complete" and task.get("no_tile"):
+            log(f"[i]   {tile.strip()}: daily done today - going to the {bname.strip()} building instead")
+            r = None                                       # the gems decide, not the daily quest (owner 24 Oct)
+        elif r == "complete":
             rd_nothing()
             return None                                    # this daily is already complete today: nothing to open
         if r and (not bname or open_building_here(dev, cfg, log, stop, bname.strip())):
@@ -8915,6 +9106,103 @@ def bm_save(serial, **kw):
         row = data.setdefault(serial or "default", {}).setdefault("black_market", {})
         row.update(kw)
         save_duty_state(data)
+
+
+BM_LOW_WAIT_MIN = 60     # gems at the floor / out of gems: normal work for an hour, then a shop visit reads the gems again (owner 24 Oct)
+BM_STALL_MIN = 4         # keep-going run: nothing bought or refreshed for this long = the shop is frozen -> restart Evony, go back
+BM_LEFT_FOR = {}         # serial -> {task id: time} the shop was left for (one stuck task cannot pull the bot out over and over)
+
+
+def aj_renew_due(cfg, serial):
+    """The game's Auto-Join needs a look now: not read since the bot started, or the time left is at the renew limit.
+    Worked out from the last reading (AJ_LEFT) - no screen look."""
+    if not (cfg.get("game_auto_join") and cfg.get("rally_enabled", True)):
+        return False
+    r = AJ_LEFT.get(serial)
+    if not r:
+        return True
+    limit = max(1, int(cfg.get("auto_join_renew_min", 120))) * 60
+    return r[0] - (time.time() - r[1]) <= limit
+
+
+def bm_leave_for(cfg, serial):
+    """Inside a keep-going Black Market run: something that must run first -> its name, else None.
+    Owner 24 Oct: Run now, any other due duty / task and the game's Auto-Join renew come first; the bot comes straight back."""
+    now = time.time()
+    seen = BM_LEFT_FOR.setdefault(serial or "default", {})
+    fresh = lambda k: now - seen.get(k, 0) > 600
+    if aj_renew_due(cfg, serial) and fresh("auto_join"):
+        seen["auto_join"] = now
+        AJ_ASK[serial] = True
+        return "the game's Auto-Join check"
+    try:
+        due = city_tasks_due(cfg, getattr(_TL, "city_last", None) or {}, serial)
+    except Exception as _e:
+        quiet_err("bm_leave_for", _e)
+        due = []
+    for t in due:
+        tid = t.get("name", "")
+        if tid == "duty:black_market" or not fresh(tid):
+            continue
+        seen[tid] = now
+        return DUTY_BY_ID[tid[5:]]["title"] if tid.startswith("duty:") and tid[5:] in DUTY_BY_ID else tid
+    return None
+
+
+def bm_priority_due(cfg, serial):
+    """Auto-Join off + Black Market 'until the gem floor' due: the shop goes before joining rallies (owner 24 Oct)."""
+    return bm_keep_going(cfg) and ((cfg.get("duties") or {}).get("black_market") or {}).get("on") \
+        and duty_status(serial, "black_market", cfg)[0] == "due"
+
+
+def bm_gems_checked(dev, img, prev, pend, log):
+    """The gold / gem totals, with a sanity check on the gems: a total that moved by more than the bot just spent
+    (pend) is read again (Kulim 24 Oct: ~400k read as 32,750). Two reads that agree are believed (a top-up in the game
+    is fine); otherwise the expected total is kept. -> (gold, gems, believed_new_read)."""
+    g, m = market_totals(img)
+    if m is None or prev is None:
+        return g, m, m is not None
+    want = max(0, prev - pend)
+    if abs(m - want) <= max(2000, pend // 10):
+        return g, m, True
+    reads = [m]
+    for _ in range(3):
+        time.sleep(0.6)
+        s2 = dev.screenshot()
+        if not market_on_screen(s2):
+            break
+        _, m2 = market_totals(s2)
+        if m2 is None:
+            continue
+        if abs(m2 - want) <= max(2000, pend // 10):
+            return g, m2, True
+        reads.append(m2)
+        if reads[-1] == reads[-2]:
+            log(f"[i] Black Market: gems now {m2:,} (expected about {want:,} - read twice the same)")
+            return g, m2, True
+    log(f"[!] Black Market: gem total read as {m:,}, expected about {want:,} - keeping {want:,}")
+    return g, want, False
+
+
+def bm_spend_add(serial, gems, items, refreshes):
+    """Per game day: gems spent, items bought, refreshes -> the 'Black Market today' line."""
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        row = data.setdefault(serial or "default", {}).setdefault("black_market", {})
+        day = _game_day()
+        if row.get("sp_day") != day:
+            row.update(sp_day=day, sp_gems=0, sp_items=0, sp_ref=0)
+        row["sp_gems"] = int(row.get("sp_gems", 0)) + int(gems or 0)
+        row["sp_items"] = int(row.get("sp_items", 0)) + int(items or 0)
+        row["sp_ref"] = int(row.get("sp_ref", 0)) + int(refreshes or 0)
+        save_duty_state(data)
+        return row["sp_gems"], row["sp_items"], row["sp_ref"]
+
+
+def bm_spend_text(row):
+    if row.get("sp_day") != _game_day() or not (row.get("sp_gems") or row.get("sp_items") or row.get("sp_ref")):
+        return ""
+    return f"today {int(row.get('sp_gems', 0)):,} gems, {int(row.get('sp_items', 0))} items, {int(row.get('sp_ref', 0))} refreshes"
 
 
 def ce_save(serial, **kw):
@@ -12502,20 +12790,23 @@ def duty_status(serial, duty_id, cfg):
     row = (load_duty_state().get(serial or "default") or {}).get(duty_id) or {}
     day, now = _game_day(), time.time()
     tries = int(row.get("tries", 0)) if row.get("day") == day else 0
+    if duty_id == "black_market" and bm_keep_going(cfg):     # owner 24 Oct: runs all day, never 'done' - the gem floor only pauses it
+        fs = _duty_fail_state(row, tries, now)               # (checked before done_day: the Activity tile says nothing about the gems)
+        if fs:
+            return fs
+        sp = bm_spend_text(row)
+        if row.get("wait_gems") and row.get("next_at", 0) > now:
+            g = row.get("end_gems")
+            return "waiting", "Waiting for gems" + (f" (read {g:,})" if isinstance(g, int) else "") + " - next look " + \
+                time.strftime("%H:%M", time.localtime(row["next_at"])) + (" · " + sp if sp else "")
+        if row.get("next_at", 0) > now:
+            return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"])) + (" · " + sp if sp else "")
+        return "due", "Due" + (" · " + sp if sp else "")
     if row.get("done_day") == day:                          # checked twice: nothing left in the game until the reset
         return "done", "Done for today"
     if duty_id in ("crazy_eggs", "royal_thief", "monster_rally"):           # timer driven: comes back when the next egg is ready
         if row.get("all_done_day") == day:
             return "done", "All eggs done"
-        fs = _duty_fail_state(row, tries, now)
-        if fs:
-            return fs
-        if row.get("next_at", 0) > now:
-            return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"]))
-        return "due", "Due"
-    if duty_id == "black_market" and bm_keep_going(cfg):     # runs all day until the gems reach the floor / run out
-        if row.get("end_day") == day:
-            return "done", "Gems used up " + time.strftime("%H:%M", time.localtime(row.get("last_ok", 0) or now))
         fs = _duty_fail_state(row, tries, now)
         if fs:
             return fs
@@ -12553,6 +12844,8 @@ def run_now_tasks(cfg, serial):
             d = DUTY_BY_ID[tid[5:]]
             t = {k: d[k] for k in ("target", "steps") if k in d}
             t["name"], t["count"] = tid, d.get("count", 1)
+            if tid == "duty:black_market" and bm_keep_going(cfg):
+                t["no_tile"] = True
             out.append(t)
         elif tid.startswith("task:"):
             for c in cfg.get("city_tasks") or []:
@@ -12573,6 +12866,8 @@ def duty_tasks_due(cfg, serial):
             t = {k: d[k] for k in ("target", "steps") if k in d}
             t["name"] = "duty:" + d["id"]
             t["count"] = d.get("count", 1)
+            if d["id"] == "black_market" and bm_keep_going(cfg):
+                t["no_tile"] = True                          # straight to the Market building, not the Activity tile (gone once the daily is done)
             out.append(t)
     return out
 
@@ -13130,8 +13425,9 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     res = read_square(dev, cfg, log, stop, (px, py), name, levels)
     if res and res[2] and nav.absolute:                      # the camera place is read from the picture each time: only close the ring
         if not close_ring(dev, stop, res[2]):
-            log("[!]   the ring menu would not close - stopping so nothing is pressed by mistake")
-            stop.set()
+            log("[!]   the ring menu would not close - restarting Evony so nothing is pressed by mistake")
+            force_restart_game(dev, cfg, log, stop)
+            return None
     elif res and res[2]:                                     # the label shows where the building really is on the screen: re-anchor the camera
         lx, ly = res[2]
         fo = FIXED_OFFSETS_FROM_SHRINE.get(name)
@@ -13140,8 +13436,9 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
         else:
             nav.cx, nav.cy = tx - lx, ty - (ly - 35)
         if not close_ring(dev, stop, res[2]):
-            log("[!]   the ring menu would not close - stopping so nothing is pressed by mistake")
-            stop.set()
+            log("[!]   the ring menu would not close - restarting Evony so nothing is pressed by mistake")
+            force_restart_game(dev, cfg, log, stop)
+            return None
     elif levels or res is not None:                          # read on the Detail page (i icon): back out to the city and make sure the ring is gone
         leave_to_city(dev, cfg, stop)
         _nap(stop, 0.6, 0.9)
@@ -13200,6 +13497,7 @@ def read_task_events(n=150):
 def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
     """From the city screen: run each due task (open it, run its steps, go back)."""
     nav_state = {}
+    _TL.city_last = last_run                                 # the Black Market keep-going run looks at what else is due
     dev.arm_guard(cfg, log, stop)
     for t in tasks:
         if stop.is_set():
@@ -13304,9 +13602,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         if auto:
             if not bring_online(dev, cfg, log, stop, check_ready=True):
                 if not stop.is_set():
-                    notify(cfg, serial, "Could not get the emulator and the game ready - this instance stopped.")
+                    notify(cfg, serial, "Could not get the emulator and the game ready - restarting the emulator.")
                 return log("[+] Stopped.") if stop.is_set() else \
-                    log("[!] Could not get the emulator and the game ready - stopping this instance.")
+                    log("[!] Could not get the emulator and the game ready - restarting the emulator.")
         else:
             dev.connect()
         dev.screenshot()
@@ -14280,7 +14578,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                                     collect_unknown_monster(screen, hit, cfg, log)
                         except Exception as e:
                             log(f"[i] Picture collector: {e}")
-                    if now >= aj_next[0]:
+                    if now >= aj_next[0] or AJ_ASK.pop(serial, False):
                         aj_next[0] = now + auto_join_renew(dev, cfg, log, stop, act)
                     elif tasks_active(cfg, serial) and now >= city_block[0] and (due := city_tasks_due(cfg, city_last, serial)):
                         log(f"[*] Auto-Join is running - going to the city for {len(due)} task(s)")      # the game joins rallies by itself meanwhile
@@ -14321,10 +14619,11 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 city_day[0] = _game_day()
                 city_last.clear()
                 log("[*] The game day reset - all tasks start again")
-            if (not target or run_now_list(serial)) and tasks_active(cfg, serial) and st == "rally_list" and now >= city_block[0]:
+            bm_first = bool(target) and bm_priority_due(cfg, serial)   # Black Market 'until the gem floor' goes before joining (owner 24 Oct)
+            if (not target or run_now_list(serial) or bm_first) and tasks_active(cfg, serial) and st == "rally_list" and now >= city_block[0]:
                 due = city_tasks_due(cfg, city_last, serial)
                 if due:
-                    log(f"[*] {'No rally waiting' if not target else 'A task was started by hand'} - going to the city for {len(due)} task(s)")
+                    log(f"[*] {'No rally waiting' if not target else 'Black Market comes first' if bm_first and not run_now_list(serial) else 'A task was started by hand'} - going to the city for {len(due)} task(s)")
                     if reach_city():
                         city_fails[0] = 0
                         run_city_tasks(dev, cfg, log, stop, due, city_last)
@@ -14546,7 +14845,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     sta = read_stamina(dev.screenshot())
                     if sta and sta[0] < sta[1]:
                         log(f"[!] Not enough stamina ({sta[0]:,} of {sta[1]:,}) - using stamina items")
-                        if not refill_stamina(dev, cfg, log, stop, sta[1]):
+                        if refill_stamina(dev, cfg, log, stop, sta[1]):
+                            if ctl is not None:
+                                ctl.no_stamina = 0           # refilled: the "no stamina" chip must go away at once
+                        else:
                             log("[!] Could not get enough stamina - skipping this rally")
                             if ctl is not None:
                                 ctl.no_stamina += 1
@@ -14640,6 +14942,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 notify(cfg, serial, f"Joined rally #{joins}", "join")
                 if cfg["max_joins"] and joins >= cfg["max_joins"]:
                     log("[+] Reached max joins, stopping this instance.")
+                    stop.set()                               # a wanted stop: the instance must not start again by itself
                     return
                 nap(*cfg["cooldown_after_join"])
             else:
@@ -14660,8 +14963,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     log(f"[!] {e3}")
                 continue
             if errors >= 15:
-                log("[!] Too many errors in a row - stopping this instance.")
-                notify(cfg, serial, "Too many errors in a row - this instance stopped.")
+                log("[!] Too many errors in a row - restarting the emulator.")
+                notify(cfg, serial, "Too many errors in a row - restarting the emulator.")
                 return
             if errors % 5 == 0:
                 try:
@@ -14707,23 +15010,32 @@ def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
 
     def work():
         try:
-            crashes = 0
-            while True:
+            fails = 0
+            while not ctl.stop.is_set():
+                # Owner rule (24 Oct): an instance never stays stopped with "Problem - see the log". Whenever the bot loop
+                # ends by itself (could not connect, gave up, crashed), restart the emulator and start again - waiting a
+                # little longer each time (1, 2, 3 ... 10 min) so a broken emulator cannot hammer the PC.
+                t_run = time.time()
                 try:
                     run_device(serial, adb, cfg, log, ctl.stop, on_frame, ctl)
-                    break
+                    if ctl.stop.is_set():
+                        break
+                    why = "the bot stopped by itself"
                 except Exception as e:                       # e.g. the PC ran out of memory for a moment: do not die silently
                     log(f"[!] {e}")
-                    crashes += 1
-                    if ctl.stop.is_set() or crashes > 6:
-                        if crashes > 6:
-                            log("[!] This instance crashed too many times - stopped.")
+                    if ctl.stop.is_set():
                         break
-                    import gc
-                    gc.collect()
-                    log(f"[*] This instance crashed - starting it again in 60 s ({crashes}/6)")
-                    if ctl.stop.wait(60):
-                        break
+                    why = f"it crashed ({type(e).__name__})"
+                fails = 1 if time.time() - t_run > 1800 else fails + 1     # a long good run starts the count again
+                import gc
+                gc.collect()
+                log(f"[!] This instance stopped ({why}) - restarting the emulator and starting again (try {fails})")
+                try:
+                    restart_emulator(Device(serial, adb), merge_device_cfg(cfg, serial), log, ctl.stop, why)
+                except Exception as e2:
+                    log(f"[!] Emulator restart did not work ({e2}) - trying again later")
+                if ctl.stop.wait(min(600, 60 * fails)):
+                    break
             merged = merge_device_cfg(cfg, serial)
             if merged.get("close_emulator_on_stop") and ctl.stop.is_set():      # stopped on purpose: free its RAM
                 close_emulator(Device(serial, adb), merged, log)

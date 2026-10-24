@@ -1095,6 +1095,27 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .bmcard select{font-size:12px;padding:4px 26px 4px 8px;width:100%;margin:0}
 .bmcard.on{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--card))}
 .bmcard.on::after{content:"\2713";position:absolute;top:6px;right:8px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--accfg);font-size:12px;line-height:20px;font-weight:700}
+/* Black Market page layout (24 Oct): summary, Spending, Your picks, Add items */
+.bmpage>.bmsum{margin-bottom:14px}
+.bmtog{margin:4px 0 14px}
+.bmtog .tgl.dim{opacity:.5}
+.bmhead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.bmhead h3{margin:0}
+.bmsetall{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bmsetall .hint{margin:0}
+.bmpicks{display:flex;flex-direction:column}
+.bmpick{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line)}
+.bmpick:first-child{border-top:0}
+.bmpick img{width:40px;height:40px;object-fit:contain;border-radius:6px;flex:none}
+.bmpick .bmpn{flex:1;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bmx{flex:none;width:28px;height:28px;border:0;border-radius:7px;background:transparent;color:var(--mute);font-size:18px;line-height:1;cursor:pointer}
+.bmx:hover{background:var(--field);color:var(--fg)}
+details.bmadd{border-top:0;padding-top:0}
+details.bmadd>summary{color:var(--fg);font-size:15px}
+.bmaddb{margin-top:12px}
+button.bmcard{font:inherit;color:inherit}
+.bmcard.on{opacity:.55}
+.bmcard.on:hover{opacity:.8}
 
 /* Today card (one instance): duty queue + today's results */
 .today .cardhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
