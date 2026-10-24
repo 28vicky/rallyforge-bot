@@ -1075,7 +1075,7 @@ PAGES.tasks = function (fixed, inPanel, redraw) {
 
 // ====================================================================== market
 const PAY = [["gems", "Gems only"], ["resources", "Resources only"], ["both", "Gems or resources"]];
-const REFRESH = [["none", "Do not refresh"], ["count", "Refresh this many times"], ["all", "Until the gem floor (keeps refreshing and buying)"]];
+const REFRESH = [["none", "Never"], ["count", "A set number of times"], ["all", "Until the gem floor"]];
 // Black Market pictures that ship with the app (templates mk_BM_NN.png, cut from a real shop recording): plain name + category.
 // The item keeps its "BM NN" name in the settings (that is the picture the bot looks for); only the label shown changes.
 const BM_CATS = [["all", "All"], ["stamina", "Stamina"], ["res", "Resources"], ["speed", "Speed-ups"], ["chest", "Chests"], ["gear", "Gear & materials"], ["other", "Other"]];
@@ -1095,19 +1095,105 @@ const BM_INFO = {
 const bmGuess = (n) => /stam|vit/i.test(n) ? "stamina" : /speed/i.test(n) ? "speed" : /chest|box/i.test(n) ? "chest" : /food|lumber|wood|stone|ore|iron|gold|silver|res/i.test(n) ? "res" : "other";
 const bmInfo = (n) => BM_INFO[n] ? { label: BM_INFO[n][0], cat: BM_INFO[n][1] } : { label: n, cat: bmGuess(n) };
 PAGES.market = function () {
+  // Layout (24 Oct): summary line, Spending card, Your picks (pay per item + "Set all to"), Add items (folded).
+  // The old global "Pay with" is gone; market_pay stays in the settings as the default for newly added items
+  // and as the bot's fallback for items saved without their own pay.
   const c = S.cfg;
   c.market_items = c.market_items || [];
   let cat = "all", q = "", names = [];
-  const holder = h("div", {});
-  const sum = h("div", { class: "bmsum" });
+  const PAY_SHORT = [["gems", "Gems"], ["resources", "Resources"], ["both", "Either"]];
+  const fmt = (v) => Number(v || 0).toLocaleString("en-US");
   const chosen = (n) => c.market_items.find((i) => i.name === n);
-  const pick = (n) => {
-    if (chosen(n)) c.market_items = c.market_items.filter((i) => i.name !== n);
-    else c.market_items.push({ name: n, pay: c.market_pay || "gems" });
-    draw();
+  const addItem = (n) => { if (!chosen(n)) c.market_items.push({ name: n, pay: c.market_pay || "gems" }); };
+  const pick = (n) => { if (chosen(n)) c.market_items = c.market_items.filter((i) => i.name !== n); else addItem(n); draw(); };
+  // ---- summary line
+  const sum = h("div", { class: "bmsum" });
+  const drawSum = () => {
+    const k = c.market_items.length;
+    if (!k) { sum.textContent = "Nothing picked yet - the bot opens the Black Market but buys nothing."; return; }
+    const m = c.market_refresh_mode || "none", rn = Number(c.market_refresh_n || 0);
+    const parts = ["Buys " + k + " item" + (k > 1 ? "s" : "") + " when the shop has them",
+      m === "none" ? "no refresh" : m === "count" ? "refreshes up to " + rn + " time" + (rn === 1 ? "" : "s") : "refreshes until the gem floor",
+      c.market_paid_refresh && m !== "none" ? "paid refresh on" : null,
+      Number(c.market_min_gems) > 0 ? "keeps " + fmt(c.market_min_gems) + " gems" : "no gem floor",
+      Number(c.market_max_gems) > 0 ? "max " + fmt(c.market_max_gems) + " gems a visit" : null];
+    sum.textContent = parts.filter(Boolean).join(" · ");
   };
+  // ---- 1. Spending
+  const nInp = inp(c, "market_refresh_n", { type: "int", cls: "short" });
+  const paidTog = tog(c, "market_paid_refresh", "Paid refresh with gems after the free ones", { after: () => draw() });
+  const lockSpend = () => {
+    const m = c.market_refresh_mode || "none";
+    const nIn = nInp.tagName === "INPUT" ? nInp : nInp.querySelector("input");
+    if (nIn) { nIn.disabled = m !== "count"; nIn.title = m === "count" ? "" : "Only used with 'A set number of times'"; }
+    const pIn = paidTog.querySelector("input"); if (pIn) pIn.disabled = m === "none";
+    paidTog.classList.toggle("dim", m === "none");
+  };
+  const spend = panel("Spending",
+    grid2(fld("Refresh the shop", sel(c, "market_refresh_mode", REFRESH, { dropdown: true, after: () => draw() })),
+      fld("How many times", nInp)),
+    h("div", { class: "bmtog" }, paidTog),
+    grid2(fld("Gem floor", inp(c, "market_min_gems", { type: "int", cls: "short" }), "Never go below this. 0 = no floor"),
+      fld("Gold floor", inp(c, "market_min_gold", { type: "int", cls: "short" }), "Never go below this. 0 = no floor"),
+      fld("Gem limit per visit", inp(c, "market_max_gems", { type: "int", cls: "short" }), "0 = no limit")));
+  spend.addEventListener("input", () => drawSum());
+  spend.addEventListener("change", () => drawSum());
+  // ---- 2. Your picks
+  const picksBody = h("div", {});
+  const picksHead = h("div", { class: "bmhead" });
+  const drawPicks = () => {
+    const k = c.market_items.length;
+    picksHead.innerHTML = "";
+    picksHead.appendChild(h("h3", {}, "Your picks" + (k ? " (" + k + ")" : "")));
+    if (k) {
+      const same = c.market_items.every((i) => (i.pay || "gems") === (c.market_items[0].pay || "gems")) ? (c.market_items[0].pay || "gems") : "";
+      const st = { v: same };
+      picksHead.appendChild(h("div", { class: "bmsetall" }, h("span", { class: "hint" }, "Set all to"),
+        segPick(st, "v", PAY_SHORT, { small: true, label: "Set all to", after: (v) => { c.market_items.forEach((i) => { i.pay = v; }); c.market_pay = v; draw(); } }),
+        h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); c.market_items = []; draw(); } }, "Clear all")));
+    }
+    picksBody.innerHTML = "";
+    if (!k) {
+      picksBody.appendChild(h("div", { class: "empty" }, "No picks yet. Open Add items below and tap the pictures you want the bot to buy."));
+      return;
+    }
+    picksBody.appendChild(h("div", { class: "bmpicks" }, ...c.market_items.map((it) => {
+      const f = bmInfo(it.name), st = { v: it.pay || "gems" };
+      return h("div", { class: "bmpick", title: it.name },
+        h("img", { src: `/api/market_img?name=${encodeURIComponent(it.name)}&k=${window.KEY}`, alt: "", onerror: (e) => (e.target.style.visibility = "hidden") }),
+        h("div", { class: "bmpn" }, f.label),
+        segPick(st, "v", PAY_SHORT, { small: true, label: "Pay for " + f.label + " with", after: (v) => { it.pay = v; draw(); } }),
+        h("button", { class: "bmx", type: "button", "aria-label": "Remove " + f.label, title: "Remove", onclick: () => pick(it.name) }, "×"));
+    })));
+  };
+  const picks = panel(null, picksHead, picksBody);
+  // ---- 3. Add items (folded; opens by itself while nothing is picked)
+  const holder = h("div", {});
   const pills = h("div", { class: "rtnpills" });
   const search = h("input", { type: "search", placeholder: "Search, e.g. stamina, food, chest", oninput: (e) => { q = e.target.value.trim().toLowerCase(); draw(); } });
+  const addSum = h("summary", {});
+  const add = h("details", { class: "adv bmadd" }, addSum,
+    h("div", { class: "bmaddb" },
+      note("Tap a picture to add it to your picks; tap again to take it off. Picked ones are dimmed with a tick."),
+      h("div", { class: "row", style: { margin: "4px 0 12px" } },
+        btn("Stamina only", () => { c.market_items = c.market_items.filter((i) => bmInfo(i.name).cat === "stamina").map((i) => ({ ...i, pay: "gems" }));
+          for (const n of names) if (bmInfo(n).cat === "stamina" && !chosen(n)) c.market_items.push({ name: n, pay: "gems" }); cat = "stamina"; draw(); }, "sm"),
+        btn("Add item from screenshot…", async () => {
+          const shot = await pickScreenshot("Screenshot of the Black Market");
+          if (!shot) return;
+          const rect = await pickOnShot(shot, "Drag a box around just the item's PICTURE (the icon in the middle, without the number in the corner), then release.", "region");
+          if (!rect) return;
+          const name = await promptBox("Black Market item", "Name of this item (e.g. Stamina 50):", "");
+          if (!name) return;
+          const j = await act(api("market_item_add", { token: shot.token, rect, name }));
+          if (!j) return;
+          if (!names.includes(j.name)) names.push(j.name);
+          addItem(j.name);
+          draw();
+        }, "sm")),
+      h("div", { class: "bmbar" }, pills, search),
+      holder));
+  let autoOpened = false;
   const draw = () => {
     const all = [...new Set([...names, ...c.market_items.map((i) => i.name)])];
     pills.innerHTML = "";
@@ -1116,50 +1202,22 @@ PAGES.market = function () {
       pills.appendChild(h("button", { type: "button", class: "rtnpill" + (cat === k ? " on" : ""), onclick: () => { cat = k; draw(); } }, l + " " + n));
     }
     const list = all.filter((n) => { const f = bmInfo(n); return (cat === "all" || f.cat === cat) && (!q || (f.label + " " + n + " " + f.cat).toLowerCase().includes(q)); })
-      .sort((a, b) => (!!chosen(b) - !!chosen(a)) || bmInfo(a).label.localeCompare(bmInfo(b).label));
+      .sort((a, b) => bmInfo(a).label.localeCompare(bmInfo(b).label));
     holder.innerHTML = "";
     holder.appendChild(list.length ? h("div", { class: "bmgrid" }, ...list.map((n) => {
       const it = chosen(n), f = bmInfo(n);
-      const pay = it ? h("select", { "aria-label": "Pay with", onclick: (e) => e.stopPropagation(), onchange: (e) => { it.pay = e.target.value; } },
-        ...PAY.map(([v, l]) => h("option", { value: v, selected: (it.pay || "gems") === v }, l))) : null;
-      return h("div", { class: "bmcard" + (it ? " on" : ""), title: n, onclick: () => pick(n) },
+      return h("button", { type: "button", class: "bmcard" + (it ? " on" : ""), title: n, "aria-pressed": !!it, onclick: () => pick(n) },
         h("img", { src: `/api/market_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, alt: "", onerror: (e) => (e.target.style.visibility = "hidden") }),
-        h("div", { class: "bmname" }, f.label), it ? pay : h("div", { class: "bmsub" }, "Click to buy"));
-    })) : note("Nothing matches."));
-    const k = c.market_items.length;
-    sum.textContent = k ? "Buying " + k + ": " + c.market_items.map((i) => bmInfo(i.name).label).join(", ") : "Nothing chosen yet - the bot buys nothing in the Black Market.";
+        h("div", { class: "bmname" }, f.label), h("div", { class: "bmsub" }, it ? "Picked" : "Tap to add"));
+    })) : h("div", { class: "empty" }, q ? "Nothing matches “" + q + "”." : "No pictures in this group yet."));
+    const left = all.filter((n) => !chosen(n)).length;
+    addSum.textContent = "Add items" + (all.length ? " · " + left + " more to choose from" : "");
+    if (!c.market_items.length && !autoOpened) { add.open = true; autoOpened = true; }
+    drawPicks(); drawSum(); lockSpend();
   };
   api("market_pictures", {}, { quiet: true }).then((j) => { names = (j && j.names) || []; draw(); }).catch(() => draw());
   draw();
-  const items = panel("Black Market: what to buy",
-    note("Tap the pictures you want; a ticked card is bought, everything else is ignored. Then add the 'Black Market' city task so it visits the shop (Tasks tab)."),
-    sum,
-    h("div", { class: "row", style: { margin: "10px 0" } },
-      btn("Stamina only", () => { c.market_items = c.market_items.filter((i) => bmInfo(i.name).cat === "stamina").map((i) => ({ ...i, pay: "gems" }));
-        for (const n of names) if (bmInfo(n).cat === "stamina" && !chosen(n)) c.market_items.push({ name: n, pay: "gems" }); cat = "stamina"; draw(); }, "sm"),
-      btn("Clear all", () => { c.market_items = []; draw(); }, "sm"),
-      btn("Add item from screenshot\u2026", async () => {
-        const shot = await pickScreenshot("Screenshot of the Black Market");
-        if (!shot) return;
-        const rect = await pickOnShot(shot, "Drag a box around just the item's PICTURE (the icon in the middle, without the number in the corner), then release.", "region");
-        if (!rect) return;
-        const name = await promptBox("Black Market item", "Name of this item (e.g. Stamina 50):", "");
-        if (!name) return;
-        const j = await act(api("market_item_add", { token: shot.token, rect, name }));
-        if (!j) return;
-        if (!names.includes(j.name)) names.push(j.name);
-        if (!chosen(j.name)) c.market_items.push({ name: j.name, pay: c.market_pay || "gems" });
-        draw();
-      })),
-    h("div", { class: "bmbar" }, pills, search),
-    holder);
-  const opts = panel("Buying and refreshing",
-    grid2(fld("Pay with (all chosen items - each card can still differ)", sel(c, "market_pay", PAY, { after: () => { (c.market_items || []).forEach((i) => { i.pay = c.market_pay; }); draw(); } })), fld("When the shop has none of them", sel(c, "market_refresh_mode", REFRESH)),
-      fld("How many refreshes", inp(c, "market_refresh_n", { type: "int", cls: "short" })), fld("Most gems to spend per visit (0 = keep going until the gems run out)", inp(c, "market_max_gems", { type: "int", cls: "short" }))),
-    grid2(fld("Keep at least this many gems (0 = no floor)", inp(c, "market_min_gems", { type: "int", cls: "short" })),
-      fld("Keep at least this much gold (0 = no floor)", inp(c, "market_min_gold", { type: "int", cls: "short" }))),
-    h("div", { style: { margin: "14px 0" } }, tog(c, "market_paid_refresh", "Also refresh with gems when the free refreshes are used up (costs gems!)")));
-  return h("div", {}, items, opts);
+  return h("div", { class: "bmpage" }, sum, spend, picks, panel(null, add));
 };
 
 // ====================================================================== telegram
