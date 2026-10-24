@@ -1400,6 +1400,7 @@ def fmt_hms(sec):
 
 
 AJ_LEFT = {}                                  # serial -> (seconds left on the game's Auto-Join, time it was read)
+AJ_ASK = {}                                   # serial -> True: check Auto-Join at the next look at the rally list (Black Market left the shop for it)
 
 
 def auto_join_renew(dev, cfg, log, stop, act):
@@ -7926,8 +7927,18 @@ def market_totals(img):
         best = None
         try:
             for _t, ws in ocr_lines(img[282:330, x0:x1], 3.0):
-                for w in ws:
-                    d = re.sub(r"\D", "", w[0])
+                runs, cur = [], ""                         # neighbouring number pieces belong together: OCR can split
+                for w in ws:                               # '432,750' into '4' + '32,750' (Kulim 24 Oct: ~400k read as 32,750)
+                    if re.fullmatch(r"[\d.,']+", w[0].strip()):
+                        cur += w[0]
+                    else:
+                        if cur:
+                            runs.append(cur)
+                        cur = ""
+                if cur:
+                    runs.append(cur)
+                for r in runs:
+                    d = re.sub(r"\D", "", r)
                     if len(d) >= 3 and (best is None or len(d) > len(str(best))):
                         best = int(d)
         except Exception as _e:
@@ -7994,7 +8005,7 @@ def market_confirm(dev, log, stop):
         log("[i] Black Market: this would use a Rebuy Chance - closed the box, not bought")
         dev.tap(*REBUY_CLOSE)
         _nap(stop, 0.9, 1.2)
-        return False
+        return None                                         # None = refused rebuy (the caller logs nothing more)
     for _ in range(2):
         p = find_text(shot, ["Confirm"], region=(60, 470, 420, 200), cutoff=0.6) or _green_button(shot, (60, 470, 420, 200))
         if not p:
@@ -8104,7 +8115,12 @@ def run_market(dev, cfg, log, stop):
     min_gold = int(cfg.get("market_min_gold", 0) or 0)
     spent = refreshes = 0
     no_change = 0
-    end = None                                               # why the run ended: "floor" / "limit" / "nogems" = nothing more to do today
+    end = None                                               # why the run ended: "floor" / "nogems" (wait for gems) / "limit" (this visit)
+    keep = bm_keep_going(cfg)                                # 'until the gem floor' + paid refresh: no time limit, other tasks go in between
+    serial = getattr(dev, "serial", "")
+    left_for = None                                          # keep-going: the shop was left for another task (or a frozen shop)
+    last_prog = last_look = time.time()                      # last buy / refresh, last look at the other tasks
+    pend = 0                                                 # gems spent since the gem total was last believed
     bought, failed = {}, set()                              # failed: slot numbers that did not sell (until the next refresh)
     gold, gems = market_totals(img)
     try:                                                     # the shop with its gold / gem row, to check the numbers read (a 6-digit
@@ -8118,7 +8134,21 @@ def run_market(dev, cfg, log, stop):
     free_left = None                                     # once the free refreshes are used up they stay at 0: no more reading them
     cost_seen = None                                     # the paid refresh cost, read once and re-checked every 10 refreshes
     next_img = None                                      # the picture taken right after a refresh is reused (one screenshot less)
-    while not stop.is_set():
+    if keep:
+        _TL.duty_deadline = None                             # no 20-min budget: the stall check below takes its place
+        left_for = bm_leave_for(cfg, serial)                 # e.g. Auto-Join not checked yet since the start: that goes first
+    while not stop.is_set() and not left_for:
+        if keep:
+            now = time.time()
+            if now - last_prog > BM_STALL_MIN * 60:          # nothing bought or refreshed for minutes: the shop / game froze
+                log(f"[!] Black Market: nothing happened for {BM_STALL_MIN} min - restarting Evony, then back to the shop")
+                left_for = "stall"
+                break
+            if now - last_look >= 20:
+                last_look = now
+                left_for = bm_leave_for(cfg, serial)
+                if left_for:
+                    break
         img = next_img if next_img is not None else dev.screenshot()
         next_img = None
         for _w in range(4):                                  # a confirm dialog / reward pop-up can sit over the shop for a moment
@@ -8137,9 +8167,12 @@ def run_market(dev, cfg, log, stop):
             cv2.imwrite(str(USER / "debug" / "black_market_closed.png"), img)
             log("[!] Black Market: the shop is no longer on screen (picture saved: debug/black_market_closed.png)")
             break
-        g2, m2 = market_totals(img) if need_totals else (None, None)
-        gold = g2 if g2 is not None else gold
-        gems = m2 if m2 is not None else gems
+        if need_totals:
+            g2, m2, fresh_read = bm_gems_checked(dev, img, gems, pend, log)
+            gold = g2 if g2 is not None else gold
+            gems = m2 if m2 is not None else gems
+            if fresh_read:
+                pend = 0
         again = False
         for si, slot in enumerate(market_slots(img)):
             if si in failed:
@@ -8178,7 +8211,9 @@ def run_market(dev, cfg, log, stop):
                     paid = (slot["gem"] and m0 is not None and m1 is not None and m1 < m0) or \
                            ((not slot["gem"]) and g0 is not None and g1 is not None and g1 < g0)
                     gone = market_on_screen(after) and market_match(after, slot, tname, th) < th
-                    if not ok_buy or not (paid or (gone and (m1 is None or m0 is None))):
+                    if ok_buy is None:                       # a refused Rebuy Chance box: already logged, not a failure
+                        failed.add(si)
+                    elif not ok_buy or not (paid or (gone and (m1 is None or m0 is None))):
                         failed.add(si)                       # the purchase did not go through
                         log(f"[!] {name}: not bought (confirm {'tapped' if ok_buy else 'not found'}; "
                             f"{'gems' if slot['gem'] else 'gold'} {m0 if slot['gem'] else g0} -> {m1 if slot['gem'] else g1})")
@@ -8186,8 +8221,10 @@ def run_market(dev, cfg, log, stop):
                             cv2.imwrite(str(USER / "debug" / "black_market_not_bought.png"), after)
                     else:
                         bought[name] = bought.get(name, 0) + 1
+                        last_prog = time.time()
                         if slot["gem"] and price:
                             spent += price
+                            pend += price
                         log(f"[+] Bought {name} for {price if price is not None else '?'} "
                             f"{'gems' if slot['gem'] else 'resources'}")
                     again = True
@@ -8262,26 +8299,53 @@ def run_market(dev, cfg, log, stop):
             if no_change >= 2:
                 log("[!] Black Market: the shop did not change after refreshing (out of gems?) - stopping")
                 end = "nogems" if (gems is not None and cost_seen and gems < 2 * cost_seen) else None
+                if keep and not end:
+                    left_for = "stall"                       # gems left but the shop does not move: frozen -> restart Evony
                 break
             continue
         no_change = 0
         next_img = shot
         if not free:
             spent += cost
+            pend += cost
         refreshes += 1
+        last_prog = time.time()
         failed.clear()
         log(f"[*] Black Market: refresh {refreshes}" + (f" of {limit}" if mode == "count" else ""))
     total = ", ".join(f"{n} x{c}" for n, c in bought.items()) or "nothing"
     log(f"[+] Black Market done: bought {total}; {refreshes} refresh(es)")
-    if bm_keep_going(cfg) and not stop.is_set():             # keeps coming back all day until the gems reach the floor / run out
-        serial = getattr(dev, "serial", "")
-        if end:
-            bm_save(serial, end_day=_game_day(), next_at=0, end_why=end, end_gems=gems)
-            log("[i] Black Market: " + {"floor": "gem floor reached", "limit": "gem limit reached",
-                                       "nogems": "out of gems"}[end] + " - done until the game reset")
-        else:
-            bm_save(serial, next_at=time.time() + BM_AGAIN_MIN * 60)
-            log(f"[i] Black Market: gems left above the floor - back in {BM_AGAIN_MIN} min")
+    sg, si, sr = bm_spend_add(serial, spent, sum(bought.values()), refreshes)
+    if bought or refreshes:
+        log(f"[*] Black Market today: {sg:,} gems -> items x{si}, {sr} refreshes")
+    if not keep or stop.is_set():
+        return
+    now = time.time()
+    # owner 24 Oct: never 'done for the day' - low gems = an hour of normal work, then a shop visit reads the gems again
+    if left_for == "stall":
+        bm_save(serial, next_at=0, wait_gems=False)
+        try:
+            force_restart_game(dev, cfg, log, stop)
+        except Exception as e:
+            log(f"[!] Black Market: restarting Evony failed: {e}")
+    elif left_for:
+        bm_save(serial, next_at=0, wait_gems=False)
+        log(f"[i] Black Market: leaving the shop for {left_for} - back right after")
+    elif end in ("floor", "nogems"):
+        nxt = now + BM_LOW_WAIT_MIN * 60
+        row = (load_duty_state().get(serial or "default") or {}).get("black_market") or {}
+        bm_save(serial, next_at=nxt, wait_gems=True, end_why=end, end_gems=gems)
+        log(f"[i] Black Market: {'gem floor reached' if end == 'floor' else 'out of gems'}"
+            f"{f' (gems {gems:,})' if isinstance(gems, int) else ''} - normal work until "
+            f"{time.strftime('%H:%M', time.localtime(nxt))}, then a look at the gems")
+        if not row.get("wait_gems"):                         # once per low spell, not every hour
+            notify(cfg, serial, f"Black Market: {'gem floor reached' if end == 'floor' else 'out of gems'}"
+                                f"{f' ({gems:,} gems)' if isinstance(gems, int) else ''} - looking again every hour")
+    elif end == "limit":                                     # 'most gems in one visit': this visit only
+        bm_save(serial, next_at=now + BM_AGAIN_MIN * 60, wait_gems=False)
+        log(f"[i] Black Market: gem limit for this visit reached - next visit in {BM_AGAIN_MIN} min")
+    else:                                                    # the shop closed / a dialog: straight back soon
+        bm_save(serial, next_at=now + 120, wait_gems=False)
+        log("[i] Black Market: visit ended early - back in 2 min")
 
 
 def fix_building_name(text):
@@ -8438,13 +8502,20 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             if find_learned_building(dev, cfg, log, stop, bname.strip()):
                 return True
             log(f"[i]   {bname.strip()}: not reached by the map - trying the Activity route")
+        elif bname and task.get("no_tile"):                   # Black Market keep-going: the learned building picture first
+            leave_to_city(dev, cfg, stop, log)
+            if find_learned_building(dev, cfg, log, stop, bname.strip()):
+                return True
         try:
             r = activity_go(dev, cfg, log, stop, tile.strip(), route=(kind == "via"))
         except Exception as e:
             log(f"[i]   Activity route to {bname or tile}: {e} - using the city map instead")
             leave_to_city(dev, cfg, stop, log)
             r = None
-        if r == "complete":
+        if r == "complete" and task.get("no_tile"):
+            log(f"[i]   {tile.strip()}: daily done today - going to the {bname.strip()} building instead")
+            r = None                                       # the gems decide, not the daily quest (owner 24 Oct)
+        elif r == "complete":
             rd_nothing()
             return None                                    # this daily is already complete today: nothing to open
         if r and (not bname or open_building_here(dev, cfg, log, stop, bname.strip())):
@@ -8986,6 +9057,103 @@ def bm_save(serial, **kw):
         row = data.setdefault(serial or "default", {}).setdefault("black_market", {})
         row.update(kw)
         save_duty_state(data)
+
+
+BM_LOW_WAIT_MIN = 60     # gems at the floor / out of gems: normal work for an hour, then a shop visit reads the gems again (owner 24 Oct)
+BM_STALL_MIN = 4         # keep-going run: nothing bought or refreshed for this long = the shop is frozen -> restart Evony, go back
+BM_LEFT_FOR = {}         # serial -> {task id: time} the shop was left for (one stuck task cannot pull the bot out over and over)
+
+
+def aj_renew_due(cfg, serial):
+    """The game's Auto-Join needs a look now: not read since the bot started, or the time left is at the renew limit.
+    Worked out from the last reading (AJ_LEFT) - no screen look."""
+    if not (cfg.get("game_auto_join") and cfg.get("rally_enabled", True)):
+        return False
+    r = AJ_LEFT.get(serial)
+    if not r:
+        return True
+    limit = max(1, int(cfg.get("auto_join_renew_min", 120))) * 60
+    return r[0] - (time.time() - r[1]) <= limit
+
+
+def bm_leave_for(cfg, serial):
+    """Inside a keep-going Black Market run: something that must run first -> its name, else None.
+    Owner 24 Oct: Run now, any other due duty / task and the game's Auto-Join renew come first; the bot comes straight back."""
+    now = time.time()
+    seen = BM_LEFT_FOR.setdefault(serial or "default", {})
+    fresh = lambda k: now - seen.get(k, 0) > 600
+    if aj_renew_due(cfg, serial) and fresh("auto_join"):
+        seen["auto_join"] = now
+        AJ_ASK[serial] = True
+        return "the game's Auto-Join check"
+    try:
+        due = city_tasks_due(cfg, getattr(_TL, "city_last", None) or {}, serial)
+    except Exception as _e:
+        quiet_err("bm_leave_for", _e)
+        due = []
+    for t in due:
+        tid = t.get("name", "")
+        if tid == "duty:black_market" or not fresh(tid):
+            continue
+        seen[tid] = now
+        return DUTY_BY_ID[tid[5:]]["title"] if tid.startswith("duty:") and tid[5:] in DUTY_BY_ID else tid
+    return None
+
+
+def bm_priority_due(cfg, serial):
+    """Auto-Join off + Black Market 'until the gem floor' due: the shop goes before joining rallies (owner 24 Oct)."""
+    return bm_keep_going(cfg) and ((cfg.get("duties") or {}).get("black_market") or {}).get("on") \
+        and duty_status(serial, "black_market", cfg)[0] == "due"
+
+
+def bm_gems_checked(dev, img, prev, pend, log):
+    """The gold / gem totals, with a sanity check on the gems: a total that moved by more than the bot just spent
+    (pend) is read again (Kulim 24 Oct: ~400k read as 32,750). Two reads that agree are believed (a top-up in the game
+    is fine); otherwise the expected total is kept. -> (gold, gems, believed_new_read)."""
+    g, m = market_totals(img)
+    if m is None or prev is None:
+        return g, m, m is not None
+    want = max(0, prev - pend)
+    if abs(m - want) <= max(2000, pend // 10):
+        return g, m, True
+    reads = [m]
+    for _ in range(3):
+        time.sleep(0.6)
+        s2 = dev.screenshot()
+        if not market_on_screen(s2):
+            break
+        _, m2 = market_totals(s2)
+        if m2 is None:
+            continue
+        if abs(m2 - want) <= max(2000, pend // 10):
+            return g, m2, True
+        reads.append(m2)
+        if reads[-1] == reads[-2]:
+            log(f"[i] Black Market: gems now {m2:,} (expected about {want:,} - read twice the same)")
+            return g, m2, True
+    log(f"[!] Black Market: gem total read as {m:,}, expected about {want:,} - keeping {want:,}")
+    return g, want, False
+
+
+def bm_spend_add(serial, gems, items, refreshes):
+    """Per game day: gems spent, items bought, refreshes -> the 'Black Market today' line."""
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        row = data.setdefault(serial or "default", {}).setdefault("black_market", {})
+        day = _game_day()
+        if row.get("sp_day") != day:
+            row.update(sp_day=day, sp_gems=0, sp_items=0, sp_ref=0)
+        row["sp_gems"] = int(row.get("sp_gems", 0)) + int(gems or 0)
+        row["sp_items"] = int(row.get("sp_items", 0)) + int(items or 0)
+        row["sp_ref"] = int(row.get("sp_ref", 0)) + int(refreshes or 0)
+        save_duty_state(data)
+        return row["sp_gems"], row["sp_items"], row["sp_ref"]
+
+
+def bm_spend_text(row):
+    if row.get("sp_day") != _game_day() or not (row.get("sp_gems") or row.get("sp_items") or row.get("sp_ref")):
+        return ""
+    return f"today {int(row.get('sp_gems', 0)):,} gems, {int(row.get('sp_items', 0))} items, {int(row.get('sp_ref', 0))} refreshes"
 
 
 def ce_save(serial, **kw):
@@ -12528,24 +12696,23 @@ def duty_status(serial, duty_id, cfg):
     row = (load_duty_state().get(serial or "default") or {}).get(duty_id) or {}
     day, now = _game_day(), time.time()
     tries = int(row.get("tries", 0)) if row.get("day") == day else 0
+    if duty_id == "black_market" and bm_keep_going(cfg):     # owner 24 Oct: runs all day, never 'done' - the gem floor only pauses it
+        fs = _duty_fail_state(row, tries, now)               # (checked before done_day: the Activity tile says nothing about the gems)
+        if fs:
+            return fs
+        sp = bm_spend_text(row)
+        if row.get("wait_gems") and row.get("next_at", 0) > now:
+            g = row.get("end_gems")
+            return "waiting", "Waiting for gems" + (f" (read {g:,})" if isinstance(g, int) else "") + " - next look " + \
+                time.strftime("%H:%M", time.localtime(row["next_at"])) + (" · " + sp if sp else "")
+        if row.get("next_at", 0) > now:
+            return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"])) + (" · " + sp if sp else "")
+        return "due", "Due" + (" · " + sp if sp else "")
     if row.get("done_day") == day:                          # checked twice: nothing left in the game until the reset
         return "done", "Done for today"
     if duty_id in ("crazy_eggs", "royal_thief", "monster_rally"):           # timer driven: comes back when the next egg is ready
         if row.get("all_done_day") == day:
             return "done", "All eggs done"
-        fs = _duty_fail_state(row, tries, now)
-        if fs:
-            return fs
-        if row.get("next_at", 0) > now:
-            return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"]))
-        return "due", "Due"
-    if duty_id == "black_market" and bm_keep_going(cfg):     # runs all day until the gems reach the floor / run out
-        if row.get("end_day") == day:
-            why = {"floor": "Stopped at your gem floor", "limit": "Gem limit for the day reached", "nogems": "Out of gems"}.get(
-                row.get("end_why"), "Gems used up")
-            g = row.get("end_gems")
-            return "done", why + (f" (gems read: {g:,})" if isinstance(g, int) else "") + " " + \
-                time.strftime("%H:%M", time.localtime(row.get("last_ok", 0) or now))
         fs = _duty_fail_state(row, tries, now)
         if fs:
             return fs
@@ -12583,6 +12750,8 @@ def run_now_tasks(cfg, serial):
             d = DUTY_BY_ID[tid[5:]]
             t = {k: d[k] for k in ("target", "steps") if k in d}
             t["name"], t["count"] = tid, d.get("count", 1)
+            if tid == "duty:black_market" and bm_keep_going(cfg):
+                t["no_tile"] = True
             out.append(t)
         elif tid.startswith("task:"):
             for c in cfg.get("city_tasks") or []:
@@ -12603,6 +12772,8 @@ def duty_tasks_due(cfg, serial):
             t = {k: d[k] for k in ("target", "steps") if k in d}
             t["name"] = "duty:" + d["id"]
             t["count"] = d.get("count", 1)
+            if d["id"] == "black_market" and bm_keep_going(cfg):
+                t["no_tile"] = True                          # straight to the Market building, not the Activity tile (gone once the daily is done)
             out.append(t)
     return out
 
@@ -13232,6 +13403,7 @@ def read_task_events(n=150):
 def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
     """From the city screen: run each due task (open it, run its steps, go back)."""
     nav_state = {}
+    _TL.city_last = last_run                                 # the Black Market keep-going run looks at what else is due
     dev.arm_guard(cfg, log, stop)
     for t in tasks:
         if stop.is_set():
@@ -14312,7 +14484,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                                     collect_unknown_monster(screen, hit, cfg, log)
                         except Exception as e:
                             log(f"[i] Picture collector: {e}")
-                    if now >= aj_next[0]:
+                    if now >= aj_next[0] or AJ_ASK.pop(serial, False):
                         aj_next[0] = now + auto_join_renew(dev, cfg, log, stop, act)
                     elif tasks_active(cfg, serial) and now >= city_block[0] and (due := city_tasks_due(cfg, city_last, serial)):
                         log(f"[*] Auto-Join is running - going to the city for {len(due)} task(s)")      # the game joins rallies by itself meanwhile
@@ -14353,10 +14525,11 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 city_day[0] = _game_day()
                 city_last.clear()
                 log("[*] The game day reset - all tasks start again")
-            if (not target or run_now_list(serial)) and tasks_active(cfg, serial) and st == "rally_list" and now >= city_block[0]:
+            bm_first = bool(target) and bm_priority_due(cfg, serial)   # Black Market 'until the gem floor' goes before joining (owner 24 Oct)
+            if (not target or run_now_list(serial) or bm_first) and tasks_active(cfg, serial) and st == "rally_list" and now >= city_block[0]:
                 due = city_tasks_due(cfg, city_last, serial)
                 if due:
-                    log(f"[*] {'No rally waiting' if not target else 'A task was started by hand'} - going to the city for {len(due)} task(s)")
+                    log(f"[*] {'No rally waiting' if not target else 'Black Market comes first' if bm_first and not run_now_list(serial) else 'A task was started by hand'} - going to the city for {len(due)} task(s)")
                     if reach_city():
                         city_fails[0] = 0
                         run_city_tasks(dev, cfg, log, stop, due, city_last)
