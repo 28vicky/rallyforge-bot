@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## READY (24 Oct 12:50 IST) - fix/restart-queue-stamina: game restart inside a restart deadlocked the restart queue (8 instances frozen 11 h on vickypc); stamina Use fallback when size labels can't be read; no-stamina chip clears after refill. Live on vickypc dev copy. Doc: claude/frozen_instances_stamina_24oct.md
+
 ## LATEST (24 Oct 01:15 IST) - 2.5.7 PUBLISHED (release/2.5.7 merged to main b64b018, signed version.json, check_release OK): T67 UI pass, T69 tests, generals tab fallback, dark mode, save status, safety stop, stamina, unknown windows, Behemoth King, task stats, detect, stability. Mode: Update available (not auto). NOT live tested. The PC dev copy app\v2.4.99 (feat/city-go keyframe map) is NOT in it - installing 2.5.7 on the PC replaces the dev copy.
 
 ## NEXT CHAT: read project doc claude/handoff_23oct_0740.md first (released today + open list: 1. too many game restarts, 2. slow building label search, 3. Rory Champions, 4. recorder on BlueStacks).
