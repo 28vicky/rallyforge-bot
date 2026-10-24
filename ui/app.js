@@ -1226,7 +1226,10 @@ function undoLast() {
     const panel = h("div", { class: "pick", role: "dialog", "aria-label": sel.getAttribute("aria-label") || "Choose" }, search, list);
     document.body.appendChild(panel);
     // place it under the box (or above when there is no room), at least as wide as the box
-    const r = sel.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    // the app scales the page with CSS zoom (text size setting): screen positions are divided by it to get CSS pixels
+    const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+    const b0 = sel.getBoundingClientRect(), r = { left: b0.left / z, top: b0.top / z, bottom: b0.bottom / z, width: b0.width / z };
+    const vw = window.innerWidth / z, vh = window.innerHeight / z;
     const w = Math.min(Math.max(r.width, 220), vw - 16);
     panel.style.width = w + "px";
     panel.style.left = Math.max(8, Math.min(r.left, vw - w - 8)) + "px";
