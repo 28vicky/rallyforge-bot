@@ -6893,6 +6893,12 @@ class CityNav:
         self.cx = self.cy = 0.0
         self.seen_city = False                              # set once the whole-city picture recognised the screen
         self.absolute = False                                # True: the camera place is read from the whole-city picture (no drifting)
+        self.deadline = None                                 # time.time() after which every move gives up (a step's time limit)
+
+    def halted(self):
+        """Stop pressed, or this step's time limit passed: every camera move checks it (Kiravik 24 Oct 14:57: Stop clicked
+        9 times while aiming at the Market, the instance kept going)."""
+        return self.stop.is_set() or (self.deadline is not None and time.time() > self.deadline)
 
     def localize(self, shot=None):
         """Find where the camera is by matching the screen against the whole-city picture. Sets cx, cy (city picture
@@ -6911,7 +6917,7 @@ class CityNav:
         mid_x, mid_y = x + w / 2, y + h / 2
         lost = 0
         for _ in range(12):
-            if self.stop.is_set():
+            if self.halted():
                 return False
             sc = self.localize()
             if sc:
@@ -6955,6 +6961,9 @@ class CityNav:
         return last
 
     def _drag(self, fx, fy, tx, ty, before=None):
+        if self.halted():
+            shot = before if before is not None else self.dev.screenshot()
+            return 0.0, 0.0, shot
         before = self._settled() if before is None else before
         self.dev.swipe(int(fx), int(fy), int(tx), int(ty), 600)
         _nap(self.stop, self.pause, self.pause + 0.3)
@@ -6983,7 +6992,7 @@ class CityNav:
         mx = my = 0.0
         for _ in range(6):                                 # a few measured drags; the city edge (springs back) ends it
             rx, ry = want_dx - mx, want_dy - my
-            if abs(rx) < 25 and abs(ry) < 25:
+            if abs(rx) < 25 and abs(ry) < 25 or self.halted():
                 break
             sx = max(-200, min(200, rx))              # one drag at a time; each is measured (patch tracking)
             sy = max(-300, min(300, ry))
@@ -7019,7 +7028,7 @@ class CityNav:
         self.pan(want_x - self.cx, want_y - self.cy)
         for _ in range(3):                                   # the city is a diamond: near a corner the map will not slide
             rx, ry = want_x - self.cx, want_y - self.cy      # sideways until you have gone down (or up) far enough,
-            if abs(rx) < 40 and abs(ry) < 40:                # so do the other direction first, then come back
+            if abs(rx) < 40 and abs(ry) < 40 or self.halted():   # so do the other direction first, then come back
                 break
             if abs(ry) >= 25:
                 self.pan(0, ry)
@@ -8344,7 +8353,11 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             if nav_state["mode"] == "labels":
                 return aim_by_labels(dev, cfg, log, stop, k)
             nav.seen_city = False
+            nav.deadline = time.time() + 150                # this step gives up by itself after 2.5 min
             nav.goto(tx, ty)
+            nav.deadline = None
+            if stop.is_set():
+                return None
             if first and not nav.seen_city:                 # the stored picture does not fit this city style
                 PICTURE_BAD[serial_] = True
                 if own_city_map(dev):                       # this account has its own city map: the closed-loop older way
@@ -8501,6 +8514,8 @@ def labels_on_screen(dev, stop):
 def pan_content(dev, stop, dx, dy):
     """Move the map content by about (dx, dy) screen px. Short finger moves can be read by the game as a TAP, so a small
     move is made as a long drag past the target and a second drag back."""
+    if stop.is_set():
+        return
     fx, fy = dx / GAIN, dy / GAIN
     fx, fy = max(-210, min(210, fx)), max(-320, min(320, fy))
     ln = (fx * fx + fy * fy) ** 0.5
@@ -8535,8 +8550,9 @@ def aim_by_labels(dev, cfg, log, stop, name, tries=24):
         return None
     x0, y0, w, h = SAFE_TAP_AREA
     lost = blank = 0
+    t_end = time.time() + 150                              # this step gives up by itself after 2.5 min
     for i in range(tries):
-        if stop.is_set():
+        if stop.is_set() or time.time() > t_end:
             return None
         labs = labels_on_screen(dev, stop)
         hit = [l for l in labs if l[0] == want]
