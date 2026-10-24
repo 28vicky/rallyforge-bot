@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## LATEST (24 Oct 18:45 IST) - 2.5.9 PUBLISHED (main 0d4c140+, check_release OK): stamina fix only. An item used without the amount window now counts (Skip 11:28: 6 -> 29 stamina but the rally was skipped); the march-screen number decides; any-Use fallback + no-stamina chip reset (from fix/restart-queue-stamina; main's own restart re-entry fix kept); the item list sizes are logged ('Stamina items on the list: 10, 25, 50, 100') + debug/stamina_list.png. PC dev copy app\v2.4.99 = 2.5.9 rally_bot.py (729554) + ui/changelog.js; app restarted 18:27 on the first version, the final one loads at the next restart. Culture maps (T76, feat/culture-pins) NOT in 2.5.9 - they ship with step 2.
+
 ## LATEST (24 Oct 18:10 IST) - 2.5.8 PUBLISHING (release/2.5.8 = main + T55 city-go keyframe mapper + T71 T72 T73 T74 T75 + City map card on Overview; 31 tests pass; version.json signed by the city chat). Mapper proven on 7 cultures (Europe, Russia, China, Korea, Japan, Arabia, America; backups city_learn\_culture_*_24oct on the PC). Not live tested as a whole. Follow-ups for the next chat: claude/handoff_city_mapper_24oct_1540.md (culture pins, resume interrupted map, ad library).
 
 ## NEXT CHAT: read project doc claude/handoff_23oct_0740.md first (released today + open list: 1. too many game restarts, 2. slow building label search, 3. Rory Champions, 4. recorder on BlueStacks).
