@@ -61,6 +61,9 @@ def pack(src, culture, out):
         im = cv2.imread(str(out / k["file"]), cv2.IMREAD_GRAYSCALE)
         X, Y = int(round(k["x"] / 2)), int(round(k["y"] / 2))
         canvas[Y:Y + im.shape[0], X:X + im.shape[1]] = im
+    col = cv2.imread(str(src / "map.png"))                 # the backup's own colour picture (same places) for the card
+    if col is not None and abs(col.shape[1] - W) <= 2 and abs(col.shape[0] - H) <= 2:
+        canvas = cv2.resize(col, (canvas.shape[1], canvas.shape[0]), interpolation=cv2.INTER_AREA)
     cv2.imwrite(str(out / "map.jpg"), canvas, [cv2.IMWRITE_JPEG_QUALITY, JPG_Q])
     m = {"culture": culture, "from": src.name, "at": meta.get("at"), "views": len(keep), "size": [W, H],
          "view": [vw, vh], "half": True, "feats": "feats.npz", "picture": "map.jpg", "picture_scale": 0.5,
