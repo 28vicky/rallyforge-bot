@@ -12967,7 +12967,7 @@ def run_now_tasks(cfg, serial):
     for tid in run_now_list(serial):
         if tid.startswith("duty:") and tid[5:] in DUTY_BY_ID:
             d = DUTY_BY_ID[tid[5:]]
-            t = {k: d[k] for k in ("target", "steps") if k in d}
+            t = {k: d[k] for k in ("target", "steps", "no_tile", "go_page") if k in d}
             t["name"], t["count"] = tid, d.get("count", 1)
             if tid == "duty:black_market" and bm_keep_going(cfg):
                 t["no_tile"] = True
@@ -12988,7 +12988,7 @@ def duty_tasks_due(cfg, serial):
     out = []
     for d in DUTY_LIBRARY:
         if duty_status(serial, d["id"], cfg)[0] in ("due",):
-            t = {k: d[k] for k in ("target", "steps") if k in d}
+            t = {k: d[k] for k in ("target", "steps", "no_tile", "go_page") if k in d}
             t["name"] = "duty:" + d["id"]
             t["count"] = d.get("count", 1)
             if d["id"] == "black_market" and bm_keep_going(cfg):
