@@ -1591,3 +1591,7 @@ a.lnk,.lnkb,.viewall,.vlink{display:inline-flex;align-items:center;min-height:28
 .md .mh,:root .md .mh{color:var(--fg)}
 /* C11 / C12 tables: muted headers */
 :root table th{color:var(--mute)}
+.mrhead{display:flex;align-items:center;gap:14px}
+.mrhead .mrtitle{flex:1;min-width:0}
+.mrlhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mrlhead .mrtime{flex:none;font-weight:500}

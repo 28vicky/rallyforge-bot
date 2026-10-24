@@ -1840,12 +1840,12 @@ function runNowCard(serial) {
     const go = h("button", { class: "btn", type: "button", disabled: !pick, onclick: () => { if (pick) set("run_now_add", { id: pick }); } }, "Run now");
     const s = h("select", { "aria-label": "Task to run", onchange: (e) => { pick = e.target.value; go.disabled = !pick; } }, h("option", { value: "" }, "Pick a task\u2026"),
       DUTY_GROUPS.filter((g) => groups[g]).map((g) => h("optgroup", { label: g }, groups[g].map(([v, t]) => h("option", { value: v, selected: v === pick }, t)))));
-    root.append(h("div", { class: "cardhead" }, h("h3", {}, "Run a task now")),
+    root.append(...[h("div", { class: "cardhead" }, h("h3", {}, "Run a task now")),
       h("small", { class: "sub" }, serial ? "Runs once, before anything else, then the bot carries on." : "Runs once on every instance, before anything else."),
       h("div", { class: "runrow" }, s, go),
       (j.queue || []).length ? h("div", { class: "row", style: { gap: "6px", flexWrap: "wrap", marginTop: "8px" } }, h("span", { class: "lab" }, "Waiting:"),
         j.queue.map((q, i) => { const id = String(q.id || "").startsWith("duty:") ? q.id.slice(5) : ""; return h("span", { class: "chip" }, (i + 1) + ". " + (id ? dutyName(id, q.title) : q.title) + " ",
-          h("a", { href: "#", title: "Cancel", "aria-label": "Cancel", onclick: (e) => { e.preventDefault(); set("run_now_remove", { id: q.id }); } }, "\u00d7")); })) : null);
+          h("a", { href: "#", title: "Cancel", "aria-label": "Cancel", onclick: (e) => { e.preventDefault(); set("run_now_remove", { id: q.id }); } }, "\u00d7")); })) : null].filter(Boolean));
   };
   draw({ tasks: [], queue: [] });
   act(api("run_now", { serial })).then((j) => { if (j) { last = JSON.stringify(j.queue); draw(j); } });
@@ -1896,18 +1896,17 @@ function monsterRallyTab(serial) {
   // world bosses nobody can join (rally_bot NEVER_JOIN) are left out of this page altogether (owner 23 Oct 08:24)
   const isBoss = (n) => (S.neverJoin || []).includes(String(n || "").toLowerCase().trim());
   const lvTxt = (r) => (r.min || 1) <= 1 && (r.max || 99) >= 99 ? "all levels" : (r.min === r.max ? "Lv" + r.min : "Lv" + (r.min || 1) + "–" + (r.max || 99));
-  // ---- head: switch, state, Run now
+  // ---- head: state only - the switch is the duty in Routines > Army (C10), this tab holds the setup
   const head = h("div", { class: "panel mrhead" });
+  const toRoutines = (e) => { e.preventDefault(); S.dutyView = { show: "all", group: "Army" }; if (S.gotoInstTab) S.gotoInstTab("routines"); };
   const paintHead = () => {
     head.innerHTML = "";
     if (!duty) return;
-    const st = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad" }[duty.status] || "";
     head.append(
-      h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: duty.on, onchange: async (e) => { const j = await act(api("duty_set", { serial, id: "monster_rally", on: e.target.checked })); if (j) take(j, false); } }), h("span", { class: "sw" })),
-      h("div", { class: "mrtitle" }, h("h2", {}, "Monster rallies"),
+      h("div", { class: "mrtitle" }, h("h3", {}, "Monster rallies"),
         h("small", { class: "sub" }, "Starts an Alliance War rally on monsters from the Telegram section, with the preset each monster sits on. Not tested in the game yet.")),
-      duty.on ? h("span", { class: "rtnst " + st }, duty.status_text) : h("span", { class: "rtnst" }, "off"),
-      h("button", { class: "btn", disabled: !duty.on, title: duty.on ? "" : "Switch it on first", onclick: async () => { if (await act(api("run_now_add", { serial, id: "duty:monster_rally" }))) toast("Monster rallies run next on this instance.", "ok"); } }, "Run now"));
+      duty.on ? dutyBadge(duty.status, duty.status_text) : h("span", { class: "mute" }, "Off"),
+      h("a", { href: "#", class: "lnk", onclick: toRoutines }, duty.on ? "Switch in Routines \u2192" : "Switch it on in Routines \u2192"));
   };
   // ---- preset lanes
   const lanes = h("div", { class: "mrlanes" });
@@ -1923,8 +1922,9 @@ function monsterRallyTab(serial) {
       const mine = rules.map((r, i) => [r, i]).filter(([r]) => r.preset === p);
       const box = h("div", { class: "mrlane" + (p === lane ? " sel" : "") + (mine.length ? "" : " empty"), onclick: (e) => { if (e.target.closest("button,input,select,.mrchip")) return; lane = p; paintLanes(); paintPool(); } },
         h("div", { class: "mrlhead" }, h("b", {}, "Preset " + p),
-          mine.length ? ((st) => segPick(st, "v", MR_TIMES.map((v) => [String(v), v + " min"]), { small: true, label: "Rally time for preset " + p,
-            after: (v) => { mine.forEach(([r]) => (r.time = MR_TIMES.find((x) => String(x) === v) ?? v)); saveRules(); paintCoords(); } }))({ v: String(laneTime(p)) }) : null),
+          mine.length ? h("button", { class: "btn sm mrtime", type: "button", "aria-label": "Rally time for preset " + p, title: "Rally time for preset " + p,
+            onclick: (e) => menu(e.currentTarget, MR_TIMES.map((v) => ({ label: v + " min" + (String(v) === laneTime(p) ? "  \u2713" : ""),
+              run: () => { mine.forEach(([r]) => (r.time = String(v))); saveRules(); paintLanes(); paintCoords(); } }))) }, laneTime(p) + " min \u25BE") : null),
         h("div", { class: "mrchips" },
           mine.length ? mine.map(([r, i]) => {
             const chip = h("span", { class: "mrchip" + (editing === i ? " edit" : ""), draggable: "true", title: "Drag to another preset \u00b7 click to set levels" },
@@ -2030,9 +2030,6 @@ function monsterRallyTab(serial) {
 }
 
 
-// ====================================================================== routines (instance tab): master-detail around the game's daily activities
-// Left: one row per activity of Tavern > Activity (points it gives, today's state, a switch). Right: the picked activity's own settings.
-// UI only: every switch and setting is the same one as before (duty_set / the instance's own values), just shown per activity.
 // ====================================================================== logs (Control settings > Logs): save the log right here, then the live log
 // ====================================================================== reports: who joined what, per day / week / month
 PAGES.reports = function () {
