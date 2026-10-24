@@ -1999,16 +1999,23 @@ function pinBuildingsDialog(culture) {
     const wrap = h("div", { class: "pinwrap" + (st.sel ? " picking" : "") }, img);
     const toMap = (e) => { const r = img.getBoundingClientRect();
       return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * st.size[0], Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * st.size[1]]; };
-    img.onclick = (e) => { if (!st.sel || !st.size) return; const b = st.sel; st.sel = null; save(b, toMap(e)).then(() => { st.sel = nextFree(); draw(); }); };
+    img.onclick = (e) => { if (st.dragged || !st.sel || !st.size) return; const b = st.sel; st.sel = null; save(b, toMap(e)).then(() => { st.sel = nextFree(); draw(); }); };
     if (st.size) for (const b of FIXED_BUILDINGS) {
       const p = pinOf(b); if (!p) continue;
       const dot = h("span", { class: "pindot", title: b, style: { left: (p[0] * 100 / st.size[0]) + "%", top: (p[1] * 100 / st.size[1]) + "%" } }, h("em", {}, b));
-      dot.onmousedown = (e) => {
+      dot.onpointerdown = (e) => {                       // drag a pin: pointer captured, no page scroll, no click on the map after it
         e.preventDefault(); e.stopPropagation();
-        const move = (ev) => { const m = toMap(ev); dot.style.left = (m[0] * 100 / st.size[0]) + "%"; dot.style.top = (m[1] * 100 / st.size[1]) + "%"; };
-        const up = (ev) => { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); save(b, toMap(ev)); };
-        document.addEventListener("mousemove", move); document.addEventListener("mouseup", up);
+        dot.setPointerCapture(e.pointerId);
+        st.dragged = false;
+        const move = (ev) => { st.dragged = true; const m = toMap(ev); dot.style.left = (m[0] * 100 / st.size[0]) + "%"; dot.style.top = (m[1] * 100 / st.size[1]) + "%"; };
+        const up = (ev) => {
+          dot.removeEventListener("pointermove", move); dot.removeEventListener("pointerup", up);
+          if (st.dragged) save(b, toMap(ev));
+          setTimeout(() => { st.dragged = false; }, 0);
+        };
+        dot.addEventListener("pointermove", move); dot.addEventListener("pointerup", up);
       };
+      dot.onclick = (e) => e.stopPropagation();
       wrap.appendChild(dot);
     }
     body.appendChild(h("div", { class: "pingrid" }, list, wrap));

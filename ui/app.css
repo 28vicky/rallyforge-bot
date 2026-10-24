@@ -1682,8 +1682,8 @@ select.pick-open{border-color:var(--accent1)}
 [data-mode="dark"] .pinrow .dbadge.todo{color:#fcd34d;background:rgba(245,158,11,.14)}
 .pinx{border:0;background:transparent;color:inherit;font-size:16px;line-height:1;cursor:pointer;padding:0 2px;opacity:.7}
 .pinx:hover{opacity:1}
-.pinwrap{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);max-height:62vh;overflow-y:auto}
+.pinwrap{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);justify-self:start;line-height:0}   /* the whole map in view: no scrolling while pinning */
 .pinwrap.picking .pinimg{cursor:crosshair}
-.pinimg{display:block;width:100%;height:auto;user-select:none}
-.pindot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;border:3px solid var(--accent1,#c2410c);box-shadow:0 0 0 2px rgba(0,0,0,.35);cursor:grab}
+.pinimg{display:block;max-width:100%;max-height:66vh;width:auto;height:auto;user-select:none}
+.pindot{touch-action:none;position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;border:3px solid var(--accent1,#c2410c);box-shadow:0 0 0 2px rgba(0,0,0,.35);cursor:grab}
 .pindot em{position:absolute;left:14px;top:-5px;white-space:nowrap;font-style:normal;font-size:11px;font-weight:700;color:#fff;background:rgba(0,0,0,.6);padding:1px 5px;border-radius:4px;pointer-events:none}
