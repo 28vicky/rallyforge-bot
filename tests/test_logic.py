@@ -136,8 +136,12 @@ class DutyStatus(Base):
         cfg = {**self.cfg(black_market={}), "market_refresh_mode": "all", "market_paid_refresh": True}
         self.state({"black_market": {"last_ok": time.time() - 30}})
         self.assertEqual(rb.duty_status("S1", "black_market", cfg)[0], "due")      # keeps going after a success
-        self.state({"black_market": {"end_day": self.day}})
-        self.assertEqual(rb.duty_status("S1", "black_market", cfg)[0], "done")
+        self.state({"black_market": {"end_day": self.day, "done_day": self.day}})    # owner 24 Oct: never done for the day
+        self.assertEqual(rb.duty_status("S1", "black_market", cfg)[0], "due")
+        self.state({"black_market": {"wait_gems": True, "next_at": time.time() + 3600}})
+        st = rb.duty_status("S1", "black_market", cfg)
+        self.assertEqual(st[0], "waiting")
+        self.assertIn("Waiting for gems", st[1])
 
     def test_other_instance_state_not_used(self):
         self.state({"vip_claim": {"done_day": self.day}}, serial="S2")
