@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.9", date: "2026-10-24",
+    fixed: ["Stamina items are used reliably again, every size (10, 25, 50, 100), so rallies are no longer skipped while you still have stamina items.",
+      "The \"no stamina\" mark on an instance goes away as soon as stamina is refilled."] },
   { v: "2.5.8", date: "2026-10-24",
     new: ["Map my city (Routines > Common tasks): the bot explores your whole city once, at the widest zoom, and keeps a picture map of it. Takes about 25 minutes; run it once per instance, and again after you change culture or move buildings.",
       "With a city map, the bot goes straight to a building it has visited before - a few short drags, no searching. Buildings are remembered as the daily tasks open them.",

@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.5.8"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.5.9"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -2134,8 +2134,10 @@ def _refill_once(dev, cfg, log, stop, needed):
         return bool(find_text(shot, ["Own:", "Own"], region=(60, 310, 300, 80), cutoff=0.6)) and \
             bool(find_text(shot, ["Max", "Minimum"], region=(60, 650, 420, 70), cutoff=0.8))
 
-    for size in sizes:                                       # every size in the chosen order until the march has enough
+    for size in sizes + ["any"]:                             # every size in the chosen order, then any Use button left
         if stop.is_set():
+            break
+        if size == "any" and used_any:
             break
         if not on_items:
             if not _open_use_item():
@@ -2143,26 +2145,47 @@ def _refill_once(dev, cfg, log, stop, needed):
                 break
             on_items = True
         shot = dev.screenshot()
-        ry = _row_y(shot, size)
-        if not ry:
-            continue                                        # the account has none of this size / not a size we know
-        use = find_text(shot, ["Use"], region=(330, ry + 10, 200, 80))
-        if not use:                                         # no 'Use' = none owned; the button shows a gem price - never tap it
-            log(f"[i] Stamina: no {size}-stamina items (only a gem price) - next size")
-            continue
+        if size == "any":                                   # the size labels could not be read (e.g. '100' misread): every row on this
+            _stamina_snap(shot, "items_list")               # screen is a stamina item, so any 'Use' button (never a gem price) is fine
+            use = find_text(shot, ["Use"], region=(330, 300, 200, 640))
+            if not use:
+                log("[i] Stamina: no Use button on the stamina item list - no items owned")
+                break
+            size = "other"
+        else:
+            ry = _row_y(shot, size)
+            if not ry:
+                continue                                    # the account has none of this size / not a size we know
+            use = find_text(shot, ["Use"], region=(330, ry + 10, 200, 80))
+            if not use:                                     # no 'Use' = none owned; the button shows a gem price - never tap it
+                log(f"[i] Stamina: no {size}-stamina items (only a gem price) - next size")
+                continue
         dev.tap(*use)
         nap(1.0, 1.4)
         shot = dev.screenshot()
         if not _dialog_open(shot):                          # slow emulator: look again, then tap Use once more before giving up
             nap(1.0, 1.4)
             shot = dev.screenshot()
-        if not _dialog_open(shot) and screen_state(shot, cfg) != "march" and _row_y(shot, size):
+        if not _dialog_open(shot) and screen_state(shot, cfg) != "march" and (size == "other" or _row_y(shot, size)):
             dev.tap(*use)
             nap(1.2, 1.6)
             shot = dev.screenshot()
         if not _dialog_open(shot):
             _stamina_snap(shot, "no_dialog")
-            log(f"[i] Stamina: the amount window for {size} did not open - trying the next size")
+            # The tap may have used the item at once (no amount window - seen 24 Oct on Skip: 6 -> 29 stamina while the bot
+            # said the window did not open, then skipped the rally). Check the march screen before trying the next size.
+            _to_march()
+            on_items = False
+            nap(0.6, 0.9)
+            st_now = read_stamina(dev.screenshot())
+            if st_now and before and st_now[0] > before[0]:
+                used_any = True
+                log(f"[+] Stamina: {size}-stamina item used without the amount window ({before[0]:,} -> {st_now[0]:,})")
+                if st_now[0] >= needed:
+                    break
+                before = st_now
+            else:
+                log(f"[i] Stamina: the amount window for {size} did not open - trying the next size")
             continue
         _stamina_snap(shot, "dialog")
         mode = str(cfg.get("stamina_amount", "full (Max)"))
@@ -2242,7 +2265,7 @@ def _refill_once(dev, cfg, log, stop, needed):
     st = read_stamina(shot_end)
     log(f"[i] Stamina after using items: {st[0]:,} (needs {needed:,})" if st else "[i] Stamina after using items: not readable")
     _stamina_snap(shot_end, "march_after")
-    if used_any and st and st[0] >= needed:
+    if st and st[0] >= needed:                              # the number on the march screen decides, however the items got used
         return True
     if used_any and (st is None or st[0] == before[0] if before else True) and screen_state(shot_end, cfg) == "march":
         log("[i] The stamina number did not change after using items - it may be misread, marching anyway")
@@ -14452,7 +14475,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     sta = read_stamina(dev.screenshot())
                     if sta and sta[0] < sta[1]:
                         log(f"[!] Not enough stamina ({sta[0]:,} of {sta[1]:,}) - using stamina items")
-                        if not refill_stamina(dev, cfg, log, stop, sta[1]):
+                        if refill_stamina(dev, cfg, log, stop, sta[1]):
+                            if ctl is not None:
+                                ctl.no_stamina = 0           # refilled: the "no stamina" chip must go away at once
+                        else:
                             log("[!] Could not get enough stamina - skipping this rally")
                             if ctl is not None:
                                 ctl.no_stamina += 1
