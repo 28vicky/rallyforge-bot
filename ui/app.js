@@ -608,8 +608,8 @@ function paintRunState() {
   document.querySelectorAll("[data-act]").forEach((b) => {
     b.className = b.className.replace(/\bcur-\w+/g, "").replace(/\s+/g, " ").trim();
     if (st !== "run" && map[st] && map[st] === b.dataset.act) b.classList.add("cur-" + st);   // only Paused / Stopped stay lit; running = all normal
-    // buttons that do nothing right now are greyed out (one instance only): Start while running, Pause and Stop while stopped
-    const off = S.sel !== "control" && ((st === "run" && b.dataset.act === "start") || ((st === "stop" || st === "idle" || st === "error") && (b.dataset.act === "pause" || b.dataset.act === "stop")));
+    // buttons that do nothing right now are greyed out (one instance only): Start while running or paused (Resume is the main action then), Pause and Stop while stopped
+    const off = S.sel !== "control" && (((st === "run" || st === "pause") && b.dataset.act === "start") || ((st === "stop" || st === "idle" || st === "error") && (b.dataset.act === "pause" || b.dataset.act === "stop")));
     b.classList.toggle("greyed", !!off);
   });
   paintRibbonRun();
