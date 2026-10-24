@@ -2,7 +2,7 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
-## LATEST (24 Oct 22:35 IST) - 2.5.12 PUBLISHED: Black Market 'Pay with' now sets every chosen item (was: default for new items only -> 'all 3 tabs look the same'); duty status says why BM stopped + gems read; debug/bm_totals_<serial>.png saved each visit. OPEN: Kulim's gems read as 32,750 (was written as Manhattan - owner 23:23) (owner: ~400k) -> market_totals crop x 265-540 probably cuts the first digit of a 6-digit total; fix from bm_totals picture. GG (tester PC) same symptom - get their log/picture.
+## LATEST (24 Oct 22:35 IST) - 2.5.12 PUBLISHED: Black Market 'Pay with' now sets every chosen item (was: default for new items only -> 'all 3 tabs look the same'); duty status says why BM stopped + gems read; debug/bm_totals_<serial>.png saved each visit. OPEN (tester system, instance Kulim - NOT the owner's PC; Manhattan never misread, that was an AI mix-up): Kulim's gems read as 32,750 (owner: ~400k). The crop is fine (checked on a recorded shop); fix on fix/bm-keep-going (T78): split OCR pieces joined + re-read when the total is off. RULE: when the owner reports a problem, ask which system / instance first - do not assume the owner's PC.
 
 ## LATEST (24 Oct 22:15 IST) - 2.5.11 PUBLISHED: account/payment window (DANGER_PATTERNS) is closed with Cancel / No / X / Back - never confirmed, no game restart (owner: Evony has many pop-ups). Everything else as 2.5.10.
 
