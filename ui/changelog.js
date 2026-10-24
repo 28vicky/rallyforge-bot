@@ -1,5 +1,12 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.13", date: "2026-10-24",
+    new: ["Black Market settings are easier to read: your spending limits first, then your picks in a short list (pay with gems, resources or either per item, or \"Set all to\"), and the item pictures fold away under Add items.",
+      "Black Market \"Until the gem floor\" keeps going all day: other tasks, Run now and the game's Auto-Join renewal are done in between, then the bot goes straight back to the shop.",
+      "When your gems reach the floor or run out, the bot does its normal work and looks at your gems again every hour - top up in the game and it carries on buying. Run now checks at once.",
+      "Black Market shows what it spent today: gems, items and refreshes."],
+    fixed: ["Black Market no longer stops after 20 minutes or says \"Done for today\" because the daily quest was finished.",
+      "The gem total in the Black Market is read correctly (a large total could be read with its first digit missing)."] },
   { v: "2.5.12", date: "2026-10-24",
     fixed: ["Black Market: \"Pay with\" now changes every item you picked (each card can still be set on its own).",
       "Black Market: the duty now says why it stopped for the day - your gem floor, the daily gem limit or out of gems - and how many gems it saw."] },
