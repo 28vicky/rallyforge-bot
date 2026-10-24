@@ -8124,7 +8124,7 @@ def run_market(dev, cfg, log, stop):
     bought, failed = {}, set()                              # failed: slot numbers that did not sell (until the next refresh)
     gold, gems = market_totals(img)
     try:                                                     # the shop with its gold / gem row, to check the numbers read (a 6-digit
-        (USER / "debug").mkdir(exist_ok=True)               # gem total was read as 32,750 on Manhattan 24 Oct - first digit lost?)
+        (USER / "debug").mkdir(exist_ok=True)               # gem total was read as 32,750 on Kulim (tester system) 24 Oct)
         cv2.imwrite(str(USER / "debug" / f"bm_totals_{str(getattr(dev, 'serial', '')).replace(':', '_')}.png"), img)
     except Exception as _e:
         quiet_err("bm_totals_pic", _e)
