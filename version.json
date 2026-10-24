@@ -1,9 +1,9 @@
 {
-  "version": "2.5.12",
-  "notes": "Black Market: Pay with applies to all picked items; the duty says why it stopped and how many gems it saw.",
+  "version": "2.5.13",
+  "notes": "Black Market: easier settings page; 'Until the gem floor' keeps going all day with other tasks in between, checks your gems every hour when low, reads the gem total correctly",
   "files": {
     "rally_bot.py": {
-      "sha256": "b7dec0aeea22e7c70717853a4ae91a33233e23b5e1f20e7185ab3695e65251b6"
+      "sha256": "f2976112de5595fae8b8b948564b79a7dfc7fd51fa7343727c35275e8e67a669"
     },
     "web_app.py": {
       "sha256": "45bc32c1366e6023cca5f1ea3c053559a8e1f217fe15507206d3a58a081ae948"
@@ -12,13 +12,13 @@
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "1b79fc768564025852391f95c00ff97cde16c677944a280af335cd949227ca79"
+      "sha256": "ffbd96bdf2d2ca88b30927103037cfeee468e3669eb8e2f78b67d4429f039649"
     },
     "ui/app.js": {
       "sha256": "9e4be6ae10e966a20e8839d258cbd03e94c4b503d346087328560d1044418010"
     },
     "ui/changelog.js": {
-      "sha256": "27dcd22dd2a384876f3c174fb6baf9858144b2b747e316b942715437c81433eb"
+      "sha256": "dc1749e4d6462fb147a7216b4f7dc8e0a0189caafe7631de997d15b7bef85c46"
     },
     "ui/dialogs.js": {
       "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "42a3be9189d7fe6dbdf1f4d9237d98677b7f28669d4577935a0fe7fd1b743536"
+      "sha256": "cf554e16db14349024ff7f3066f1e1a48d93225a93881113d4aa3dd4c404b5a9"
     },
     "ui/tour.js": {
       "sha256": "3a4ca195aed40a7b56c7158ce844a5879f327325f7486a59c8e8814eed318da0"
@@ -1709,5 +1709,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "4a0e69f0244b47ab4f61963d47d0d1e7e10705daacb93f7af88845ca2aa70369"
+  "sig": "bd59b5b7d3d0483515fbe37aae6f7714bbe9b7989d1d7d5d7a7268525075a07a"
 }
