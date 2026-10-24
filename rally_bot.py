@@ -13602,6 +13602,13 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             if screen_state(scr, cfg) == "city":
                 return True
             if cancel_quit_dialog(dev, scr, log):
+                # the Exit box only opens on the city or the world map, so we are on one of them even if it was not
+                # recognised: switch view (world map -> city), and once more if that was the city (city -> world -> city)
+                for _t in range(2):
+                    dev.tap(*VIEW_TOGGLE)
+                    log("[*] Exit box means city or world map - tapped the city/landscape switch")
+                    if wait_state("city", 6):
+                        return True
                 continue
             if i > 0 and world_map(scr):                       # the arrow led to the world map: Back there asks to quit - use the city button
                 dev.tap(*VIEW_TOGGLE)
@@ -13618,8 +13625,29 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 dev.back()
             if wait_state("city", 4):
                 return True
-        save_debug(serial, dev.screenshot())
+        last = dev.screenshot()
+        save_debug(serial, last)
+        try:                                                   # one picture per instance of the screen it took for "not the city"
+            (USER / "debug").mkdir(exist_ok=True)
+            cv2.imwrite(str(USER / "debug" / f"city_unknown_{re.sub(r'[^0-9A-Za-z]', '_', serial)}.png"), last)
+        except Exception as _e:
+            quiet_err("reach_city.picture", _e)
         return False
+
+    city_fails = [0]
+
+    def city_trip_failed(msg):
+        """reach_city() gave up. Once: pause city tasks 10 min. Twice in a row: the bot is lost - restart the game
+        (closing and reopening Evony fixed it on Renner, 23 Oct) instead of pausing again and again."""
+        city_fails[0] += 1
+        task_event(serial, "Tasks", False, "could not reach the city screen")
+        if city_fails[0] >= 2:
+            log(f"[!] Could not reach the city screen {city_fails[0]} times in a row - restarting the game")
+            city_fails[0] = 0
+            force_restart_game(dev, cfg, log, stop)
+            return
+        log(msg)
+        city_block[0] = time.time() + 600
 
     def dismiss_popup(screen, x_ok=False):
         if cancel_quit_dialog(dev, screen, log):
@@ -14163,11 +14191,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     elif tasks_active(cfg, serial) and now >= city_block[0] and (due := city_tasks_due(cfg, city_last, serial)):
                         log(f"[*] Auto-Join is running - going to the city for {len(due)} task(s)")      # the game joins rallies by itself meanwhile
                         if reach_city():
+                            city_fails[0] = 0
                             run_city_tasks(dev, cfg, log, stop, due, city_last)
                         else:
-                            log("[!] Could not reach the city screen - city tasks paused for 10 minutes")
-                            task_event(serial, "Tasks", False, "could not reach the city screen")
-                            city_block[0] = time.time() + 600
+                            city_trip_failed("[!] Could not reach the city screen - city tasks paused for 10 minutes")
                         recover()
                     else:
                         act("step", text="Auto-Join is on - next check in %d min" % max(1, int((aj_next[0] - now) // 60)))
@@ -14188,9 +14215,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     continue
                 if st == "rally_list" and due and now >= city_block[0]:
                     if not reach_city():
-                        log("[!] Could not reach the city screen - tasks paused for 10 minutes")
-                        task_event(serial, "Tasks", False, "could not reach the city screen")
-                        city_block[0] = time.time() + 600
+                        city_trip_failed("[!] Could not reach the city screen - tasks paused for 10 minutes")
+                    else:
+                        city_fails[0] = 0
                     continue
                 nap(5, 8)                                         # rallies are off: never fall through to joining
                 continue
@@ -14205,11 +14232,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 if due:
                     log(f"[*] {'No rally waiting' if not target else 'A task was started by hand'} - going to the city for {len(due)} task(s)")
                     if reach_city():
+                        city_fails[0] = 0
                         run_city_tasks(dev, cfg, log, stop, due, city_last)
                     else:
-                        log("[!] Could not reach the city screen - city tasks paused for 10 minutes")
-                        task_event(serial, "Tasks", False, "could not reach the city screen")
-                        city_block[0] = time.time() + 600
+                        city_trip_failed("[!] Could not reach the city screen - city tasks paused for 10 minutes")
                     recover()
                     continue
             if not target and st == "rally_list":

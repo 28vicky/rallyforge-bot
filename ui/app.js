@@ -43,7 +43,25 @@ async function api(name, body, opts) {
     if (!opts.quiet) toast(j.error || "Something went wrong.", "error");
     throw new Error(j.error || "error");
   }
+  if (j._saved) syncSaved(j._saved);
   return j;
+}
+// The duty APIs save on the server; copy what they stored into the page's settings, so the page autosave never writes an
+// older copy back (an unticked duty came back on, owner 24 Oct). Unsaved edits elsewhere on the page stay as they are.
+function syncSaved(sv) {
+  if (!S.cfg) return;
+  const clean = typeof AUTO !== "undefined" && cfgSnap() === AUTO.saved;
+  let tgt = S.cfg;
+  if (sv.serial) {
+    S.cfg.per_device = S.cfg.per_device || {};
+    tgt = S.cfg.per_device[sv.serial];
+    if (!tgt) { if (!Object.keys(sv.vals).length) return; tgt = S.cfg.per_device[sv.serial] = {}; }
+  }
+  for (const k of ["duties", "crazy_eggs", "champions", "wheel"]) {
+    if (k in sv.vals) tgt[k] = sv.vals[k];
+    else if (sv.serial) delete tgt[k];
+  }
+  if (clean) AUTO.saved = AUTO.seen = cfgSnap();
 }
 const act = (p) => p.catch(() => null);          // swallow: the error was already shown as a toast
 
@@ -104,8 +122,8 @@ const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", mon
 
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
-  ["tasks", "Tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram & Discord"], ["reliability", "Reliability"],
-  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Themes"], ["license", "Account"],
+  ["tasks", "My tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram coordinates"], ["reliability", "Reliability"],
+  ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Appearance"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
 
@@ -200,7 +218,8 @@ function layout() {
       h("div", { class: "instfilter", id: "instFilter" }),
       h("div", { class: "inst-list", id: "instList" }),
       h("div", { class: "install", id: "instAll" }),
-      h("div", { class: "sidefoot" }, h("div", { class: "whoami", id: "whoami" }),
+      h("div", { class: "sidefoot" }, h("div", { class: "whorow" }, h("div", { class: "whoami", id: "whoami" }),
+        DARK_ON ? h("button", { type: "button", class: "iconbtn", id: "modeBtn", onclick: quickMode }) : null),     // light / dark in one click from any screen
         // (ui-simple) Pause all / Stop all live only in the page header - one place for run controls
         h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
     h("div", { class: "main" },
@@ -208,8 +227,7 @@ function layout() {
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
         saveStEl(),
         h("button", { class: "btn sm newbtn", id: "newBtn", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "What\u2019s new"),
-        h("span", { class: "sum", id: "sum" }),
-        h("div", { class: "iconbtn", id: "modeBtn", title: "Dark / light", onclick: quickMode })),
+        h("span", { class: "sum", id: "sum" })),
       h("div", { class: "ribbon", id: "ribbon" }),
       h("div", { class: "tabs", id: "tabs" }),
       h("div", { class: "pages", id: "pages" })),
@@ -247,6 +265,7 @@ function renderModeIcon() {
   const dark = resolvedMode() === "dark";
   const b = $("#modeBtn");
   if (!b) return;
+  b.title = dark ? "Switch to light mode" : "Switch to dark mode"; b.setAttribute("aria-label", b.title);
   b.innerHTML = dark
     ? '<svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'
     : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
@@ -254,7 +273,7 @@ function renderModeIcon() {
 function quickMode() {
   setTheme(null, resolvedMode() === "dark" ? "light" : "dark");
   renderModeIcon();
-  if (S.sel === "control" && S.tab === "settings") renderPage();
+  if (S.sel === "control" && (S.tab === "settings" || S.tab === "themes")) rerender();       // the Light / Dark choice on the page follows
 }
 
 // ------------------------------------------------------------------ ribbon
@@ -277,6 +296,10 @@ function buildRibbon() {
       btn("Start", () => { if (S.sel === "control" && allPaused()) return act(api("resume")); if (S.sel === "control") { S.startingAt = Date.now(); paintRunState(); } collectAndRun("start", { serial: target() }); }, "pri", "play"),
       btn("Pause", () => act(api("pause", { serial: target() })), "", "pause"),
       btn("Stop", async () => { if (S.sel === "control" && !(await confirmStopAll())) return; S.startingAt = 0; act(api("stop", { serial: target() })); }, "bad", "stop")),
+    grp("Auto-Join",                                  // the game's Auto-Join for every instance at once (own switch, not part of presets)
+      h("label", { class: "tgl ajsw", id: "ajAll", title: "Switch the game's Auto-Join on or off for every instance (needs the Rally Monthly Card)" },
+        (() => { const i = h("input", { type: "checkbox", "aria-label": "Auto-Join for all instances" }); i.addEventListener("change", () => { ajSetAll(i.checked); rerender(); }); return i; })(),
+        h("span", { class: "sw" }), "Auto-Join", h("span", { class: "ajcnt" }))),
     grp("Tools",
       btn("Tools ▾", (e) => menu(e.currentTarget, [
         { label: "Generals", icon: "users", run: () => openGeneralManager() },
@@ -430,7 +453,7 @@ function sideStatus(d) {
   if (d.state === "run" && d.kicked_at) return ["kicked · back in", "warn", T("data-at", d.kicked_at)];
   if (d.state === "run" && d.loading) return [d.loading, "warn", T("data-since", d.loading_since)];
   if (d.state === "run" && d.no_stamina) return ["no stamina", "warn"];
-  if (d.state === "run") return [busyTask(d.id, true) || "idle", busyTask(d.id) ? "ok" : ""];
+  if (d.state === "run") return [busyTask(d.id, true) || "running", "ok"];        // C7: same word as the header when nothing is busy
   if (d.start_at) return ["starts in", "", T("data-at", d.start_at)];
   if (d.queued) return ["queued", ""];
   if (d.state === "pause") return d.resume_at ? ["paused · resumes in", "warn", T("data-at", d.resume_at)] : ["paused", "warn"];
@@ -603,8 +626,8 @@ function paintRunState() {
   document.querySelectorAll("[data-act]").forEach((b) => {
     b.className = b.className.replace(/\bcur-\w+/g, "").replace(/\s+/g, " ").trim();
     if (st !== "run" && map[st] && map[st] === b.dataset.act) b.classList.add("cur-" + st);   // only Paused / Stopped stay lit; running = all normal
-    // buttons that do nothing right now are greyed out (one instance only): Start while running, Pause and Stop while stopped
-    const off = S.sel !== "control" && ((st === "run" && b.dataset.act === "start") || ((st === "stop" || st === "idle" || st === "error") && (b.dataset.act === "pause" || b.dataset.act === "stop")));
+    // buttons that do nothing right now are greyed out (one instance only): Start while running or paused (Resume is the main action then), Pause and Stop while stopped
+    const off = S.sel !== "control" && (((st === "run" || st === "pause") && b.dataset.act === "start") || ((st === "stop" || st === "idle" || st === "error") && (b.dataset.act === "pause" || b.dataset.act === "stop")));
     b.classList.toggle("greyed", !!off);
   });
   paintRibbonRun();
@@ -620,11 +643,11 @@ const TAB_GROUPS = [
   ["dashboard", "Dashboard", null],
   ["presets", "Presets & generals", null],
   ["monsters", "Monsters", null],
-  ["tasks", "Tasks", null],
   ["duties", "Duties", null],
+  ["tasks", "My tasks", null],
   ["market", "Market", null],
   // one row only (ui-simple): the rarely used pages live under More, grouped by small headings ("#...")
-  ["more", "More", ["logs", "reports", "#Setup", "settings", "reliability", "schedule", "#App", "updates", "telegram", "license"]],
+  ["more", "More", ["logs", "reports", "#Setup", "settings", "reliability", "schedule", "#App", "updates", "themes", "telegram", "license"]],
 ];
 function closeTabMenu() { const m = document.getElementById("tabmenu"); if (m) m.remove(); document.removeEventListener("mousedown", tabMenuOutside, true); document.removeEventListener("keydown", tabMenuKey, true); }
 function tabMenuOutside(e) { const m = document.getElementById("tabmenu"); if (m && !m.contains(e.target) && !e.target.closest(".tab.grp")) closeTabMenu(); }
@@ -687,6 +710,7 @@ function renderPage() {
   } else {
     p.appendChild(instancePage(S.sel));
   }
+  paintAjAll();
   lastPageSel = S.sel;
   if (keep) { p.scrollTop = keep; requestAnimationFrame(() => { p.scrollTop = keep; }); setTimeout(() => { p.scrollTop = keep; }, 250); }
   paintRunState();
@@ -760,26 +784,21 @@ function todayModel(j, serial) {
   j = j || {};
   const nowText = ((S.now && S.now[serial]) || {}).text || "";
   const skew = (j.now || Date.now() / 1000) - Date.now() / 1000;             // server clock vs this window
-  const why = (m) => /city map|City Mapper/i.test(m || "") ? "no city map" : (m || "failed 3 times").replace(/^the /, "");
-  const order = { run: 0, due: 1, waiting: 2, retry: 2, gaveup: 3, done: 4 };
+  const order = { run: 0, gaveup: 1, retry: 2, due: 3, waiting: 4, done: 5 };
+  // same names and badge words as Routines (C7); the count is the server's one done / on number (C8)
   const items = (j.queue || []).map((q) => {
-    let k = q.status, sub;
-    if (nowText === "Duty: " + q.title) k = "run";
-    if (k === "run") sub = "running now";
-    else if (k === "done") sub = "done " + hhmm(q.last_ok);
-    else if (k === "waiting" || k === "retry") sub = (k === "retry" ? "retry " : "next ~") + String(q.text || "").replace(/^(Next|Retrying)\s*/, "");
-    else if (k === "gaveup") sub = "skipped - " + why(q.msg);
-    else sub = q.msg ? "next - after a failed try" : "next - waiting its turn";
-    return { k, title: q.title, sub, icon: { run: "▶", done: "✓", gaveup: "!" }[k] || "○" };
-  }).sort((a, b) => (order[a.k] ?? 2) - (order[b.k] ?? 2));
-  const total = items.length, left = items.filter((x) => x.k !== "done").length;
+    const k = nowText === "Duty: " + q.title ? "run" : q.status;
+    const tip = k === "gaveup" || k === "retry" ? (q.msg ? "Last problem: " + q.msg : q.text) : "";
+    return { k, title: dutyName(q.id, q.title), text: q.text, tip };
+  }).sort((a, b) => (order[a.k] ?? 3) - (order[b.k] ?? 3));
+  const cnt = j.count || { done: 0, on: items.length }, left = cnt.on - cnt.done;
   const resetIn = (j.reset_at || 0) - (Date.now() / 1000 + skew);
   let summary;
-  if (!total) summary = "No daily duty is switched on for this instance.";
-  else if (!left) summary = `All ${total} duties done for today`;
+  if (!cnt.on) summary = "";
+  else if (left <= 0) summary = `All ${cnt.on} done for today`;
   else {
     const need = left * 180;                                                // about 3 minutes per duty
-    summary = `${left} of ${total} duties left · ` + (need < resetIn ? `should all finish ${fmtHM(resetIn - need)} before reset` : "may not all finish before reset");
+    summary = `${cnt.done} of ${cnt.on} done · ` + (need < resetIn ? `the rest should finish ${fmtHM(resetIn - need)} before reset` : "may not all finish before reset");
   }
   const r = j.results || {}, mons = r.monsters || {}, w = j.week || {};
   const monList = Object.entries(mons).sort((a, b) => b[1] - a[1]);
@@ -789,7 +808,7 @@ function todayModel(j, serial) {
       ["Rallies joined", r.joins || 0, ""],
       ["Skipped (late)", r.late || 0, "Rallies left alone because too little time was left for the march"],
       ["Monsters hit", monList.length, monList.map(([m, n]) => `${m} ×${n}`).join(", ") || "none yet"],
-      ["Duties done", total ? `${r.duties_done || 0}/${total}` : String(r.duties_done || 0), ""],
+      ["Duties done", cnt.on ? `${cnt.done}/${cnt.on}` : "0", "Duties switched on that finished at least once today"],
       ["Restarts", r.restarts || 0, "Evony or the emulator restarted by the bot"],
     ],
     week: w.days ? `Last ${w.days} day${w.days > 1 ? "s" : ""}: ${w.joins || 0} joins · ${((w.restarts || 0) / w.days).toFixed(1).replace(/\.0$/, "")} restarts/day avg` : "Last 7 days: no data yet",
@@ -855,7 +874,8 @@ function activityBox(serial, title) {
   now.textContent = actNow(serial); paintStats(stats, serial);
   return h("div", { class: "actsplit" },
     h("div", { class: "actleft" }, h("h3", {}, title || "Activity"), h("div", { class: "actbar" }, h("span", { class: "actlab" }, "Now"), now), stats),
-    h("div", { class: "actright" }, h("h3", {}, "Monster joins"), wrap));
+    h("div", { class: "actright" }, h("h3", {}, "Monster joins"), wrap,
+      h("div", { class: "actempty" }, "No rally joined yet today. Each join shows here as it happens.")));
 }
 function pushActs(list) {
   for (const l of list || []) {
@@ -1130,4 +1150,130 @@ function undoLast() {
     scan(p);
   };
   start();
+})();
+
+// ====================================================================== C13: the app's own dropdown (no native popup)
+// Every <select> keeps working as before (its value, options and change handlers are untouched - saved settings never
+// change); only the open list is ours: the app's surface and colours, tinted group headers, a search box on long lists,
+// keyboard support. The native popup is white on the ivory app and its group headers cannot be styled (owner 24 Oct).
+(() => {
+  let open = null;                                     // { sel, panel, items, active, onKey }
+  const SEARCH_AT = 9;                                 // lists this long get a search box
+  const close = (refocus) => {
+    if (!open) return;
+    const { sel, panel } = open;
+    panel.remove(); document.removeEventListener("keydown", open.onKey, true);
+    sel.classList.remove("pick-open"); sel.setAttribute("aria-expanded", "false");
+    open = null;
+    if (refocus) sel.focus({ preventScroll: true });
+  };
+  const choose = (sel, v) => {
+    close(true);
+    if (sel.value === v) return;
+    sel.value = v;
+    sel.dispatchEvent(new Event("input", { bubbles: true }));
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  const setActive = (i) => {
+    const vis = open.items.filter((it) => !it.el.hidden && !it.dis);
+    if (!vis.length) { open.active = null; return; }
+    const cur = vis.indexOf(open.active), n = vis.length;
+    const next = i === "first" ? vis[0] : i === "last" ? vis[n - 1] : vis[Math.max(0, Math.min(n - 1, (cur < 0 ? (i > 0 ? -1 : n) : cur) + i))];
+    open.items.forEach((it) => it.el.classList.toggle("act", it === next));
+    open.active = next; next.el.scrollIntoView({ block: "nearest" });
+  };
+  const openPick = (sel) => {
+    if (open && open.sel === sel) { close(true); return; }
+    close(false);
+    if (sel.disabled) return;
+    const list = h("div", { class: "pick-list", role: "listbox" });
+    const items = [];
+    const addOpt = (o, inGroup) => {
+      const it = { v: o.value, t: o.textContent, dis: o.disabled, el: null, head: null };
+      it.el = h("div", { class: "pick-o" + (inGroup ? " ing" : "") + (o.value === sel.value ? " cur" : "") + (o.disabled ? " dis" : ""), role: "option",
+        "aria-selected": o.value === sel.value ? "true" : "false",
+        onmousedown: (e) => e.preventDefault(), onclick: () => { if (!it.dis) choose(sel, it.v); },
+        onmousemove: () => { if (open && open.active !== it && !it.dis) { open.items.forEach((x) => x.el.classList.toggle("act", x === it)); open.active = it; } } },
+        h("span", { class: "pick-t" }, o.textContent), o.value === sel.value ? h("span", { class: "pick-ck", "aria-hidden": "true" }, "✓") : null);
+      items.push(it); list.appendChild(it.el); return it;
+    };
+    for (const c of sel.children) {
+      if (c.tagName === "OPTGROUP") {
+        const head = h("div", { class: "pick-h", role: "presentation" }, c.label);
+        list.appendChild(head);
+        for (const o of c.children) addOpt(o, true).head = head;
+      } else if (c.tagName === "OPTION") addOpt(c, false);
+    }
+    const empty = h("div", { class: "pick-empty", hidden: true }, "No matches");
+    list.appendChild(empty);
+    let search = null;
+    if (items.length >= SEARCH_AT) {
+      search = h("input", { type: "search", class: "pick-s", placeholder: "Search…", "aria-label": "Search the list", autocomplete: "off" });
+      search.addEventListener("input", () => {
+        const q = search.value.trim().toLowerCase();
+        const heads = new Map();
+        for (const it of items) {
+          const hit = !q || it.t.toLowerCase().includes(q);
+          it.el.hidden = !hit;
+          if (it.head) heads.set(it.head, (heads.get(it.head) || false) || hit);
+        }
+        heads.forEach((any, hd) => { hd.hidden = !any; });
+        empty.hidden = items.some((it) => !it.el.hidden);
+        if (!empty.hidden) empty.textContent = "No matches for “" + search.value.trim() + "”";
+        open.active = null; setActive("first");
+      });
+    }
+    const panel = h("div", { class: "pick", role: "dialog", "aria-label": sel.getAttribute("aria-label") || "Choose" }, search, list);
+    document.body.appendChild(panel);
+    // place it under the box (or above when there is no room), at least as wide as the box
+    // the app scales the page with CSS zoom (text size setting): screen positions are divided by it to get CSS pixels
+    const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+    const b0 = sel.getBoundingClientRect(), r = { left: b0.left / z, top: b0.top / z, bottom: b0.bottom / z, width: b0.width / z };
+    const vw = window.innerWidth / z, vh = window.innerHeight / z;
+    const w = Math.min(Math.max(r.width, 220), vw - 16);
+    panel.style.width = w + "px";
+    panel.style.left = Math.max(8, Math.min(r.left, vw - w - 8)) + "px";
+    const below = vh - r.bottom - 12, above = r.top - 12;
+    const up = below < 240 && above > below;
+    const room = Math.max(160, Math.min(420, up ? above : below));
+    panel.style.maxHeight = room + "px";
+    if (up) panel.style.bottom = (vh - r.top + 6) + "px"; else panel.style.top = (r.bottom + 6) + "px";
+    sel.classList.add("pick-open"); sel.setAttribute("aria-expanded", "true");
+    const onKey = (e) => {
+      if (!open) return;
+      const k = e.key;
+      if (k === "Escape") { e.preventDefault(); e.stopPropagation(); close(true); }
+      else if (k === "Tab") close(false);
+      else if (k === "ArrowDown") { e.preventDefault(); setActive(1); }
+      else if (k === "ArrowUp") { e.preventDefault(); setActive(-1); }
+      else if (k === "Home" && !search) { e.preventDefault(); setActive("first"); }
+      else if (k === "End" && !search) { e.preventDefault(); setActive("last"); }
+      else if (k === "Enter") { e.preventDefault(); if (open.active) choose(sel, open.active.v); }
+      else if (!search && k.length === 1 && /\S/.test(k)) {        // short lists: jump to the next item starting with the letter
+        const vis = items.filter((it) => !it.dis), from = vis.indexOf(open.active);
+        const hit = vis.slice(from + 1).concat(vis.slice(0, from + 1)).find((it) => it.t.trim().toLowerCase().startsWith(k.toLowerCase()));
+        if (hit) { items.forEach((x) => x.el.classList.toggle("act", x === hit)); open.active = hit; hit.el.scrollIntoView({ block: "nearest" }); }
+      }
+    };
+    open = { sel, panel, items, active: null, onKey };
+    document.addEventListener("keydown", onKey, true);
+    const cur = items.find((it) => it.v === sel.value && !it.dis);
+    if (cur) { open.active = cur; cur.el.classList.add("act"); cur.el.scrollIntoView({ block: "center" }); } else setActive("first");
+    (search || panel).focus({ preventScroll: true });
+    if (!search) panel.tabIndex = -1, panel.focus({ preventScroll: true });
+  };
+  const ours = (t) => t && t.tagName === "SELECT" && !t.multiple && !(t.size > 1);
+  document.addEventListener("mousedown", (e) => {
+    if (open && !open.panel.contains(e.target) && e.target !== open.sel) close(false);
+    if (e.button !== 0 || !ours(e.target)) return;
+    e.preventDefault();                                // no native popup
+    e.target.focus({ preventScroll: true });
+    openPick(e.target);
+  }, true);
+  document.addEventListener("keydown", (e) => {
+    if (open || !ours(e.target)) return;
+    if ([" ", "Enter", "ArrowDown", "ArrowUp"].includes(e.key) || (e.altKey && e.key === "ArrowDown")) { e.preventDefault(); openPick(e.target); }
+  }, true);
+  window.addEventListener("resize", () => close(false));
+  document.addEventListener("scroll", (e) => { if (open && !open.panel.contains(e.target)) close(false); }, true);
 })();

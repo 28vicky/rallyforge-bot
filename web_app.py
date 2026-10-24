@@ -1567,6 +1567,69 @@ def open_path(path):
         rb.quiet_err("open_path", _e)
 
 
+# ---- start with Windows (T71): a Run-key entry pointing at the installed exe, never a copy of the exe.
+# A copied exe cannot start: it looks for its _internal folder next to itself ("Failed to load Python DLL").
+WIN_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+WIN_RUN_NAME = "RallyForgeBot"
+
+
+def win_startup_supported():
+    return os.name == "nt" and bool(getattr(sys, "frozen", False))
+
+
+def win_startup_on():
+    if not win_startup_supported():
+        return False
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, WIN_RUN_KEY) as k:
+            winreg.QueryValueEx(k, WIN_RUN_NAME)
+            return True
+    except OSError:
+        return False
+
+
+def win_startup_set(on):
+    if not win_startup_supported():
+        return
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, WIN_RUN_KEY, 0, winreg.KEY_SET_VALUE) as k:
+        if on:
+            winreg.SetValueEx(k, WIN_RUN_NAME, 0, winreg.REG_SZ, f'"{os.path.abspath(sys.executable)}"')
+        else:
+            try:
+                winreg.DeleteValue(k, WIN_RUN_NAME)
+            except OSError:
+                pass
+
+
+def win_startup_repair(log=None):
+    """Every launch: remove RallyForge exe copies from the Startup folder (they cannot run) and keep the Run entry
+    pointing at this exe (the install folder may have moved). A copy found there means the user wanted it -> Run entry on."""
+    if not win_startup_supported():
+        return
+    me = os.path.abspath(sys.executable)
+    folder = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    wanted = False
+    try:
+        for f in folder.glob("*.exe"):
+            if (f.name.lower() == os.path.basename(me).lower() or f.name.lower().startswith("rallyforge")) and os.path.abspath(f) != me:
+                try:
+                    f.unlink()
+                    wanted = True
+                    if log:
+                        log(f"[*] Removed a copy of the app from the Windows Startup folder ({f.name}); it now starts with Windows the proper way.")
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    try:
+        if wanted or win_startup_on():
+            win_startup_set(True)
+    except OSError:
+        pass
+
+
 class Api:
     """One method per button. Each takes the JSON the page sent and returns a dict (or raises ApiError)."""
 
@@ -1616,22 +1679,69 @@ class Api:
             _r = (rb.load_duty_state().get(serial or "default") or {}).get(d["id"]) or {}
             _h = list((_r.get("hist") or {}).values())
             week = {"ok": sum(int(x[0]) for x in _h), "fail": sum(int(x[1]) for x in _h), "last_error": _r.get("last_error", "")}
+            _lo = _r.get("last_ok", 0)
+            today = st == "done" or (bool(_lo) and time.strftime("%Y-%m-%d", time.gmtime(_lo - rb.reset_min() * 60)) == rb._game_day())
             rows.append({"id": d["id"], "week": week, "group": d["group"], "title": d["title"], "note": d["note"],
                          "on": bool(conf.get("on")), "every_min": int(conf.get("every_min", d["every_min"]) or 0),
                          "default_every": d["every_min"], "verified": bool(d.get("verified")),
-                         "status": st, "status_text": txt,
+                         "status": st, "status_text": txt, "today": today,
                          "opts": [dict(o, val=conf.get(o["k"], o.get("def"))) for o in (d.get("opts") or [])],
                          "gems": bool(d.get("gems")),
                          "schedule": ("When the next egg is ready" if d["id"] == "crazy_eggs" else "Once per game day" if not d["every_min"] else f"Every {d['every_min']} min")})
         return rows
 
+    # test duties: never shown to users and never counted (C8 / C12)
+    TEST_DUTIES = ("reach_keep_tavern", "market_capture", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy",
+                   "test_learned_keep", "test_activity_go")
+
+    def _duty_count(self, serial, cfg=None):
+        """The one 'done / on' count every screen shows (C8): duties switched on (test duties left out) and how many of
+        them finished at least once this game day."""
+        cfg = cfg if cfg is not None else self._eff(serial)
+        state = rb.load_duty_state().get(serial or "default") or {}
+        day = rb._game_day()
+        on = done = 0
+        for d in rb.DUTY_LIBRARY:
+            if d["id"] in self.TEST_DUTIES or not ((cfg.get("duties") or {}).get(d["id"]) or {}).get("on"):
+                continue
+            on += 1
+            last_ok = (state.get(d["id"]) or {}).get("last_ok", 0)
+            ok_today = bool(last_ok) and time.strftime("%Y-%m-%d", time.gmtime(last_ok - rb.reset_min() * 60)) == day
+            done += bool(ok_today or rb.duty_status(serial, d["id"], cfg)[0] == "done")
+        return {"done": done, "on": on}
+
     def _own(self, scope):
         ov = (self.c.cfg.get("per_device") or {}).get(scope, {}) if scope else {}
         return {"duties": "duties" in ov, "crazy_eggs": "crazy_eggs" in ov, "champions": "champions" in ov, "wheel": "wheel" in ov}
 
+    def _saved(self, scope):
+        """What is stored now for this scope's own keys - the page copies it into its settings so the page autosave
+        never writes an older copy back over a switch saved here (duty switch came back on, owner 24 Oct)."""
+        src = ((self.c.cfg.get("per_device") or {}).get(scope) or {}) if scope else self.c.cfg
+        return {"serial": scope, "vals": {k: src[k] for k in self.OWN_KEYS_COPY if k in src}}
+
     def duties(self, p):
         scope = self._scope(p)
-        return {"duties": self._duty_rows(scope), "serial": scope, "own": self._own(scope)}
+        return {"duties": self._duty_rows(scope), "serial": scope, "own": self._own(scope),
+                "count": self._duty_count(scope) if scope else None, "_saved": self._saved(scope)}
+
+    def duties_copy(self, p):
+        """'Copy from another instance...' on Routines: this instance gets the other one's duties and their settings
+        (Crazy Eggs, Champions, Wheel). Same per_device keys the switches write; nothing else changes."""
+        scope, src = self._scope(p), str(p.get("from", ""))
+        ids = [d["id"] for d in self.c.devices]
+        if not scope or src not in ids or src == scope:
+            raise ApiError("Pick another instance.")
+        src_cfg = self._eff(src)
+        per = {s: dict(v) for s, v in (self.c.cfg.get("per_device") or {}).items()}
+        mine = per.setdefault(scope, {})
+        for k in self.OWN_KEYS_COPY:
+            if k in src_cfg:
+                mine[k] = json.loads(json.dumps(src_cfg[k]))
+        self.c.save({"per_device": per}, managed=True)
+        return self.duties({"serial": scope})
+
+    OWN_KEYS_COPY = ("duties", "crazy_eggs", "champions", "wheel")
 
     def today(self, p):
         """Today card for one instance: reset time, duty queue (Daily activities + Reward claims that are on),
@@ -1643,9 +1753,9 @@ class Api:
         reset_at = ((now - rm) // 86400 + 1) * 86400 + rm
         state = (rb.load_duty_state().get(serial) or {})
         day = rb._game_day()
-        queue, done_n = [], 0
+        queue = []
         for d in rb.DUTY_LIBRARY:
-            if d["group"] not in ("Daily activities", "Reward claims"):
+            if d["id"] in self.TEST_DUTIES:
                 continue
             conf = (cfg.get("duties") or {}).get(d["id"]) or {}
             if not conf.get("on"):
@@ -1654,7 +1764,6 @@ class Api:
             st, txt = rb.duty_status(serial, d["id"], cfg)
             last_ok = row.get("last_ok", 0)
             ok_today = bool(last_ok) and time.strftime("%Y-%m-%d", time.gmtime(last_ok - rb.reset_min() * 60)) == day
-            done_n += ok_today
             queue.append({"id": d["id"], "title": d["title"], "group": d["group"], "status": st, "text": txt,
                           "last_ok": last_ok if ok_today else 0, "msg": row.get("msg", "") if row.get("day") == day else "",
                           "every": int(conf.get("every_min", d["every_min"]) or 0)})
@@ -1665,7 +1774,8 @@ class Api:
         return {"serial": serial, "name": name, "now": now, "reset_at": reset_at, "tasks_on": bool(cfg.get("city_enabled")) or any(q for q in queue),
                 "queue": queue,
                 "results": {"joins": int(t.get("joins", 0)), "late": int(t.get("late", 0)), "restarts": int(t.get("restarts", 0)),
-                            "monsters": t.get("monsters") or {}, "duties_done": done_n},
+                            "monsters": t.get("monsters") or {}, "duties_done": self._duty_count(serial, cfg)["done"]},
+                "count": self._duty_count(serial, cfg),
                 "week": {"days": len(week), "joins": sum(int(w.get("joins", 0)) for w in week),
                          "restarts": sum(int(w.get("restarts", 0)) for w in week)}}
 
@@ -1678,7 +1788,7 @@ class Api:
                 continue
             t = self.today({"serial": d["id"]})
             q = t["queue"]
-            rows.append({"serial": d["id"], "name": t["name"], "duties_done": t["results"]["duties_done"], "duties_total": len(q),
+            rows.append({"serial": d["id"], "name": t["name"], "duties_done": t["count"]["done"], "duties_total": t["count"]["on"],
                          "joins": t["results"]["joins"], "late": t["results"]["late"]})
             if not ((self._eff(d["id"]).get("duties") or {}).get("crazy_eggs") or {}).get("on"):
                 ce_off.append(t["name"])
@@ -1687,15 +1797,6 @@ class Api:
         return {"now": now, "reset_at": ((now - rm) // 86400 + 1) * 86400 + rm, "rows": rows,
                 "crazy_eggs": {"total": len(rows), "off": ce_off}}
 
-    def crazy_eggs_on_all(self, p):
-        """'turn on' link of the Crazy Eggs alert: switch the crazy_eggs duty on in the universal list
-        and in every instance that has its own duties copy. Nothing else in the settings changes."""
-        self.duty_set({"id": "crazy_eggs", "on": True})
-        own = [s for s, v in (self.c.cfg.get("per_device") or {}).items() if "duties" in (v or {})]
-        for s in own:
-            if s in [d["id"] for d in self.c.devices]:
-                self.duty_set({"id": "crazy_eggs", "on": True, "serial": s})
-        return self.today_all(p)
     def duty_retry(self, p):
         """'Retry' on a duty that failed 3 times today: run it again now (one instance, or every instance)."""
         did = str(p.get("id", ""))
@@ -1758,11 +1859,14 @@ class Api:
         matrix = []
         for d in self.c.devices:
             eff = rb.merge_device_cfg(self.c.cfg, d["id"])
-            row = {"emu": names[d["id"]], "tasks": bool(eff.get("city_enabled")), "duties": []}
+            row = {"id": d["id"], "emu": names[d["id"]], "tasks": bool(eff.get("city_enabled")), "duties": [],
+                   "count": self._duty_count(d["id"], eff)}
             for du in rb.DUTY_LIBRARY:
+                if du["id"] in self.TEST_DUTIES:
+                    continue
                 st, txt = rb.duty_status(d["id"], du["id"], eff)
                 if st != "off":
-                    row["duties"].append({"title": du["title"], "status": st, "text": txt})
+                    row["duties"].append({"id": du["id"], "title": du["title"], "status": st, "text": txt})
             matrix.append(row)
         return {"events": events, "matrix": matrix}
 
@@ -1780,7 +1884,7 @@ class Api:
         c = rb.ce_conf(self._eff(scope))
         serial = scope or (self.c.devices[0]["id"] if self.c.devices else "default")
         row = rb.ce_row(serial)
-        return {"conf": c, "costs": rb.CE_COSTS, "lucky_used": row.get("lucky_day") == rb._game_day(), "own": self._own(scope),
+        return {"conf": c, "costs": rb.CE_COSTS, "lucky_used": row.get("lucky_day") == rb._game_day(), "own": self._own(scope), "_saved": self._saved(scope),
                 "smashes": row.get("smashes") if row.get("smash_day") == rb._game_day() else {}}
 
     def crazy_eggs_set(self, p):
@@ -1838,7 +1942,7 @@ class Api:
 
     def wheel(self, p):
         scope = self._scope(p)
-        return {"conf": rb.wheel_conf(self._eff(scope)), "own": self._own(scope)}
+        return {"conf": rb.wheel_conf(self._eff(scope)), "own": self._own(scope), "_saved": self._saved(scope)}
 
     def wheel_set(self, p):
         scope = self._scope(p)
@@ -1855,7 +1959,7 @@ class Api:
         serial = scope or (self.c.devices[0]["id"] if self.c.devices else "default")
         row = rb.ch_row(serial)
         day = rb._game_day()
-        return {"plan": conf["plan"], "names": rb.CHAMPIONS, "max_taps": rb.CH_TAPS, "max_greets": rb.CH_GREETS, "own": self._own(scope),
+        return {"plan": conf["plan"], "names": rb.CHAMPIONS, "max_taps": rb.CH_TAPS, "max_greets": rb.CH_GREETS, "own": self._own(scope), "_saved": self._saved(scope),
                 "taps": row.get("taps") if row.get("taps_day") == day else {}, "greets": row.get("greets") if row.get("greets_day") == day else {}}
 
     def champions_set(self, p):
@@ -2099,6 +2203,19 @@ class Api:
         rb.LOG_DIR.mkdir(exist_ok=True)
         open_path(rb.LOG_DIR)
         return {"path": str(rb.LOG_DIR)}
+
+    # ---- start with Windows (T71)
+    def win_startup(self, p):
+        return {"supported": win_startup_supported(), "on": win_startup_on()}
+
+    def win_startup_set(self, p):
+        if not win_startup_supported():
+            raise ApiError("Start with Windows works only in the installed app.")
+        try:
+            win_startup_set(bool(p.get("on")))
+        except OSError as e:
+            raise ApiError(f"Windows did not accept the change: {e}")
+        return {"on": win_startup_on()}
 
     # ---- profiles
     def profile_save(self, p):
@@ -2783,7 +2900,16 @@ def open_window(url, ctl):
 
 
 def main():
+    if getattr(sys, "frozen", False):
+        try:
+            os.chdir(os.path.dirname(os.path.abspath(sys.executable)))   # started by Windows: the folder is System32 otherwise
+        except OSError:
+            pass
     ctl = Controller()
+    try:
+        win_startup_repair(ctl.log)
+    except Exception:
+        pass
     try:
         rb.setup_tesseract()                                  # the scans read general names with OCR
     except Exception as _e:

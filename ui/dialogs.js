@@ -329,7 +329,7 @@ function openGeneralManager() {
   const pickHint = h("div", { class: "empty" }, h("b", {}, "No general chosen"), h("span", {}, "Click a general on the left to see and change its settings."));
   const right = h("div", {}, pickHint, detail);
   drawList();
-  modal({ title: "General Manager", wide: true, focus: false, buttons: [{ label: "Close", cls: "pri" }], body: h("div", { class: "gen-body" }, left, right) });
+  modal({ title: "General manager", wide: true, focus: false, buttons: [{ label: "Close", cls: "pri" }], body: h("div", { class: "gen-body" }, left, right) });
 }
 
 // a general was renamed (new = its new name) or deleted (new = null): fix every place that used it
