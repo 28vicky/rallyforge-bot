@@ -1933,13 +1933,13 @@ function cityMapCard(serial) {
     }
     if (!total) root.appendChild(h("p", { class: "hint" }, "No duty needs a building yet."));
     else {
-      const STATE = { found: ["Found", "ok"], pinned: ["Pinned", "ok"], seen: ["Seen", "next"], none: ["Not yet", ""] };
+      const STATE = { found: ["Found", "ok"], pinned: ["Pinned", "ok"], seen: ["Seen", "next"], none: ["To pin", "todo"] };
       root.appendChild(h("div", { class: "cmlist" }, j.buildings.map((b) => h("div", { class: "cmrow" + (b.on ? "" : " off"), title: "Needed by: " + b.duties.join(", ") + (b.on ? "" : " (switched off)") },
         h("span", { class: "cmname" }, b.name), h("span", { class: "dbadge " + STATE[b.state][1] }, STATE[b.state][0])))));
       if (j.culture && !j.buildings.some((b) => b.state === "pinned" || b.state === "found"))
         root.appendChild(h("p", { class: "hint" }, "Your city matched the " + j.culture.charAt(0).toUpperCase() + j.culture.slice(1) + " map. Its buildings are not pinned yet, so each one is pinned the first time a task opens it."));
       root.appendChild(h("p", { class: "hint" }, found === total && total ? "Every building the duties need is on the map." :
-        "Found = reached on this city. Pinned = known from the culture map, checked on the first visit. Not yet = pinned the first time a task opens it."));
+        "Found = reached on this city. Pinned = known from the culture map, checked on the first visit. To pin = pinned the first time a task opens it."));
     }
     const run = async (again) => {
       if (again && !(await confirmBox("Map again", "Map the city again? The bot first matches it to a culture map (a few seconds); only a city that matches none is walked (about 20 minutes). Found places are replaced."))) return;
