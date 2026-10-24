@@ -5752,13 +5752,28 @@ def _bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
 _HEAVY_LOCK = threading.RLock()            # only one emulator restart / game restart at a time: they are the PC's heaviest moments
 _HEAVY_QUEUE = []                          # serials waiting for _HEAVY_LOCK, first come first served
 _HEAVY_QLOCK = threading.Lock()
+_HEAVY_OWNER = [None, 0]                   # [serial holding the lock, depth] - the holder re-enters at once (never joins the line)
+
+
+def heavy_release():
+    with _HEAVY_QLOCK:
+        _HEAVY_OWNER[1] = max(0, _HEAVY_OWNER[1] - 1)
+        if _HEAVY_OWNER[1] == 0:
+            _HEAVY_OWNER[0] = None
+    _HEAVY_LOCK.release()
 
 
 def heavy_acquire(serial, stop, log=None):
     """Take _HEAVY_LOCK in the order the instances asked for it (a plain lock let late instances jump the line,
-    so one instance could wait for ever). -> False when stopped while waiting."""
+    so one instance could wait for ever). The instance that already holds it gets it again at once: Manhattan 24 Oct
+    16:51 held it for its emulator restart, then needed a game restart, queued behind Rory who waited for Manhattan's
+    lock - all three instances hung for 40 min. -> False when stopped while waiting."""
     with _HEAVY_QLOCK:
+        if _HEAVY_OWNER[0] == serial and _HEAVY_LOCK.acquire(blocking=False):   # re-entry by the holder
+            _HEAVY_OWNER[1] += 1
+            return True
         if not _HEAVY_QUEUE and _HEAVY_LOCK.acquire(blocking=False):   # nobody waiting: no line to keep
+            _HEAVY_OWNER[0], _HEAVY_OWNER[1] = serial, _HEAVY_OWNER[1] + 1
             return True
         _HEAVY_QUEUE.append(serial)
     if log:
@@ -5768,6 +5783,8 @@ def heavy_acquire(serial, stop, log=None):
             with _HEAVY_QLOCK:
                 first = bool(_HEAVY_QUEUE) and _HEAVY_QUEUE[0] == serial
             if first and _HEAVY_LOCK.acquire(timeout=2):
+                with _HEAVY_QLOCK:
+                    _HEAVY_OWNER[0], _HEAVY_OWNER[1] = serial, _HEAVY_OWNER[1] + 1
                 return True
             if not first:
                 stop.wait(1)
@@ -5786,7 +5803,7 @@ def restart_emulator(dev, cfg, log, stop, why=""):
     try:
         return _restart_emulator(dev, cfg, log, stop, why)
     finally:
-        _HEAVY_LOCK.release()
+        heavy_release()
 
 
 def _restart_emulator(dev, cfg, log, stop, why=""):
@@ -5897,7 +5914,7 @@ def force_restart_game(dev, cfg, log, stop):
             return not stop.is_set()
         return _restart_emulator(dev, cfg, log, stop, "Evony did not load after a game restart")  # the lock is already ours
     finally:
-        _HEAVY_LOCK.release()
+        heavy_release()
 
 
 # ---------------------------------------------------------------- one device
