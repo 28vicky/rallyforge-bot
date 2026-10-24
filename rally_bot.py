@@ -7901,10 +7901,15 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             zoom_out_city(dev, stop, log)
         leave_to_city(dev, cfg, stop, log)
         return find_learned_building(dev, cfg, log, stop, name.strip())
-    if kind in ("go", "via"):                              # Activity > tile > Go walks to the building (any city layout); map as fallback
-        tile, _, bname = name.partition("|")
+    if kind in ("go", "via"):                              # a PINNED building goes by the keyframe map (locate -> a few measured drags
+        tile, _, bname = name.partition("|")               # -> tap); the Activity tile is only the teacher for a building not pinned yet
         if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
             zoom_out_city(dev, stop, log)                   # learned pictures are taken / searched at the widest zoom
+        if bname and _pinned(dev, bname.strip()) and city_map(dev) is not None:
+            leave_to_city(dev, cfg, stop, log)
+            if find_learned_building(dev, cfg, log, stop, bname.strip()):
+                return True
+            log(f"[i]   {bname.strip()}: not reached by the map - trying the Activity route")
         try:
             r = activity_go(dev, cfg, log, stop, tile.strip(), route=(kind == "via"))
         except Exception as e:
@@ -7921,6 +7926,9 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         leave_to_city(dev, cfg, stop, log)
         if find_learned_building(dev, cfg, log, stop, bname.strip()):     # learned from an earlier Go (tile gone today)
             return True
+        if city_map(dev) is not None:                      # with a keyframe map there is no name reading (owner 24 Oct): the
+            log(f"[!]   {bname.strip()}: no tile today and not pinned on the city map yet - will try again later")
+            return False                                   # building gets pinned the next time a tile or picture opens it
         leave_to_city(dev, cfg, stop, log)
         return city_task_target(dev, cfg, log, stop, {**task, "target": "building:" + bname.strip()}, nav_state)
     if kind == "xy":
@@ -10012,6 +10020,14 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
 LEARN_DIR = USER / "city_learn"
 
 
+def _pinned(dev, bname):
+    """Does this building have a place on the instance's keyframe map (learned at an earlier open)?"""
+    try:
+        return bool(json.loads(_learn_path(dev, bname).with_suffix(".json").read_text(encoding="utf-8")).get("map"))
+    except Exception:
+        return False
+
+
 def _learn_path(dev, bname):
     return LEARN_DIR / re.sub(r"[^\w.-]+", "_", str(getattr(dev, "serial", "default"))) / (re.sub(r"[^a-z]+", "_", bname.lower()).strip("_") + ".png")
 
@@ -10034,6 +10050,14 @@ def learn_building(dev, shot, bname, x, y):
             meta = {}
         cv2.imwrite(str(p), crop)
         meta.update({"dx": x - x0, "dy": y - y0, "at": time.strftime("%Y-%m-%d %H:%M")})
+        try:                                               # PIN the building on the keyframe map: every successful open on the city
+            cmap = city_map(dev)                           # (Activity route, learned picture, map) teaches its map place, so the
+            if cmap is not None:                           # next visit is locate -> a few measured drags -> tap (owner 24 Oct: the
+                loc = cmap.locate(shot)                    # Activity tile is a teacher, the map is the way)
+                if loc:                                    # (a zoomed-in screen does not locate: the pixel check fails)
+                    meta["map"] = [round(loc[0] + x), round(loc[1] + y)]
+        except Exception:
+            pass
         (p.with_suffix(".json")).write_text(json.dumps(meta), encoding="utf-8")
     except Exception:
         pass
