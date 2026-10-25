@@ -7373,7 +7373,7 @@ def calm_drag(shot, fx, fy, tx, ty):
         for ox in (0, -120, 120, -200, 200):
             for oy in (0, -150, 150, -250, 250):
                 a, b, c, d = fx + ox, fy + oy, tx + ox, ty + oy
-                if min(a, c) < 30 or max(a, c) > 510 or min(b, d) < 160 or max(b, d) > 800:
+                if min(a, c) < 90 or max(a, c) > 450 or min(b, d) < 190 or max(b, d) > 790:
                     continue                                  # both ends stay on the map, away from the game's buttons
                 x0, y0 = int(a) - 22, int(b) - 22
                 v = float(lap[y0:y0 + 44, x0:x0 + 44].mean()) + (abs(ox) + abs(oy)) * 0.004   # prefer staying close
@@ -7438,8 +7438,8 @@ class CityNav:
             if abs(px - mid_x) <= tol and abs(py - mid_y) <= tol:
                 self.log(f"[i]   camera at {round(self.cx)},{round(self.cy)} (match {sc:.2f}), target on screen at {round(px)},{round(py)}")
                 return True
-            mx = max(-380, min(380, px - mid_x))              # how far the picture has to move (owner 25 Oct: one long drag, not many short ones)
-            my = max(-540, min(540, py - mid_y))
+            mx = max(-330, min(330, px - mid_x))              # how far the picture has to move (owner 25 Oct: one long drag, not many short ones)
+            my = max(-500, min(500, py - mid_y))
             self.log(f"[i]   camera at {round(self.cx)},{round(self.cy)} (match {sc:.2f}) - target {round(px - mid_x)},{round(py - mid_y)} px away, dragging")
             if abs(mx) < 30 and abs(my) < 30:                 # a short drag may count as a TAP on a building: overshoot and come back
                 ux, uy = (1.0 if mx >= 0 else -1.0), (1.0 if my >= 0 else -1.0)
@@ -7498,8 +7498,8 @@ class CityNav:
             rx, ry = want_dx - mx, want_dy - my
             if abs(rx) < 25 and abs(ry) < 25 or self.halted():
                 break
-            sx = max(-380, min(380, rx))              # one long drag at a time (owner 25 Oct); each is measured (patch tracking)
-            sy = max(-540, min(540, ry))
+            sx = max(-330, min(330, rx))              # one long drag at a time (owner 25 Oct), ends kept off the side icon columns
+            sy = max(-500, min(500, ry))
             # dragging the finger left/up moves the camera right/down.
             # A short drag can be read by the game as a TAP on a building (that opened Prison, Rare Books ...), so a
             # short move is done as one long drag past the target and a second long drag back.
@@ -12000,6 +12000,7 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
     x, y, w, h = CITY_VIEW
     mid_x, mid_y = x + w / 2, y + h / 2
     lost = 0
+    prev_cam = None
     for i in range(8):
         if stop.is_set():
             return None
@@ -12023,6 +12024,9 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
         if (abs(sx - mid_x) <= tol and abs(sy - mid_y) <= tol) or (90 <= sx <= 450 and 200 <= sy <= 780):
             log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} on the map ({r[2]} points), target on screen at {round(sx)},{round(sy)}")
             return sx, sy
+        if i and prev_cam and abs(prev_cam[0] - nav.cx) < 15 and abs(prev_cam[1] - nav.cy) < 15:
+            log("[!]   camera: the last drag did not move the map (a button or building under the finger?)")
+        prev_cam = (nav.cx, nav.cy)
         log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} ({r[2]} points) - target {round(sx - mid_x)},{round(sy - mid_y)} px from the middle, moving (round {i + 1})")
         nav.pan(sx - mid_x, sy - mid_y)                    # measured drags (the diamond's edge stops them safely)
     return None
