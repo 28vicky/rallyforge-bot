@@ -6157,6 +6157,10 @@ def read_alliance_chat(dev, cfg, log, stop):
             low = text.lower()
             if "alliance war" in low or "started an" in low:
                 pending = [None, None]
+            if pending is not None:                              # owner 25 Oct: a rally anyone started = never pick that monster
+                xy = re.search(r"X\s*[:.]?\s*(\d{1,4})\s*[,.;]?\s*Y\s*[:.]?\s*(\d{1,4})", text, re.I)
+                if xy:
+                    mr_block(f"{int(xy.group(1))},{int(xy.group(2))}", getattr(dev, "serial", ""), "rallied")
             if pending is not None and pending[0] is None:
                 names = MONSTER_NAMES + [n for grp in MONSTER_CATALOG for n, _ in grp[1]]
                 exact = [n for n in names if n.lower() in low]
@@ -6402,7 +6406,12 @@ def feed_get(keep_min=60):
                     save_json(FEED_FILE, {"items": _feed}, indent=1)
                 except Exception as _e:
                     quiet_err("feed_get", _e)
-        return list(_feed), dict(_feed_stats)
+        out = list(_feed)
+    try:
+        out = [f for f in out if mr_block_why(f"{f.get('x')},{f.get('y')}") not in ("rallied", "dead")]   # never shown again
+    except Exception as _e:
+        quiet_err("feed_get_block", _e)
+    return out, dict(_feed_stats)
 
 
 def feed_clear():
@@ -12557,6 +12566,55 @@ def mr_rules(cfg):
     return out
 
 
+MR_BLOCK_FILE = USER / "monster_blocks.json"
+MR_BLOCK_H = 2                            # a blocked monster stays blocked this long (later: until Telegram drops it)
+_mr_block, _mr_block_lock = {}, threading.Lock()
+
+
+def _mr_block_load():
+    if not _mr_block and MR_BLOCK_FILE.exists():
+        try:
+            _mr_block.update(json.loads(MR_BLOCK_FILE.read_text(encoding="utf-8")) or {})
+        except Exception as _e:
+            quiet_err("mr_block_load", _e)
+    now = time.time()
+    for k in [k for k, v in _mr_block.items() if now - float(v.get("t", 0)) > MR_BLOCK_H * 3600]:
+        _mr_block.pop(k, None)
+
+
+def mr_block(key, by, why):
+    """Owner 25 Oct: a monster an instance picked, that is being rallied (anyone in the alliance) or that is dead
+    is blocked for every instance on this PC - a Telegram refresh can never bring it back."""
+    if not key:
+        return
+    with _mr_block_lock:
+        _mr_block_load()
+        old = _mr_block.get(key) or {}
+        if old.get("why") in ("rallied", "dead") and why == "picked":
+            return                                           # never weaken a block
+        _mr_block[key] = {"t": time.time(), "by": by or "", "why": why}
+        try:
+            save_json(MR_BLOCK_FILE, _mr_block, indent=1)
+        except Exception as _e:
+            quiet_err("mr_block", _e)
+
+
+def mr_block_why(key):
+    with _mr_block_lock:
+        _mr_block_load()
+        return (_mr_block.get(key) or {}).get("why")
+
+
+def mr_blocked(key, me=None):
+    """True = no instance may pick it. 'picked' only blocks the OTHER instances (the picker keeps it while it waits)."""
+    with _mr_block_lock:
+        _mr_block_load()
+        b = _mr_block.get(key)
+    if not b:
+        return False
+    return b.get("why") != "picked" or me is None or b.get("by") != me
+
+
 def mr_preset_loaded(shot):
     """Alliance War troop page: a general is set (no 'Select a Main General' card). An empty preset = its general is out."""
     return not rd_seen(shot, ["Select a Main General"], region=(0, 450, 540, 170))
@@ -12611,7 +12669,7 @@ def mr_rule_for(rules, name, level):
     return None, None
 
 
-def mr_targets(cfg, tried):
+def mr_targets(cfg, tried, serial=None):
     """Telegram coordinates of monsters that sit on a preset (Monster rallies tab), best first (newest, then nearest).
     -> [{name, level, x, y, km, t, rule, rank}]"""
     rules = mr_rules(cfg)
@@ -12626,7 +12684,7 @@ def mr_targets(cfg, tried):
     out, seen = [], set()
     for it in pool:
         key = f"{it.get('x')},{it.get('y')}"
-        if key in seen or now - float(tried.get(key, 0)) < MR_FORGET_MIN * 60:
+        if key in seen or now - float(tried.get(key, 0)) < MR_FORGET_MIN * 60 or mr_blocked(key, serial):
             continue
         seen.add(key)
         if now - float(it.get("t") or 0) > age:
@@ -12819,7 +12877,7 @@ def _run_monster_rally(dev, cfg, log, stop):
         mr_save(serial, tried=tried, next_at=time.time() + minutes * 60)
         log(f"[*]  Monster rally: {why} - again at {time.strftime('%H:%M', time.localtime(time.time() + minutes * 60))}")
 
-    targets = mr_targets(cfg, tried)
+    targets = mr_targets(cfg, tried, serial)
     hold = row.get("hold")                                  # a monster reached but not started (preset out / window): first
     if hold:
         targets.sort(key=lambda t: f"{t.get('x')},{t.get('y')}" != hold)
@@ -12842,6 +12900,9 @@ def _run_monster_rally(dev, cfg, log, stop):
             return
         mode, preset = tgt["rule"]["time"], tgt["rule"]["preset"]   # this monster's own preset and rally time
         key, label = f"{tgt['x']},{tgt['y']}", f"{('Lv' + str(tgt['level']) + ' ') if tgt.get('level') else ''}{tgt.get('name') or 'monster'} ({tgt['x']},{tgt['y']})"
+        if mr_blocked(key, serial):                          # another instance picked it / a rally started on it meanwhile
+            continue
+        mr_block(key, serial, "picked")
         tried[key] = time.time()
         mr_save(serial, tried=tried)
         if not mr_search(dev, stop, tgt["x"], tgt["y"]):
@@ -12868,6 +12929,7 @@ def _run_monster_rally(dev, cfg, log, stop):
             if stop.is_set():
                 return
             if gone:
+                mr_block(key, serial, "dead")
                 log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
                 continue
         while True:                                          # stay on this monster until a march is free
@@ -12880,6 +12942,7 @@ def _run_monster_rally(dev, cfg, log, stop):
                 return later(1, "the map was closed while waiting")
             line = mr_march_line(shot) if skip_lines else None
             if line:
+                mr_block(key, serial, "rallied")
                 log(f"[*]  Monster rally: {label} - a {line} march line is already going to it, skipped")
                 break
             mk = None if getattr(dev, "mr_no_march_count", False) else rt_marches(shot)
@@ -12895,6 +12958,7 @@ def _run_monster_rally(dev, cfg, log, stop):
                 checked = time.time()
                 if not mr_still_there(dev, stop):
                     gone = True
+                    mr_block(key, serial, "dead")
                     log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
                     break
             if max_wait and time.time() - t0 >= max_wait:
@@ -12989,9 +13053,11 @@ def _run_monster_rally(dev, cfg, log, stop):
                 continue
             break
         if got == "gone":
+            mr_block(key, serial, "dead")
             log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
             continue
         if got == "other":
+            mr_block(key, serial, "dead")
             log(f"[*]  Monster rally: {label} - another monster stands there ({page}), skipped")
             continue
         preset = used
@@ -13038,6 +13104,7 @@ def _run_monster_rally(dev, cfg, log, stop):
         busy = dict(mr_row(serial).get("busy") or {})
         busy[preset] = time.time()
         mr_save(serial, hold=None, busy=busy)
+        mr_block(key, serial, "rallied")
         log(f"[+]  Monster rally: started on {label} - {mode} min, preset {preset}")
         started += 1
         continue                                             # owner 25 Oct: straight to the next monster
