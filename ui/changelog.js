@@ -1,5 +1,7 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.17", date: "2026-10-25",
+    fixed: ["Map my city zooms the city out on emulators that ignored it before (such as some BlueStacks versions): if the first way does nothing, the bot tries a real Ctrl + scroll, then a two-finger pinch."] },
   { v: "2.5.16", date: "2026-10-25",
     fixed: ["The game's Auto-Join is renewed again on instances where the bot's own rally joining is switched off."] },
   { v: "2.5.15", date: "2026-10-25",
