@@ -168,6 +168,7 @@ DEFAULTS = {
     "stable_checks": 3,                     # known screen this many times in a row = loaded
     "settle_seconds": 8,
     "restart_settle_seconds": 25,           # after a game / emulator (re)start: settle at least this long, no red wifi icon (owner 25 Oct)
+    "restart_skip_max_idle": 180,           # over the restart budget, still restart when the list showed no rallies for this long (s)
     "game_restarts_per_hour": 2,            # Evony restarts per instance per hour, except must-restarts (frozen game etc.); 0 = no limit                    # after the game looks loaded: wait this long (and until the screen is calm) before any task
     "watchdog_seconds": 60,
     "no_progress_seconds": 300,           # no log line for this long while running -> force restart the emulator (0 = off)
@@ -6067,11 +6068,17 @@ def force_restart_game(dev, cfg, log, stop, must=False):
     now = time.time()
     hist = [t for t in _GAME_RESTARTS.get(dev.serial, []) if now - t < 3600]
     cap = int(cfg.get("game_restarts_per_hour", 2) or 0)
-    if not must and cap and len(hist) >= cap:
+    seen = _RALLY_SEEN.get(dev.serial, 0)
+    idle_max = int(cfg.get("restart_skip_max_idle", 180) or 0)
+    working = now - seen < idle_max or not others_see_rallies(dev.serial, idle_max, allies_only=False)   # saw rallies lately, or nobody did (quiet time)
+    if not must and cap and len(hist) >= cap and working:
         _GAME_RESTARTS[dev.serial] = hist
-        log(f"[i] Not restarting Evony ({len(hist)} restarts this hour already) - letting the game settle and trying again the soft way")
+        log(f"[i] Not restarting Evony ({len(hist)} restarts this hour already, the list showed rallies "
+            f"{now - seen:.0f}s ago) - letting the game settle and trying again the soft way")
         wait_calm(dev, cfg, log, stop, 20)
         return not stop.is_set()
+    if not must and cap and len(hist) >= cap:              # owner 25 Oct: the budget must never cost an hour of rallies
+        log(f"[!] {len(hist)} Evony restarts this hour already, but no rallies seen for {(now - seen) / 60:.0f} min - restarting anyway")
     _GAME_RESTARTS[dev.serial] = hist + [now]
     pkg = evony_package(dev.adb, dev.serial, cfg)
     log("[!] Lost for too long - restarting Evony")
