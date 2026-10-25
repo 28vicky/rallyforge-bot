@@ -12615,6 +12615,32 @@ def mr_blocked(key, me=None):
     return b.get("why") != "picked" or me is None or b.get("by") != me
 
 
+_mr_card_seen = {}                        # (monster, end time // 30) -> time: each rally card is read only once
+
+
+def mr_card_block(screen, hit, serial, mon, left):
+    """Owner 25 Oct: a rally card on the Alliance War list shows the monster's X : Y under its name (right side) -
+    block that monster for Monster rallies on this PC. Read once per rally (the joiner scans the list often)."""
+    try:
+        now = time.time()
+        ck = (mon, round((now + float(left)) / 30))
+        if ck in _mr_card_seen:
+            return
+        _mr_card_seen[ck] = now
+        if len(_mr_card_seen) > 400:
+            for k in [k for k, t in _mr_card_seen.items() if now - t > 3600]:
+                _mr_card_seen.pop(k, None)
+        x0, y0 = int(hit[0]) - 200, int(hit[1]) - 105
+        txt = " ".join(t for t, _ in rd_lines(screen, (max(0, x0), max(0, y0), 290, 50)))
+        m = re.search(r"(\d{3,4})\s*[:;.]\s*(\d{3,4})", txt)
+        if m:
+            mr_block(f"{int(m.group(1))},{int(m.group(2))}", serial, "rallied")
+        else:
+            _mr_card_seen.pop(ck, None)                      # not read: try again on the next scan
+    except Exception as _e:
+        quiet_err("mr_card_block", _e)
+
+
 def mr_preset_loaded(shot):
     """Alliance War troop page: a general is set (no 'Select a Main General' card). An empty preset = its general is out."""
     return not rd_seen(shot, ["Select a Main General"], region=(0, 450, 540, 170))
@@ -14533,6 +14559,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             last_march[0] = march
             if mon and mon != "hidden" and rally:
                 note_rally(serial, mon, rally, mlv)
+                mr_card_block(screen, hit, serial, mon, rally)
             if not label:
                 label = f"[{show_name(screen, hit, mon)}] "
             if ok and not rotator_for(mon).available():
