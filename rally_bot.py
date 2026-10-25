@@ -10290,6 +10290,14 @@ def run_champions(dev, cfg, log, stop):
     row = ch_row(serial)
     taps_used = row.get("taps") or {} if row.get("taps_day") == day else {}
     greets_used = row.get("greets") or {} if row.get("greets_day") == day else {}
+    # Owner 25 Oct (Kiravik): the saved count said "done today" while the game still had taps / greets left, so the bot
+    # opened the page and did nothing. The game's own counter wins over the saved one.
+    if t_used is not None and t_used < CH_TAPS and sum(int(v) for v in taps_used.values()) > t_used:
+        log(f"[i]   Champions: the game shows {t_used}/{CH_TAPS} taps used - the saved count was wrong, using the game's")
+        taps_used = {}
+    if g_used is not None and g_used < CH_GREETS and sum(int(v) for v in greets_used.values()) > g_used:
+        log(f"[i]   Champions: the game shows {g_used}/{CH_GREETS} greets used - the saved count was wrong, using the game's")
+        greets_used = {}
     if not plan:                                           # default: everything on the champion shown, or the first active one
         cur = None
         for _ in range(4):                                 # the name read is flaky: try a few pictures
@@ -10311,6 +10319,7 @@ def run_champions(dev, cfg, log, stop):
         need_t = max(0, plan[name]["taps"] - int(taps_used.get(name, 0)))
         need_g = max(0, plan[name]["greets"] - int(greets_used.get(name, 0)))
         if not (need_t or need_g):
+            log(f"[i]   Champions: {name} - today's taps and greets already done")
             continue
         if not ch_goto(dev, stop, log, name):
             log(f"[!]  Champions: could not reach {name}")
