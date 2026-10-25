@@ -3774,6 +3774,31 @@ def popup_seen(dev, shot, how):
         quiet_err("popup_seen", _e)
 
 
+def black_screen(shot):
+    """The game shows a (nearly) black picture - it happens for a while after a start / restart (owner 25 Oct: Rory)."""
+    try:
+        return shot is not None and float(shot.mean()) < 8 and float(shot.std()) < 6
+    except Exception:
+        return False
+
+
+def wait_not_black(dev, log, stop, secs=20, limit=120):
+    """Black screen: tap nothing, wait until the game shows a picture, then let it settle `secs` s (owner: 20 s).
+    -> True when the picture came back, False when it stayed black for `limit` s."""
+    t0 = time.time()
+    log(f"[*] The game screen is black - waiting for it (nothing is tapped)")
+    while not stop.is_set() and time.time() - t0 < limit:
+        _nap(stop, 3)
+        try:
+            if not black_screen(dev.screenshot()):
+                log(f"[+] The game picture is back after {time.time() - t0:.0f}s - letting it settle {secs}s")
+                _nap(stop, secs)
+                return True
+        except Exception as _e:
+            quiet_err("wait_not_black", _e)
+    return False
+
+
 def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
     """Close whatever covers the game (offers, event pop-ups, full-screen sales, dialogs) so the bot can carry on with
     what it was doing. Uses your popup_* pictures first; on a screen it does not know it presses Back, but only when it
@@ -3789,6 +3814,9 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
         if stop.is_set():
             break
         shot = dev.screenshot()
+        if black_screen(shot):                             # nothing to close on a black picture: wait for the game instead
+            wait_not_black(dev, log, stop)
+            return closed
         _poplib_learn(pending, shot, log)
         pending = None
         if screen_state(shot, cfg) == "unknown" and safety_stop(dev, shot, cfg, log, stop):
@@ -5778,6 +5806,7 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
     good, last_note, last_fg = 0, 0.0, time.time()
     not_ready_since, last_clear, last_kick = None, 0.0, 0.0
     loading_since, app_restarted = None, False                 # stuck on the loading / "Connecting" screen -> close and reopen Evony once
+    black_since, black_restart = None, False                   # black picture after a start: wait (and restart the emulator once if it stays)
     end = time.time() + cfg["game_load_timeout"]
     while time.time() < end and not stop.is_set():
         if pause_gate():                                       # paused meanwhile: no clicks, no timeout, start counting again after the resume
@@ -5795,6 +5824,22 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
                 good, not_ready_since = 0, None
                 end = time.time() + cfg["game_load_timeout"]
                 continue
+        if black_screen(screen):                               # black after a start: wait, tap nothing (owner 25 Oct)
+            good = 0
+            black_since = black_since or time.time()
+            if time.time() - black_since > 150 and allow_emu_restart and not black_restart:
+                black_restart = True
+                log("[!] The game screen stayed black for 2.5 min - restarting the emulator once")
+                return restart_emulator(dev, cfg, log, stop, "the game screen stayed black")
+            if time.time() - last_note > 30:
+                last_note = time.time()
+                log("[*] The game screen is black - waiting for it (nothing is tapped)")
+            _nap(stop, 3)
+            continue
+        if black_since:
+            log(f"[+] The game picture is back after {time.time() - black_since:.0f}s")
+            black_since = None
+            end = max(end, time.time() + 60)
         closed = False
         for name in list_templates("popup_"):
             h = find(screen, name, 0.85)
