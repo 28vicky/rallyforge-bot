@@ -14751,6 +14751,24 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             quiet_err("reach_city.picture", _e)
         return False
 
+    def leave_list():
+        """Map duties (owner 25 Oct): from the rally list back to the screen it was opened from (world map or city)
+        with the arrow top left - no city trip. Back is only pressed on pages, never on the map / city."""
+        for i in range(4):
+            if stop.is_set():
+                return False
+            scr = dev.screenshot()
+            if world_map(scr) or screen_state(scr, cfg) == "city":
+                return True
+            if cancel_quit_dialog(dev, scr, log):
+                return True                                    # the Exit box only opens on the map or the city
+            if i == 0:
+                dev.tap(*cfg["city_to_tap"])                   # the arrow top left of Alliance War
+            else:
+                dev.back()
+            nap(1.5, 2.0)
+        return reach_city()
+
     city_fails = [0]
 
     def city_trip_failed(msg):
@@ -15336,6 +15354,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     elif tasks_active(cfg, serial) and now >= city_block[0] and (due := city_tasks_due(cfg, city_last, serial)):
                         if map_only(due):                                  # monster rallies: straight from the rally list to the map
                             log(f"[*] Auto-Join is running - going to the world map for {len(due)} task(s)")
+                            leave_list()
                             run_city_tasks(dev, cfg, log, stop, due, city_last)
                             recover()
                             continue
@@ -15383,6 +15402,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 if due:
                     log(f"[*] {'No rally waiting' if not target else 'Black Market comes first' if bm_first and not run_now_list(serial) else 'A task was started by hand'} - going to the city for {len(due)} task(s)")
                     if map_only(due):                                  # monster rallies: from the rally list straight to the map
+                        leave_list()
                         run_city_tasks(dev, cfg, log, stop, due, city_last)
                     elif reach_city():
                         city_fails[0] = 0
