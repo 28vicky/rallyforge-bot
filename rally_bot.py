@@ -7373,7 +7373,7 @@ def calm_drag(shot, fx, fy, tx, ty):
         for ox in (0, -120, 120, -200, 200):
             for oy in (0, -150, 150, -250, 250):
                 a, b, c, d = fx + ox, fy + oy, tx + ox, ty + oy
-                if min(a, c) < 90 or max(a, c) > 450 or min(b, d) < 190 or max(b, d) > 790:
+                if min(a, c) < 100 or max(a, c) > 440 or min(b, d) < 200 or max(b, d) > 760:
                     continue                                  # both ends stay on the map, away from the game's buttons
                 x0, y0 = int(a) - 22, int(b) - 22
                 v = float(lap[y0:y0 + 44, x0:x0 + 44].mean()) + (abs(ox) + abs(oy)) * 0.004   # prefer staying close
@@ -12008,7 +12008,7 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
     for i in range(6):                                     # anchor: long drags towards the top-left corner
         if stop.is_set():
             return None
-        dev.swipe(110, 220, 440, 770, 500)                 # finger right/down = camera left/up
+        dev.swipe(100, 200, 440, 760, 550)                 # finger right/down = camera left/up (safe zone 100-440 x 200-760)
         _nap(stop, 0.9, 1.1)
         r = cmap.locate(dev.screenshot())
         cur = (r[0], r[1]) if r else None
@@ -12020,8 +12020,8 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
         return None
     cx, cy = prev
     dx, dy = (mapx - cx) - mid_x, (mapy - cy) - mid_y      # how far the camera has to move (map px)
-    n = max(1, math.ceil(abs(dx) / 330), math.ceil(abs(dy) / 500))
-    n = min(n, 4)
+    n = max(1, math.ceil(max(abs(dx), abs(dy)) / 250))   # owner: short fixed segments (<= 250 px), linear 550 ms each
+    n = min(n, 8)
     sx_, sy_ = dx / n, dy / n
     log(f"[i]   jump: anchor (corner) at {round(cx)},{round(cy)} - pin {round(mapx)},{round(mapy)} - {n} fixed drag(s) of {round(sx_)},{round(sy_)}")
     for k in range(n):                                     # fixed drags, no looking in between
@@ -12029,7 +12029,9 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
             return None
         fx, fy = 270 + sx_ / 2, 480 + sy_ / 2
         tx, ty = 270 - sx_ / 2, 480 - sy_ / 2
-        dev.swipe(int(fx), int(fy), int(tx), int(ty), 600)
+        fx, tx = max(100, min(440, fx)), max(100, min(440, tx))   # safe zone (no HUD under the finger)
+        fy, ty = max(200, min(760, fy)), max(200, min(760, ty))
+        dev.swipe(int(fx), int(fy), int(tx), int(ty), 550)
         _nap(stop, 0.35, 0.45)
     _nap(stop, 1.0, 1.1)                                   # glide + spring-back finish
     shot = dev.screenshot()
