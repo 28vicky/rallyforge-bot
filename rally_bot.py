@@ -8808,10 +8808,19 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         tile, _, bname = name.partition("|")               # -> tap); the Activity tile is only the teacher for a building not pinned yet
         if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
             zoom_out_city(dev, stop, log)                   # learned pictures are taken / searched at the widest zoom
+        if bname.strip().lower() == "prison":             # owner 25 Oct: City Buff > City Labor jumps to the Prison
+            if city_buff_jump(dev, cfg, log, stop) and open_building_here(dev, cfg, log, stop, "Prison",
+                                                                         spots=BUFF_PRISON_SPOTS, how="the City Labor jump"):
+                return True
+            if stop.is_set():
+                return False
+            leave_to_city(dev, cfg, stop, log)
         if bname and _pinned(dev, bname.strip()) and city_map(dev) is not None:
             leave_to_city(dev, cfg, stop, log)
             if find_learned_building(dev, cfg, log, stop, bname.strip()):
                 return True
+            if stop.is_set():                              # owner 25 Oct: Stop took 33 s walking the fallback routes
+                return False
             log(f"[i]   {bname.strip()}: not reached by the map - trying the Activity route")
         elif bname and task.get("no_tile"):                   # Black Market keep-going: the learned building picture first
             leave_to_city(dev, cfg, stop, log)
@@ -8820,6 +8829,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         try:
             r = activity_go(dev, cfg, log, stop, tile.strip(), route=(kind == "via"))
         except Exception as e:
+            if stop.is_set():
+                return False
             log(f"[i]   Activity route to {bname or tile}: {e} - using the city map instead")
             leave_to_city(dev, cfg, stop, log)
             r = None
@@ -8833,7 +8844,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return True                                    # Go on the Wheel tile opens the Wheel page itself (no Tavern menu)
         if r and (not bname or open_building_here(dev, cfg, log, stop, bname.strip())):
             return True
-        if not bname:
+        if not bname or stop.is_set():
             return False
         leave_to_city(dev, cfg, stop, log)
         if find_learned_building(dev, cfg, log, stop, bname.strip()):     # learned from an earlier Go (tile gone today)
@@ -11994,6 +12005,81 @@ def run_map_city(dev, cfg, log, stop):
         f"{W}x{H} px, {drags[0]} moves, {round(time.time() - t0)} s (solve {round(time.time() - t1)} s)")
 
 
+CITY_BUFF_ICON = (27, 114)                                 # buff icon under the avatar (owner recording 25 Oct 16:02)
+
+
+def city_buff_jump(dev, cfg, log, stop):
+    """Owner 25 Oct: the game's own jump. City -> buff icon (top-left) -> City Buff page -> row 'City Labor' -> its arrow:
+    the game returns to the city with the camera centred on the PRISON. Only City Labor jumps to a building (every other
+    row opens Use Item). Used for Labor and as the camera ANCHOR for every other pinned building.
+    -> True when back on the city after the jump."""
+    leave_to_city(dev, cfg, stop, log)
+    if stop.is_set():
+        return False
+    dev.tap(*CITY_BUFF_ICON)
+    _nap(stop, 1.6, 2.0)
+    shot = dev.screenshot()
+    if not rd_seen(shot, ["City Buff"], region=(100, 0, 340, 70)):
+        rd_snap(shot, "buff_0_nopage")
+        log("[i]   City Buff: the buff page did not open")
+        leave_to_city(dev, cfg, stop, log)
+        return False
+    hit = None
+    for i in range(12):                                    # active buffs sit at the top - the row moves, find it by its words
+        if stop.is_set():
+            return False
+        hit = find_text(shot, ["City Labor"], region=(120, 70, 360, 860), cutoff=0.8)
+        if hit and hit[1] <= 800:
+            break
+        hit = None
+        if i < 8:
+            dev.swipe(270, 760, 270, 330, 700)             # list up
+        else:
+            dev.swipe(270, 300, 270, 730, 700)             # overshot: back down
+        _nap(stop, 0.9, 1.2)
+        shot = dev.screenshot()
+    if not hit:
+        rd_snap(shot, "buff_1_norow")
+        log("[i]   City Buff: no 'City Labor' row found")
+        leave_to_city(dev, cfg, stop, log)
+        return False
+    dev.tap(505, min(900, hit[1] + 22))                    # the row's arrow (right side, middle of the row)
+    _nap(stop, 2.2, 2.6)
+    shot = dev.screenshot()
+    if rd_seen(shot, ["City Buff"], region=(100, 0, 340, 70)):
+        dev.tap(270, min(900, hit[1] + 30))                # owner tapped the row itself - try that too
+        _nap(stop, 2.2, 2.6)
+        shot = dev.screenshot()
+    if view_of(shot, cfg) != "city":
+        rd_snap(shot, "buff_2_nocity")
+        log("[i]   City Buff: the City Labor jump did not land on the city")
+        leave_to_city(dev, cfg, stop, log)
+        return False
+    log("[i]   City Buff: jumped to the Prison (City Labor)")
+    return True
+
+
+BUFF_PRISON_SPOTS = [(290, 480), (270, 490), (300, 450), (260, 455), (290, 520)]   # Prison in the middle after the jump
+
+
+def buff_anchor(dev, cfg, log, stop, cmap):
+    """Camera anchor: City Labor jump -> camera on the Prison -> where is the camera on the map? -> (cx, cy) or None."""
+    if not city_buff_jump(dev, cfg, log, stop):
+        return None
+    shot = dev.screenshot()
+    r = cmap.locate(shot)
+    if r:
+        log(f"[i]   anchor: Prison jump - camera at {round(r[0])},{round(r[1])}")
+        return r[0], r[1]
+    pin = culture_pin(dev, "Prison")
+    if pin is None:
+        log("[i]   anchor: Prison jump, but the view is not on the map and there is no Prison pin")
+        return None
+    cx, cy = pin[0] - BUFF_PRISON_SPOTS[0][0], pin[1] - BUFF_PRISON_SPOTS[0][1]
+    log(f"[i]   anchor: Prison jump - camera taken from the Prison pin {round(pin[0])},{round(pin[1])}")
+    return cx, cy
+
+
 _DRAG_SCALE = {}          # serial -> map pixels moved per finger pixel (learned by jump_to_pin)
 
 
@@ -12012,9 +12098,12 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
         close_ring(dev, stop, (270, 490))
         shot = dev.screenshot()
     r = cmap.locate(shot)
-    if not r:
-        log("[i]   jump: this view is not found on the city map - using the step-by-step route")
-        return None
+    if not r:                                              # owner 25 Oct: the City Labor jump is the anchor (camera on the Prison)
+        log("[i]   jump: this view is not found on the city map - anchoring with the City Labor jump")
+        r = buff_anchor(dev, cfg, log, stop, cmap)
+        if not r:
+            log("[i]   jump: no anchor - using the step-by-step route")
+            return None
     cx, cy = r[0], r[1]
     dx, dy = (mapx - cx) - mid_x, (mapy - cy) - mid_y      # how far the camera has to move (map px)
     if abs(dx) < 120 and abs(dy) < 150 and 90 <= mapx - cx <= 450 and 200 <= mapy - cy <= 780:
