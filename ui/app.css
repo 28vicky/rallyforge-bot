@@ -1694,3 +1694,7 @@ select.pick-open{border-color:var(--accent1)}
 .sph .spt .dbadge{display:inline-block;margin-top:6px;max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
 .mrage{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .mrage .segb{text-transform:none;letter-spacing:0}
+.mrlvrow{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border-radius:12px;background:var(--field);margin-bottom:4px}
+.mrlvrow>b{margin-right:4px}
+.mrlvrow .mrx{margin-left:auto}
+.mrpchip.open{border-color:var(--accent1);color:var(--accent1)}
