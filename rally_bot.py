@@ -9343,7 +9343,7 @@ BM_LEFT_FOR = {}         # serial -> {task id: time} the shop was left for (one 
 def aj_renew_due(cfg, serial):
     """The game's Auto-Join needs a look now: not read since the bot started, or the time left is at the renew limit.
     Worked out from the last reading (AJ_LEFT) - no screen look."""
-    if not (cfg.get("game_auto_join") and cfg.get("rally_enabled", True)):
+    if not cfg.get("game_auto_join"):                      # its own switch - not tied to bot joining (owner 25 Oct)
         return False
     r = AJ_LEFT.get(serial)
     if not r:
@@ -14780,7 +14780,10 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 continue
             frozen["n"] = 0
 
-            rallies_on = cfg.get("rally_enabled", True)
+            # Owner 25 Oct: Kiravik/Stalds ran 2 h with the game's Auto-Join expired - their bot joining was off
+            # (rally_enabled False) and the renew check only ran with it on. Auto-Join is its own switch: it always
+            # needs the rally list (the game joins, the bot only renews), whatever the bot-joining switch says.
+            rallies_on = cfg.get("rally_enabled", True) or bool(cfg.get("game_auto_join"))
             if getattr(dev, "acted", None) is None:
                 dev.acted = time.time()
             if st == "unknown" and has_template("rally_screen") and time.time() - dev.acted > 90:   # no tap for 90 s on a screen it does not know
