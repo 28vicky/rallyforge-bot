@@ -11994,11 +11994,71 @@ def run_map_city(dev, cfg, log, stop):
         f"{W}x{H} px, {drags[0]} moves, {round(time.time() - t0)} s (solve {round(time.time() - t1)} s)")
 
 
+def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
+    """Owner 25 Oct: reach a pinned building like a jump, no roaming. 1) anchor: drag to the city's top-left corner until
+    the map stops (the edge is the only camera place the game always returns to the same); read the camera once there.
+    2) split the whole corner->pin vector into 1-4 fixed drags (each <= 330 x 500 px, ends off the side button columns),
+    NO looking between them. 3) wait 1 s for the glide / spring-back, ONE check on the map -> the pin's screen place.
+    -> (sx, sy) or None (then the caller's closed loop takes over)."""
+    import math
+    x, y, w, h = CITY_VIEW
+    mid_x, mid_y = x + w / 2, y + h / 2
+    t0 = time.time()
+    prev = None
+    for i in range(6):                                     # anchor: long drags towards the top-left corner
+        if stop.is_set():
+            return None
+        dev.swipe(110, 220, 440, 770, 500)                 # finger right/down = camera left/up
+        _nap(stop, 0.9, 1.1)
+        r = cmap.locate(dev.screenshot())
+        cur = (r[0], r[1]) if r else None
+        if cur and prev and abs(cur[0] - prev[0]) < 8 and abs(cur[1] - prev[1]) < 8:
+            break                                          # the map stopped: we are at the corner
+        prev = cur
+    if not prev:
+        log("[i]   jump: the corner view is not found on the city map - using the step-by-step route")
+        return None
+    cx, cy = prev
+    dx, dy = (mapx - cx) - mid_x, (mapy - cy) - mid_y      # how far the camera has to move (map px)
+    n = max(1, math.ceil(abs(dx) / 330), math.ceil(abs(dy) / 500))
+    n = min(n, 4)
+    sx_, sy_ = dx / n, dy / n
+    log(f"[i]   jump: anchor (corner) at {round(cx)},{round(cy)} - pin {round(mapx)},{round(mapy)} - {n} fixed drag(s) of {round(sx_)},{round(sy_)}")
+    for k in range(n):                                     # fixed drags, no looking in between
+        if stop.is_set():
+            return None
+        fx, fy = 270 + sx_ / 2, 480 + sy_ / 2
+        tx, ty = 270 - sx_ / 2, 480 - sy_ / 2
+        dev.swipe(int(fx), int(fy), int(tx), int(ty), 600)
+        _nap(stop, 0.35, 0.45)
+    _nap(stop, 1.0, 1.1)                                   # glide + spring-back finish
+    shot = dev.screenshot()
+    if find_detail_icon(shot):
+        close_ring(dev, stop, (270, 490))
+        shot = dev.screenshot()
+    r = cmap.locate(shot)                                  # the one check
+    if not r:
+        log("[i]   jump: the view after the drags is not found on the map - using the step-by-step route")
+        return None
+    nav.cx, nav.cy = r[0], r[1]
+    sx, sy = mapx - nav.cx, mapy - nav.cy
+    log(f"[i]   jump: camera at {round(nav.cx)},{round(nav.cy)} after {time.time() - t0:.0f}s - pin on screen at {round(sx)},{round(sy)}")
+    if 90 <= sx <= 450 and 200 <= sy <= 780:
+        return sx, sy
+    return None
+
+
 def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
     """Closed loop on the own map: locate -> drag the difference -> locate again, until map point (mapx, mapy) is near
     the middle of the view. -> the point's screen place (sx, sy), or None."""
     x, y, w, h = CITY_VIEW
     mid_x, mid_y = x + w / 2, y + h / 2
+    try:
+        at = jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy)
+        if at:
+            return at
+    except Exception as _e:
+        quiet_err("jump_to_pin", _e)
     lost = 0
     prev_cam = None
     for i in range(8):
