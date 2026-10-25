@@ -1,9 +1,9 @@
 {
-  "version": "2.5.16",
-  "notes": "Auto-Join renewal fixed",
+  "version": "2.5.17",
+  "notes": "BlueStacks zoom fix",
   "files": {
     "rally_bot.py": {
-      "sha256": "2d4b67eabdb92e6be3bcf6963e0a4d1d3c7db9e3d7e96b8dd21493b3a69e5dc6"
+      "sha256": "7694c659604ce0a3f0ecd0b70fc1e199fb03efdcc09b95ccea400a19298e20f9"
     },
     "web_app.py": {
       "sha256": "debef39b921ecfbb766debe14c2746681e60e56bf98b9838974cb8dfc7e314f6"
@@ -18,7 +18,7 @@
       "sha256": "9e4be6ae10e966a20e8839d258cbd03e94c4b503d346087328560d1044418010"
     },
     "ui/changelog.js": {
-      "sha256": "eb7c8413b941cd44d5661c92573b03ccc75a69ce1bf3a732d5761bc3bfc57d7b"
+      "sha256": "41c903660994162e033a3627ac180b841224e5c893dfdb6f7533ac695fa6e50c"
     },
     "ui/dialogs.js": {
       "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "c39191f01937bc7ad923d44eaa0e30494f71bac7432f06667db777d40136c11c"
+      "sha256": "4a408589f476438cca2dd1a9903e36b7afcacae826550078bd75e597edf89cab"
     },
     "ui/tour.js": {
       "sha256": "3a4ca195aed40a7b56c7158ce844a5879f327325f7486a59c8e8814eed318da0"
@@ -699,7 +699,7 @@
       "url": "cultures/china/map.json"
     },
     "china/pins.json": {
-      "sha256": "d290e4cb53984f459ffd386a7019f0572548522fa28970621eed149a1f1d9787",
+      "sha256": "ff0e06cb5cbb50900faf418878e96c877ab320ae4d0d52e6a59d64803e449358",
       "url": "cultures/china/pins.json"
     },
     "europe/feats.npz": {
@@ -907,7 +907,7 @@
       "url": "cultures/europe/map.json"
     },
     "europe/pins.json": {
-      "sha256": "85390a8e70c664c0f5b1556365b011986a11997482b4a1395eb0240beb2398bf",
+      "sha256": "e72d9aabfd90aadff93fcc9b93956a3806e6d4924a743cd5b137642a9fa4026c",
       "url": "cultures/europe/pins.json"
     },
     "japan/feats.npz": {
@@ -1135,7 +1135,7 @@
       "url": "cultures/japan/map.json"
     },
     "japan/pins.json": {
-      "sha256": "5908cb978407def4de207ed5d9128c174248c67b114a3280ae1e8717aa999f2c",
+      "sha256": "6c8c87d57597b773081ba1a109ee44c638a77937e544dca4291e2c85b62d0d50",
       "url": "cultures/japan/pins.json"
     },
     "korea/feats.npz": {
@@ -3287,5 +3287,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "b7219b8a631f55c090bd99dd3b085ee2ffa68d9b5ace8bbed05298c296239cbf"
+  "sig": "3b228e4bad00d557fbb8e9c4011064e9804dee595922dac8989ec61d2bbab76d"
 }
