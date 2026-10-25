@@ -1,5 +1,10 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.15", date: "2026-10-25",
+    new: ["Map my city is much faster: the bot recognises your city's culture from ready-made maps and knows where the main buildings are, instead of walking the whole city."],
+    fixed: ["Wheel of Fortune: the reward window is closed reliably, today's spins are remembered (a retry never spins twice) and the bot no longer hangs on the reward panel.",
+      "A daily task that gets stuck gives up sooner and the bot goes back to joining rallies, then tries the task again later.",
+      "Long task messages no longer squeeze the task name or the side panel title."] },
   { v: "2.5.14", date: "2026-10-25",
     new: ["The bot reads your Alliance chat when no rally has shown for a while, to tell a quiet server from a rally list that stopped updating - and restarts the game only when rallies are really being missed.",
       "A stuck instance now restarts its emulator by itself instead of waiting."],
