@@ -14174,6 +14174,14 @@ DUTY_BUDGET_MIN = 8      # owner 25 Oct: a duty that cannot finish is left after
                          # a stuck Wheel panel); it is retried later and the instance goes back to joining rallies
 
 
+MAP_DUTIES = {"monster_rally"}             # duties that work on the world map: no trip to the city before / after (owner 25 Oct)
+
+
+def map_only(tasks):
+    """True when every task in the list works on the world map (no city view needed)."""
+    return bool(tasks) and all(str(t.get("name", "")).startswith("duty:") and t["name"][5:] in MAP_DUTIES for t in tasks)
+
+
 def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
     """From the city screen: run each due task (open it, run its steps, go back)."""
     nav_state = {}
@@ -14184,6 +14192,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
             break
         name = t.get("name", "task")
         duty_id = name[5:] if name.startswith("duty:") else ""
+        on_map = duty_id in MAP_DUTIES                        # owner 25 Oct: map duties never go city <-> map after each step
         shown = DUTY_BY_ID[duty_id]["title"] if duty_id in DUTY_BY_ID else name
         log(f"[*] {'Duty' if duty_id else 'City task'}: {shown}")
         log("@act " + json.dumps({"k": "step", "text": f"{'Duty' if duty_id else 'City task'}: {shown}"}))     # shown under 'Now executing'
@@ -14206,9 +14215,9 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                 # time budget per duty (Kiravik 24 Oct 15:14: Champions sat on a purchase page for 10+ min with no log line):
                 # 20 min, 50 for the city map; over it, the next tap aborts the duty and the attempt-2 path takes over
                 _TL.duty_deadline = time.time() + (50 if duty_id == "map_city" else DUTY_BUDGET_MIN) * 60
-                if not ensure_view(dev, cfg, stop, log, "city") and not stop.is_set():
-                    log("[!] Could not get back to the city view")
-                clear_popups(dev, cfg, log, stop)            # close offers / pop-ups first, then do the task
+                if not ensure_view(dev, cfg, stop, log, "world" if on_map else "city") and not stop.is_set():
+                    log(f"[!] Could not get back to the {'world map' if on_map else 'city view'}")
+                clear_popups(dev, cfg, log, stop, want_city=not on_map)   # close offers / pop-ups first, then do the task
                 ok = city_task_target(dev, cfg, log, stop, t, nav_state)
                 if not ok and clear_popups(dev, cfg, log, stop):  # a pop-up was in the way: try the same task again
                     ok = city_task_target(dev, cfg, log, stop, t, nav_state)
@@ -14222,7 +14231,8 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                             run_step(dev, cfg, log, stop, st)
                     finally:
                         dev._guard_busy = was_busy
-                    leave_to_city(dev, cfg, stop, log)
+                    if not on_map:
+                        leave_to_city(dev, cfg, stop, log)
                 result = (ok is not False, "" if ok is not False else "could not open it")
             except Exception as e:
                 log(f"[!] {'Duty' if duty_id else 'City task'} '{shown}' failed: {e}")
@@ -14232,14 +14242,18 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
             if stop.is_set() or (result and result[0]):
                 break
             dev.expect_city = False
-            leave_to_city(dev, cfg, stop, log)               # failed or a wrong window opened: close everything, then (once) start over
+            if on_map:
+                clear_popups(dev, cfg, log, stop, rounds=3, want_city=False)
+            else:
+                leave_to_city(dev, cfg, stop, log)           # failed or a wrong window opened: close everything, then (once) start over
         dev.expect_city = False
         if result is not None and not stop.is_set():
             task_event(getattr(dev, "serial", ""), shown, *result)
         if duty_id and result is not None and not stop.is_set():
             if duty_record(getattr(dev, "serial", ""), duty_id, *result, nothing=bool(result[0] and getattr(_TL, "rd_nothing", False))) == "gaveup":
                 duty_failed_report(dev, cfg, log, shown, result[1])
-        leave_to_city(dev, cfg, stop, log)
+        if not on_map:                                       # map duties: the rally list is reached from the map (Alliance button)
+            leave_to_city(dev, cfg, stop, log)
     log("@act " + json.dumps({"k": "step", "text": "Idle - tasks done, back to the rallies"}))   # the instance list stops showing the task
 
 
@@ -15291,6 +15305,11 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     if now >= aj_next[0] or AJ_ASK.pop(serial, False):
                         aj_next[0] = now + auto_join_renew(dev, cfg, log, stop, act)
                     elif tasks_active(cfg, serial) and now >= city_block[0] and (due := city_tasks_due(cfg, city_last, serial)):
+                        if map_only(due):                                  # monster rallies: straight from the rally list to the map
+                            log(f"[*] Auto-Join is running - going to the world map for {len(due)} task(s)")
+                            run_city_tasks(dev, cfg, log, stop, due, city_last)
+                            recover()
+                            continue
                         log(f"[*] Auto-Join is running - going to the city for {len(due)} task(s)")      # the game joins rallies by itself meanwhile
                         if reach_city():
                             city_fails[0] = 0
@@ -15334,7 +15353,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 due = city_tasks_due(cfg, city_last, serial)
                 if due:
                     log(f"[*] {'No rally waiting' if not target else 'Black Market comes first' if bm_first and not run_now_list(serial) else 'A task was started by hand'} - going to the city for {len(due)} task(s)")
-                    if reach_city():
+                    if map_only(due):                                  # monster rallies: from the rally list straight to the map
+                        run_city_tasks(dev, cfg, log, stop, due, city_last)
+                    elif reach_city():
                         city_fails[0] = 0
                         run_city_tasks(dev, cfg, log, stop, due, city_last)
                     else:
