@@ -1,5 +1,7 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.16", date: "2026-10-25",
+    fixed: ["The game's Auto-Join is renewed again on instances where the bot's own rally joining is switched off."] },
   { v: "2.5.15", date: "2026-10-25",
     new: ["Map my city is much faster: the bot recognises your city's culture from ready-made maps and knows where the main buildings are, instead of walking the whole city."],
     fixed: ["Wheel of Fortune: the reward window is closed reliably, today's spins are remembered (a retry never spins twice) and the bot no longer hangs on the reward panel.",
