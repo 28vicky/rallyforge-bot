@@ -7380,8 +7380,8 @@ class CityNav:
             if abs(px - mid_x) <= tol and abs(py - mid_y) <= tol:
                 self.log(f"[i]   camera at {round(self.cx)},{round(self.cy)} (match {sc:.2f}), target on screen at {round(px)},{round(py)}")
                 return True
-            mx = max(-210, min(210, px - mid_x))              # how far the picture has to move (finger moves the other way)
-            my = max(-320, min(320, py - mid_y))
+            mx = max(-380, min(380, px - mid_x))              # how far the picture has to move (owner 25 Oct: one long drag, not many short ones)
+            my = max(-540, min(540, py - mid_y))
             if abs(mx) < 30 and abs(my) < 30:                 # a short drag may count as a TAP on a building: overshoot and come back
                 ux, uy = (1.0 if mx >= 0 else -1.0), (1.0 if my >= 0 else -1.0)
                 self.dev.swipe(*calm_drag(self.dev.screenshot(), 270 + ux * 100, 440 + uy * 100, 270 - ux * 100, 440 - uy * 100), 450)
