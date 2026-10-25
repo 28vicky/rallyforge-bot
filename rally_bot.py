@@ -5759,6 +5759,11 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
                     not_ready_since = None
                     _nap(stop, 1.5)
                     continue
+                if game_screen_shown(dev.screenshot()):          # 25 Oct: Rob sat 3 min on an open Alliance page "waiting for loading"
+                    log("[*] The game is already open on another screen - finding the way back")
+                    if _ensure_view(dev, cfg, stop, log, "city"):
+                        not_ready_since = loading_since = None
+                        continue
         if ready_screen(screen, cfg):
             not_ready_since = loading_since = None
         if pkg and time.time() - last_fg > 15:
@@ -8922,7 +8927,50 @@ def buttons_hidden(shot):
         return False
 
 
+_VIEW_FAILS = {}           # serial -> times ensure_view could not reach the wanted view (last 5 min)
+_VIEW_RESTARTING = set()  # serials restarting Evony because recovery went round in circles
+
+
+def game_screen_shown(shot):
+    """Evony has finished loading and shows something the recovery routine can work with (not a loading screen): the world
+    map, a full page (gold Back arrow / red title bar), a window over a dimmed view or the 'exit the game?' box."""
+    try:
+        if world_map(shot) or (has_template("popup_exit_cancel") and find(shot, "popup_exit_cancel", 0.85)):
+            return True
+        hsv = cv2.cvtColor(shot[8:80, 5:75], cv2.COLOR_BGR2HSV)
+        if cv2.countNonZero(cv2.inRange(hsv, (12, 110, 150), (32, 255, 255))) > 250:   # gold Back arrow of a full page
+            return True
+        top = cv2.cvtColor(shot[0:70], cv2.COLOR_BGR2HSV)
+        red = cv2.countNonZero(cv2.inRange(top, (0, 120, 80), (8, 255, 255))) + cv2.countNonZero(cv2.inRange(top, (170, 120, 80), (180, 255, 255)))
+        return red > 0.25 * top.shape[0] * top.shape[1]                 # red title bar of a game page
+    except Exception:
+        return False
+
+
 def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
+    """Run the recovery routine; when it fails 3 times in 5 min (going round in circles, e.g. Rob 25 Oct 11:05: landscape ->
+    city button -> 'unexpected window' -> Back -> landscape ... for minutes) restart Evony instead of trying again."""
+    ok = _ensure_view(dev, cfg, stop, log, want, tries)
+    serial = getattr(dev, "serial", None)
+    if ok or stop.is_set() or serial is None or serial in _VIEW_RESTARTING:
+        return ok
+    now = time.time()
+    fails = [t for t in _VIEW_FAILS.get(serial, []) if now - t < 300] + [now]
+    _VIEW_FAILS[serial] = fails
+    if len(fails) < 3:
+        return ok
+    _VIEW_FAILS[serial] = []
+    _VIEW_RESTARTING.add(serial)
+    try:
+        lg = log or (lambda m: None)
+        lg("[!] Recovery went round in circles 3 times in 5 min - restarting Evony")
+        force_restart_game(dev, cfg, lg, stop)
+        return _ensure_view(dev, cfg, stop, log, want, tries)
+    finally:
+        _VIEW_RESTARTING.discard(serial)
+
+
+def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
     """THE universal recovery routine. Whatever is on the screen - a building's window, stacked pages, a pop-up, a ring menu,
     a reward panel, the 'exit the game?' box - get out of it and land on the wanted view: 'city' or 'landscape'.
     Already there = nothing is pressed. Already in the other main view = the round city / landscape button is tapped.
@@ -8932,12 +8980,14 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
         return True                                          # nothing to recognise the views by: do not press anything blindly
     toggled = 0
     unknown = 0
+    quit_seen = False                                        # Back already opened 'exit the game?': we are on a main view - never Back again
     for i in range(tries):
         if stop.is_set():
             return False
         shot = dev.screenshot()
         if cancel_quit_dialog(dev, shot, lambda *_: None):
             say("[*] Recovery: the game asked to exit - tapped Cancel")
+            quit_seen = True
             _nap(stop, 0.8, 1.2)
             continue
         v = view_of(shot, cfg)
@@ -8993,10 +9043,13 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             say("[*] Recovery: the game's buttons were hidden - tapped the ground to show them")
             _nap(stop, 1.0, 1.4)
             continue
-        elif unknown >= 5 and toggled < 2:                  # backing out leads nowhere known: maybe the other main view is showing without being recognised
+        elif (unknown >= 5 or quit_seen) and toggled < 2:   # backing out leads nowhere known / Back asked to quit: a main view not recognised
             toggled += 1
             dev.tap(*VIEW_TOGGLE)
             say("[*] Recovery: screen not recognised - tapped the city / landscape button")
+        elif quit_seen:                                     # owner 25 Oct: Back on the city / map only asks to quit - stop here
+            say("[!] Recovery: on a main view the bot does not recognise - not pressing Back (it only asks to quit)")
+            return False
         else:
             dev.back()
             say("[*] Recovery: unexpected window - pressed Back")
