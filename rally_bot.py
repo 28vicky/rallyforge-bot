@@ -12562,6 +12562,43 @@ def mr_preset_loaded(shot):
     return not rd_seen(shot, ["Select a Main General"], region=(0, 450, 540, 170))
 
 
+MR_PANEL_TAP = (50, 147)                  # world map: the folded "March" pill / the open panel's header (toggles it)
+
+
+def mr_to_map(dev, cfg, stop, tries=3):
+    """Back from the troop / monster page to the world map - never presses Back on the map itself (exit box)."""
+    for _ in range(tries):
+        shot = dev.screenshot()
+        if view_of(shot, cfg) in ("landscape", "world"):
+            return True
+        dev.back()
+        _nap(stop, 1.0, 1.3)
+    return view_of(dev.screenshot(), cfg) in ("landscape", "world")
+
+
+def mr_return_secs(dev, cfg, stop, log):
+    """Open the March panel, read the soonest return countdown, fold it again. -> seconds or None."""
+    shot = dev.screenshot()
+    mk = rt_marches(shot)
+    opened = False
+    if not mk:
+        dev.tap(*MR_PANEL_TAP)
+        _nap(stop, 1.0, 1.2)
+        shot = dev.screenshot()
+        mk = rt_marches(shot)
+        opened = True
+    rd_snap(shot, "mrally_march_panel")
+    if opened or mk:
+        for spot in (MR_PANEL_TAP, (22, 147)):               # fold it again (owner: keep it minimised)
+            if not rt_marches(dev.screenshot()):
+                break
+            dev.tap(*spot)
+            _nap(stop, 0.8, 1.0)
+        if rt_marches(dev.screenshot()):
+            log("[i]  Monster rally: the March panel did not fold - see debug/duty_mrally_march_panel.png")
+    return mk[2] if mk else None
+
+
 def mr_rule_for(rules, name, level):
     """-> (index, rule) of the first row that fits this monster, or (None, None)."""
     low = str(name or "").lower().strip()
@@ -12799,6 +12836,7 @@ def _run_monster_rally(dev, cfg, log, stop):
     shot = _wait_view(dev, cfg, stop, "landscape", 30)
     if shot is None:
         return later(MR_POLL_MIN, "the map did not open")
+    started = 0
     for tgt in targets[:10]:                                # a gone / busy monster: try the next coordinate
         if stop.is_set():
             return
@@ -12811,6 +12849,27 @@ def _run_monster_rally(dev, cfg, log, stop):
         _nap(stop, 1.0, 1.4)
         t0 = time.time()
         gone, checked, said = False, time.time(), False
+        # Owner 25 Oct 21:26: every preset for monsters is out -> stay on this monster and try when the first
+        # rally's time is up (no return-time maths; the troop page / March panel decide after that).
+        rules_ = mr_rules(cfg)
+        in_use = {r["preset"] for r in rules_}
+        rtime = {r["preset"]: int(r["time"]) for r in rules_}
+        busy = {p: float(t) for p, t in (mr_row(serial).get("busy") or {}).items() if p in in_use and time.time() - float(t) < 1800}
+        until = min(t + rtime.get(p, 5) * 60 for p, t in busy.items()) if in_use and set(busy) >= in_use else 0
+        if until > time.time():
+            log(f"[*]  Monster rally: {label} - every preset is out, waiting on this monster until {time.strftime('%H:%M:%S', time.localtime(until))}")
+            while time.time() < until and not stop.is_set():
+                _nap(stop, min(30, max(1, until - time.time())), min(31, max(1.5, until - time.time() + 1)))
+                if time.time() - checked > 60 and time.time() < until - 10:
+                    checked = time.time()
+                    if not mr_still_there(dev, stop):
+                        gone = True
+                        break
+            if stop.is_set():
+                return
+            if gone:
+                log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
+                continue
         while True:                                          # stay on this monster until a march is free
             if stop.is_set():
                 return
@@ -12846,47 +12905,88 @@ def _run_monster_rally(dev, cfg, log, stop):
             _nap(stop, wait, wait + 1)
         if line or gone:
             continue
-        while True:                                          # the march count was not read / was wrong: keep trying here
-            got, page = mr_open_monster(dev, stop, tgt.get("name") or "", tgt.get("level"))
-            if got != "ok":
-                break
-            dev.tap(*MR_ALLIANCE_WAR)                        # fixed spot (the white-on-brown label is rarely read); window checked below
-            _nap(stop, 1.0, 1.2)
-            shot = None
-            for _ in range(5):                               # the rally time window can be slow to open
-                shot = dev.screenshot()
-                if rd_seen(shot, ["Alliance War Rally", "rally time"], region=(0, 300, 540, 160)):
+        empties = 0
+        while True:                                          # owner 25 Oct: stay on this monster until it is rallied
+            while True:                                          # the march count was not read / was wrong: keep trying here
+                got, page = mr_open_monster(dev, stop, tgt.get("name") or "", tgt.get("level"))
+                if got != "ok":
                     break
-                _nap(stop, 0.7, 0.9)
-            else:
-                rd_snap(shot, "mrally_time")
-                if view_of(shot, cfg) not in ("landscape", "world"):
-                    dev.back()
+                dev.tap(*MR_ALLIANCE_WAR)                        # fixed spot (the white-on-brown label is rarely read); window checked below
+                _nap(stop, 1.0, 1.2)
+                shot = None
+                for _ in range(5):                               # the rally time window can be slow to open
+                    shot = dev.screenshot()
+                    if rd_seen(shot, ["Alliance War Rally", "rally time"], region=(0, 300, 540, 160)):
+                        break
+                    _nap(stop, 0.7, 0.9)
+                else:
+                    rd_snap(shot, "mrally_time")
+                    if view_of(shot, cfg) not in ("landscape", "world"):
+                        dev.back()
+                        _nap(stop, 1.0, 1.3)
+                    if not max_wait or time.time() - t0 < max_wait:   # back on the map = no free march (or no stamina): wait here
+                        log(f"[*]  Monster rally: {label} - no rally window (all marches busy?), trying again in 30 s")
+                        _nap(stop, 30, 32)
+                        continue
+                    tried.pop(key, None)
+                    return later(2, "no rally window (all marches busy or no stamina)")
+                dev.tap(*MR_TIMES.get(mode, MR_TIMES["5"]))      # fixed spot of the 5/10/30/60 min button; the troop page is checked below
+                _nap(stop, 1.0, 1.2)
+                for _ in range(12):                              # the troop page can take several seconds to open (owner 23 Oct)
+                    shot = dev.screenshot()
+                    if rd_seen(shot, ["Select a Preset"], region=(0, 0, 540, 180)) and not rd_seen(shot, ["rally time"], region=(0, 380, 540, 80)):
+                        break
+                    _nap(stop, 0.6, 0.8)
+                rd_snap(shot, "mrally_preset_page")
+                if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)) or rd_seen(shot, ["rally time"], region=(0, 380, 540, 80)):
+                    rd_snap(shot, "mrally_nomarch")
+                    dev.tap(504, 352)                                # X of the rally time popup
                     _nap(stop, 1.0, 1.3)
-                if not max_wait or time.time() - t0 < max_wait:   # back on the map = no free march (or no stamina): wait here
-                    log(f"[*]  Monster rally: {label} - no rally window (all marches busy?), trying again in 30 s")
-                    _nap(stop, 30, 32)
-                    continue
-                tried.pop(key, None)
-                return later(2, "no rally window (all marches busy or no stamina)")
-            dev.tap(*MR_TIMES.get(mode, MR_TIMES["5"]))      # fixed spot of the 5/10/30/60 min button; the troop page is checked below
-            _nap(stop, 1.0, 1.2)
-            for _ in range(12):                              # the troop page can take several seconds to open (owner 23 Oct)
+                    if (not max_wait or time.time() - t0 < max_wait) and not (skip_lines and mr_march_line(dev.screenshot())):
+                        log(f"[*]  Monster rally: {label} - no free march yet, waiting on the monster")
+                        _nap(stop, 20, 22)
+                        continue
+                    tried.pop(key, None)
+                    return later(2, "the troop page did not open (no free march?)")
+                break
+            if got in ("gone", "other"):
+                break
+            # Owner 25 Oct: never March on an empty preset (its general is still out on another rally) - try the other
+            # presets that have this monster; none loaded = keep this monster first in line and come back soon.
+            lvl = tgt.get("level") or 0
+            cands = [preset] + [r["preset"] for r in mr_rules(cfg) if r["preset"] != preset and mr_rule_for([r], tgt.get("name"), lvl)[1]]
+            cands = list(dict.fromkeys(cands))
+            used = None
+            for p_ in cands:
+                n = RT_PRESETS.index(p_) if p_ in RT_PRESETS else 0
+                for _ in range(2):                               # the first tap on a preset is sometimes lost
+                    dev.tap(62 + n * 61, 115)
+                    _nap(stop, 0.6, 0.8)
                 shot = dev.screenshot()
-                if rd_seen(shot, ["Select a Preset"], region=(0, 0, 540, 180)) and not rd_seen(shot, ["rally time"], region=(0, 380, 540, 80)):
+                rd_snap(shot, "mrally_troops")
+                if mr_preset_loaded(shot):
+                    used = p_
                     break
-                _nap(stop, 0.6, 0.8)
-            rd_snap(shot, "mrally_preset_page")
-            if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)) or rd_seen(shot, ["rally time"], region=(0, 380, 540, 80)):
-                rd_snap(shot, "mrally_nomarch")
-                dev.tap(504, 352)                                # X of the rally time popup
-                _nap(stop, 1.0, 1.3)
-                if (not max_wait or time.time() - t0 < max_wait) and not (skip_lines and mr_march_line(dev.screenshot())):
-                    log(f"[*]  Monster rally: {label} - no free march yet, waiting on the monster")
-                    _nap(stop, 20, 22)
-                    continue
-                tried.pop(key, None)
-                return later(2, "the troop page did not open (no free march?)")
+                log(f"[*]  Monster rally: {label} - preset {p_} is empty (its general is still out)")
+            if not used:                                     # every preset for it is out: stay here (owner 25 Oct 21:26)
+                rd_snap(shot, "mrally_empty_preset")
+                mr_to_map(dev, cfg, stop)
+                empties += 1
+                if empties > 8:
+                    tried.pop(key, None)
+                    mr_save(serial, hold=key)
+                    return later(1, f"{label} - the presets stayed out, trying this monster again first")
+                if empties == 1:
+                    log(f"[*]  Monster rally: {label} - every preset is still out, trying again in 30 s")
+                    _nap(stop, 30, 32)
+                else:
+                    secs = mr_return_secs(dev, cfg, stop, log)
+                    w = min(900, max(20, (secs or 30) + 5))
+                    log(f"[*]  Monster rally: {label} - troops back in about {w} s (March panel), waiting on the monster")
+                    _nap(stop, w, w + 1)
+                if stop.is_set():
+                    return
+                continue
             break
         if got == "gone":
             log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
@@ -12894,30 +12994,6 @@ def _run_monster_rally(dev, cfg, log, stop):
         if got == "other":
             log(f"[*]  Monster rally: {label} - another monster stands there ({page}), skipped")
             continue
-        # Owner 25 Oct: never March on an empty preset (its general is still out on another rally) - try the other
-        # presets that have this monster; none loaded = keep this monster first in line and come back soon.
-        lvl = tgt.get("level") or 0
-        cands = [preset] + [r["preset"] for r in mr_rules(cfg) if r["preset"] != preset and mr_rule_for([r], tgt.get("name"), lvl)[1]]
-        cands = list(dict.fromkeys(cands))
-        used = None
-        for p_ in cands:
-            n = RT_PRESETS.index(p_) if p_ in RT_PRESETS else 0
-            for _ in range(2):                               # the first tap on a preset is sometimes lost
-                dev.tap(62 + n * 61, 115)
-                _nap(stop, 0.6, 0.8)
-            shot = dev.screenshot()
-            rd_snap(shot, "mrally_troops")
-            if mr_preset_loaded(shot):
-                used = p_
-                break
-            log(f"[*]  Monster rally: {label} - preset {p_} is empty (its general is still out)")
-        if not used:
-            rd_snap(shot, "mrally_empty_preset")
-            dev.back()                                       # the troop page (not the map): back to the monster
-            _nap(stop, 1.0, 1.3)
-            tried.pop(key, None)
-            mr_save(serial, hold=key)
-            return later(0.5, f"{label} - every preset for it is out, trying this monster again first")
         preset = used
         sta = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (280, 820, 260, 55))))
         if keep_sta and len(sta) >= 2 and sta[-2] - sta[-1] < keep_sta:
@@ -12959,9 +13035,14 @@ def _run_monster_rally(dev, cfg, log, stop):
             tried.pop(key, None)
             mr_save(serial, hold=key)
             return later(0.5, f"{label} - not started, trying this monster again first")
-        mr_save(serial, hold=None)
+        busy = dict(mr_row(serial).get("busy") or {})
+        busy[preset] = time.time()
+        mr_save(serial, hold=None, busy=busy)
         log(f"[+]  Monster rally: started on {label} - {mode} min, preset {preset}")
-        return later(1, "rally started, looking for the next one")
+        started += 1
+        continue                                             # owner 25 Oct: straight to the next monster
+    if started:
+        return later(1, f"{started} rally(s) started, looking for the next one")
     later(MR_POLL_MIN, "every coordinate tried was gone or taken")
 
 RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
