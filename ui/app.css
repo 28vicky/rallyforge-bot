@@ -1687,3 +1687,8 @@ select.pick-open{border-color:var(--accent1)}
 .pinimg{display:block;max-width:100%;max-height:66vh;width:auto;height:auto;user-select:none}
 .pindot{touch-action:none;position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;border:3px solid var(--accent1,#c2410c);box-shadow:0 0 0 2px rgba(0,0,0,.35);cursor:grab}
 .pindot em{position:absolute;left:14px;top:-5px;white-space:nowrap;font-style:normal;font-size:11px;font-weight:700;color:#fff;background:rgba(0,0,0,.6);padding:1px 5px;border-radius:4px;pointer-events:none}
+/* long duty status (e.g. Black Market "Waiting for gems ...") never squeezes the duty name or the side panel title */
+.dline .dtx{min-width:120px}
+.dline .dtx b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dline .dbadge{flex:0 1 auto;min-width:0;max-width:45%;overflow:hidden;text-overflow:ellipsis}
+.sph .spt .dbadge{display:inline-block;margin-top:6px;max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.4}

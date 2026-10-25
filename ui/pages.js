@@ -1619,7 +1619,7 @@ const BADGE_CLS = { done: "ok", due: "due", waiting: "next", retry: "next", gave
 function dutyBadge(status, text, tip) {
   if (!status || status === "off") return null;
   const t = status === "gaveup" ? "Gave up" : status === "run" ? "Running now" : (text || status);
-  return h("span", { class: "dbadge " + (BADGE_CLS[status] || ""), title: tip || (status === "gaveup" ? text : "") }, t);
+  return h("span", { class: "dbadge " + (BADGE_CLS[status] || ""), title: tip || text || "" }, t);
 }
 // C4: the one own / default line at the top of an instance card that has a universal default
 function ownLine(own, onMake, onReset) {
@@ -1708,8 +1708,8 @@ PAGES.duties = function (fixed) {
     side.appendChild(h("aside", { class: "sidep", role: "dialog", "aria-modal": "true", "aria-label": r.t + " settings" },
       h("div", { class: "sph" },
         h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!r.on, "aria-label": r.t, onchange: async (e) => { await setOn(r, e.target.checked); drawSide(); } }), h("span", { class: "sw" })),
-        h("div", { class: "spt" }, h("h3", {}, r.t), h("small", {}, [serial ? "This instance" : "Universal default", r.g, r.schedule, r.pts ? "+" + r.pts + " activity points" : ""].filter(Boolean).join(" · "))),
-        serial && r.on ? dutyBadge(r.status, r.status_text) : null,
+        h("div", { class: "spt" }, h("h3", {}, r.t), h("small", {}, [serial ? "This instance" : "Universal default", r.g, r.schedule, r.pts ? "+" + r.pts + " activity points" : ""].filter(Boolean).join(" · ")),
+          serial && r.on ? dutyBadge(r.status, r.status_text) : null),     // status on its own line under the title: a long one never squeezes the title
         h("button", { class: "spx", type: "button", "aria-label": "Close", title: "Close (Esc)", onclick: closeSide }, "×")),
       h("div", { class: "spb" }, setBody(r)),
       h("div", { class: "spf" }, h("span", { class: "hint" }, "Changes save as you make them."), runBtn, h("button", { class: "btn pri", type: "button", onclick: closeSide }, "Done"))));
