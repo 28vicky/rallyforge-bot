@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## RELEASED 25 Oct 12:30 IST - 2.5.16 = 2.5.15 + fix/autojoin-renew-rallies-off (Auto-Join renewed when bot joining is off; Kiravik/Stalds 2 h expired). Doc claude/autojoin_and_pins_next_25oct.md.
+
 ## RELEASED 25 Oct 12:20 IST - 2.5.15 = 2.5.14 (T79-rw restart fixes + chat check) + feat/culture-pins (T76 steps 1-3, wheel fixes, duties give up after 8 min) + fix/side-status-wrap. All rows marked ready earlier (T56-T70) were already in main. Owner PC: do NOT need the update for the fixes (PC copy patched), but installing 2.5.15 is now safe - it has everything.
 
 ## LATEST (24 Oct 23:55 IST) - 2.5.13 PUBLISHED (main, check_release OK): T77 Black Market settings layout + T78 Black Market 'until the gem floor' keep-going rules (project doc claude/bm_keep_going_rules_24oct.md, section BUILT = what to watch in the first live run). NOT live tested. Kulim gem misread fix included.
