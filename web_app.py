@@ -2290,6 +2290,33 @@ class Api:
     def shot_take(self, p):
         return self.c.shot_from_device(p["serial"])
 
+    def culture_pins_get(self, p):
+        """Owner tool (Pin buildings): one culture map's size and its fixed-building pins."""
+        c = str(p.get("culture") or "").lower()
+        d = rb.culture_dir(c)
+        if not d:
+            raise ApiError("That culture map is not on this PC.")
+        meta = json.loads((d / "map.json").read_text(encoding="utf-8"))
+        return {"culture": c, "size": meta.get("size"), "pins": rb.culture_pins(c), "cultures": list(rb.CULTURES)}
+
+    def culture_pin_set(self, p):
+        """Owner tool: set (map [x, y]) or remove (map null) one building's pin on a culture map -> cultures/<c>/pins.json."""
+        if not (rb.USER / "admin.txt").exists():
+            raise ApiError("Only the owner can pin buildings.")
+        c = str(p.get("culture") or "").lower()
+        name = str(p.get("name") or "").strip()
+        d = rb.culture_dir(c)
+        if not d or not name:
+            raise ApiError("Pick a culture and a building first.")
+        pins = rb.culture_pins(c)
+        xy = p.get("map")
+        if xy:
+            pins[name] = [round(float(xy[0])), round(float(xy[1]))]
+        else:
+            pins.pop(name, None)
+        (d / "pins.json").write_text(json.dumps(pins, indent=1), encoding="utf-8")
+        return self.culture_pins_get({"culture": c})
+
     def city_map_info(self, p):
         """The instance's city map for the City map card: built? views / date, mapping progress, and the buildings the
         duties need - found (pinned on the map), seen (picture only) or not yet. Only buildings, no small markers (owner)."""
@@ -2301,6 +2328,15 @@ class Api:
             meta = json.loads((d / "map.json").read_text(encoding="utf-8"))
         except Exception:
             meta = {}
+        cult = rb.city_culture(dev)
+        cpins = rb.culture_pins(cult["culture"]) if cult else {}
+        if cult:                                           # matched to a shipped culture map: its places and picture are used
+            cd = rb.culture_dir(cult["culture"])
+            try:
+                meta = json.loads((cd / "map.json").read_text(encoding="utf-8"))
+                meta["at"] = cult.get("at", "")
+            except Exception:
+                meta = {}
         built = bool(meta.get("keyframes"))
         rows = self._duty_rows(serial)                      # (the live "Mapping N views" progress is read by the page from the chip text)
         on_ids = {r["id"] for r in rows if r["on"]}
@@ -2324,10 +2360,16 @@ class Api:
                 state = "found" if place else ("seen" if pth.exists() else "none")
             except Exception:
                 state = "seen" if pth.exists() else "none"
+            if state != "found":                           # a shipped culture pin not reached on this instance yet
+                want = re.sub(r"[^a-z]+", "", name.lower())
+                cp = next((v for k, v in cpins.items() if re.sub(r"[^a-z]+", "", k.lower()) == want), None)
+                if cp:
+                    state, place = "pinned", cp
             buildings.append({"name": name, "state": state, "map": place, "on": info["on"], "duties": info["duties"]})
         return {"built": built, "at": meta.get("at", ""), "views": len(meta.get("keyframes") or []), "size": meta.get("size"),
-                "buildings": buildings,
-                "img": bool((d / "map.png").exists())}
+                "buildings": buildings, "culture": cult["culture"] if cult else None,
+                "img": bool(rb.culture_dir(cult["culture"]) and (rb.culture_dir(cult["culture"]) / "map.jpg").exists()) if cult
+                else bool((d / "map.png").exists())}
 
     def dev_find(self, p):
         """Owner tool: run the bot's own building finder on a PAUSED instance and leave the building's ring menu open
@@ -2781,8 +2823,16 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/shot":
             img = c.shot(q["token"][0])
             return self._send(200, jpg_bytes(img, 85), "image/jpeg")
+        if path == "/api/culture_img":                  # a shipped culture map picture (owner's Pin buildings tool)
+            d = rb.culture_dir(str(q["c"][0]).lower())
+            img = cv2.imread(str(d / "map.jpg")) if d else None
+            if img is None:
+                return self._send(404, "no map", "text/plain")
+            return self._send(200, jpg_bytes(img, 85), "image/jpeg", {"Cache-Control": "max-age=60"})
         if path == "/api/city_map_img":                 # the instance's stitched city map (for the City map card)
-            d = rb._map_dir(types.SimpleNamespace(serial=q["serial"][0])) / "map.png"
+            dv = types.SimpleNamespace(serial=q["serial"][0])
+            cult = rb.city_culture(dv)
+            d = (rb.culture_dir(cult["culture"]) / "map.jpg") if cult and rb.culture_dir(cult["culture"]) else rb._map_dir(dv) / "map.png"
             if not d.exists():
                 return self._send(404, "no map", "text/plain")
             img = cv2.imread(str(d))

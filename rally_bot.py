@@ -4742,6 +4742,55 @@ def sync_monster_pack(log=print):
         sync_catalog_pack(log)
     except Exception as _e:
         quiet_err("sync_monster_pack", _e)
+    try:
+        sync_culture_pack(log)
+    except Exception as _e:
+        quiet_err("sync_monster_pack", _e)
+    return n
+
+
+_NAME_CUL = re.compile(r"^(?P<c>[a-z]{2,20})/(map\.json|pins\.json|feats\.npz|map\.jpg|kf_\d{2,3}\.jpg)$")
+
+
+def sync_culture_pack(log=print):
+    """The published list can carry the culture reference maps (cultures/<culture>/...). Only missing or changed files
+    are fetched; a culture whose map.json changed is reloaded."""
+    import urllib.parse
+    got = _LAST_MANIFEST[0]
+    if not got:
+        return 0
+    man, base = got
+    pack = man.get("cultures") or {}
+    root = USER / "cultures"
+    n, changed = 0, set()
+    for name, meta in pack.items():
+        try:
+            mm = _NAME_CUL.match(name)
+            if not mm or mm.group("c") not in CULTURES:
+                continue
+            want = str((meta or {}).get("sha256", ""))
+            target = root / name
+            if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == want:
+                continue
+            data = _download(urllib.parse.urljoin(base, (meta or {}).get("url", "cultures/" + urllib.parse.quote(name))), 8_000_000)
+            if hashlib.sha256(data).hexdigest() != want:
+                continue
+            if name.endswith(".jpg") and not data.startswith(b"\xff\xd8"):
+                continue
+            if name.endswith(".npz") and not data.startswith(b"PK"):
+                continue
+            if name.endswith(".json"):
+                json.loads(data.decode("utf-8"))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            changed.add(mm.group("c"))
+            n += 1
+        except Exception:
+            continue
+    for c in changed:
+        _CULTURE_MAPS.pop(c, None)
+    if n:
+        log(f"[+] City culture maps updated ({', '.join(sorted(changed))}).")
     return n
 
 
@@ -8696,6 +8745,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         elif r == "complete":
             rd_nothing()
             return None                                    # this daily is already complete today: nothing to open
+        if r and task.get("go_page") == "wheel" and wheel_on_page(dev.screenshot()):
+            return True                                    # Go on the Wheel tile opens the Wheel page itself (no Tavern menu)
         if r and (not bname or open_building_here(dev, cfg, log, stop, bname.strip())):
             return True
         if not bname:
@@ -8703,10 +8754,9 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         leave_to_city(dev, cfg, stop, log)
         if find_learned_building(dev, cfg, log, stop, bname.strip()):     # learned from an earlier Go (tile gone today)
             return True
-        if city_map(dev) is not None:                      # with a keyframe map there is no name reading (owner 24 Oct): the
-            log(f"[!]   {bname.strip()}: no tile today and not pinned on the city map yet - will try again later")
-            return False                                   # building gets pinned the next time a tile or picture opens it
-        leave_to_city(dev, cfg, stop, log)
+        if city_map(dev) is not None:                      # not pinned yet (fresh map / culture without this pin): find it by its
+            log(f"[i]   {bname.strip()}: no tile today and not pinned on the city map yet - looking for it by name once")
+        leave_to_city(dev, cfg, stop, log)                 # name this once; opening it pins it on the map (owner 25 Oct)
         return city_task_target(dev, cfg, log, stop, {**task, "target": "building:" + bname.strip()}, nav_state)
     if kind == "xy":
         x, y = [float(v) for v in name.split(",")[:2]]
@@ -9865,7 +9915,8 @@ def wheel_add_chips(dev, conf, coins, log, stop):
     """Wheel page is open: top up the coins from chip items the account already owns (setting "needed" or "all").
     "needed" adds 1K items for the spins still to do (+ the coins to keep); with "until out" it uses them all."""
     mode = conf.get("chips", "off")
-    target, big = int(conf["spins"] or 0), int(conf["button"])
+    big = int(conf["button"])
+    target = int(conf["spins"] or 0) * big                 # presses x button = spins
     if mode == "off":
         return
     need = None
@@ -9898,13 +9949,33 @@ def wheel_add_chips(dev, conf, coins, log, stop):
         _nap(stop, 1.2, 1.6)
 
 
+def wheel_spun_today(serial, add=0):
+    """Spins already done today on this instance (a retried Wheel duty does not spin the same spins twice). -> count."""
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        row = data.setdefault(serial or "default", {}).setdefault("wheel_spins", {})
+        if row.get("day") != _game_day():
+            row.clear()
+            row["day"], row["n"] = _game_day(), 0
+        if add:
+            row["n"] = int(row.get("n", 0)) + add
+            save_duty_state(data)
+        return int(row.get("n", 0))
+
+
 def run_wheel(dev, cfg, log, stop):
     """Tavern's ring menu is open: open the Wheel of Fortune and spin with the button the user picked until the number
     of spins is done, the coins run out (or fall to the reserve to keep) or something unexpected is on the screen.
     The reward panel is closed by tapping its Continue / empty ground. Only the three Spin buttons are ever pressed."""
     conf = wheel_conf(cfg)
     big = int(conf["button"]) if int(conf["button"]) in WHEEL_BTN else 100
-    target = int(conf["spins"] or 0)                       # 0 = until the coins are used up
+    target = int(conf["spins"] or 0) * big                 # "spins" = presses of the chosen button (owner 25 Oct); 0 = until the coins are used up
+    serial = getattr(dev, "serial", "")
+    before = wheel_spun_today(serial) if target else 0
+    if target and before >= target:
+        log(f"[+]  Wheel: {before} spin(s) already done today - nothing to spin")
+        return before
+    target -= before                                       # Rob 25 Oct 03:28: the retry after a stuck panel would spin 100 more
     reserve = int(conf["reserve"] or 0)
     shot = dev.screenshot()
     if not wheel_on_page(shot):
@@ -9922,19 +9993,25 @@ def run_wheel(dev, cfg, log, stop):
                 raise RuntimeError("could not get back to the Wheel of Fortune page after adding chips")
     done = 0
     fails = 0
+    closes = 0
+    last_pick = big
     while not stop.is_set():
         shot = dev.screenshot()
-        if wheel_reward_panel(shot):                       # a reward panel is still up
-            dev.tap(270, 754)
+        if wheel_reward_panel(shot):                       # a reward panel is still up: its Continue button, else empty ground
+            closes += 1
+            if closes > 8:                                 # Rob 25 Oct 03:10: the x100 panel never closed -> 17 min without a log line
+                rd_snap(shot, "wheel_panel_stuck")
+                raise RuntimeError(f"the Wheel reward panel does not close (after {done} spin(s))")
+            dev.tap(*(WHEEL_BTN[last_pick] if closes % 2 else (270, 110)))   # owner 25 Oct: the spin button's own spot or
+                                                           # outside closes it (tapped only while the panel is seen = no extra spin)
             _nap(stop, 0.8, 1.1)
             continue
+        closes = 0
         if not wheel_on_page(shot):
-            log("[!]  Wheel: not on the Wheel of Fortune page any more - stopped")
-            break
+            raise RuntimeError(f"left the Wheel of Fortune page (after {done} spin(s))")   # failed = tried again later, not 'done'
         coins = wheel_coins(shot)
         if coins is None:
-            log("[!]  Wheel: could not read the coins - stopped")
-            break
+            raise RuntimeError(f"could not read the Wheel coins (after {done} spin(s))")
         left = (target - done) if target else None
         if left is not None and left <= 0:
             log(f"[+]  Wheel: {done} spin(s) done")
@@ -9944,23 +10021,33 @@ def run_wheel(dev, cfg, log, stop):
             log(f"[+]  Wheel: stopped after {done} spin(s) - {coins:,} coins left (cost/keep-at-least {reserve:,})")
             break
         dev.tap(*WHEEL_BTN[pick])
-        shown = False
+        last_pick = pick
+        shown = spent = False
         for _ in range(14):
             _nap(stop, 0.5, 0.7)
-            if wheel_reward_panel(dev.screenshot()):
+            s2 = dev.screenshot()
+            if wheel_reward_panel(s2):
                 shown = True
                 break
-        if not shown:
-            fails += 1
-            log(f"[i]   Wheel: no reward panel after the {pick}-spin button ({fails}/3)")
-            if fails >= 3:
+            c2 = wheel_coins(s2) if wheel_on_page(s2) else None
+            if c2 is not None and coins - c2 >= WHEEL_COST[pick]:      # Spin once shows no panel: the coins dropping = it spun
+                spent = True
+                _nap(stop, 1.5, 2.0)                       # let the wheel stop turning
                 break
+        if not (shown or spent):
+            fails += 1
+            log(f"[i]   Wheel: the {pick}-spin button did not spin ({fails}/3)")
+            if fails >= 3:
+                raise RuntimeError(f"the {pick}-spin button did not spin 3 times (after {done} spin(s))")
             continue
         fails = 0
         done += pick
+        wheel_spun_today(serial, pick)
         log(f"[i]   Wheel: {done} spin(s) done ({coins - WHEEL_COST[pick]:,} coins left)")
-        for _ in range(4):                                 # close the panel: Continue, else empty ground
-            dev.tap(270, 754)
+        for _ in range(4 if shown else 0):                                 # close the panel: the button's own spot (owner 25 Oct)
+            if not wheel_reward_panel(dev.screenshot()):
+                break
+            dev.tap(*WHEEL_BTN[pick])
             _nap(stop, 0.8, 1.1)
             if not wheel_reward_panel(dev.screenshot()):
                 break
@@ -10980,9 +11067,11 @@ LEARN_DIR = USER / "city_learn"
 def _pinned(dev, bname):
     """Does this building have a place on the instance's keyframe map (learned at an earlier open)?"""
     try:
-        return bool(json.loads(_learn_path(dev, bname).with_suffix(".json").read_text(encoding="utf-8")).get("map"))
+        if json.loads(_learn_path(dev, bname).with_suffix(".json").read_text(encoding="utf-8")).get("map"):
+            return True
     except Exception:
-        return False
+        pass
+    return culture_pin(dev, bname) is not None
 
 
 def _learn_path(dev, bname):
@@ -11042,13 +11131,19 @@ def find_learned_building(dev, cfg, log, stop, bname):
     all 0.3), so: look here -> top-left corner -> the spot where it was found before -> sweep the whole city row by row
     (each move measured from the pictures). The spot found is saved for next time. -> True when its ring menu is open."""
     p = _learn_path(dev, bname)
+    pin = culture_pin(dev, bname)
     if not p.exists():
-        return False
+        if pin is None:
+            return False
+        log(f"[i]   {bname}: culture pin ({city_culture(dev)['culture'].title()}) at {round(pin[0])},{round(pin[1])}")
+        return bool(find_on_map(dev, cfg, log, stop, bname, None, {"map": pin, "dx": 0, "dy": 0}, p))
     try:
         tpl = cv2.imread(str(p))
         meta = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
     except Exception:
         return False
+    if not meta.get("map") and pin is not None:
+        meta["map"] = pin
     tag = "learn_" + re.sub(r"[^a-z]+", "_", bname.lower())
     r = find_on_map(dev, cfg, log, stop, bname, tpl, meta, p)   # the own city map: a few measured drags (owner 23 Oct)
     if r:
@@ -11333,13 +11428,29 @@ class CityMap:
         self.kf = []                                       # [(x, y, gray, keypoints)]
         self.index = None
         self.labels = self.pts = None
+        self.half = bool(self.meta.get("half"))            # shipped culture map: half-size pictures + precomputed features
         try:
             for v in self.meta.get("keyframes", []):
                 im = cv2.imread(str(path.parent / v["file"]), cv2.IMREAD_GRAYSCALE)
                 if im is not None:
+                    if self.half:                          # back to the view size for the pixel check (the shot is blurred the same way)
+                        im = cv2.resize(im, (CITY_VIEW[2], CITY_VIEW[3]), interpolation=cv2.INTER_LINEAR)
                     self.kf.append((float(v["x"]), float(v["y"]), im, None))
+            if self.meta.get("feats"):
+                self._load_feats(path.parent / self.meta["feats"])
         except Exception:
             self.kf = []
+
+    def _load_feats(self, p):
+        """Features computed at full size when the culture map was packed (cultures/<c>/feats.npz: pts, desc, label)."""
+        with np.load(str(p), allow_pickle=False) as z:
+            pts, desc, lab = z["pts"].astype(np.float32), z["desc"].astype(np.uint8), z["label"].astype(np.int64)
+        if len(desc) != len(pts) or len(desc) != len(lab) or not len(desc) or lab.max() >= len(self.kf):
+            raise ValueError("feats.npz does not fit map.json")
+        self.labels, self.pts = lab, pts
+        self.index = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=12, multi_probe_level=1), dict(checks=50))
+        self.index.add([desc])
+        self.index.train()
 
     def ok(self):
         return len(self.kf) >= 2
@@ -11390,6 +11501,9 @@ class CityMap:
                 if s:
                     cands.append((s[2], int(n), s[0], s[1]))
             cands.sort(reverse=True)
+            if self.half:                                  # same blur as the half-size keyframes
+                g = cv2.resize(cv2.resize(g, (g.shape[1] // 2, g.shape[0] // 2), interpolation=cv2.INTER_AREA),
+                               (g.shape[1], g.shape[0]), interpolation=cv2.INTER_LINEAR)
             for npts, n, dx, dy in cands[:4]:
                 if _kf_ncc(self.kf[n][2], g, dx, dy) >= KF_MIN_NCC:
                     return self.kf[n][0] - dx, self.kf[n][1] - dy, npts
@@ -11401,6 +11515,11 @@ class CityMap:
 def city_map(dev):
     """The instance's own map, or None when 'Map my city' has not been run yet (or the old stitched-only map is there)."""
     key = str(getattr(dev, "serial", "default"))
+    cult = city_culture(dev)
+    if cult:                                               # matched to a shipped culture map (owner 25 Oct: no 20-min walk)
+        cm = culture_map(cult["culture"])
+        if cm is not None:
+            return cm
     m = _CITY_MAPS.get(key)
     p = _map_dir(dev) / "map.png"
     if m is None or (p.exists() and m.path.stat().st_mtime != m.meta.get("_mtime")):
@@ -11410,6 +11529,129 @@ def city_map(dev):
         m.meta["_mtime"] = p.stat().st_mtime
         _CITY_MAPS[key] = m
     return m if m.ok() else None
+
+
+# --- culture reference maps (24 Oct): one keyframe map per city culture, packed from the owner's own accounts and shipped
+#     with the app (cultures/<culture>/: map.json + feats.npz + kf_NN.jpg half-size grey + map.jpg). Read-only. -----------
+CULTURES = ("europe", "russia", "china", "korea", "japan", "arabia", "america")
+_CULTURE_MAPS = {}                                         # culture -> CityMap or None
+
+
+def culture_dir(name):
+    """The newest copy of a culture map: the one the update downloaded (USER) wins over the one in the installer (RES)."""
+    for root in (USER / "cultures", RES / "cultures"):
+        if (root / name / "map.json").exists():
+            return root / name
+    return None
+
+
+def culture_map(name):
+    """The shipped reference map of one culture (cached), or None when it is not on this PC."""
+    name = str(name or "").lower()
+    if name not in CULTURES:
+        return None
+    if name not in _CULTURE_MAPS:
+        d = culture_dir(name)
+        m = CityMap(d / "map.png") if d else None          # CityMap reads map.json next to it; map.png itself is not needed
+        _CULTURE_MAPS[name] = m if m is not None and m.ok() and m.index is not None else None
+    return _CULTURE_MAPS[name]
+
+
+CULTURE_MARGIN = 1.5                                       # the best culture needs this many times the 2nd best's points
+                                                           # (false hits on another culture share walls/terrain - 24 Oct test)
+
+
+def match_culture(shot):
+    """Which shipped culture map does this widest-zoom city screenshot belong to? Located on ALL cultures, the one with
+    the most agreeing points wins only with a clear margin. -> (culture, cx, cy, points, second_best) or None."""
+    hits = []
+    for c in CULTURES:
+        m = culture_map(c)
+        loc = m.locate(shot) if m is not None else None
+        if loc:
+            hits.append((loc[2], c, loc[0], loc[1]))
+    if not hits:
+        return None
+    hits.sort(reverse=True)
+    second = hits[1][0] if len(hits) > 1 else 0
+    if hits[0][0] < KF_MIN_PTS or hits[0][0] < second * CULTURE_MARGIN:
+        return None
+    return hits[0][1], hits[0][2], hits[0][3], hits[0][0], second
+
+
+def city_culture(dev):
+    """The culture this instance's city was matched to (city_learn/<serial>/culture.json), or None."""
+    try:
+        c = json.loads((_map_dir(dev) / "culture.json").read_text(encoding="utf-8"))
+        return c if c.get("culture") in CULTURES else None
+    except Exception:
+        return None
+
+
+def culture_pins(name):
+    """Fixed-building places on a culture map: cultures/<c>/pins.json {building: [x, y]} (map coordinates)."""
+    d = culture_dir(name) if name else None
+    try:
+        return {str(k): [float(v[0]), float(v[1])] for k, v in json.loads((d / "pins.json").read_text(encoding="utf-8")).items()}
+    except Exception:
+        return {}
+
+
+def culture_pin(dev, bname):
+    """The shipped pin of a building for this instance's matched culture, or None."""
+    cult = city_culture(dev)
+    if not cult:
+        return None
+    pins = culture_pins(cult["culture"])
+    want = re.sub(r"[^a-z]+", "", str(bname).lower())
+    return next((v for k, v in pins.items() if re.sub(r"[^a-z]+", "", k.lower()) == want), None)
+
+
+def _drop_own_places(dev):
+    """Learned buildings' map places belong to one map: forget them when the instance changes map."""
+    for p in _map_dir(dev).glob("*.json"):
+        if p.stem not in ("map", "culture") and not p.stem.endswith("_prev"):
+            try:
+                m = json.loads(p.read_text(encoding="utf-8"))
+                if "map" in m:
+                    m.pop("map", None)
+                    p.write_text(json.dumps(m), encoding="utf-8")
+            except Exception:
+                pass
+
+
+def try_culture_match(dev, cfg, log, stop, nav=None):
+    """Map my city, culture first: up to 3 widest-zoom screenshots (moved between) located on every culture map.
+    A clear winner is saved as culture.json and used as the instance's city map. -> culture name or None."""
+    if not any(culture_map(c) is not None for c in CULTURES):
+        log("[i]   Map my city: no culture maps on this PC - walking the city")
+        return None
+    seen = []
+    for i, move in enumerate(((0, 0), (300, 0), (-300, 400))):
+        if stop.is_set():
+            return None
+        if i and nav is not None:
+            nav.pan(*move)
+        shot = dev.screenshot()
+        if view_of(shot, cfg) != "city":
+            leave_to_city(dev, cfg, stop, log)
+            shot = dev.screenshot()
+        r = match_culture(shot)
+        if r:
+            name, cx, cy, pts, second = r
+            d = _map_dir(dev)
+            d.mkdir(parents=True, exist_ok=True)
+            was = city_culture(dev)
+            if not was or was.get("culture") != name or (d / "map.json").exists():
+                _drop_own_places(dev)                      # places learned on another map do not fit this one
+            (d / "culture.json").write_text(json.dumps({"culture": name, "score": pts, "second": second,
+                                                        "at": time.strftime("%Y-%m-%d %H:%M")}), encoding="utf-8")
+            _CITY_MAPS.pop(str(getattr(dev, "serial", "default")), None)
+            log(f"[+]  Map my city: the city matches the {name.title()} culture map ({pts} points, next best {second}) - no walk needed")
+            return name
+        seen.append("no clear match")
+    log(f"[i]   Map my city: no culture map matched clearly ({len(seen)} views) - walking the city")
+    return None
 
 
 def zoom_out_full(dev, cfg, stop, log):
@@ -11439,6 +11681,8 @@ def run_map_city(dev, cfg, log, stop):
     leave_to_city(dev, cfg, stop, log)
     zoom_out_full(dev, cfg, stop, log)
     nav = CityNav(dev, stop, log, pause=0.6)
+    if try_culture_match(dev, cfg, log, stop, nav):
+        return
     x, y, w, h = CITY_VIEW
     STEPX, STEPY = int(w * 0.5), int(h * 0.6)          # one step in GAME px: views overlap half sideways, 40 % up/down. The
     views = []                                             # finger distance comes from the measured gain (a fixed 234 finger px
@@ -11612,6 +11856,10 @@ def run_map_city(dev, cfg, log, stop):
     meta = {"at": time.strftime("%Y-%m-%d %H:%M"), "views": len(kept), "size": [W, H], "keyframes": kfs,
             "links": len(edges), "zoomed_out": True}
     (d / "map.json").write_text(json.dumps(meta), encoding="utf-8")
+    try:
+        (d / "culture.json").unlink()                      # the own walked map is used from now on
+    except Exception:
+        pass
     _CITY_MAPS.pop(str(getattr(dev, "serial", "default")), None)
     for p in d.glob("*.json"):                             # learned buildings' map places belonged to the old map
         if p.stem != "map" and not p.stem.endswith("_prev"):
@@ -11669,7 +11917,7 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
     if at is None:
         return None
     shot = dev.screenshot()
-    mv, ml, f = _learn_match(shot, tpl)
+    mv, ml, f = _learn_match(shot, tpl) if tpl is not None else (0.0, None, 1.0)
     ex, ey = at
     if ml:
         x, y = ml[0] + int(meta["dx"] * f), ml[1] + int(meta["dy"] * f)
@@ -11677,12 +11925,13 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
         spot = (x, y)
     else:
         spot = (int(ex), int(ey))                          # trust the map place (the picture may have changed: upgrade, decoration)
-        log(f"[i]   {bname}: picture match {mv:.2f} near the map place - tapping the map place")
+        if tpl is not None:
+            log(f"[i]   {bname}: picture match {mv:.2f} near the map place - tapping the map place")
     if not (60 <= spot[0] <= 470 and 150 <= spot[1] <= 820):
         return None
     if open_building_here(dev, cfg, log, stop, bname, spots=[spot], how=f"the city map (match {mv:.2f})"):
         try:                                               # refresh the place and the picture (open_building_here learned it)
-            m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
+            m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8")) if p.with_suffix(".json").exists() else {"dx": 0, "dy": 0}
             m2["map"] = [round(nav.cx + spot[0]), round(nav.cy + spot[1])]
             p.with_suffix(".json").write_text(json.dumps(m2), encoding="utf-8")
         except Exception:
@@ -12679,8 +12928,8 @@ DUTY_LIBRARY = [
      "note": "Keep > Champions: 15 taps and 10 greetings a day on the champions you pick (only active ones). Needs the city map (Keep).",
      "target": "go:Greet Champion|Keep", "tap_dy": 0, "steps": ["wait 1.2", "champions"]},
     {"id": "wheel", "group": "Daily activities", "title": "Wheel of Fortune", "every_min": 0, "verified": False,
-     "note": "Tavern > Wheel of Fortune: spins with the button you pick (1 / 10 / 100) for the number of spins you set, or until the coins are used up. Needs the city map (Tavern).",
-     "target": "go:Wheel of Fortune|Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "wheel"]},
+     "note": "Tavern > Wheel of Fortune: presses the Spin button you pick (once / x10 / x100) the number of times you set, or until the coins are used up. Needs the city map (Tavern).",
+     "target": "go:Wheel of Fortune|Tavern", "tap_dy": 0, "no_tile": True, "go_page": "wheel", "steps": ["wait 1.5", "ring_name Tavern", "wheel"]},
     {"id": "crazy_eggs", "group": "Common tasks", "title": "Crazy Eggs", "every_min": 1, "verified": False,
      "note": "Smashes the ready eggs, closes the reward panel, comes back when each timer ends; Lucky Hammer once a day on the egg you pick.",
      "target": "tpl:event_center_icon|Center",
@@ -12974,7 +13223,7 @@ def run_now_tasks(cfg, serial):
     for tid in run_now_list(serial):
         if tid.startswith("duty:") and tid[5:] in DUTY_BY_ID:
             d = DUTY_BY_ID[tid[5:]]
-            t = {k: d[k] for k in ("target", "steps") if k in d}
+            t = {k: d[k] for k in ("target", "steps", "no_tile", "go_page") if k in d}
             t["name"], t["count"] = tid, d.get("count", 1)
             if tid == "duty:black_market" and bm_keep_going(cfg):
                 t["no_tile"] = True
@@ -12995,7 +13244,7 @@ def duty_tasks_due(cfg, serial):
     out = []
     for d in DUTY_LIBRARY:
         if duty_status(serial, d["id"], cfg)[0] in ("due",):
-            t = {k: d[k] for k in ("target", "steps") if k in d}
+            t = {k: d[k] for k in ("target", "steps", "no_tile", "go_page") if k in d}
             t["name"] = "duty:" + d["id"]
             t["count"] = d.get("count", 1)
             if d["id"] == "black_market" and bm_keep_going(cfg):
@@ -13626,6 +13875,10 @@ def read_task_events(n=150):
     return out
 
 
+DUTY_BUDGET_MIN = 8      # owner 25 Oct: a duty that cannot finish is left after 8 min (was 20 - Rob missed rallies for 18 min on
+                         # a stuck Wheel panel); it is retried later and the instance goes back to joining rallies
+
+
 def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
     """From the city screen: run each due task (open it, run its steps, go back)."""
     nav_state = {}
@@ -13657,7 +13910,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                     nav_state.clear()
                 # time budget per duty (Kiravik 24 Oct 15:14: Champions sat on a purchase page for 10+ min with no log line):
                 # 20 min, 50 for the city map; over it, the next tap aborts the duty and the attempt-2 path takes over
-                _TL.duty_deadline = time.time() + (50 if duty_id == "map_city" else 20) * 60
+                _TL.duty_deadline = time.time() + (50 if duty_id == "map_city" else DUTY_BUDGET_MIN) * 60
                 if not ensure_view(dev, cfg, stop, log, "city") and not stop.is_set():
                     log("[!] Could not get back to the city view")
                 clear_popups(dev, cfg, log, stop)            # close offers / pop-ups first, then do the task

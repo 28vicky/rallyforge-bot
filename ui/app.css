@@ -1665,5 +1665,25 @@ select.pick-open{border-color:var(--accent1)}
 .citymap .cmlist{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;margin-top:8px}
 @media (max-width:1100px){.citymap .cmlist{grid-template-columns:1fr}}
 .citymap .cmrow{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--line);gap:8px}
-.citymap .cmrow.off{opacity:.55}
+.citymap .cmrow.off{opacity:.7}
+.citymap .cmrow .dbadge.todo{color:#92400e;background:#fffbeb;border-color:transparent}
+[data-mode="dark"] .citymap .cmrow .dbadge.todo{color:#fcd34d;background:rgba(245,158,11,.14)}
 .citymap .cmname{font-size:13px}
+
+/* Pin buildings (owner tool) */
+.pinbox .pinseg{margin-bottom:8px;flex-wrap:wrap}
+.pingrid{display:grid;grid-template-columns:220px 1fr;gap:12px;align-items:start;margin-top:8px}
+.pinlist{max-height:62vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.pinrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;font-size:13px;cursor:pointer;border-top:1px solid var(--line)}
+.pinrow:first-child{border-top:0}
+.pinrow:hover{background:var(--field)}
+.pinrow.on{background:var(--accent1,#c2410c);color:var(--accfg,#fff)}
+.pinrow .dbadge.todo{color:#92400e;background:#fffbeb;border-color:transparent}
+[data-mode="dark"] .pinrow .dbadge.todo{color:#fcd34d;background:rgba(245,158,11,.14)}
+.pinx{border:0;background:transparent;color:inherit;font-size:16px;line-height:1;cursor:pointer;padding:0 2px;opacity:.7}
+.pinx:hover{opacity:1}
+.pinwrap{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);justify-self:start;line-height:0}   /* the whole map in view: no scrolling while pinning */
+.pinwrap.picking .pinimg{cursor:crosshair}
+.pinimg{display:block;max-width:100%;max-height:66vh;width:auto;height:auto;user-select:none}
+.pindot{touch-action:none;position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;border:3px solid var(--accent1,#c2410c);box-shadow:0 0 0 2px rgba(0,0,0,.35);cursor:grab}
+.pindot em{position:absolute;left:14px;top:-5px;white-space:nowrap;font-style:normal;font-size:11px;font-weight:700;color:#fff;background:rgba(0,0,0,.6);padding:1px 5px;border-radius:4px;pointer-events:none}

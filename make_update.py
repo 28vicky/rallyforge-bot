@@ -34,6 +34,7 @@ def main():
     ap.add_argument("--monsters", default="", help="folder with monster .png pictures to publish too")
     ap.add_argument("--extra", nargs="*", default=[], help="more .py files that belong to the update")
     ap.add_argument("--auto", action="store_true", help="let apps whose owner chose 'automatic updates' install this one by themselves (default: they only show 'Update available' in the status bar)")
+    ap.add_argument("--cultures", default="", help="the culture city maps folder (cultures/<culture>/map.json, feats.npz, kf_NN.jpg, map.jpg) to publish too, e.g. cultures")
     ap.add_argument("--catalog", default="", help="the general catalogue folder (catalog.json + art) to publish too, e.g. %%APPDATA%%\\RallyForgeBot\\catalog")
     a = ap.parse_args()
 
@@ -65,7 +66,16 @@ def main():
             cat["catalog.json"] = {"sha256": hashlib.sha256((root / "catalog.json").read_bytes()).hexdigest(), "url": "catalog/catalog.json"}
         for p in sorted((root / "art").glob("*.png")):
             cat["art/" + p.name] = {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "url": "catalog/art/" + quote(p.name)}
-        manifest = {"version": m.group(1), "notes": a.notes, "files": files, "mode": "auto" if a.auto else "ask"}
+    cul = {}
+    if a.cultures:
+        from urllib.parse import quote
+        for p in sorted(Path(a.cultures).glob("*/*")):
+            if p.suffix in (".json", ".npz", ".jpg"):
+                rel = f"{p.parent.name}/{p.name}"
+                cul[rel] = {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "url": "cultures/" + quote(rel)}
+    manifest = {"version": m.group(1), "notes": a.notes, "files": files, "mode": "auto" if a.auto else "ask"}
+    if cul:
+        manifest["cultures"] = cul
     if cat:
         try:                                               # catalog_replaces.json: {"art/X.png": [sha256 of the outdated published picture]}
             for k, v in json.loads((HERE / "catalog_replaces.json").read_text(encoding="utf-8")).items():
@@ -86,6 +96,8 @@ def main():
     print("Upload:", ", ".join(list(files) + ["version.json"] + list(pics)))
     if cat:
         print(f"Also upload the catalogue folder as catalog/ (catalog.json + art/, {len(cat)} files) next to version.json.")
+    if cul:
+        print(f"Also upload the culture maps folder as cultures/ ({len(cul)} files) next to version.json.")
 
 
 if __name__ == "__main__":

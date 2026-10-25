@@ -235,5 +235,23 @@ class QuietErr(unittest.TestCase):
         self.assertIn("[dbg] here: ValueError: x", lf.call_args_list[0][0][0])
 
 
+
+class CultureMatchTest(unittest.TestCase):
+    def test_europe_view_matches_europe(self):
+        import cv2
+        d = rb.culture_dir("europe")
+        if d is None:
+            self.skipTest("no culture maps")
+        meta = json.loads((d / "map.json").read_text(encoding="utf-8"))
+        v = meta["keyframes"][len(meta["keyframes"]) // 2]
+        x, y, w, h = rb.CITY_VIEW
+        g = cv2.resize(cv2.imread(str(d / v["file"]), cv2.IMREAD_GRAYSCALE), (w, h))
+        shot = np.zeros((960, 540, 3), np.uint8)
+        shot[y:y + h, x:x + w] = cv2.cvtColor(g, cv2.COLOR_GRAY2BGR)
+        r = rb.match_culture(shot)
+        self.assertIsNotNone(r)
+        self.assertEqual(r[0], "europe")
+        self.assertLess(abs(r[1] - v["x"]) + abs(r[2] - v["y"]), 20)
+
 if __name__ == "__main__":
     unittest.main()

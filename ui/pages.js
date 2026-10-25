@@ -1839,20 +1839,22 @@ PAGES.duties = function (fixed) {
         h("span", { class: "hint" }, "When all four eggs are done, it stops for the day."))));
   };
   const loadCe = async () => { const j = await act(api("crazy_eggs", { serial })); if (j) drawCe(j); };
-  // Wheel of Fortune: which spin button, how many spins, coins to keep
+  // Wheel of Fortune: which spin button, how many presses of it, coins to keep
   const wh = h("div", {});
+  const whTotal = (n, b) => { n = parseInt(n, 10) || 0; b = b || 1; return n > 0 ? "= " + (n * b).toLocaleString() + " spins \u00b7 " + (n * ({ 1: 100, 10: 900, 100: 9000 }[b] || 100)).toLocaleString() + " coins" : "Empty or 0 = until the coins run out."; };
   const drawWh = (j) => {
     wh.innerHTML = "";
     const c = j.conf;
     const set = async (o) => { const r = await act(api("wheel_set", { serial, ...o })); if (r) drawWh(r); };
     wh.appendChild(subset("Wheel of Fortune",
-      note("Tavern > Wheel of Fortune. Each spin costs coins. The bot presses only the Spin buttons and closes the reward panel after every spin. With a big button it still finishes with smaller ones so the number of spins is exact."),
+      note("Tavern > Wheel of Fortune. Each spin costs coins. The bot presses only the Spin buttons and closes the reward panel after every spin. Presses = how many times the chosen button is pressed (1 press of \u00d7100 = 100 spins). If the coins run short it finishes with smaller buttons."),
       h("div", { class: "fgrid eggf" },
         h("div", { class: "wide" }, h("span", { class: "lab" }, "Spin button"),
           h("div", { class: "seg small" }, [1, 10, 100].map((b) => h("button", { class: "segb" + (c.button === b ? " on" : ""), type: "button", onclick: () => set({ button: b }) }, "Spin " + (b === 1 ? "once" : "\u00d7" + b))))),
-        h("label", {}, h("span", { class: "lab" }, "Number of spins"),
-          h("input", { type: "number", min: 0, value: c.spins || "", placeholder: "Until out of coins", onchange: (ev) => set({ spins: ev.target.value }) }),
-          h("small", { class: "hint" }, "Empty or 0 = until the coins run out.")),
+        h("label", {}, h("span", { class: "lab" }, "Presses"),
+          h("input", { type: "number", min: 0, value: c.spins || "", placeholder: "Until out of coins", onchange: (ev) => set({ spins: ev.target.value }),
+            oninput: (ev) => { const t = ev.target.parentNode.querySelector(".hint"); if (t) t.textContent = whTotal(ev.target.value, c.button); } }),
+          h("small", { class: "hint" }, whTotal(c.spins, c.button))),
         h("label", {}, h("span", { class: "lab" }, "Coins to keep"),
           h("input", { type: "number", min: 0, value: c.reserve || "", placeholder: "0", onchange: (ev) => set({ reserve: ev.target.value }) }),
           h("small", { class: "hint" }, "Never go below this many.")),
@@ -1905,19 +1907,21 @@ function cityMapCard(serial) {
     root.innerHTML = "";
     const m = /Mapping (\d+) views/.exec(nowText());
     const mapping = m ? parseInt(m[1], 10) : null;
-    const total = j.buildings.length, found = j.buildings.filter((b) => b.state === "found").length;
+    const total = j.buildings.length, found = j.buildings.filter((b) => b.state === "found" || b.state === "pinned").length;
     const pct = total ? Math.round(found * 100 / total) : 0;
     const head = h("div", { class: "cardhead" },
       h("div", {}, h("h3", {}, "City map"), h("small", { class: "sub" },
-        mapping !== null ? "Mapping now" : j.built ? "Mapped " + (j.at || "") + " · " + j.views + " views" : "Not mapped yet")),
+        mapping !== null ? "Mapping now" : j.culture ? "Culture: " + j.culture.charAt(0).toUpperCase() + j.culture.slice(1) + " (matched " + (j.at || "") + ")"
+          : j.built ? "Mapped " + (j.at || "") + " · " + j.views + " views" : "Not mapped yet")),
       mapping !== null ? h("span", { class: "dbadge run" }, "Mapping · " + mapping + " views")
+        : j.culture && !found ? h("span", { class: "dbadge ok" }, "\u2713 Matched")
         : j.built ? h("span", { class: "dbadge ok" }, found + " of " + total + " buildings · " + pct + "%")
         : h("span", { class: "dbadge" }, "Run Map my city"));
     root.appendChild(head);
     if (mapping !== null) {                               // a city at the widest zoom is ~50 views: the bar is a guide, not a promise
       const est = Math.min(96, Math.round(mapping * 100 / Math.max(50, mapping + 4)));
       root.appendChild(h("div", { class: "cmbar" }, h("div", { class: "cmfill", style: { width: est + "%" } })));
-      root.appendChild(h("p", { class: "hint" }, "The bot walks over the whole city once (about 20 minutes). The buildings below are pinned as the daily tasks open them."));
+      root.appendChild(h("p", { class: "hint" }, "No culture map matched this city, so the bot walks over it once (about 20 minutes). Buildings are pinned as the tasks open them."));
     }
     if (j.built && j.img) {
       const img = h("img", { class: "cmimg", src: "/api/city_map_img?serial=" + encodeURIComponent(serial) + "&k=" + encodeURIComponent(window.KEY) + "&t=" + (j.at || ""), alt: "City map" });
@@ -1929,17 +1933,20 @@ function cityMapCard(serial) {
     }
     if (!total) root.appendChild(h("p", { class: "hint" }, "No duty needs a building yet."));
     else {
-      const STATE = { found: ["Found", "ok"], seen: ["Seen", "next"], none: ["Not yet", ""] };
+      const STATE = { found: ["Found", "ok"], pinned: ["Pinned", "ok"], seen: ["Seen", "next"], none: ["To pin", "todo"] };
       root.appendChild(h("div", { class: "cmlist" }, j.buildings.map((b) => h("div", { class: "cmrow" + (b.on ? "" : " off"), title: "Needed by: " + b.duties.join(", ") + (b.on ? "" : " (switched off)") },
         h("span", { class: "cmname" }, b.name), h("span", { class: "dbadge " + STATE[b.state][1] }, STATE[b.state][0])))));
+      if (j.culture && !j.buildings.some((b) => b.state === "pinned" || b.state === "found"))
+        root.appendChild(h("p", { class: "hint" }, "Your city matched the " + j.culture.charAt(0).toUpperCase() + j.culture.slice(1) + " map. Its buildings are not pinned yet, so each one is pinned the first time a task opens it."));
       root.appendChild(h("p", { class: "hint" }, found === total && total ? "Every building the duties need is on the map." :
-        "Found = the bot knows where it is on the map and goes straight there. Not yet = pinned the first time a daily task opens it (the Activity tile does that)."));
+        "Found = reached on this city. Pinned = known from the culture map, checked on the first visit. To pin = pinned the first time a task opens it."));
     }
     const run = async (again) => {
-      if (again && !(await confirmBox("Map again", "Map the city again? The current map and the found places are replaced (about 20 minutes)."))) return;
+      if (again && !(await confirmBox("Map again", "Map the city again? The bot first matches it to a culture map (a few seconds); only a city that matches none is walked (about 20 minutes). Found places are replaced."))) return;
       if (await act(api("run_now_add", { serial, id: "duty:map_city" }))) toast("Map my city runs next on this instance.", "ok");
     };
-    root.appendChild(h("div", { class: "row", style: { justifyContent: "flex-end", marginTop: "10px" } },
+    root.appendChild(h("div", { class: "row", style: { justifyContent: "flex-end", gap: "8px", marginTop: "10px" } },
+      S.dev ? btn("Pin buildings", () => pinBuildingsDialog(j.culture || "europe"), "sm") : null,
       mapping !== null ? null : btn(j.built ? "Map again" : "Map my city", () => run(j.built), j.built ? "sm" : "pri")));
   };
   const load = async () => {
@@ -1955,6 +1962,72 @@ function cityMapCard(serial) {
     if (j && JSON.stringify(j) + "|" + nowText() !== last) { last = JSON.stringify(j) + "|" + nowText(); paint(j); }
   }, 15000);
   return root;
+}
+
+// ---- Pin buildings (owner tool, 25 Oct): click each FIXED building once on every culture map; pins ship to every user
+//      of that culture (cultures/<c>/pins.json). Buildings players place themselves are not offered (their spot differs).
+const FIXED_BUILDINGS = ["Keep", "Tavern", "Shrine", "Pasture", "Academy", "Military Academy", "Ideal Land", "Triumphal Arch",
+  "Research Factory", "Wall", "Archer Tower", "Watchtower", "Rally Spot", "Bunker", "Victory Column", "Wonder",
+  "Fountain of the Gods", "Wisdom Dome", "Dragon Cliff", "Holy Palace", "Art Hall", "Council of Senate", "Subordinate City", "Battlefield"];
+function pinBuildingsDialog(culture) {
+  const st = { c: culture, sel: null, pins: {}, size: null };
+  const body = h("div", { class: "pinbox" });
+  const cap = (c) => c.charAt(0).toUpperCase() + c.slice(1);
+  const norm = (x) => x.toLowerCase().replace(/[^a-z]/g, "");
+  const pinOf = (b) => { const k = Object.keys(st.pins).find((k) => norm(k) === norm(b)); return k ? st.pins[k] : null; };
+  const save = async (name, xy) => {
+    const r = await act(api("culture_pin_set", { culture: st.c, name, map: xy }));
+    if (r) { st.pins = r.pins; draw(); }
+  };
+  const nextFree = () => FIXED_BUILDINGS.find((b) => !pinOf(b)) || null;
+  const draw = () => {
+    body.innerHTML = "";
+    const done = FIXED_BUILDINGS.filter(pinOf).length;
+    body.appendChild(h("div", { class: "seg small pinseg" }, ["europe", "russia", "china", "korea", "japan", "arabia", "america"].map((c) =>
+      h("button", { class: "segb" + (st.c === c ? " on" : ""), type: "button", onclick: () => load(c) }, cap(c)))));
+    body.appendChild(h("p", { class: "hint" }, st.sel ? "Click on the map where the " + st.sel + " is. Drag a pin to move it." :
+      done === FIXED_BUILDINGS.length ? "Every building is pinned on the " + cap(st.c) + " map." : "Pick a building on the left, then click it on the map."));
+    const list = h("div", { class: "pinlist" }, FIXED_BUILDINGS.map((b) => {
+      const p = pinOf(b);
+      return h("div", { class: "pinrow" + (st.sel === b ? " on" : ""), onclick: () => { st.sel = b; draw(); } },
+        h("span", {}, b),
+        p ? h("span", { class: "row", style: { gap: "6px" } }, h("span", { class: "dbadge ok" }, "Pinned"),
+          h("button", { class: "pinx", type: "button", title: "Remove pin", onclick: (e) => { e.stopPropagation(); save(b, null); } }, "\u00d7"))
+          : h("span", { class: "dbadge todo" }, "To pin"));
+    }));
+    const img = h("img", { class: "pinimg", src: "/api/culture_img?c=" + st.c + "&k=" + encodeURIComponent(window.KEY), alt: cap(st.c) + " map", draggable: false });
+    const wrap = h("div", { class: "pinwrap" + (st.sel ? " picking" : "") }, img);
+    const toMap = (e) => { const r = img.getBoundingClientRect();
+      return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * st.size[0], Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * st.size[1]]; };
+    img.onclick = (e) => { if (st.dragged || !st.sel || !st.size) return; const b = st.sel; st.sel = null; save(b, toMap(e)).then(() => { st.sel = nextFree(); draw(); }); };
+    if (st.size) for (const b of FIXED_BUILDINGS) {
+      const p = pinOf(b); if (!p) continue;
+      const dot = h("span", { class: "pindot", title: b, style: { left: (p[0] * 100 / st.size[0]) + "%", top: (p[1] * 100 / st.size[1]) + "%" } }, h("em", {}, b));
+      dot.onpointerdown = (e) => {                       // drag a pin: pointer captured, no page scroll, no click on the map after it
+        e.preventDefault(); e.stopPropagation();
+        dot.setPointerCapture(e.pointerId);
+        st.dragged = false;
+        const move = (ev) => { st.dragged = true; const m = toMap(ev); dot.style.left = (m[0] * 100 / st.size[0]) + "%"; dot.style.top = (m[1] * 100 / st.size[1]) + "%"; };
+        const up = (ev) => {
+          dot.removeEventListener("pointermove", move); dot.removeEventListener("pointerup", up);
+          if (st.dragged) save(b, toMap(ev));
+          setTimeout(() => { st.dragged = false; }, 0);
+        };
+        dot.addEventListener("pointermove", move); dot.addEventListener("pointerup", up);
+      };
+      dot.onclick = (e) => e.stopPropagation();
+      wrap.appendChild(dot);
+    }
+    body.appendChild(h("div", { class: "pingrid" }, list, wrap));
+    body.appendChild(h("p", { class: "hint" }, done + " of " + FIXED_BUILDINGS.length + " pinned on the " + cap(st.c) + " map. Pins are saved at once and used by every instance matched to this culture."));
+  };
+  const load = async (c) => {
+    const r = await act(api("culture_pins_get", { culture: c }));
+    if (!r) return;
+    st.c = c; st.pins = r.pins; st.size = r.size; st.sel = nextFree(); draw();
+  };
+  modal({ title: "Pin buildings", wide: true, body, buttons: [{ label: "Done", cls: "pri" }] });
+  load(culture);
 }
 
 function runNowCard(serial) {
