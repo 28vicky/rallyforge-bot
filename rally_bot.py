@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.5.13"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.5.14"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -166,8 +166,13 @@ DEFAULTS = {
     "game_load_timeout": 240,               # game not loaded / stable after this many seconds -> restart the emulator
     "load_restart_emulator": True,
     "stable_checks": 3,                     # known screen this many times in a row = loaded
-    "settle_seconds": 8,                    # after the game looks loaded: wait this long (and until the screen is calm) before any task
+    "settle_seconds": 8,
+    "restart_settle_seconds": 25,           # after a game / emulator (re)start: settle at least this long, no red wifi icon (owner 25 Oct)
+    "restart_skip_max_idle": 180,           # over the restart budget, still restart when the list showed no rallies for this long (s)
+    "game_restarts_per_hour": 2,
+    "chat_check_minutes": 10,               # no rally on the list for this long -> read the Alliance chat to tell quiet from broken (0 = off)            # Evony restarts per instance per hour, except must-restarts (frozen game etc.); 0 = no limit                    # after the game looks loaded: wait this long (and until the screen is calm) before any task
     "watchdog_seconds": 60,
+    "no_progress_seconds": 300,           # no log line for this long while running -> force restart the emulator (0 = off)
     # generals: names = pictures in the generals folder, "" = keep whatever the preset set
     "general_main": [],                     # a list, best first: the bot tries the next one if a general is not available
     "popup_outside_tap": [8, 480],          # where to tap to close an unknown dialog (outside it, left edge)
@@ -960,7 +965,9 @@ class Device:
 
     def _lag_wait(self, img):
         """Evony shows a red wifi icon mid-screen while the game lags (usually the PC is overloaded); taps made then
-        get lost and rallies are missed. Hold this instance still until the icon goes, then let the game settle (max 20 s)."""
+        get lost and rallies are missed. Owner 25 Oct: hold this instance still until the icon goes (up to 2 min), then
+        let the game settle 20 s with no icon before the next tap. Only a lag of 2+ min non-stop counts as a strike
+        (lag_streak) - the rally loop restarts Evony on that. Time spent here does not count as 'lost' (lag_spent)."""
         try:
             if not lag_icon(img):
                 return img
@@ -972,23 +979,29 @@ class Device:
         self.lag_count = getattr(self, "lag_count", 0) + 1
         t0 = time.time()
         self.lag_times = [t for t in getattr(self, "lag_times", []) if t0 - t < 600] + [t0]   # lag spells in the last 10 min
+        stopped = lambda: stop is not None and stop.is_set()
         try:
             if log:
                 log(f"[!] Game lagging (red wifi icon) - waiting for it to clear (#{self.lag_count} this run)")
-            while time.time() - t0 < 20 and not (stop is not None and stop.is_set()):
-                time.sleep(1.5)
+            calm_from = None
+            while time.time() - t0 < 120 and not stopped():
+                time.sleep(2.0)
                 img = self.screenshot()
-                if not lag_icon(img):
-                    time.sleep(1.0)                  # let the game catch up before the next tap
-                    img = self.screenshot()
+                if lag_icon(img):
+                    calm_from = None
+                    continue
+                calm_from = calm_from or time.time()
+                if time.time() - calm_from >= 20:                # 20 s with no icon: the game has caught up
                     self.lag_streak = 0
                     if log:
                         log(f"[+] Game settled after {time.time() - t0:.0f}s")
                     return img
-            self.lag_streak = getattr(self, "lag_streak", 0) + 1     # counted by the rally loop: 4 in a row -> restart Evony
-            if log:
-                log(f"[!] Still lagging after 20 s - carrying on ({self.lag_streak} in a row)")
+            if not stopped():
+                self.lag_streak = getattr(self, "lag_streak", 0) + 1
+                if log:
+                    log(f"[!] Still lagging after 2 min - carrying on ({self.lag_streak} in a row)")
         finally:
+            self.lag_spent = getattr(self, "lag_spent", 0.0) + (time.time() - t0)
             self._lag_busy = False
         return img
 
@@ -3949,7 +3962,7 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
             cv2.imwrite(str(USER / "debug" / "stuck_before_restart.png"), _end)
         except Exception:
             pass
-        force_restart_game(dev, cfg, log, stop)
+        force_restart_game(dev, cfg, log, stop, must=True)
         closed += 1
     return closed
 
@@ -5545,15 +5558,30 @@ def ready_screen(screen, cfg):
     return has_template("rally_icon") and find(screen, "rally_icon", 0.85) is not None
 
 
+def wait_calm(dev, cfg, log, stop, secs=20, limit=120):
+    """Wait until the game has shown no red wifi icon for `secs` seconds in a row (gives up after `limit` s)."""
+    t0, calm_from = time.time(), time.time()
+    while not stop.is_set() and time.time() - t0 < limit:
+        try:
+            if lag_icon(dev.screenshot()):
+                calm_from = time.time()
+        except Exception:
+            calm_from = time.time()
+        if time.time() - calm_from >= secs:
+            return True
+        _nap(stop, 2)
+    return False
+
+
 def settle_game(dev, cfg, log, stop):
     """After a start / restart / reconnect: give the game a few calm seconds (late pop-ups, icons still appearing,
     animations) before any task starts. Needs `settle_seconds` to have passed AND the screen to be a known one and
     unchanged for 3 checks in a row."""
-    secs = cfg.get("settle_seconds", 8)
+    secs = max(cfg.get("settle_seconds", 8) or 0, cfg.get("restart_settle_seconds", 25) or 0)   # owner 25 Oct: 20-30 s after a (re)start
     if not secs or secs <= 0:
         return
     log(f"[*] Letting the game settle ({secs}s) before starting")
-    t_end, limit = time.time() + secs, time.time() + secs + 45
+    t_end, limit = time.time() + secs, time.time() + secs + 90
     prev, calm, odd_since = None, 0, None
     while not stop.is_set() and time.time() < limit:
         try:
@@ -5576,6 +5604,11 @@ def settle_game(dev, cfg, log, stop):
             continue
         small = cv2.resize(cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY), (54, 96), interpolation=cv2.INTER_AREA)
         ok = ready_screen(screen, cfg)
+        try:
+            if lag_icon(screen):                             # red wifi: not calm, and the settle time starts again
+                ok, t_end = False, max(t_end, time.time() + secs)
+        except Exception as _e:
+            quiet_err("settle_game", _e)
         still = prev is not None and float(np.mean(cv2.absdiff(prev, small))) < 2.5
         prev = small
         if ok:
@@ -5758,6 +5791,11 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
                     not_ready_since = None
                     _nap(stop, 1.5)
                     continue
+                if game_screen_shown(dev.screenshot()):          # 25 Oct: Rob sat 3 min on an open Alliance page "waiting for loading"
+                    log("[*] The game is already open on another screen - finding the way back")
+                    if _ensure_view(dev, cfg, stop, log, "city"):
+                        not_ready_since = loading_since = None
+                        continue
         if ready_screen(screen, cfg):
             not_ready_since = loading_since = None
         if pkg and time.time() - last_fg > 15:
@@ -5850,6 +5888,7 @@ def _bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
             raise RuntimeError("The emulator did not finish starting in time.")
         _START_FAILS.pop(serial, None)
         log("[+] The emulator is up")
+        heavy_release(serial)                              # the heavy part is over: loading Evony does not hold up other restarts
         _nap(stop, 5)
     pkg = None
     if cfg["auto_launch_game"]:
@@ -5865,50 +5904,54 @@ def _bring_online(dev, cfg, log, stop, wait=True, check_ready=False):
     return not stop.is_set()
 
 
-_HEAVY_LOCK = threading.RLock()            # only one emulator restart / game restart at a time: they are the PC's heaviest moments
-_HEAVY_QUEUE = []                          # serials waiting for _HEAVY_LOCK, first come first served
-_HEAVY_QLOCK = threading.Lock()
-_HEAVY_OWNER = [None, 0]                   # [serial holding the lock, depth] - the holder re-enters at once (never joins the line)
+_HEAVY_SLOTS = 2                           # emulators that may restart at once (the boot itself is also spaced by _launch_lock)
+_HEAVY_MAX_WAIT = 30                       # owner 25 Oct: never wait more than 30 s for another emulator - a long wait = missed rallies
+_HEAVY_HOLD = set()                        # serials holding a slot
+_HEAVY_QUEUE = []                          # serials waiting, first come first served
+_HEAVY_COND = threading.Condition()
 
 
-def heavy_release():
-    with _HEAVY_QLOCK:
-        _HEAVY_OWNER[1] = max(0, _HEAVY_OWNER[1] - 1)
-        if _HEAVY_OWNER[1] == 0:
-            _HEAVY_OWNER[0] = None
-    _HEAVY_LOCK.release()
+def heavy_release(serial):
+    """Give the slot back. Safe to call twice (once when the emulator is up, again when the restart ends)."""
+    with _HEAVY_COND:
+        _HEAVY_HOLD.discard(serial)
+        _HEAVY_COND.notify_all()
 
 
 def heavy_acquire(serial, stop, log=None):
-    """Take _HEAVY_LOCK in the order the instances asked for it (a plain lock let late instances jump the line,
-    so one instance could wait for ever). The instance that already holds it gets it again at once: Manhattan 24 Oct
-    16:51 held it for its emulator restart, then needed a game restart, queued behind Rory who waited for Manhattan's
-    lock - all three instances hung for 40 min. -> False when stopped while waiting."""
-    with _HEAVY_QLOCK:
-        if _HEAVY_OWNER[0] == serial and _HEAVY_LOCK.acquire(blocking=False):   # re-entry by the holder
-            _HEAVY_OWNER[1] += 1
+    """Take one of the emulator-restart slots, in the order the instances asked. Waits at most _HEAVY_MAX_WAIT s,
+    then goes anyway (25 Oct: Rory and GK-P waited 10+ min behind Rob's 5-min game load). A holder asking again
+    gets it at once (24 Oct deadlock). -> False only when stopped while waiting."""
+    with _HEAVY_COND:
+        if serial in _HEAVY_HOLD:
             return True
-        if not _HEAVY_QUEUE and _HEAVY_LOCK.acquire(blocking=False):   # nobody waiting: no line to keep
-            _HEAVY_OWNER[0], _HEAVY_OWNER[1] = serial, _HEAVY_OWNER[1] + 1
+        if not _HEAVY_QUEUE and len(_HEAVY_HOLD) < _HEAVY_SLOTS:
+            _HEAVY_HOLD.add(serial)
             return True
         _HEAVY_QUEUE.append(serial)
     if log:
-        log("[*] Another emulator is restarting - waiting for my turn (keeps the PC from overloading)")
+        log("[*] Another emulator is restarting - waiting for my turn (30 s at most)")
+    LOADING[serial] = ("waiting", time.time())
+    end = time.time() + _HEAVY_MAX_WAIT
     try:
-        while not stop.is_set():
-            with _HEAVY_QLOCK:
-                first = bool(_HEAVY_QUEUE) and _HEAVY_QUEUE[0] == serial
-            if first and _HEAVY_LOCK.acquire(timeout=2):
-                with _HEAVY_QLOCK:
-                    _HEAVY_OWNER[0], _HEAVY_OWNER[1] = serial, _HEAVY_OWNER[1] + 1
-                return True
-            if not first:
-                stop.wait(1)
-        return False
+        with _HEAVY_COND:
+            while not stop.is_set():
+                if _HEAVY_QUEUE and _HEAVY_QUEUE[0] == serial and len(_HEAVY_HOLD) < _HEAVY_SLOTS:
+                    _HEAVY_HOLD.add(serial)
+                    return True
+                if time.time() >= end:
+                    if log:
+                        log("[*] Waited 30 s for the other restart - going ahead now")
+                    return True                    # not counted as a slot: the next one in line is not held up by us
+                _HEAVY_COND.wait(1)
+            return False
     finally:
-        with _HEAVY_QLOCK:
+        with _HEAVY_COND:
             if serial in _HEAVY_QUEUE:
                 _HEAVY_QUEUE.remove(serial)
+            _HEAVY_COND.notify_all()
+        if LOADING.get(serial, ("",))[0] == "waiting":
+            LOADING[serial] = ("restart", time.time())
 
 
 def restart_emulator(dev, cfg, log, stop, why=""):
@@ -5919,7 +5962,7 @@ def restart_emulator(dev, cfg, log, stop, why=""):
     try:
         return _restart_emulator(dev, cfg, log, stop, why)
     finally:
-        heavy_release()
+        heavy_release(dev.serial)
 
 
 def _restart_emulator(dev, cfg, log, stop, why=""):
@@ -5984,8 +6027,8 @@ def missed_rallies(serial, cfg):
     for more than 45 s, which this instance never read - its list is out of date. Monsters this instance does not
     join are ignored. No alliance match yet: any other instance counts."""
     now = time.time()
-    allies = {s for pair in list(_ALLIES) if serial in pair for s in pair if s != serial} or \
-        {s for s in list(_RALLY_ENDS) if s != serial}
+    allies = {s for pair in list(_ALLIES) if serial in pair for s in pair if s != serial}   # owner 25 Oct: only the same alliance -
+    # instances on other servers (or not matched yet) see other rallies; comparing with them made lone instances restart for nothing
     mine = _RALLY_ENDS.get(serial, [])
     out, seen = [], set()
     for other in allies:
@@ -6014,23 +6057,158 @@ def others_see_rallies(serial, within=150, allies_only=True):
     return any((s in allies if allies_only else s != serial) and now - t < within for s, t in list(_RALLY_SEEN.items()))
 
 
-def force_restart_game(dev, cfg, log, stop):
-    """Close Evony completely, open it again and wait until it is stable (used when the bot is lost)."""
+# ------------------------------------------------------------ alliance chat check (owner 25 Oct)
+# A rally list can stop updating while the game looks fine. Every rally posts "<name> started an Alliance War: LvN
+# <Monster>(K:.. X:..,Y:..) Join Now / N secs ago" in the Alliance chat tab (unless an alliance hides war messages),
+# so the chat tells whether rallies are really happening - for any user, any server, with or without other instances.
+CHAT_BAR = (200, 910)          # the chat line at the bottom of the city / map view (same place on both)
+CHAT_ALLIANCE_TAB = (338, 94)  # chat tabs: 4 equal tabs, Alliance = 2nd from the right (3rd only during Battlefield)
+CHAT_STATE = {}                # serial -> {"last", "nowar", "off", "broken", "noally"}
+_AGO = re.compile(r"(\d{1,3})?\s*(sec|secs|second|seconds|min|mins|minute|minutes|hour|hours|day|days)\s*ago", re.I)
+
+
+def _chat_age(text):
+    """'19 secs ago' -> 19. The number is sometimes lost by OCR on the yellow bubbles ('min ago'): then a middle guess."""
+    m = _AGO.search(text or "")
+    if not m:
+        return None
+    u = m.group(2).lower()
+    unit = 1 if u.startswith("sec") else 60 if u.startswith("min") else 3600 if u.startswith("hour") else 86400
+    n = int(m.group(1)) if m.group(1) else (30 if unit == 1 else 1 if not u.endswith("s") else 2)
+    return n * unit
+
+
+def read_alliance_chat(dev, cfg, log, stop):
+    """Open chat > Alliance tab, read it, close it. -> ("noally", None) | ("ok", [(monster, age_s), ...] war messages,
+    newest last) | ("fail", why)."""
+    import difflib
+    if not ensure_view(dev, cfg, stop, None, "city") and not ensure_view(dev, cfg, stop, None, "landscape"):
+        return "fail", "could not reach the city or map view"
+    dev.tap(*CHAT_BAR)
+    _nap(stop, 1.5, 2.0)
+    try:
+        shot = dev.screenshot()
+        if not find_text(shot, ["Chat"], region=(150, 5, 240, 60), cutoff=0.7):
+            return "fail", "the chat did not open"
+        if not find_text(shot, ["Alliance"], region=(180, 65, 360, 60), cutoff=0.7):
+            dev.tap(*CHAT_ALLIANCE_TAB)
+            _nap(stop, 1.2, 1.6)
+            shot = dev.screenshot()
+            if not find_text(shot, ["Alliance"], region=(180, 65, 360, 60), cutoff=0.7):
+                try:
+                    cv2.imwrite(str(USER / "debug" / f"chat_check_fail_{re.sub(r'[^0-9A-Za-z]', '_', dev.serial)}.png"), shot)
+                except Exception as _e:
+                    quiet_err("read_alliance_chat", _e)
+                return "fail", "the Alliance chat tab was not found"
+        if find_text(shot, ["join an alliance", "join alliance", "not in an alliance"], region=(0, 100, 540, 800), cutoff=0.75):
+            return "noally", None
+        lines = sorted(ocr_lines(shot[100:880]), key=lambda l: min(w[2] for w in l[1]))
+        wars, pending = [], None
+        for text, words in lines:
+            low = text.lower()
+            if "alliance war" in low or "started an" in low:
+                pending = [None, None]
+            if pending is not None and pending[0] is None:
+                names = MONSTER_NAMES + [n for grp in MONSTER_CATALOG for n, _ in grp[1]]
+                exact = [n for n in names if n.lower() in low]
+                best = max(exact, key=len) if exact else None
+                if not best:                                 # the light-blue part of a name can be lost ('Pumpkin' for Pumpkin Monster)
+                    firsts = [n for n in names if len(n.split()) > 1 and re.search(r"\b" + re.escape(n.split()[0].lower()) + r"\b", low)]
+                    best = firsts[0] if len(firsts) == 1 else None
+                if not best:
+                    sc = {n: difflib.SequenceMatcher(None, n.lower(), low).find_longest_match(0, len(n), 0, len(low)).size / len(n)
+                          for n in names if len(n) >= 4}
+                    cand = max(sc, key=sc.get) if sc else None
+                    best = cand if cand and sc[cand] >= 0.85 else None
+                if best:
+                    pending[0] = best
+            age = _chat_age(text)
+            if age is not None and pending is not None:
+                wars.append((pending[0] or "?", age))
+                pending = None
+        return "ok", wars
+    finally:
+        dev.back()                                           # Back closes the chat page (never pressed on the city itself)
+        _nap(stop, 1.0, 1.4)
+
+
+def chat_war_check(dev, cfg, log, stop, serial):
+    """-> "broken" (wars started in chat that this list never showed / not in an alliance), "quiet", "ok" or "skip"."""
+    st = CHAT_STATE.setdefault(serial, {"last": 0.0, "nowar": 0, "off": False, "broken": 0, "noally": 0})
+    now = time.time()
+    st["last"] = now
+    res, wars = read_alliance_chat(dev, cfg, log, stop)
+    if res == "fail":
+        log(f"[i] Chat check: {wars} - skipped")
+        return "skip"
+    if res == "noally":
+        st["noally"] += 1
+        log(f"[!] Chat check: the Alliance chat says to join an alliance ({st['noally']}x in a row)")
+        return "broken"
+    st["noally"] = 0
+    if not wars:
+        st["nowar"] += 1
+        if st["nowar"] >= 6 and now - _RALLY_SEEN.get(serial, 0) < 3600:   # joins rallies but chat never shows a war: hidden
+            st["off"] = True
+            log("[i] Chat check: this alliance's chat never shows rallies - chat check turned off for this instance")
+        else:
+            log("[i] Chat check: no rally messages in the Alliance chat - quiet time")
+        return "quiet"
+    st["nowar"] = 0
+    seen = _RALLY_SEEN.get(serial, 0)
+    # a rally started 30 s - 4 min ago is still open: the list must have shown rally cards since it started
+    missed = [(m, a) for m, a in wars if 30 <= a <= 240 and seen < now - a]
+    if missed:
+        names = ", ".join(sorted({m for m, _ in missed}))
+        log(f"[!] Chat check: the Alliance chat shows rallies started {min(a for _, a in missed)}-{max(a for _, a in missed)}s ago "
+            f"({names}) but this rally list showed none - the game is not updating")
+        return "broken"
+    recent = [w for w in wars if w[1] <= 240]
+    log("[i] Chat check: " + (f"{len(recent)} recent rally message(s), the list showed rallies - all fine" if recent
+                              else "no recent rally in the Alliance chat - quiet time"))
+    return "ok" if recent else "quiet"
+
+
+
+_GAME_RESTARTS = {}        # serial -> times Evony was restarted (last hour)
+_ON_LIST = {}              # serial -> last time the instance was on its rally list
+
+
+def force_restart_game(dev, cfg, log, stop, must=False):
+    """Close Evony completely, open it again and wait until it is stable (used when the bot is lost).
+    Owner 25 Oct: restarts must be rare (73 in one morning; each costs minutes and loads the PC -> more lag -> more
+    restarts). At most game_restarts_per_hour (2) per instance unless `must` (frozen game, ring menu, asked from the
+    interface); over that the bot lets the game settle and carries on the soft way (reopen the list, recovery).
+    A really stuck instance is still caught by lost/stuck_seconds (emulator restart) and the watchdog."""
+    now = time.time()
+    hist = [t for t in _GAME_RESTARTS.get(dev.serial, []) if now - t < 3600]
+    cap = int(cfg.get("game_restarts_per_hour", 2) or 0)
+    seen = _RALLY_SEEN.get(dev.serial, 0)
+    idle_max = int(cfg.get("restart_skip_max_idle", 180) or 0)
+    # Working = on its rally list lately AND not missing rallies its own alliance sees. An instance with no ally running
+    # (alone on its server) is judged only by itself: on the list = fine, even when the list is empty (quiet time).
+    on_list = now - _ON_LIST.get(dev.serial, 0) < idle_max
+    working = on_list and (now - seen < idle_max or not others_see_rallies(dev.serial, idle_max))
+    if not must and cap and len(hist) >= cap and working:
+        _GAME_RESTARTS[dev.serial] = hist
+        log(f"[i] Not restarting Evony ({len(hist)} restarts this hour already, the list showed rallies "
+            f"{now - seen:.0f}s ago) - letting the game settle and trying again the soft way")
+        wait_calm(dev, cfg, log, stop, 20)
+        return not stop.is_set()
+    if not must and cap and len(hist) >= cap:              # owner 25 Oct: the budget must never cost an hour of rallies
+        log(f"[!] {len(hist)} Evony restarts this hour already, but " + ("its alliance sees rallies this list does not show" if on_list
+            else "it has not been on the rally list for 3 min") + " - restarting anyway")
+    _GAME_RESTARTS[dev.serial] = hist + [now]
     pkg = evony_package(dev.adb, dev.serial, cfg)
     log("[!] Lost for too long - restarting Evony")
     LOADING[dev.serial] = ("restart", time.time())
     _adb(dev.adb, dev.serial, "shell", "am", "force-stop", pkg)
     _nap(stop, 3, 4)
-    if not heavy_acquire(dev.serial, stop, log):           # loading Evony is heavy: one at a time, in turn
-        return False
-    try:
-        start_app(dev.adb, dev.serial, pkg)
-        _nap(stop, 8)
-        if wait_stable(dev, cfg, log, stop, pkg, allow_emu_restart=False) or stop.is_set():
-            return not stop.is_set()
-        return _restart_emulator(dev, cfg, log, stop, "Evony did not load after a game restart")  # the lock is already ours
-    finally:
-        heavy_release()
+    start_app(dev.adb, dev.serial, pkg)                   # a game restart is light: it never waits for other emulators (25 Oct)
+    _nap(stop, 8)
+    if wait_stable(dev, cfg, log, stop, pkg, allow_emu_restart=False) or stop.is_set():
+        return not stop.is_set()
+    return restart_emulator(dev, cfg, log, stop, "Evony did not load after a game restart")
 
 
 # ---------------------------------------------------------------- one device
@@ -8324,7 +8502,7 @@ def run_market(dev, cfg, log, stop):
     if left_for == "stall":
         bm_save(serial, next_at=0, wait_gems=False)
         try:
-            force_restart_game(dev, cfg, log, stop)
+            force_restart_game(dev, cfg, log, stop, must=True)
         except Exception as e:
             log(f"[!] Black Market: restarting Evony failed: {e}")
     elif left_for:
@@ -8921,7 +9099,50 @@ def buttons_hidden(shot):
         return False
 
 
+_VIEW_FAILS = {}           # serial -> times ensure_view could not reach the wanted view (last 5 min)
+_VIEW_RESTARTING = set()  # serials restarting Evony because recovery went round in circles
+
+
+def game_screen_shown(shot):
+    """Evony has finished loading and shows something the recovery routine can work with (not a loading screen): the world
+    map, a full page (gold Back arrow / red title bar), a window over a dimmed view or the 'exit the game?' box."""
+    try:
+        if world_map(shot) or (has_template("popup_exit_cancel") and find(shot, "popup_exit_cancel", 0.85)):
+            return True
+        hsv = cv2.cvtColor(shot[8:80, 5:75], cv2.COLOR_BGR2HSV)
+        if cv2.countNonZero(cv2.inRange(hsv, (12, 110, 150), (32, 255, 255))) > 250:   # gold Back arrow of a full page
+            return True
+        top = cv2.cvtColor(shot[0:70], cv2.COLOR_BGR2HSV)
+        red = cv2.countNonZero(cv2.inRange(top, (0, 120, 80), (8, 255, 255))) + cv2.countNonZero(cv2.inRange(top, (170, 120, 80), (180, 255, 255)))
+        return red > 0.25 * top.shape[0] * top.shape[1]                 # red title bar of a game page
+    except Exception:
+        return False
+
+
 def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
+    """Run the recovery routine; when it fails 3 times in 5 min (going round in circles, e.g. Rob 25 Oct 11:05: landscape ->
+    city button -> 'unexpected window' -> Back -> landscape ... for minutes) restart Evony instead of trying again."""
+    ok = _ensure_view(dev, cfg, stop, log, want, tries)
+    serial = getattr(dev, "serial", None)
+    if ok or stop.is_set() or serial is None or serial in _VIEW_RESTARTING:
+        return ok
+    now = time.time()
+    fails = [t for t in _VIEW_FAILS.get(serial, []) if now - t < 300] + [now]
+    _VIEW_FAILS[serial] = fails
+    if len(fails) < 3:
+        return ok
+    _VIEW_FAILS[serial] = []
+    _VIEW_RESTARTING.add(serial)
+    try:
+        lg = log or (lambda m: None)
+        lg("[!] Recovery went round in circles 3 times in 5 min - restarting Evony")
+        force_restart_game(dev, cfg, lg, stop)
+        return _ensure_view(dev, cfg, stop, log, want, tries)
+    finally:
+        _VIEW_RESTARTING.discard(serial)
+
+
+def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
     """THE universal recovery routine. Whatever is on the screen - a building's window, stacked pages, a pop-up, a ring menu,
     a reward panel, the 'exit the game?' box - get out of it and land on the wanted view: 'city' or 'landscape'.
     Already there = nothing is pressed. Already in the other main view = the round city / landscape button is tapped.
@@ -8931,12 +9152,14 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
         return True                                          # nothing to recognise the views by: do not press anything blindly
     toggled = 0
     unknown = 0
+    quit_seen = False                                        # Back already opened 'exit the game?': we are on a main view - never Back again
     for i in range(tries):
         if stop.is_set():
             return False
         shot = dev.screenshot()
         if cancel_quit_dialog(dev, shot, lambda *_: None):
             say("[*] Recovery: the game asked to exit - tapped Cancel")
+            quit_seen = True
             _nap(stop, 0.8, 1.2)
             continue
         v = view_of(shot, cfg)
@@ -8992,10 +9215,13 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             say("[*] Recovery: the game's buttons were hidden - tapped the ground to show them")
             _nap(stop, 1.0, 1.4)
             continue
-        elif unknown >= 5 and toggled < 2:                  # backing out leads nowhere known: maybe the other main view is showing without being recognised
+        elif (unknown >= 5 or quit_seen) and toggled < 2:   # backing out leads nowhere known / Back asked to quit: a main view not recognised
             toggled += 1
             dev.tap(*VIEW_TOGGLE)
             say("[*] Recovery: screen not recognised - tapped the city / landscape button")
+        elif quit_seen:                                     # owner 25 Oct: Back on the city / map only asks to quit - stop here
+            say("[!] Recovery: on a main view the bot does not recognise - not pressing Back (it only asks to quit)")
+            return False
         else:
             dev.back()
             say("[*] Recovery: unexpected window - pressed Back")
@@ -13332,7 +13558,7 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     if res and res[2] and nav.absolute:                      # the camera place is read from the picture each time: only close the ring
         if not close_ring(dev, stop, res[2]):
             log("[!]   the ring menu would not close - restarting Evony so nothing is pressed by mistake")
-            force_restart_game(dev, cfg, log, stop)
+            force_restart_game(dev, cfg, log, stop, must=True)
             return None
     elif res and res[2]:                                     # the label shows where the building really is on the screen: re-anchor the camera
         lx, ly = res[2]
@@ -13343,7 +13569,7 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
             nav.cx, nav.cy = tx - lx, ty - (ly - 35)
         if not close_ring(dev, stop, res[2]):
             log("[!]   the ring menu would not close - restarting Evony so nothing is pressed by mistake")
-            force_restart_game(dev, cfg, log, stop)
+            force_restart_game(dev, cfg, log, stop, must=True)
             return None
     elif levels or res is not None:                          # read on the Detail page (i icon): back out to the city and make sure the ring is gone
         leave_to_city(dev, cfg, stop)
@@ -13569,6 +13795,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     last_march = [None]                   # march time of the rally find_target just chose
     latency = [None]                      # seconds the bot itself needs between reading a rally and pressing March
     last_ok = [time.time()]               # last time ADB gave us a screenshot
+    t_started = [time.time()]             # this run of the instance began (no chat check in the first minutes)
     still = {"sig": None, "since": None}  # screen that should be moving but is not
     stale_hits = [0]                      # empty-list checks in a row while other instances saw rallies
     empty_list = {"checks": 0, "reopens": 0, "last": 0.0, "stale": 0, "restarts": []}   # empty / out-of-date rally list: looks, reopens, last reopen, Evony restarts
@@ -13601,6 +13828,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             wait_s = max(60, 3600 - (now - min(restarts)) + 5)
             log(f"[!] The emulator was already restarted several times this hour - cooling down {wait_s/60:.0f} min, then trying again.")
             notify(cfg, serial, f"Stuck again ({why}) after several restarts - waiting {wait_s/60:.0f} min before another try.")
+            QUIET_UNTIL[serial] = time.time() + wait_s                    # planned wait: the watchdog leaves it alone
             if stop.wait(wait_s):
                 return False
             now = time.time()
@@ -13981,8 +14209,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     def recover():
         """Get back to the rally list: close pop-ups, follow the navigation steps, use Back where it is safe."""
-        if getattr(dev, "lag_streak", 0) >= 4:       # the game has lagged through 4 waits in a row: restart it instead of carrying on
-            log(f"[!] The game kept lagging ({dev.lag_streak} waits of 20 s in a row)")
+        if getattr(dev, "lag_streak", 0) >= 1:       # the game lagged 2+ min non-stop: restart it instead of carrying on
+            log("[!] The game kept lagging for over 2 min")
             dev.lag_streak = 0
             war_streak[0] = 0
             force_restart_game(dev, cfg, log, stop)
@@ -14261,9 +14489,11 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             if serial in GAME_RESTART_REQ:                       # Restart game asked from the interface
                 GAME_RESTART_REQ.discard(serial)
                 log("[*] Restart game asked - closing and opening Evony")
-                force_restart_game(dev, cfg, log, stop)
+                force_restart_game(dev, cfg, log, stop, must=True)
                 continue
             st = screen_state(screen, cfg)
+            if st == "rally_list":
+                _ON_LIST[serial] = time.time()
             if st != "rally_list" and time.time() - kick_check[0] > 4:
                 kick_check[0] = time.time()
                 if reclaim_if_kicked(dev, cfg, log, stop, screen):
@@ -14290,7 +14520,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         restart_emulator(dev, cfg, log, stop, "the game froze twice (does not react to taps)")
                     else:
                         log("[!] The game does not react (same screen after 20 taps, ~3 min) - restarting Evony")
-                        force_restart_game(dev, cfg, log, stop)
+                        force_restart_game(dev, cfg, log, stop, must=True)
                     frozen["last"] = time.time()
                     continue
                 nap(1.0, 1.5)
@@ -14336,6 +14566,25 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         stale_hits[0] = 0
                 except Exception as _e:
                     quiet_err("run_device", _e)
+            ck = CHAT_STATE.get(serial) or {}
+            ck_every = int(cfg.get("chat_check_minutes", 10) or 0) * 60
+            if ck_every and st == "rally_list" and not ck.get("off") and now - _RALLY_SEEN.get(serial, 0) > ck_every \
+                    and now - ck.get("last", 0) > ck_every and now - t_started[0] > ck_every:
+                verdict = chat_war_check(dev, cfg, log, stop, serial)   # no rally on this list for 10 min: is the game really quiet?
+                ck = CHAT_STATE[serial]
+                if verdict == "broken":
+                    ck["broken"] = ck.get("broken", 0) + 1
+                    if ck["broken"] > 5:                                # owner: after 5 tries stop restarting for the same case
+                        if ck["broken"] == 6:
+                            notify(cfg, serial, "Chat check: still broken after 5 restarts (" +
+                                   ("not in an alliance" if ck.get("noally") else "rallies in chat never reach the list") + ") - please check this instance.")
+                            log("[!] Chat check: 5 restarts did not help - not restarting for this any more, alert sent")
+                    else:
+                        log(f"[!] Chat check: restarting Evony (try {ck['broken']} of 5)")
+                        force_restart_game(dev, cfg, log, stop, must=True)
+                else:
+                    ck["broken"] = 0
+                continue
             if not moving and st in ("rally_list", "unknown"):      # rally countdown bars (green) on the list: their numbers tick every second
                 try:
                     hsv = cv2.cvtColor(screen[150:800:3, ::3], cv2.COLOR_BGR2HSV)
@@ -14403,6 +14652,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 still["since"] = now
             still["sig"] = sig
             frozen_for = 0 if still["since"] is None else now - still["since"]
+            _lag_s, dev.lag_spent = getattr(dev, "lag_spent", 0.0), 0.0
+            if lost_since[0] and _lag_s:
+                lost_since[0] += _lag_s                  # time the game lagged does not count as lost (owner 25 Oct)
             lost_since[0] = (lost_since[0] or now) if need_recover else None
             stuck = int(cfg.get("stuck_seconds", 0) or 0)
             if (frozen_for > 20 or (lost_since[0] and now - lost_since[0] > 20)) and now - kick_check[0] > 4:
@@ -14437,7 +14689,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 log(f"[!] The screen has not changed for {frozen_for:.0f}s - restarting Evony")
                 notify(cfg, serial, f"Screen frozen for {frozen_for:.0f}s - restarting Evony.")
                 still["since"] = None
-                force_restart_game(dev, cfg, log, stop)
+                force_restart_game(dev, cfg, log, stop, must=True)
                 continue
             if lost_too_long(not need_recover):
                 if reclaim_if_kicked(dev, cfg, log, stop, dev.screenshot()):      # not lost: kicked by another device
@@ -14551,19 +14803,18 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     empty_list["checks"] += 1
                     t_now = time.time()
                     allies_busy = others_see_rallies(serial)
-                    others_busy = others_see_rallies(serial, allies_only=False)
                     recent_restart = any(t_now - r < 1800 for r in empty_list["restarts"])
-                    gap = 45 if (allies_busy or others_busy) and not (recent_restart and empty_list["reopens"] >= 3) else 300
+                    gap = 45 if allies_busy and not (recent_restart and empty_list["reopens"] >= 3) else 300
                     if empty_list["checks"] >= 3 and t_now - empty_list["last"] >= gap:
                         empty_list["checks"] = 0
                         empty_list["last"] = t_now
                         empty_list["reopens"] += 1
                         at_bottom[0], scrolls = False, 0
-                        if (allies_busy or others_busy) and empty_list["reopens"] >= 3 and \
+                        if allies_busy and empty_list["reopens"] >= 3 and \
                                 list_restart("The rally list stays empty after reopening it while other instances see rallies"):
                             empty_list["reopens"] = 0
                         else:
-                            log("[!] The rally list is empty" + (" while other instances see rallies" if (allies_busy or others_busy) else "")
+                            log("[!] The rally list is empty" + (" while other instances see rallies" if allies_busy else "")
                                 + " - reopening Alliance War to refresh it")
                             dev.back()
                             nap(1.5, 2.0)
@@ -14907,12 +15158,49 @@ def prepare(cfg, log):
 INSTANCE_GUARD = None        # set by the sold edition: callable(serial) -> bool
 
 
+HEARTBEAT = {}            # serial -> last time the instance wrote a log line
+QUIET_UNTIL = {}          # serial -> end of a planned long wait (cool-down) the watchdog must not count as stuck
+
+
 def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
     """Start (or restart) one emulator's bot in its own thread. ctl = DeviceControl for pause/stop."""
     if INSTANCE_GUARD is not None and not INSTANCE_GUARD(serial):
         log("[!] License does not allow this emulator.")
         return None
     ctl.reset()
+    _log0 = log
+
+    def log(msg, *a, **k):                                   # every log line = this instance is alive (see watchdog below)
+        HEARTBEAT[serial] = time.time()
+        return _log0(msg, *a, **k)
+    HEARTBEAT[serial] = time.time()
+
+    def watchdog():
+        """Owner 25 Oct: an instance must never sit stuck with no emulator restart. No log line for no_progress_seconds
+        (default 5 min) while running and not in a planned wait -> close its emulator by force from outside. The stuck
+        bot thread then gets errors from ADB and its normal recovery restarts the emulator and the game."""
+        last_force = 0.0
+        while not ctl.stop.wait(20):
+            now = time.time()
+            if not ctl.run.is_set():                          # paused: not stuck
+                HEARTBEAT[serial] = now
+                continue
+            limit = int(merge_device_cfg(cfg, serial).get("no_progress_seconds", 300) or 0)
+            idle = now - max(HEARTBEAT.get(serial, now), QUIET_UNTIL.get(serial, 0))
+            if not limit or idle < limit or now - last_force < 600:
+                continue
+            last_force = now
+            log(f"[!] No progress for {idle / 60:.0f} min - force restarting the emulator")
+            try:
+                mcfg = merge_device_cfg(cfg, serial)
+                notify(mcfg, serial, f"Stuck with no progress for {idle / 60:.0f} min - force restarting the emulator.")
+                cmd = emulator_stop_command(serial, adb, mcfg)
+                if cmd:
+                    subprocess.run(cmd, shell=isinstance(cmd, str), capture_output=True, timeout=40, creationflags=NOWIN)
+                kill_listener(serial, log)
+            except Exception as e:
+                log(f"[!] Force restart did not work: {e}")
+    threading.Thread(target=watchdog, daemon=True).start()
 
     def work():
         try:
@@ -14940,6 +15228,7 @@ def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
                     restart_emulator(Device(serial, adb), merge_device_cfg(cfg, serial), log, ctl.stop, why)
                 except Exception as e2:
                     log(f"[!] Emulator restart did not work ({e2}) - trying again later")
+                QUIET_UNTIL[serial] = time.time() + min(600, 60 * fails)      # planned wait: not stuck
                 if ctl.stop.wait(min(600, 60 * fails)):
                     break
             merged = merge_device_cfg(cfg, serial)
