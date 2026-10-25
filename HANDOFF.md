@@ -2,6 +2,17 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## HANDOFF 25 Oct 14:25 IST (read first) - published 2.5.17; owner PC runs MORE than 2.5.17
+- Published today: 2.5.14 (restart wait 30 s, watchdog, calm game, restart budget, cross-server, alliance chat check), 2.5.15 (+ culture pins T76, wheel fixes, side status wrap), 2.5.16 (Auto-Join renew with bot joining off - confirmed working), 2.5.17 (BlueStacks zoom fallbacks, pin list every building).
+- NOT published, on the owner PC (app\v2.5.13\rally_bot.py + ui\pages.js patched; current.txt = v2.5.13):
+  - branch fix/drag-empty-ground: calm_drag (drags start on empty ground), long drags (380x540), goto_on_map = reached when the building is safely on screen + logs each round, tap the pin + 6 spots around it, culture sync never overwrites the owner's pins.json (admin.txt), black screen = wait/tap nothing (emulator restart after 2.5 min black), game-load wait does not restart the emulator when the game is loaded, Champions trusts the game's tap/greet counter, watchdog: 3 min no progress = stop the task (TASK_ABORT), 5 min = game_responds() (watch / scroll / Back) - restart the emulator only when the screen never changes, camera logs every move.
+  - branch feat/pin-forge: Forge in the pin list + the owner's pins from the PC (Russia 38, Europe/China/Japan 24).
+  - Merge BOTH into the next release (publish the owner's pins too).
+- Owner must restart RallyForge after each deploy (the last two fixes - tap around the pin, goto_on_map - were not loaded at 14:22).
+- Live findings 14:00-14:20: camera reaches the Tavern pin in 3-35 s ("camera at ... target on screen"), but ONE tap on the pin missed (no ring) -> old fallback routes walk the whole city. Kiravik has no learned Tavern picture yet (learned only after a successful open).
+- NEXT (Fable chat): read project doc claude/autojoin_and_pins_next_25oct.md - THE CAMERA PLAN (zoom out -> city corner as anchor -> fixed drags to the pin -> check -> tap; world-map toggle does NOT reset the camera) + owner's "reach buildings like a human": look for the building's saved picture on the current screen first, one drag towards the pin if not visible, map maths only as backup.
+- Open: Ideal Land screen (Rory) - recognise it and tap the city icon bottom corner (need a screenshot); testers' BlueStacks zoom - check logs after 2.5.17; chat check not seen running yet (needs 10 min without rallies).
+
 ## RELEASED 25 Oct 12:55 IST - 2.5.17 = 2.5.16 + fix/bluestacks-zoom (window-message zoom -> real Ctrl+scroll x3 -> pinch, plain log) + feat/pin-all-buildings (pin tool lists every building, one name each; old pins renamed Walls / Archer Tower 1 / Council of State). Owner still pinning on his PC: publish cultures/*/pins.json from the PC next.
 
 ## RELEASED 25 Oct 12:30 IST - 2.5.16 = 2.5.15 + fix/autojoin-renew-rallies-off (Auto-Join renewed when bot joining is off; Kiravik/Stalds 2 h expired). Doc claude/autojoin_and_pins_next_25oct.md.
