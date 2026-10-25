@@ -5903,6 +5903,12 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
                 start_app(dev.adb, dev.serial, pkg)
         _nap(stop, 3)
     if not stop.is_set():
+        try:                                                   # Rory 25 Oct 13:22: a game restart run from inside this wait
+            if ready_screen(dev.screenshot(), cfg):            # used up its time - the game IS loaded: no emulator restart
+                log("[+] The game is loaded (the wait ran out during another restart) - carrying on")
+                return True
+        except Exception as _e:
+            quiet_err("wait_stable", _e)
         if allow_emu_restart and cfg.get("load_restart_emulator", True) and cfg.get("auto_launch_emulator"):
             now = time.time()
             hist = _LOAD_RESTARTS.setdefault(dev.serial, [])
