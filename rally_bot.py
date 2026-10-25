@@ -6026,8 +6026,8 @@ def missed_rallies(serial, cfg):
     for more than 45 s, which this instance never read - its list is out of date. Monsters this instance does not
     join are ignored. No alliance match yet: any other instance counts."""
     now = time.time()
-    allies = {s for pair in list(_ALLIES) if serial in pair for s in pair if s != serial} or \
-        {s for s in list(_RALLY_ENDS) if s != serial}
+    allies = {s for pair in list(_ALLIES) if serial in pair for s in pair if s != serial}   # owner 25 Oct: only the same alliance -
+    # instances on other servers (or not matched yet) see other rallies; comparing with them made lone instances restart for nothing
     mine = _RALLY_ENDS.get(serial, [])
     out, seen = [], set()
     for other in allies:
@@ -6057,6 +6057,7 @@ def others_see_rallies(serial, within=150, allies_only=True):
 
 
 _GAME_RESTARTS = {}        # serial -> times Evony was restarted (last hour)
+_ON_LIST = {}              # serial -> last time the instance was on its rally list
 
 
 def force_restart_game(dev, cfg, log, stop, must=False):
@@ -6070,7 +6071,10 @@ def force_restart_game(dev, cfg, log, stop, must=False):
     cap = int(cfg.get("game_restarts_per_hour", 2) or 0)
     seen = _RALLY_SEEN.get(dev.serial, 0)
     idle_max = int(cfg.get("restart_skip_max_idle", 180) or 0)
-    working = now - seen < idle_max or not others_see_rallies(dev.serial, idle_max, allies_only=False)   # saw rallies lately, or nobody did (quiet time)
+    # Working = on its rally list lately AND not missing rallies its own alliance sees. An instance with no ally running
+    # (alone on its server) is judged only by itself: on the list = fine, even when the list is empty (quiet time).
+    on_list = now - _ON_LIST.get(dev.serial, 0) < idle_max
+    working = on_list and (now - seen < idle_max or not others_see_rallies(dev.serial, idle_max))
     if not must and cap and len(hist) >= cap and working:
         _GAME_RESTARTS[dev.serial] = hist
         log(f"[i] Not restarting Evony ({len(hist)} restarts this hour already, the list showed rallies "
@@ -6078,7 +6082,8 @@ def force_restart_game(dev, cfg, log, stop, must=False):
         wait_calm(dev, cfg, log, stop, 20)
         return not stop.is_set()
     if not must and cap and len(hist) >= cap:              # owner 25 Oct: the budget must never cost an hour of rallies
-        log(f"[!] {len(hist)} Evony restarts this hour already, but no rallies seen for {(now - seen) / 60:.0f} min - restarting anyway")
+        log(f"[!] {len(hist)} Evony restarts this hour already, but " + ("its alliance sees rallies this list does not show" if on_list
+            else "it has not been on the rally list for 3 min") + " - restarting anyway")
     _GAME_RESTARTS[dev.serial] = hist + [now]
     pkg = evony_package(dev.adb, dev.serial, cfg)
     log("[!] Lost for too long - restarting Evony")
@@ -14372,6 +14377,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 force_restart_game(dev, cfg, log, stop, must=True)
                 continue
             st = screen_state(screen, cfg)
+            if st == "rally_list":
+                _ON_LIST[serial] = time.time()
             if st != "rally_list" and time.time() - kick_check[0] > 4:
                 kick_check[0] = time.time()
                 if reclaim_if_kicked(dev, cfg, log, stop, screen):
@@ -14662,19 +14669,18 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     empty_list["checks"] += 1
                     t_now = time.time()
                     allies_busy = others_see_rallies(serial)
-                    others_busy = others_see_rallies(serial, allies_only=False)
                     recent_restart = any(t_now - r < 1800 for r in empty_list["restarts"])
-                    gap = 45 if (allies_busy or others_busy) and not (recent_restart and empty_list["reopens"] >= 3) else 300
+                    gap = 45 if allies_busy and not (recent_restart and empty_list["reopens"] >= 3) else 300
                     if empty_list["checks"] >= 3 and t_now - empty_list["last"] >= gap:
                         empty_list["checks"] = 0
                         empty_list["last"] = t_now
                         empty_list["reopens"] += 1
                         at_bottom[0], scrolls = False, 0
-                        if (allies_busy or others_busy) and empty_list["reopens"] >= 3 and \
+                        if allies_busy and empty_list["reopens"] >= 3 and \
                                 list_restart("The rally list stays empty after reopening it while other instances see rallies"):
                             empty_list["reopens"] = 0
                         else:
-                            log("[!] The rally list is empty" + (" while other instances see rallies" if (allies_busy or others_busy) else "")
+                            log("[!] The rally list is empty" + (" while other instances see rallies" if allies_busy else "")
                                 + " - reopening Alliance War to refresh it")
                             dev.back()
                             nap(1.5, 2.0)
