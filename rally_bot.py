@@ -15549,7 +15549,16 @@ def game_responds(serial, adb):
         d.swipe(270, 620, 270, 520, 400)                     # a short scroll: lists move, the map moves, nothing is tapped
         time.sleep(2.5)
         c = cv2.cvtColor(d.screenshot(), cv2.COLOR_BGR2GRAY)
-        return float(np.mean(cv2.absdiff(b, c))) > 1.5
+        if float(np.mean(cv2.absdiff(b, c))) > 1.5:
+            return True
+        d.back()                                              # owner: scroll OR back - a live game always reacts to Back
+        time.sleep(2.5)
+        shot = d.screenshot()
+        e = cv2.cvtColor(shot, cv2.COLOR_BGR2GRAY)
+        if float(np.mean(cv2.absdiff(c, e))) > 1.5:
+            cancel_quit_dialog(d, shot, lambda *_: None)      # Back on the city asks to quit: say Cancel
+            return True
+        return False
     except Exception:
         return False                                          # no screenshot at all = the emulator does not answer
 QUIET_UNTIL = {}          # serial -> end of a planned long wait (cool-down) the watchdog must not count as stuck
