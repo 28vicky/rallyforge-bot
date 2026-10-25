@@ -166,7 +166,9 @@ DEFAULTS = {
     "game_load_timeout": 240,               # game not loaded / stable after this many seconds -> restart the emulator
     "load_restart_emulator": True,
     "stable_checks": 3,                     # known screen this many times in a row = loaded
-    "settle_seconds": 8,                    # after the game looks loaded: wait this long (and until the screen is calm) before any task
+    "settle_seconds": 8,
+    "restart_settle_seconds": 25,           # after a game / emulator (re)start: settle at least this long, no red wifi icon (owner 25 Oct)
+    "game_restarts_per_hour": 2,            # Evony restarts per instance per hour, except must-restarts (frozen game etc.); 0 = no limit                    # after the game looks loaded: wait this long (and until the screen is calm) before any task
     "watchdog_seconds": 60,
     "no_progress_seconds": 300,           # no log line for this long while running -> force restart the emulator (0 = off)
     # generals: names = pictures in the generals folder, "" = keep whatever the preset set
@@ -961,7 +963,9 @@ class Device:
 
     def _lag_wait(self, img):
         """Evony shows a red wifi icon mid-screen while the game lags (usually the PC is overloaded); taps made then
-        get lost and rallies are missed. Hold this instance still until the icon goes, then let the game settle (max 20 s)."""
+        get lost and rallies are missed. Owner 25 Oct: hold this instance still until the icon goes (up to 2 min), then
+        let the game settle 20 s with no icon before the next tap. Only a lag of 2+ min non-stop counts as a strike
+        (lag_streak) - the rally loop restarts Evony on that. Time spent here does not count as 'lost' (lag_spent)."""
         try:
             if not lag_icon(img):
                 return img
@@ -973,23 +977,29 @@ class Device:
         self.lag_count = getattr(self, "lag_count", 0) + 1
         t0 = time.time()
         self.lag_times = [t for t in getattr(self, "lag_times", []) if t0 - t < 600] + [t0]   # lag spells in the last 10 min
+        stopped = lambda: stop is not None and stop.is_set()
         try:
             if log:
                 log(f"[!] Game lagging (red wifi icon) - waiting for it to clear (#{self.lag_count} this run)")
-            while time.time() - t0 < 20 and not (stop is not None and stop.is_set()):
-                time.sleep(1.5)
+            calm_from = None
+            while time.time() - t0 < 120 and not stopped():
+                time.sleep(2.0)
                 img = self.screenshot()
-                if not lag_icon(img):
-                    time.sleep(1.0)                  # let the game catch up before the next tap
-                    img = self.screenshot()
+                if lag_icon(img):
+                    calm_from = None
+                    continue
+                calm_from = calm_from or time.time()
+                if time.time() - calm_from >= 20:                # 20 s with no icon: the game has caught up
                     self.lag_streak = 0
                     if log:
                         log(f"[+] Game settled after {time.time() - t0:.0f}s")
                     return img
-            self.lag_streak = getattr(self, "lag_streak", 0) + 1     # counted by the rally loop: 4 in a row -> restart Evony
-            if log:
-                log(f"[!] Still lagging after 20 s - carrying on ({self.lag_streak} in a row)")
+            if not stopped():
+                self.lag_streak = getattr(self, "lag_streak", 0) + 1
+                if log:
+                    log(f"[!] Still lagging after 2 min - carrying on ({self.lag_streak} in a row)")
         finally:
+            self.lag_spent = getattr(self, "lag_spent", 0.0) + (time.time() - t0)
             self._lag_busy = False
         return img
 
@@ -3950,7 +3960,7 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
             cv2.imwrite(str(USER / "debug" / "stuck_before_restart.png"), _end)
         except Exception:
             pass
-        force_restart_game(dev, cfg, log, stop)
+        force_restart_game(dev, cfg, log, stop, must=True)
         closed += 1
     return closed
 
@@ -5546,15 +5556,30 @@ def ready_screen(screen, cfg):
     return has_template("rally_icon") and find(screen, "rally_icon", 0.85) is not None
 
 
+def wait_calm(dev, cfg, log, stop, secs=20, limit=120):
+    """Wait until the game has shown no red wifi icon for `secs` seconds in a row (gives up after `limit` s)."""
+    t0, calm_from = time.time(), time.time()
+    while not stop.is_set() and time.time() - t0 < limit:
+        try:
+            if lag_icon(dev.screenshot()):
+                calm_from = time.time()
+        except Exception:
+            calm_from = time.time()
+        if time.time() - calm_from >= secs:
+            return True
+        _nap(stop, 2)
+    return False
+
+
 def settle_game(dev, cfg, log, stop):
     """After a start / restart / reconnect: give the game a few calm seconds (late pop-ups, icons still appearing,
     animations) before any task starts. Needs `settle_seconds` to have passed AND the screen to be a known one and
     unchanged for 3 checks in a row."""
-    secs = cfg.get("settle_seconds", 8)
+    secs = max(cfg.get("settle_seconds", 8) or 0, cfg.get("restart_settle_seconds", 25) or 0)   # owner 25 Oct: 20-30 s after a (re)start
     if not secs or secs <= 0:
         return
     log(f"[*] Letting the game settle ({secs}s) before starting")
-    t_end, limit = time.time() + secs, time.time() + secs + 45
+    t_end, limit = time.time() + secs, time.time() + secs + 90
     prev, calm, odd_since = None, 0, None
     while not stop.is_set() and time.time() < limit:
         try:
@@ -5577,6 +5602,11 @@ def settle_game(dev, cfg, log, stop):
             continue
         small = cv2.resize(cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY), (54, 96), interpolation=cv2.INTER_AREA)
         ok = ready_screen(screen, cfg)
+        try:
+            if lag_icon(screen):                             # red wifi: not calm, and the settle time starts again
+                ok, t_end = False, max(t_end, time.time() + secs)
+        except Exception as _e:
+            quiet_err("settle_game", _e)
         still = prev is not None and float(np.mean(cv2.absdiff(prev, small))) < 2.5
         prev = small
         if ok:
@@ -6025,8 +6055,24 @@ def others_see_rallies(serial, within=150, allies_only=True):
     return any((s in allies if allies_only else s != serial) and now - t < within for s, t in list(_RALLY_SEEN.items()))
 
 
-def force_restart_game(dev, cfg, log, stop):
-    """Close Evony completely, open it again and wait until it is stable (used when the bot is lost)."""
+_GAME_RESTARTS = {}        # serial -> times Evony was restarted (last hour)
+
+
+def force_restart_game(dev, cfg, log, stop, must=False):
+    """Close Evony completely, open it again and wait until it is stable (used when the bot is lost).
+    Owner 25 Oct: restarts must be rare (73 in one morning; each costs minutes and loads the PC -> more lag -> more
+    restarts). At most game_restarts_per_hour (2) per instance unless `must` (frozen game, ring menu, asked from the
+    interface); over that the bot lets the game settle and carries on the soft way (reopen the list, recovery).
+    A really stuck instance is still caught by lost/stuck_seconds (emulator restart) and the watchdog."""
+    now = time.time()
+    hist = [t for t in _GAME_RESTARTS.get(dev.serial, []) if now - t < 3600]
+    cap = int(cfg.get("game_restarts_per_hour", 2) or 0)
+    if not must and cap and len(hist) >= cap:
+        _GAME_RESTARTS[dev.serial] = hist
+        log(f"[i] Not restarting Evony ({len(hist)} restarts this hour already) - letting the game settle and trying again the soft way")
+        wait_calm(dev, cfg, log, stop, 20)
+        return not stop.is_set()
+    _GAME_RESTARTS[dev.serial] = hist + [now]
     pkg = evony_package(dev.adb, dev.serial, cfg)
     log("[!] Lost for too long - restarting Evony")
     LOADING[dev.serial] = ("restart", time.time())
@@ -8330,7 +8376,7 @@ def run_market(dev, cfg, log, stop):
     if left_for == "stall":
         bm_save(serial, next_at=0, wait_gems=False)
         try:
-            force_restart_game(dev, cfg, log, stop)
+            force_restart_game(dev, cfg, log, stop, must=True)
         except Exception as e:
             log(f"[!] Black Market: restarting Evony failed: {e}")
     elif left_for:
@@ -13386,7 +13432,7 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     if res and res[2] and nav.absolute:                      # the camera place is read from the picture each time: only close the ring
         if not close_ring(dev, stop, res[2]):
             log("[!]   the ring menu would not close - restarting Evony so nothing is pressed by mistake")
-            force_restart_game(dev, cfg, log, stop)
+            force_restart_game(dev, cfg, log, stop, must=True)
             return None
     elif res and res[2]:                                     # the label shows where the building really is on the screen: re-anchor the camera
         lx, ly = res[2]
@@ -13397,7 +13443,7 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
             nav.cx, nav.cy = tx - lx, ty - (ly - 35)
         if not close_ring(dev, stop, res[2]):
             log("[!]   the ring menu would not close - restarting Evony so nothing is pressed by mistake")
-            force_restart_game(dev, cfg, log, stop)
+            force_restart_game(dev, cfg, log, stop, must=True)
             return None
     elif levels or res is not None:                          # read on the Detail page (i icon): back out to the city and make sure the ring is gone
         leave_to_city(dev, cfg, stop)
@@ -14036,8 +14082,8 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     def recover():
         """Get back to the rally list: close pop-ups, follow the navigation steps, use Back where it is safe."""
-        if getattr(dev, "lag_streak", 0) >= 4:       # the game has lagged through 4 waits in a row: restart it instead of carrying on
-            log(f"[!] The game kept lagging ({dev.lag_streak} waits of 20 s in a row)")
+        if getattr(dev, "lag_streak", 0) >= 1:       # the game lagged 2+ min non-stop: restart it instead of carrying on
+            log("[!] The game kept lagging for over 2 min")
             dev.lag_streak = 0
             war_streak[0] = 0
             force_restart_game(dev, cfg, log, stop)
@@ -14316,7 +14362,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             if serial in GAME_RESTART_REQ:                       # Restart game asked from the interface
                 GAME_RESTART_REQ.discard(serial)
                 log("[*] Restart game asked - closing and opening Evony")
-                force_restart_game(dev, cfg, log, stop)
+                force_restart_game(dev, cfg, log, stop, must=True)
                 continue
             st = screen_state(screen, cfg)
             if st != "rally_list" and time.time() - kick_check[0] > 4:
@@ -14345,7 +14391,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         restart_emulator(dev, cfg, log, stop, "the game froze twice (does not react to taps)")
                     else:
                         log("[!] The game does not react (same screen after 20 taps, ~3 min) - restarting Evony")
-                        force_restart_game(dev, cfg, log, stop)
+                        force_restart_game(dev, cfg, log, stop, must=True)
                     frozen["last"] = time.time()
                     continue
                 nap(1.0, 1.5)
@@ -14458,6 +14504,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 still["since"] = now
             still["sig"] = sig
             frozen_for = 0 if still["since"] is None else now - still["since"]
+            _lag_s, dev.lag_spent = getattr(dev, "lag_spent", 0.0), 0.0
+            if lost_since[0] and _lag_s:
+                lost_since[0] += _lag_s                  # time the game lagged does not count as lost (owner 25 Oct)
             lost_since[0] = (lost_since[0] or now) if need_recover else None
             stuck = int(cfg.get("stuck_seconds", 0) or 0)
             if (frozen_for > 20 or (lost_since[0] and now - lost_since[0] > 20)) and now - kick_check[0] > 4:
@@ -14492,7 +14541,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 log(f"[!] The screen has not changed for {frozen_for:.0f}s - restarting Evony")
                 notify(cfg, serial, f"Screen frozen for {frozen_for:.0f}s - restarting Evony.")
                 still["since"] = None
-                force_restart_game(dev, cfg, log, stop)
+                force_restart_game(dev, cfg, log, stop, must=True)
                 continue
             if lost_too_long(not need_recover):
                 if reclaim_if_kicked(dev, cfg, log, stop, dev.screenshot()):      # not lost: kicked by another device
