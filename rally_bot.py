@@ -8821,7 +8821,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 return True
             if stop.is_set():                              # owner 25 Oct: Stop took 33 s walking the fallback routes
                 return False
-            log(f"[i]   {bname.strip()}: not reached by the map - trying the Activity route")
+            log(f"[!]   {bname.strip()}: not reached by the map (Prison anchor) - no Activity route for pinned buildings, trying later")
+            return False                                   # owner 25 Oct 16:28: tasks work with the map, not the Activity window
         elif bname and task.get("no_tile"):                   # Black Market keep-going: the learned building picture first
             leave_to_city(dev, cfg, stop, log)
             if find_learned_building(dev, cfg, log, stop, bname.strip()):
@@ -12005,6 +12006,7 @@ def run_map_city(dev, cfg, log, stop):
         f"{W}x{H} px, {drags[0]} moves, {round(time.time() - t0)} s (solve {round(time.time() - t1)} s)")
 
 
+_BUFF_SWIPES = {}                                          # serial -> swipes down the City Buff list to City Labor
 CITY_BUFF_ICON = (27, 114)                                 # buff icon under the avatar (owner recording 25 Oct 16:02)
 
 
@@ -12025,6 +12027,16 @@ def city_buff_jump(dev, cfg, log, stop):
         leave_to_city(dev, cfg, stop, log)
         return False
     hit = None
+    known = _BUFF_SWIPES.get(dev.serial, 0)               # swipes it took last time: do them blind, read only from there
+    for _ in range(max(0, known - 1)):
+        if stop.is_set():
+            return False
+        dev.swipe(270, 740, 270, 300, 1200)
+        _nap(stop, 0.5, 0.6)
+    done = max(0, known - 1)
+    if done:
+        _nap(stop, 0.6, 0.8)
+        shot = dev.screenshot()
     for i in range(12):                                    # active buffs sit at the top - the row moves, find it by its words
         if stop.is_set():
             return False
@@ -12034,13 +12046,16 @@ def city_buff_jump(dev, cfg, log, stop):
             hit = find_text(shot, ["instantly gain resources", "resources from Main City"], region=(120, 70, 360, 860), cutoff=0.72)
             dy = -5
         if hit and hit[1] <= 800:
+            _BUFF_SWIPES[dev.serial] = done
             break
         hit = None
         if i < 8:
-            dev.swipe(270, 720, 270, 380, 1500)            # list up, slow (owner holds the finger: no glide, sharp picture)
+            dev.swipe(270, 740, 270, 300, 1200)            # list up, held (owner holds the finger: no glide, sharp picture)
+            done += 1
         else:
-            dev.swipe(270, 380, 270, 720, 1500)            # overshot: back down
-        _nap(stop, 1.3, 1.6)
+            dev.swipe(270, 300, 270, 740, 1200)            # overshot: back down
+            done -= 1
+        _nap(stop, 0.9, 1.1)
         shot = dev.screenshot()
     if not hit:
         rd_snap(shot, "buff_1_norow")
@@ -12101,13 +12116,15 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
     if find_detail_icon(shot):
         close_ring(dev, stop, (270, 490))
         shot = dev.screenshot()
-    r = cmap.locate(shot)
-    if not r:                                              # owner 25 Oct: the City Labor jump is the anchor (camera on the Prison)
-        log("[i]   jump: this view is not found on the city map - anchoring with the City Labor jump")
-        r = buff_anchor(dev, cfg, log, stop, cmap)
-        if not r:
-            log("[i]   jump: no anchor - using the step-by-step route")
-            return None
+    r = cmap.locate(shot)                                  # already looking at the pin? then no jump at all
+    if r and 90 <= mapx - r[0] <= 450 and 200 <= mapy - r[1] <= 780:
+        return mapx - r[0], mapy - r[1]
+    a = buff_anchor(dev, cfg, log, stop, cmap)             # owner 25 Oct 16:28: EVERY trip starts at the Prison (City Labor jump)
+    if a:
+        r = a
+    elif not r:
+        log("[i]   jump: no anchor and this view is not on the map - using the step-by-step route")
+        return None
     cx, cy = r[0], r[1]
     dx, dy = (mapx - cx) - mid_x, (mapy - cy) - mid_y      # how far the camera has to move (map px)
     if abs(dx) < 120 and abs(dy) < 150 and 90 <= mapx - cx <= 450 and 200 <= mapy - cy <= 780:
