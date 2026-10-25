@@ -12399,11 +12399,17 @@ def rt_col(x):
 def rt_marches(img):
     """World map March panel (top left): -> (busy, total, soonest_seconds or None), or None when not read."""
     busy = total = None
-    for t, _ in rd_lines(img, (0, 125, 300, 45)):
-        m = re.search(r"(\d)\s*/\s*(\d)", t)
-        if "arch" in t.lower() and m:
-            busy, total = int(m.group(1)), int(m.group(2))
+    # Open panel = "v March ... n/6" bar. On a busy map OCR splits or drops parts, so the count is read on its own
+    # (right end of the bar) and "March" on the left; the folded "> March" pill has no count (owner screenshots 25 Oct).
+    for r in ((200, 135, 120, 30), (200, 132, 130, 36), (0, 120, 320, 60)):
+        m = re.search(r"\b(\d)\s*/\s*(\d)\b", " ".join(t for t, _ in rd_lines(img, r)))
+        if m and 0 <= int(m.group(1)) <= int(m.group(2)) <= 8:
             break
+    else:
+        return None
+    if not any("arch" in " ".join(t for t, _ in rd_lines(img, r)).lower() for r in ((0, 120, 320, 60), (0, 135, 320, 30), (0, 132, 160, 36))):
+        return None
+    busy, total = int(m.group(1)), int(m.group(2))
     if busy is None:
         return None
     waits = []
@@ -12685,6 +12691,21 @@ def mr_to_map(dev, cfg, stop, tries=3):
     return view_of(dev.screenshot(), cfg) in ("landscape", "world")
 
 
+def mr_fold_panel(dev, stop, log, shot=None):
+    """World map: the March panel open ('March n/6' bar) -> fold it; already folded ('> March') -> nothing to do."""
+    shot = dev.screenshot() if shot is None else shot
+    if not rt_marches(shot):
+        return False
+    for spot in (MR_PANEL_TAP, (150, 147)):
+        dev.tap(*spot)
+        _nap(stop, 0.8, 1.0)
+        if not rt_marches(dev.screenshot()):
+            return True
+    rd_snap(dev.screenshot(), "mrally_march_panel")
+    log("[i]  Monster rally: the March panel did not fold - see debug/duty_mrally_march_panel.png")
+    return False
+
+
 def mr_return_secs(dev, cfg, stop, log):
     """Open the March panel, read the soonest return countdown, fold it again. -> seconds or None."""
     shot = dev.screenshot()
@@ -12959,6 +12980,7 @@ def _run_monster_rally(dev, cfg, log, stop):
         if not mr_search(dev, stop, tgt["x"], tgt["y"]):
             return later(MR_POLL_MIN, "the coordinate search did not open")
         _nap(stop, 1.0, 1.4)
+        mr_fold_panel(dev, stop, log)                        # owner 25 Oct: an open March panel hides the monster's Attack
         t0 = time.time()
         gone, checked, said = False, time.time(), False
         # Owner 25 Oct 21:26: every preset for monsters is out -> stay on this monster and try when the first
@@ -13023,6 +13045,7 @@ def _run_monster_rally(dev, cfg, log, stop):
         empties = 0
         while True:                                          # owner 25 Oct: stay on this monster until it is rallied
             while True:                                          # the march count was not read / was wrong: keep trying here
+                mr_fold_panel(dev, stop, log)
                 got, page = mr_open_monster(dev, stop, tgt.get("name") or "", tgt.get("level"))
                 if got != "ok":
                     break
