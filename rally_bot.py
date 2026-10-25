@@ -6369,6 +6369,20 @@ def feed_add(items, chat="", keep_min=60):
     with _feed_lock:
         if keep_min:
             _feed[:] = [f for f in _feed if now - f["t"] <= keep_min * 60]
+        # Owner 25 Oct: EvonyBossBot lists EVERY monster of a search, so a new list that has this monster + level
+        # but not an older coordinate of it = that one is dead -> drop it (and its block: the tile is free again).
+        # Items seen in the last 20 s are kept (a long reply can come split over several messages).
+        grp = lambda f: (str(f.get("name") or "").lower().strip(), f.get("level") or 0)
+        groups = {grp(it) for it in items if it.get("name")}
+        new_xy = {(it["x"], it["y"]) for it in items}
+        dead = [f for f in _feed if f.get("chat") == chat and grp(f) in groups and (f["x"], f["y"]) not in new_xy and now - f["t"] > 20]
+        if dead:
+            _feed[:] = [f for f in _feed if f not in dead]
+            for f in dead:
+                try:
+                    mr_unblock(f"{f['x']},{f['y']}")
+                except Exception as _e:
+                    quiet_err("feed_add_dead", _e)
         for it in items:
             for f in _feed:
                 if f["x"] == it["x"] and f["y"] == it["y"] and f.get("chat") == chat and f.get("name") == it.get("name"):
@@ -12567,7 +12581,7 @@ def mr_rules(cfg):
 
 
 MR_BLOCK_FILE = USER / "monster_blocks.json"
-MR_BLOCK_H = 2                            # a blocked monster stays blocked this long (later: until Telegram drops it)
+MR_BLOCK_H = 2                            # safety cap; normally a block ends when Telegram stops listing the monster
 _mr_block, _mr_block_lock = {}, threading.Lock()
 
 
@@ -12597,6 +12611,17 @@ def mr_block(key, by, why):
             save_json(MR_BLOCK_FILE, _mr_block, indent=1)
         except Exception as _e:
             quiet_err("mr_block", _e)
+
+
+def mr_unblock(key):
+    """Telegram stopped listing this monster (dead): forget its block - a new monster on that tile is a new one."""
+    with _mr_block_lock:
+        _mr_block_load()
+        if _mr_block.pop(key, None) is not None:
+            try:
+                save_json(MR_BLOCK_FILE, _mr_block, indent=1)
+            except Exception as _e:
+                quiet_err("mr_unblock", _e)
 
 
 def mr_block_why(key):
