@@ -168,6 +168,7 @@ DEFAULTS = {
     "stable_checks": 3,                     # known screen this many times in a row = loaded
     "settle_seconds": 8,                    # after the game looks loaded: wait this long (and until the screen is calm) before any task
     "watchdog_seconds": 60,
+    "no_progress_seconds": 300,           # no log line for this long while running -> force restart the emulator (0 = off)
     # generals: names = pictures in the generals folder, "" = keep whatever the preset set
     "general_main": [],                     # a list, best first: the bot tries the next one if a general is not available
     "popup_outside_tap": [8, 480],          # where to tap to close an unknown dialog (outside it, left edge)
@@ -13601,6 +13602,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             wait_s = max(60, 3600 - (now - min(restarts)) + 5)
             log(f"[!] The emulator was already restarted several times this hour - cooling down {wait_s/60:.0f} min, then trying again.")
             notify(cfg, serial, f"Stuck again ({why}) after several restarts - waiting {wait_s/60:.0f} min before another try.")
+            QUIET_UNTIL[serial] = time.time() + wait_s                    # planned wait: the watchdog leaves it alone
             if stop.wait(wait_s):
                 return False
             now = time.time()
@@ -14907,12 +14909,49 @@ def prepare(cfg, log):
 INSTANCE_GUARD = None        # set by the sold edition: callable(serial) -> bool
 
 
+HEARTBEAT = {}            # serial -> last time the instance wrote a log line
+QUIET_UNTIL = {}          # serial -> end of a planned long wait (cool-down) the watchdog must not count as stuck
+
+
 def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
     """Start (or restart) one emulator's bot in its own thread. ctl = DeviceControl for pause/stop."""
     if INSTANCE_GUARD is not None and not INSTANCE_GUARD(serial):
         log("[!] License does not allow this emulator.")
         return None
     ctl.reset()
+    _log0 = log
+
+    def log(msg, *a, **k):                                   # every log line = this instance is alive (see watchdog below)
+        HEARTBEAT[serial] = time.time()
+        return _log0(msg, *a, **k)
+    HEARTBEAT[serial] = time.time()
+
+    def watchdog():
+        """Owner 25 Oct: an instance must never sit stuck with no emulator restart. No log line for no_progress_seconds
+        (default 5 min) while running and not in a planned wait -> close its emulator by force from outside. The stuck
+        bot thread then gets errors from ADB and its normal recovery restarts the emulator and the game."""
+        last_force = 0.0
+        while not ctl.stop.wait(20):
+            now = time.time()
+            if not ctl.run.is_set():                          # paused: not stuck
+                HEARTBEAT[serial] = now
+                continue
+            limit = int(merge_device_cfg(cfg, serial).get("no_progress_seconds", 300) or 0)
+            idle = now - max(HEARTBEAT.get(serial, now), QUIET_UNTIL.get(serial, 0))
+            if not limit or idle < limit or now - last_force < 600:
+                continue
+            last_force = now
+            log(f"[!] No progress for {idle / 60:.0f} min - force restarting the emulator")
+            try:
+                mcfg = merge_device_cfg(cfg, serial)
+                notify(mcfg, serial, f"Stuck with no progress for {idle / 60:.0f} min - force restarting the emulator.")
+                cmd = emulator_stop_command(serial, adb, mcfg)
+                if cmd:
+                    subprocess.run(cmd, shell=isinstance(cmd, str), capture_output=True, timeout=40, creationflags=NOWIN)
+                kill_listener(serial, log)
+            except Exception as e:
+                log(f"[!] Force restart did not work: {e}")
+    threading.Thread(target=watchdog, daemon=True).start()
 
     def work():
         try:
@@ -14940,6 +14979,7 @@ def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
                     restart_emulator(Device(serial, adb), merge_device_cfg(cfg, serial), log, ctl.stop, why)
                 except Exception as e2:
                     log(f"[!] Emulator restart did not work ({e2}) - trying again later")
+                QUIET_UNTIL[serial] = time.time() + min(600, 60 * fails)      # planned wait: not stuck
                 if ctl.stop.wait(min(600, 60 * fails)):
                     break
             merged = merge_device_cfg(cfg, serial)
