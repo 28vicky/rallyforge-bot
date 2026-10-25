@@ -11684,8 +11684,14 @@ def zoom_out_full(dev, cfg, stop, log):
                     log(f"[i]   zoom: the real Ctrl+scroll worked (try {k + 1})")
                     sc, use_real = s2, True
                     break
-            else:
-                log("[i]   zoom: neither Ctrl+wheel nor a real Ctrl+scroll changed the view - the city is fully out (or this emulator does not zoom)")
+            else:                                        # owner: try every other way before mapping at this zoom
+                log("[i]   zoom: neither Ctrl+wheel nor a real Ctrl+scroll changed the view - trying a two-finger pinch")
+                dev.zoomed_out = False
+                if zoom_out_city(dev, stop, log):
+                    log("[i]   zoom: the pinch zoomed the city out")
+                else:
+                    log("[!]   zoom: no way of zooming out worked on this emulator (Ctrl+wheel, real Ctrl+scroll, pinch) - "
+                        "mapping at this zoom; zoom the city out by hand once if the map comes out poor")
                 return
         if not sc or sc >= 0.97:
             log(f"[i]   zoom: fully out after {i} more notch(es)")
