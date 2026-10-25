@@ -11994,6 +11994,9 @@ def run_map_city(dev, cfg, log, stop):
         f"{W}x{H} px, {drags[0]} moves, {round(time.time() - t0)} s (solve {round(time.time() - t1)} s)")
 
 
+_DRAG_SCALE = {}          # serial -> map pixels moved per finger pixel (learned by jump_to_pin)
+
+
 def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
     """Owner 25 Oct: reach a pinned building like a jump, no roaming. 1) anchor: drag to the city's top-left corner until
     the map stops (the edge is the only camera place the game always returns to the same); read the camera once there.
@@ -12004,26 +12007,24 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
     x, y, w, h = CITY_VIEW
     mid_x, mid_y = x + w / 2, y + h / 2
     t0 = time.time()
-    prev = None
-    for i in range(6):                                     # anchor: long drags towards the top-left corner
-        if stop.is_set():
-            return None
-        dev.swipe(100, 200, 440, 760, 550)                 # finger right/down = camera left/up (safe zone 100-440 x 200-760)
-        _nap(stop, 0.9, 1.1)
-        r = cmap.locate(dev.screenshot())
-        cur = (r[0], r[1]) if r else None
-        if cur and prev and abs(cur[0] - prev[0]) < 8 and abs(cur[1] - prev[1]) < 8:
-            break                                          # the map stopped: we are at the corner
-        prev = cur
-    if not prev:
-        log("[i]   jump: the corner view is not found on the city map - using the step-by-step route")
+    shot = dev.screenshot()                                # owner 25 Oct 15:15: no corner reset - start from where the camera is
+    if find_detail_icon(shot):
+        close_ring(dev, stop, (270, 490))
+        shot = dev.screenshot()
+    r = cmap.locate(shot)
+    if not r:
+        log("[i]   jump: this view is not found on the city map - using the step-by-step route")
         return None
-    cx, cy = prev
+    cx, cy = r[0], r[1]
     dx, dy = (mapx - cx) - mid_x, (mapy - cy) - mid_y      # how far the camera has to move (map px)
-    n = max(1, math.ceil(max(abs(dx), abs(dy)) / 250))   # owner: short fixed segments (<= 250 px), linear 550 ms each
+    if abs(dx) < 120 and abs(dy) < 150 and 90 <= mapx - cx <= 450 and 200 <= mapy - cy <= 780:
+        return mapx - cx, mapy - cy                        # already on screen: no drag at all
+    k_scale = _DRAG_SCALE.get(dev.serial, 1.0)             # learned: the map moves k x the finger (25 Oct: 1.3-1.44 x)
+    fdx, fdy = dx / k_scale, dy / k_scale                  # finger distance
+    n = max(1, math.ceil(max(abs(fdx), abs(fdy)) / 250))   # owner: short fixed segments (<= 250 px), linear 550 ms each
     n = min(n, 8)
-    sx_, sy_ = dx / n, dy / n
-    log(f"[i]   jump: anchor (corner) at {round(cx)},{round(cy)} - pin {round(mapx)},{round(mapy)} - {n} fixed drag(s) of {round(sx_)},{round(sy_)}")
+    sx_, sy_ = fdx / n, fdy / n
+    log(f"[i]   jump: camera at {round(cx)},{round(cy)} - pin {round(mapx)},{round(mapy)} - {n} fixed drag(s) of {round(sx_)},{round(sy_)} (scale {k_scale:.2f})")
     for k in range(n):                                     # fixed drags, no looking in between
         if stop.is_set():
             return None
@@ -12043,8 +12044,13 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
         log("[i]   jump: the view after the drags is not found on the map - using the step-by-step route")
         return None
     nav.cx, nav.cy = r[0], r[1]
+    moved = ((nav.cx - cx) ** 2 + (nav.cy - cy) ** 2) ** 0.5
+    finger = (fdx ** 2 + fdy ** 2) ** 0.5
+    if finger > 150 and moved > 50:                         # learn how far the map really moves per finger pixel
+        k_new = max(0.6, min(2.5, moved / finger))
+        _DRAG_SCALE[dev.serial] = round(0.5 * k_scale + 0.5 * k_new, 3) if dev.serial in _DRAG_SCALE else round(k_new, 3)
     sx, sy = mapx - nav.cx, mapy - nav.cy
-    log(f"[i]   jump: camera at {round(nav.cx)},{round(nav.cy)} after {time.time() - t0:.0f}s - pin on screen at {round(sx)},{round(sy)}")
+    log(f"[i]   jump: camera at {round(nav.cx)},{round(nav.cy)} after {time.time() - t0:.0f}s - pin on screen at {round(sx)},{round(sy)} (map moved {moved / max(1, finger):.2f} x the finger)")
     if 90 <= sx <= 450 and 200 <= sy <= 780:
         return sx, sy
     return None
