@@ -7498,8 +7498,8 @@ class CityNav:
             rx, ry = want_dx - mx, want_dy - my
             if abs(rx) < 25 and abs(ry) < 25 or self.halted():
                 break
-            sx = max(-200, min(200, rx))              # one drag at a time; each is measured (patch tracking)
-            sy = max(-300, min(300, ry))
+            sx = max(-380, min(380, rx))              # one long drag at a time (owner 25 Oct); each is measured (patch tracking)
+            sy = max(-540, min(540, ry))
             # dragging the finger left/up moves the camera right/down.
             # A short drag can be read by the game as a TAP on a building (that opened Prison, Rare Books ...), so a
             # short move is done as one long drag past the target and a second long drag back.
@@ -12017,9 +12017,12 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
         lost = 0
         nav.cx, nav.cy = r[0], r[1]
         sx, sy = mapx - nav.cx, mapy - nav.cy
-        if abs(sx - mid_x) <= tol and abs(sy - mid_y) <= tol:
+        # owner 25 Oct: reach the building, don't polish the camera - anywhere safely on screen is good enough
+        # (a building near the city edge can never be centred: the map springs back, Kiravik looped 2 min on the Tavern)
+        if (abs(sx - mid_x) <= tol and abs(sy - mid_y) <= tol) or (90 <= sx <= 450 and 200 <= sy <= 780):
             log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} on the map ({r[2]} points), target on screen at {round(sx)},{round(sy)}")
             return sx, sy
+        log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} ({r[2]} points) - target {round(sx - mid_x)},{round(sy - mid_y)} px from the middle, moving (round {i + 1})")
         nav.pan(sx - mid_x, sy - mid_y)                    # measured drags (the diamond's edge stops them safely)
     return None
 
