@@ -1,9 +1,9 @@
 {
-  "version": "2.5.13",
-  "notes": "Black Market: easier settings page; 'Until the gem floor' keeps going all day with other tasks in between, checks your gems every hour when low, reads the gem total correctly",
+  "version": "2.5.14",
+  "notes": "Smarter recovery: 30 s restart wait, stuck instances restart themselves, calmer game after lag and restarts, alliance chat check",
   "files": {
     "rally_bot.py": {
-      "sha256": "f2976112de5595fae8b8b948564b79a7dfc7fd51fa7343727c35275e8e67a669"
+      "sha256": "8e3d3644aeb176ed0f82a34d05191cf769288dfb262feebb177f811fb5ff7de7"
     },
     "web_app.py": {
       "sha256": "45bc32c1366e6023cca5f1ea3c053559a8e1f217fe15507206d3a58a081ae948"
@@ -18,7 +18,7 @@
       "sha256": "9e4be6ae10e966a20e8839d258cbd03e94c4b503d346087328560d1044418010"
     },
     "ui/changelog.js": {
-      "sha256": "dc1749e4d6462fb147a7216b4f7dc8e0a0189caafe7631de997d15b7bef85c46"
+      "sha256": "10a4d662313bbe9b3727f5b3ac977de3dd60f3eddf19d3937c6fd3bf9baf9419"
     },
     "ui/dialogs.js": {
       "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
@@ -1709,5 +1709,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "bd59b5b7d3d0483515fbe37aae6f7714bbe9b7989d1d7d5d7a7268525075a07a"
+  "sig": "27c6ca163911eae13debc7e6ed3f7b456800012369cca4edb303e828403c1e84"
 }
