@@ -1,24 +1,24 @@
 {
-  "version": "2.5.14",
-  "notes": "Smarter recovery: 30 s restart wait, stuck instances restart themselves, calmer game after lag and restarts, alliance chat check",
+  "version": "2.5.15",
+  "notes": "Faster city mapping with culture maps, Wheel and duty fixes",
   "files": {
     "rally_bot.py": {
-      "sha256": "8e3d3644aeb176ed0f82a34d05191cf769288dfb262feebb177f811fb5ff7de7"
+      "sha256": "9f8374e211a06b480c98d1ca4449b77fd3515aaf57fc8d77b2a75303dfb61a87"
     },
     "web_app.py": {
-      "sha256": "45bc32c1366e6023cca5f1ea3c053559a8e1f217fe15507206d3a58a081ae948"
+      "sha256": "debef39b921ecfbb766debe14c2746681e60e56bf98b9838974cb8dfc7e314f6"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "ffbd96bdf2d2ca88b30927103037cfeee468e3669eb8e2f78b67d4429f039649"
+      "sha256": "bc47bcd5b5bffa6a251e116d4ea0f732cc2554d7855f4bc1d6d14ece1299f22a"
     },
     "ui/app.js": {
       "sha256": "9e4be6ae10e966a20e8839d258cbd03e94c4b503d346087328560d1044418010"
     },
     "ui/changelog.js": {
-      "sha256": "10a4d662313bbe9b3727f5b3ac977de3dd60f3eddf19d3937c6fd3bf9baf9419"
+      "sha256": "0af81ae2d0da4813deff092cfc82a9e38023e0aea24a99b0ec01eb11629bd6b7"
     },
     "ui/dialogs.js": {
       "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
@@ -30,13 +30,1591 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "cf554e16db14349024ff7f3066f1e1a48d93225a93881113d4aa3dd4c404b5a9"
+      "sha256": "c39191f01937bc7ad923d44eaa0e30494f71bac7432f06667db777d40136c11c"
     },
     "ui/tour.js": {
       "sha256": "3a4ca195aed40a7b56c7158ce844a5879f327325f7486a59c8e8814eed318da0"
     }
   },
   "mode": "ask",
+  "cultures": {
+    "america/feats.npz": {
+      "sha256": "c145e15d76eea088db3c2f3b4786899ff0452961f9219e0d29366ef04c6e40ed",
+      "url": "cultures/america/feats.npz"
+    },
+    "america/kf_01.jpg": {
+      "sha256": "e3530031ea8c0dabe9fbda4527a943a846e212f72899dd104ba9f8ab20b151f9",
+      "url": "cultures/america/kf_01.jpg"
+    },
+    "america/kf_02.jpg": {
+      "sha256": "caa9e4c11c5a29d7e6c56298878fccb64b5497fadc6eebf151e0ebbd2787631f",
+      "url": "cultures/america/kf_02.jpg"
+    },
+    "america/kf_03.jpg": {
+      "sha256": "344b749f41f44fe2b126c1f0e87e6280e831f08a32cca6b0c0b00fb0f789ebe5",
+      "url": "cultures/america/kf_03.jpg"
+    },
+    "america/kf_04.jpg": {
+      "sha256": "feed90447ba26c058b454dbf533ae1e1fe585fbdd7cb2ccab64b703f0478da99",
+      "url": "cultures/america/kf_04.jpg"
+    },
+    "america/kf_05.jpg": {
+      "sha256": "9ab37a4d9eb55227078d9d289d052d57f2e354c141a260382452779e72402f24",
+      "url": "cultures/america/kf_05.jpg"
+    },
+    "america/kf_06.jpg": {
+      "sha256": "5d83b91678eb4852b11c478514fb51b7b28206a49915d2c4674f2a4a288ff72b",
+      "url": "cultures/america/kf_06.jpg"
+    },
+    "america/kf_07.jpg": {
+      "sha256": "9fc33948b6256486d58bc5b451656611dfa95d627965bc323cf01f42ab0cd8cb",
+      "url": "cultures/america/kf_07.jpg"
+    },
+    "america/kf_08.jpg": {
+      "sha256": "4830f0e394ac7ee0d5ff09ba5813e70e297747bbf4cd3ca1f80ca8dd79f282ec",
+      "url": "cultures/america/kf_08.jpg"
+    },
+    "america/kf_09.jpg": {
+      "sha256": "298b0890a7228a4373d22a562f4284c4f62658f626005007c27903276e0cea3e",
+      "url": "cultures/america/kf_09.jpg"
+    },
+    "america/kf_10.jpg": {
+      "sha256": "8dd130b2eca5e63cac829ed180b0d6ad72aac490fc2740404cb347813eec8fc0",
+      "url": "cultures/america/kf_10.jpg"
+    },
+    "america/kf_11.jpg": {
+      "sha256": "6c82ed5c5712862ffd65c52390aa5a96cb45fee9da1d7bc98c0a8369077e1703",
+      "url": "cultures/america/kf_11.jpg"
+    },
+    "america/kf_12.jpg": {
+      "sha256": "d1e044a6da2f730d7cbdb3f2457da350f4e8ed1cbe598050948028c2add63699",
+      "url": "cultures/america/kf_12.jpg"
+    },
+    "america/kf_13.jpg": {
+      "sha256": "5409da076ab5ca31f962fd3227c3def17993cd222769f2e7b6589326ac5789a6",
+      "url": "cultures/america/kf_13.jpg"
+    },
+    "america/kf_14.jpg": {
+      "sha256": "0b953cffdc9c89ed941313e2acf0889552aa3c822352151b61f739903b5f99d9",
+      "url": "cultures/america/kf_14.jpg"
+    },
+    "america/kf_15.jpg": {
+      "sha256": "2400b01933cc78c37bc0a07b99dbbc84c2c78aa890ec5257b531c877fc9752e8",
+      "url": "cultures/america/kf_15.jpg"
+    },
+    "america/kf_16.jpg": {
+      "sha256": "1caa627779429efac51ee5f8055b46f979e7dffad1dd671628609b4fbd6731e9",
+      "url": "cultures/america/kf_16.jpg"
+    },
+    "america/kf_17.jpg": {
+      "sha256": "31df9ab8e19ced3fcc8cf19eff25e73fd1d97e5c81e444929511465117d7eb7b",
+      "url": "cultures/america/kf_17.jpg"
+    },
+    "america/kf_18.jpg": {
+      "sha256": "38c32759c3393d00de51f3c15dcd99c5a05cce8c23a0a4ee964058c0933da526",
+      "url": "cultures/america/kf_18.jpg"
+    },
+    "america/kf_19.jpg": {
+      "sha256": "9d383c7c0b92497e7351b3e7f672b9908a54d2498db094ef4173b023852e9e41",
+      "url": "cultures/america/kf_19.jpg"
+    },
+    "america/kf_20.jpg": {
+      "sha256": "4bc733ed8837dfe1c806edcaa44a3c5fecf64271e4bbdf461595e7f6795cd981",
+      "url": "cultures/america/kf_20.jpg"
+    },
+    "america/kf_21.jpg": {
+      "sha256": "1b42c401e974a48d89eccf04bb11a595df4e436647843c0031aa3d61e2c9e884",
+      "url": "cultures/america/kf_21.jpg"
+    },
+    "america/kf_22.jpg": {
+      "sha256": "4a05814818ad3c35b1a8c8cd6ebcbfd97782e58ebd364e414ca076207ab08578",
+      "url": "cultures/america/kf_22.jpg"
+    },
+    "america/kf_23.jpg": {
+      "sha256": "8d8e26eaa36655aa58d61ec4de27e481b922c725db5476cd2a3e99cee957cab6",
+      "url": "cultures/america/kf_23.jpg"
+    },
+    "america/kf_24.jpg": {
+      "sha256": "982dee1bc8ed2562da6ddc94a7f559fab76fd3a3b72fc7adb2ed6e41ea557cb2",
+      "url": "cultures/america/kf_24.jpg"
+    },
+    "america/kf_25.jpg": {
+      "sha256": "b634b129cac87991a8c08576818b6816317bb75beba657137796d08ee8179fd3",
+      "url": "cultures/america/kf_25.jpg"
+    },
+    "america/kf_26.jpg": {
+      "sha256": "640f4a1dbca630a03eaeea59e18d6d51ae32e2485fab6c8833896ad1680c969c",
+      "url": "cultures/america/kf_26.jpg"
+    },
+    "america/kf_27.jpg": {
+      "sha256": "f3d3ad6cc4739d1393b2e843f1600f43c9828972463fb132182abe0d6277c779",
+      "url": "cultures/america/kf_27.jpg"
+    },
+    "america/kf_28.jpg": {
+      "sha256": "4bae78dc96ceb07adccf5475313b150e7a9c41310173968cd75224110ff3f2af",
+      "url": "cultures/america/kf_28.jpg"
+    },
+    "america/kf_29.jpg": {
+      "sha256": "0cd3e21f8f4c16ab51aaa0317a20cd51c92364572033f7c03a031d4949d85f8f",
+      "url": "cultures/america/kf_29.jpg"
+    },
+    "america/kf_30.jpg": {
+      "sha256": "e22b5acfce2948c6022deb8c83c304b3e12f7a54cf1d3423f997befb21630f83",
+      "url": "cultures/america/kf_30.jpg"
+    },
+    "america/kf_31.jpg": {
+      "sha256": "ee2b5626da89b29121bf9ac6c18cf2b9ac7aa544fd3721f75bd9c81af203a983",
+      "url": "cultures/america/kf_31.jpg"
+    },
+    "america/kf_32.jpg": {
+      "sha256": "e261477caed82c90c19a2e7ced651e0d3e6576f129bbd1ebeda931afc6d2d877",
+      "url": "cultures/america/kf_32.jpg"
+    },
+    "america/kf_33.jpg": {
+      "sha256": "58224ad8cd1c7fcc5667786fdca9f33cdcce890bcb437389bd6f46aaf837fc64",
+      "url": "cultures/america/kf_33.jpg"
+    },
+    "america/kf_34.jpg": {
+      "sha256": "a26b48cdc2c0a99e4b5deedaf8ab507697072aa9fbb6c0b3b7f50ee68f7522fe",
+      "url": "cultures/america/kf_34.jpg"
+    },
+    "america/kf_35.jpg": {
+      "sha256": "b586ef703a3b3e6412b1fe1ee3f080b0aba9140216bb53588d82a77aa8cd01b1",
+      "url": "cultures/america/kf_35.jpg"
+    },
+    "america/kf_36.jpg": {
+      "sha256": "d42ea6940b30f67f346bf2fc8a83e108eea9f00380c029e43b9a451eeea9536c",
+      "url": "cultures/america/kf_36.jpg"
+    },
+    "america/kf_37.jpg": {
+      "sha256": "409c1142a54e64eca7a62d611cc86e7436298da684eb5b6ac71aa333f4fde17b",
+      "url": "cultures/america/kf_37.jpg"
+    },
+    "america/kf_38.jpg": {
+      "sha256": "84ce09356f72f7fb55b3781699f64787f5c5e5497ad19fc70adcd6744052039e",
+      "url": "cultures/america/kf_38.jpg"
+    },
+    "america/kf_39.jpg": {
+      "sha256": "c8232714e5ace59cf08ff2f9bd7547195ccc1fc2e29a778e12872121543ef54b",
+      "url": "cultures/america/kf_39.jpg"
+    },
+    "america/kf_40.jpg": {
+      "sha256": "3ddc5f9a17ccd3406fa55fa317f0bd3fa2af17891b7bf8cae56cc83c53de01cd",
+      "url": "cultures/america/kf_40.jpg"
+    },
+    "america/kf_41.jpg": {
+      "sha256": "52c87baa1b0d33a640f92b19c292854a4f3414d4a155504a20ebb3d543d4428e",
+      "url": "cultures/america/kf_41.jpg"
+    },
+    "america/kf_42.jpg": {
+      "sha256": "293bb1d4b556ef98d44562fd246318f56027d6834a690275a790558a93231e1e",
+      "url": "cultures/america/kf_42.jpg"
+    },
+    "america/kf_43.jpg": {
+      "sha256": "1f3fcb7ef4e64d17298466a802321c957d6ed7926ff4bb29b30cc913f3d535be",
+      "url": "cultures/america/kf_43.jpg"
+    },
+    "america/kf_44.jpg": {
+      "sha256": "bd0b848f815626e73f7722995c9afa82bf82257246619bd7d8f6f165c9e946c4",
+      "url": "cultures/america/kf_44.jpg"
+    },
+    "america/kf_45.jpg": {
+      "sha256": "f12bc7b4ecfef5ca84c4cedb795e4cd4b0f8fd0673b1a6e3dfffe082fd1ebbaf",
+      "url": "cultures/america/kf_45.jpg"
+    },
+    "america/kf_46.jpg": {
+      "sha256": "ad16b95cfb92c07beca84ee1bcecdd27a371ca62f34b1fad3df1fa704d7fd9a1",
+      "url": "cultures/america/kf_46.jpg"
+    },
+    "america/kf_47.jpg": {
+      "sha256": "35484c37fc8765036c744a042cb4b9b62d30a8b91f9f2a907e1b8bb1e73393b7",
+      "url": "cultures/america/kf_47.jpg"
+    },
+    "america/kf_48.jpg": {
+      "sha256": "42dafd5009e3b09644209fb1de0c1205488f5647438415f966692aa9614aa389",
+      "url": "cultures/america/kf_48.jpg"
+    },
+    "america/kf_49.jpg": {
+      "sha256": "2fd74f2ab5158217cfa60f7a0640e5e0e1bef176080952d0ee98bafc3c3e5a08",
+      "url": "cultures/america/kf_49.jpg"
+    },
+    "america/kf_50.jpg": {
+      "sha256": "1c49b85e4748bbe7fcb209cc6672b98876b124a407d95153dcb630b3a18a115e",
+      "url": "cultures/america/kf_50.jpg"
+    },
+    "america/kf_51.jpg": {
+      "sha256": "e594f0ecf74701a51b01e0b6ec599189589c1df76bf93233a417f9adef272600",
+      "url": "cultures/america/kf_51.jpg"
+    },
+    "america/kf_52.jpg": {
+      "sha256": "9d7267330971d20848469543c0b654d098f36951262b4c516a552cf41382a51a",
+      "url": "cultures/america/kf_52.jpg"
+    },
+    "america/kf_53.jpg": {
+      "sha256": "fc504d7395b559894fbc4329f557c11bc52efd4a78430933d5e74bae11360828",
+      "url": "cultures/america/kf_53.jpg"
+    },
+    "america/kf_54.jpg": {
+      "sha256": "97db85f5528e244695e96e81f2b116319c8ed3ead2bfe1de4c55637cf7ad0b66",
+      "url": "cultures/america/kf_54.jpg"
+    },
+    "america/map.jpg": {
+      "sha256": "81fdd0e21d6d1201a93960406f48088c151fc9134edffbed5489df051ed44201",
+      "url": "cultures/america/map.jpg"
+    },
+    "america/map.json": {
+      "sha256": "26f8076e7547ba2b8162f7aa542ec870a0f1d3393905cbed8fc9502222183410",
+      "url": "cultures/america/map.json"
+    },
+    "arabia/feats.npz": {
+      "sha256": "897950f7d4b363ebb8e46baeeebf7b6c8ad9224f4f295e39151646afbfb1c79b",
+      "url": "cultures/arabia/feats.npz"
+    },
+    "arabia/kf_01.jpg": {
+      "sha256": "085c59e03f08f133ef78e99542b6b15f39788c852979ff91e48dd4c035561cf9",
+      "url": "cultures/arabia/kf_01.jpg"
+    },
+    "arabia/kf_02.jpg": {
+      "sha256": "53172f3df1708325f00819a9c776115588d7bbdc667411b1cd31512e038c4587",
+      "url": "cultures/arabia/kf_02.jpg"
+    },
+    "arabia/kf_03.jpg": {
+      "sha256": "4bef74cb62be0c8c46a3888226c8e1f860dee8f2d578f27e61405019a300f144",
+      "url": "cultures/arabia/kf_03.jpg"
+    },
+    "arabia/kf_04.jpg": {
+      "sha256": "736346ff9315c42a3ba88202614eb5cf36b6bf83beee0572fb78e61ea0f74470",
+      "url": "cultures/arabia/kf_04.jpg"
+    },
+    "arabia/kf_05.jpg": {
+      "sha256": "daa041ff1baa7ccc7868c5028bc79cd65e6d84c5068dc80f771134d6f81f3a65",
+      "url": "cultures/arabia/kf_05.jpg"
+    },
+    "arabia/kf_06.jpg": {
+      "sha256": "975c8e8a1eafd58891d96a63355ae3ddabaf9319c039a3d8a07a22e1d909a1b9",
+      "url": "cultures/arabia/kf_06.jpg"
+    },
+    "arabia/kf_07.jpg": {
+      "sha256": "edcb5441152239259f604bfd5c601c1664d025a1ee562e40e47aef903702b533",
+      "url": "cultures/arabia/kf_07.jpg"
+    },
+    "arabia/kf_08.jpg": {
+      "sha256": "e54a6538171483e3a4e7aa6acb6653bc3adb300b24922bf9ecbe3068628725c7",
+      "url": "cultures/arabia/kf_08.jpg"
+    },
+    "arabia/kf_09.jpg": {
+      "sha256": "a32b08687d25e81519a8032542673d7d3412979d5362aff6520554ef70ca8dc3",
+      "url": "cultures/arabia/kf_09.jpg"
+    },
+    "arabia/kf_10.jpg": {
+      "sha256": "554c6b99685523375fe7ad487310639c9181c7cc2a3d58efc0459476cf660366",
+      "url": "cultures/arabia/kf_10.jpg"
+    },
+    "arabia/kf_11.jpg": {
+      "sha256": "fd14fe220dabf8149f47377219dd7c7e1a05add541602b98f6fd8244d4ff154a",
+      "url": "cultures/arabia/kf_11.jpg"
+    },
+    "arabia/kf_12.jpg": {
+      "sha256": "10a30538e255842f29fd55b462240fb75a0c15949cf5f690135fd29ca2416a4d",
+      "url": "cultures/arabia/kf_12.jpg"
+    },
+    "arabia/kf_13.jpg": {
+      "sha256": "11f6d4ae5b4824743e1fc83baabe38a300738ec51e6784f1b7364659bcb51372",
+      "url": "cultures/arabia/kf_13.jpg"
+    },
+    "arabia/kf_14.jpg": {
+      "sha256": "1898f0aec0f594613929254264a03839fb1e50453ce5d96b32706ce1f939b9c4",
+      "url": "cultures/arabia/kf_14.jpg"
+    },
+    "arabia/kf_15.jpg": {
+      "sha256": "cca5f1880e58242398df3367ff26464784eaead1c319d804a3700f9eedd105fc",
+      "url": "cultures/arabia/kf_15.jpg"
+    },
+    "arabia/kf_16.jpg": {
+      "sha256": "5bfcb6ff99b84dcee65d220864cd24cb8cc9fed15d4a89aec82164211fb12cc2",
+      "url": "cultures/arabia/kf_16.jpg"
+    },
+    "arabia/kf_17.jpg": {
+      "sha256": "e82c2e7b55d284e075e2a8029837a7dd5d7e743d144b444135783ce230d60556",
+      "url": "cultures/arabia/kf_17.jpg"
+    },
+    "arabia/kf_18.jpg": {
+      "sha256": "3425f859672d58dbca0c03113b7857b1738bae730b82f929a9b485be86489d0e",
+      "url": "cultures/arabia/kf_18.jpg"
+    },
+    "arabia/kf_19.jpg": {
+      "sha256": "ded0e47a5013d847496d2c0019d62da69975ffe7057263706fda0ca357ccc21f",
+      "url": "cultures/arabia/kf_19.jpg"
+    },
+    "arabia/kf_20.jpg": {
+      "sha256": "18f763b31e7bcef97209b2dc3addfaca90a94f494b1f35562c1e596ea3d7bc83",
+      "url": "cultures/arabia/kf_20.jpg"
+    },
+    "arabia/kf_21.jpg": {
+      "sha256": "0921cd8d4b5402f68bf877e619ce3d8c7480c8f9d84356e943ba902e65fc088e",
+      "url": "cultures/arabia/kf_21.jpg"
+    },
+    "arabia/kf_22.jpg": {
+      "sha256": "eda45a85a6e663519880d376661d698668f65b3d1e7ad29e3f6552fe32c95462",
+      "url": "cultures/arabia/kf_22.jpg"
+    },
+    "arabia/kf_23.jpg": {
+      "sha256": "81d12d4d485902306ff0a326a33b4ef398119b4b345d0204798dea5371170ff3",
+      "url": "cultures/arabia/kf_23.jpg"
+    },
+    "arabia/kf_24.jpg": {
+      "sha256": "ad23275943c9fc2892404b4b34285abdc1c3fbaa6929f65668d96601cbc731ee",
+      "url": "cultures/arabia/kf_24.jpg"
+    },
+    "arabia/kf_25.jpg": {
+      "sha256": "8ff1e83083de6a0ede7e47166ae64a8fa4adf7a80b4f40ed3a83ab09cddc9e1b",
+      "url": "cultures/arabia/kf_25.jpg"
+    },
+    "arabia/kf_26.jpg": {
+      "sha256": "c576b99f0e77858af0bcdc996802fa7861eef1fe2a5f0f5d7d822c560feb5f81",
+      "url": "cultures/arabia/kf_26.jpg"
+    },
+    "arabia/kf_27.jpg": {
+      "sha256": "b2939f91210e01e0c071bce03e2ba477de49420a95de50410b2bd98c521f19ca",
+      "url": "cultures/arabia/kf_27.jpg"
+    },
+    "arabia/kf_28.jpg": {
+      "sha256": "f441a651fa71c66ed38322b1ddc07a655c69f3a43698786f2d7f8d8032e366ca",
+      "url": "cultures/arabia/kf_28.jpg"
+    },
+    "arabia/kf_29.jpg": {
+      "sha256": "7190d9f3df62b1d28b8bd49a6131302f144c73ad18da1605c59c41a30f910daa",
+      "url": "cultures/arabia/kf_29.jpg"
+    },
+    "arabia/kf_30.jpg": {
+      "sha256": "ea182ae19517af7d2c0b505083518464086b82b43bf661a0aea42353d5084611",
+      "url": "cultures/arabia/kf_30.jpg"
+    },
+    "arabia/kf_31.jpg": {
+      "sha256": "22dec73800c6dc9aa8143aa09b3e235679db70af1a128aaa5eea25f5b0deecbd",
+      "url": "cultures/arabia/kf_31.jpg"
+    },
+    "arabia/kf_32.jpg": {
+      "sha256": "13cd3965c91a02213f89307ac1cd4b64ad492e7b0ec9e13edf2e5b248a003b22",
+      "url": "cultures/arabia/kf_32.jpg"
+    },
+    "arabia/kf_33.jpg": {
+      "sha256": "93e2096e9b02db297703023ba1ea4ba210d00e2cfceed673ab017b1787c7c23e",
+      "url": "cultures/arabia/kf_33.jpg"
+    },
+    "arabia/kf_34.jpg": {
+      "sha256": "ec8d4479f0c070ac4a1e3afe5dfbb56721c4ee60b73ac839926094cf9c2801a8",
+      "url": "cultures/arabia/kf_34.jpg"
+    },
+    "arabia/kf_35.jpg": {
+      "sha256": "3baec3906413c839e096ebfe17e8a23adf533888b71711ff2284e54a2ec9ee06",
+      "url": "cultures/arabia/kf_35.jpg"
+    },
+    "arabia/kf_36.jpg": {
+      "sha256": "40fedf5dc32000a3b7eb440d5af32f3fa8ae1a1c6065dfa815e45b2871010548",
+      "url": "cultures/arabia/kf_36.jpg"
+    },
+    "arabia/kf_37.jpg": {
+      "sha256": "104575caf296161a41fd752797d2790ae2ad8ade07dbc03c442dbb6772abffa2",
+      "url": "cultures/arabia/kf_37.jpg"
+    },
+    "arabia/kf_38.jpg": {
+      "sha256": "dcf3b7ccc6afdddbf3fffea6476fbbe90f4f0f9e60b342e83fe5a49e9cc0bf32",
+      "url": "cultures/arabia/kf_38.jpg"
+    },
+    "arabia/kf_39.jpg": {
+      "sha256": "67d78b2dc29cf6b5d5e1e11834386dd8a1ef51e7b5f0cefd1fde4bb92f2570e4",
+      "url": "cultures/arabia/kf_39.jpg"
+    },
+    "arabia/kf_40.jpg": {
+      "sha256": "943680dcaa2dea6c03a1e5e9d393c4e75c0e9e95733e15ad62cea490522f9c62",
+      "url": "cultures/arabia/kf_40.jpg"
+    },
+    "arabia/kf_41.jpg": {
+      "sha256": "a9dc4a9b3ed0a4921166bcee35af25dc633dbdafd8781f07a68c1ca054c1b1c9",
+      "url": "cultures/arabia/kf_41.jpg"
+    },
+    "arabia/kf_42.jpg": {
+      "sha256": "3ce70883b5ec438863365a5d5a2087eed96016d6997b771162f9c7a7398b4cdd",
+      "url": "cultures/arabia/kf_42.jpg"
+    },
+    "arabia/kf_43.jpg": {
+      "sha256": "c5ea383fb6fff60bf6d3c25f820c65b56979c280699f6cc4a2e0421f6f38a4ef",
+      "url": "cultures/arabia/kf_43.jpg"
+    },
+    "arabia/kf_44.jpg": {
+      "sha256": "8a7afb28ee3088b421805cfbc52758db9117c86f823640ab0dafdf29a5eed452",
+      "url": "cultures/arabia/kf_44.jpg"
+    },
+    "arabia/kf_45.jpg": {
+      "sha256": "a47a672116e6a964cede00db3cdbc6caf81434a8eac887d0e8df1ee483ddcbbd",
+      "url": "cultures/arabia/kf_45.jpg"
+    },
+    "arabia/kf_46.jpg": {
+      "sha256": "eaaaf413751913554fa4637049b0aef1f4853a899ef9a615d6f270e567ba6c53",
+      "url": "cultures/arabia/kf_46.jpg"
+    },
+    "arabia/kf_47.jpg": {
+      "sha256": "c015b14f7c831d7ef745567f745dd4098d4aff557ddf6f632cef302640c77b6c",
+      "url": "cultures/arabia/kf_47.jpg"
+    },
+    "arabia/kf_48.jpg": {
+      "sha256": "592e9dc7abb7c973cea8acdc25af0f026d0193398ff243d3ef2485a1345c70a3",
+      "url": "cultures/arabia/kf_48.jpg"
+    },
+    "arabia/kf_49.jpg": {
+      "sha256": "fc5fb366f4e2cfd49b6f4680cb24bb0866db051b40ca1f80032cd4e07a57e731",
+      "url": "cultures/arabia/kf_49.jpg"
+    },
+    "arabia/kf_50.jpg": {
+      "sha256": "94f60fe3e097ff0fed2bf0be624473ae7873244f611a773956baa87bcd0c1bbe",
+      "url": "cultures/arabia/kf_50.jpg"
+    },
+    "arabia/kf_51.jpg": {
+      "sha256": "0c3d953b94f48dc5e21cd2a8cab2ad78ddceb16c1d13c8cc2471e568cc6639ed",
+      "url": "cultures/arabia/kf_51.jpg"
+    },
+    "arabia/kf_52.jpg": {
+      "sha256": "c01ff05d754129dc530891bc85e0790c725344e4312fe44eec69ae001c3f1e65",
+      "url": "cultures/arabia/kf_52.jpg"
+    },
+    "arabia/kf_53.jpg": {
+      "sha256": "1f61ee22bf6180687eba04ed7ea993c4bb762c4cf9b4d7c6f8b6d42478a3e9b9",
+      "url": "cultures/arabia/kf_53.jpg"
+    },
+    "arabia/kf_54.jpg": {
+      "sha256": "6d3ba614568db7e09628499a7595bfe0308ac009015b40b23389f99d0b047d97",
+      "url": "cultures/arabia/kf_54.jpg"
+    },
+    "arabia/kf_55.jpg": {
+      "sha256": "8c03e013ee1381fa35350d7a4cf8416f1e42b87386158e24684f69f75c3c8416",
+      "url": "cultures/arabia/kf_55.jpg"
+    },
+    "arabia/kf_56.jpg": {
+      "sha256": "952aca1873ce1d32c688e6e6ed8da12941cb7fe1303537b9b153996595ab8ec8",
+      "url": "cultures/arabia/kf_56.jpg"
+    },
+    "arabia/kf_57.jpg": {
+      "sha256": "6eab7d11c9c9d6c9173b2f2f2048671f0257b1fedda83297e3755c84046f5436",
+      "url": "cultures/arabia/kf_57.jpg"
+    },
+    "arabia/kf_58.jpg": {
+      "sha256": "8739f12af20cbd364c744903f1e3ac269599e5ab00262d32c222b4734f76e11d",
+      "url": "cultures/arabia/kf_58.jpg"
+    },
+    "arabia/kf_59.jpg": {
+      "sha256": "12ebfbd93c723b4ec159f67523f66e1468a7c3f5662e5587e60488eac99ddb13",
+      "url": "cultures/arabia/kf_59.jpg"
+    },
+    "arabia/kf_60.jpg": {
+      "sha256": "f5c8b83851a7ddef8208853f44dd5962e172d2d5f0d99a7a5d6207a877aad877",
+      "url": "cultures/arabia/kf_60.jpg"
+    },
+    "arabia/kf_61.jpg": {
+      "sha256": "8f97ea9beed7c9acc2d8ca46549031d72d5870bd31aee0886f876261b42e16ab",
+      "url": "cultures/arabia/kf_61.jpg"
+    },
+    "arabia/kf_62.jpg": {
+      "sha256": "01c970c1411e35920769135e8fdca696cf474cf541c43d78ad07df75108d619d",
+      "url": "cultures/arabia/kf_62.jpg"
+    },
+    "arabia/map.jpg": {
+      "sha256": "693b0fb5fffb9eb0cd8106f3fdb96fb24e9702679b2ce0d710ad2a92b051b910",
+      "url": "cultures/arabia/map.jpg"
+    },
+    "arabia/map.json": {
+      "sha256": "0a724d72eb463bbdd7aeaac88e06c898ea58bce126b1e08da5e4e11ad4091f3a",
+      "url": "cultures/arabia/map.json"
+    },
+    "china/feats.npz": {
+      "sha256": "651c3de59d290ad985c7541cc40458fa097dfc763865c615436db554603f53de",
+      "url": "cultures/china/feats.npz"
+    },
+    "china/kf_01.jpg": {
+      "sha256": "61ae78138c9ae9de6478649bf44897cc844444de515d83bac7811bceba025d35",
+      "url": "cultures/china/kf_01.jpg"
+    },
+    "china/kf_02.jpg": {
+      "sha256": "17d5a2c48fe9a80a7bf1e7e98473f93a7331fa4c3f68dfb268e42ae9f9f4aecf",
+      "url": "cultures/china/kf_02.jpg"
+    },
+    "china/kf_03.jpg": {
+      "sha256": "a591bb2f28b9ea351a506de6e4cb7a55e78921fcf6c7ffe1e25959fe06e4e190",
+      "url": "cultures/china/kf_03.jpg"
+    },
+    "china/kf_04.jpg": {
+      "sha256": "90e8400428e8e0bfb63027981c5bc7ad8eccb66cd171b07b0a4ebdfbcdb8d02c",
+      "url": "cultures/china/kf_04.jpg"
+    },
+    "china/kf_05.jpg": {
+      "sha256": "8e76c7781d7d3684ed3bec151f302bd09eac635e88f528a98090e53150383ad1",
+      "url": "cultures/china/kf_05.jpg"
+    },
+    "china/kf_06.jpg": {
+      "sha256": "fd86caae1299e60b5be3d475c694e98a6a141bafb3bd71b9c0cadf5491415cfe",
+      "url": "cultures/china/kf_06.jpg"
+    },
+    "china/kf_07.jpg": {
+      "sha256": "33c9e0ada8a7b2b019fd8db3ad1d77a08d48107a162b9c44eba30052acd7c679",
+      "url": "cultures/china/kf_07.jpg"
+    },
+    "china/kf_08.jpg": {
+      "sha256": "c7eb57bdcd2824f5dfe1b602fea725e8cb4c00c37caad94f4dc4179ff7f60768",
+      "url": "cultures/china/kf_08.jpg"
+    },
+    "china/kf_09.jpg": {
+      "sha256": "4036d3ec158e09499c3eb55881c08ea23498b4e28ed37c6b27d6928b75135066",
+      "url": "cultures/china/kf_09.jpg"
+    },
+    "china/kf_10.jpg": {
+      "sha256": "6608f0e1febb479b1f26dbe9f1be595cba2ea4c99d9bbbfb1eef95695a534d28",
+      "url": "cultures/china/kf_10.jpg"
+    },
+    "china/kf_11.jpg": {
+      "sha256": "615dcae01deba17bf914ab0d3ef90af7df0bb99e9b92ce748ade9af19b6ffd62",
+      "url": "cultures/china/kf_11.jpg"
+    },
+    "china/kf_12.jpg": {
+      "sha256": "ba11930a199f8835ddb88c8ecf4aa553bf4b02da8f41500c69289612530080bf",
+      "url": "cultures/china/kf_12.jpg"
+    },
+    "china/kf_13.jpg": {
+      "sha256": "c4cb86abc7c9f2be8e2e385a57da01013d8ff751ddf5f619483077e4b94f90c2",
+      "url": "cultures/china/kf_13.jpg"
+    },
+    "china/kf_14.jpg": {
+      "sha256": "2728fac3fa7a82455832c1d7e6f7d35e03adc1baaa66acbb01307265e2a5b729",
+      "url": "cultures/china/kf_14.jpg"
+    },
+    "china/kf_15.jpg": {
+      "sha256": "62533abd0be72c727a600a4c6cb707fc93753f915e1b6aeb7c71bbf7416af27f",
+      "url": "cultures/china/kf_15.jpg"
+    },
+    "china/kf_16.jpg": {
+      "sha256": "3179ce35f316e0ba90ae9674c67efaa25f325aa60e46d4f3e3170603faaac2de",
+      "url": "cultures/china/kf_16.jpg"
+    },
+    "china/kf_17.jpg": {
+      "sha256": "d8557c6ab6297a809a51bd1eea9035ad57bc6761410838828408c992b9af881c",
+      "url": "cultures/china/kf_17.jpg"
+    },
+    "china/kf_18.jpg": {
+      "sha256": "16b92bcc7c94add0b2ca35f40a932af36f6ae264e42feb0cafd6eb370a8afd91",
+      "url": "cultures/china/kf_18.jpg"
+    },
+    "china/kf_19.jpg": {
+      "sha256": "753b65622b52dcdbb6f3faf40394d7b5f49221e8454c46e21bbcf11d3a9db978",
+      "url": "cultures/china/kf_19.jpg"
+    },
+    "china/kf_20.jpg": {
+      "sha256": "936e1b90a50c9caadd711d9b39e237210198a7b70bd092ef357039d0a6cd79e6",
+      "url": "cultures/china/kf_20.jpg"
+    },
+    "china/kf_21.jpg": {
+      "sha256": "f0afd0135e17a97fa90bc3180291b8d8f20b893bd9c7e142f931bcb3da668350",
+      "url": "cultures/china/kf_21.jpg"
+    },
+    "china/kf_22.jpg": {
+      "sha256": "2b9a075a7d4beac5b2e5979ee67dce537d2f692860af5eb252b0e1c89772e94a",
+      "url": "cultures/china/kf_22.jpg"
+    },
+    "china/kf_23.jpg": {
+      "sha256": "b6629b6d89dc282fdb5ff34840fbf4f8925fc112178e9b8e7d8a579a00c3eca2",
+      "url": "cultures/china/kf_23.jpg"
+    },
+    "china/kf_24.jpg": {
+      "sha256": "b8515debdb5d63fdba3dff0722104243452106feb841f132b737c0784e2c501b",
+      "url": "cultures/china/kf_24.jpg"
+    },
+    "china/kf_25.jpg": {
+      "sha256": "de37707f714fa4a7aa774be7b5ebca4a70fe3ed1287f3d9af8ca0a6b4a5910e1",
+      "url": "cultures/china/kf_25.jpg"
+    },
+    "china/kf_26.jpg": {
+      "sha256": "f47c526832235425acd83fd8d51c7018e59fbc7046ca4b4c0e9c6970fcdc40fc",
+      "url": "cultures/china/kf_26.jpg"
+    },
+    "china/kf_27.jpg": {
+      "sha256": "7ed589f2eadc888f4d903152cd3656737a0eb18b642fb800e7fa9d983c46dc42",
+      "url": "cultures/china/kf_27.jpg"
+    },
+    "china/kf_28.jpg": {
+      "sha256": "5aebfa8520e693944ffef5525b630fd4e1c020d327b8f22c9de76abb316a3b77",
+      "url": "cultures/china/kf_28.jpg"
+    },
+    "china/kf_29.jpg": {
+      "sha256": "9754433abbabbc58ebac716dc9e3a68459a1fb42c1be6d89c5806f34202e07b8",
+      "url": "cultures/china/kf_29.jpg"
+    },
+    "china/kf_30.jpg": {
+      "sha256": "862865deb60082fbba4cc0db614c0a34da93992299de10afb858dbfd5d3f399c",
+      "url": "cultures/china/kf_30.jpg"
+    },
+    "china/kf_31.jpg": {
+      "sha256": "0c3c317706d9e69abaafb25b47de1cd82f398562be6bb195778a9b6f07dd29c4",
+      "url": "cultures/china/kf_31.jpg"
+    },
+    "china/kf_32.jpg": {
+      "sha256": "f00df6fa35cf76f83eb061ef56a3c5f7c5fb94146f87cfd1a7612c11c26effa4",
+      "url": "cultures/china/kf_32.jpg"
+    },
+    "china/kf_33.jpg": {
+      "sha256": "7ed00c380d956b60d0b9152706f2b040619dbab4acbf629d282dd7e2b95faf8f",
+      "url": "cultures/china/kf_33.jpg"
+    },
+    "china/kf_34.jpg": {
+      "sha256": "d173e0f30524af0745967bed2bd3ed15efd28af7eb5daf620da92177653faedf",
+      "url": "cultures/china/kf_34.jpg"
+    },
+    "china/kf_35.jpg": {
+      "sha256": "8c53e9c5fbed3c77df3857118fa6d4b52b8fa5017a0f6d69e1e3c77c6b86d770",
+      "url": "cultures/china/kf_35.jpg"
+    },
+    "china/kf_36.jpg": {
+      "sha256": "130c3e4fc71a45310449412820d75339ae70f402def3ada8e40ed2408e9e8176",
+      "url": "cultures/china/kf_36.jpg"
+    },
+    "china/kf_37.jpg": {
+      "sha256": "d146c6b98dbe7029eb032d6fca85e22992c19367d3d7d918ac1d5bff4f842c97",
+      "url": "cultures/china/kf_37.jpg"
+    },
+    "china/kf_38.jpg": {
+      "sha256": "28f972c21a8079e43c86773ae6bb3b0864933c17f702579da3611813d412f917",
+      "url": "cultures/china/kf_38.jpg"
+    },
+    "china/kf_39.jpg": {
+      "sha256": "238d6d1a713c3812f3eff8fcb1ea622f5e966352a18bac4ccfcc9b3cdc62144e",
+      "url": "cultures/china/kf_39.jpg"
+    },
+    "china/kf_40.jpg": {
+      "sha256": "ac3a35188f11433947045d4b3cb93f571a1ff2d583abc2865e4cca655fbfbc8f",
+      "url": "cultures/china/kf_40.jpg"
+    },
+    "china/map.jpg": {
+      "sha256": "2b43965f8fe6a5997dc18e32d4ba1bd4c56e970ba8f78b3f44f1b90cd862b329",
+      "url": "cultures/china/map.jpg"
+    },
+    "china/map.json": {
+      "sha256": "39f359425d4b5595b0d5de44271ea2bcb6d05e3ca2987cdfc84716f60cacd80f",
+      "url": "cultures/china/map.json"
+    },
+    "china/pins.json": {
+      "sha256": "d290e4cb53984f459ffd386a7019f0572548522fa28970621eed149a1f1d9787",
+      "url": "cultures/china/pins.json"
+    },
+    "europe/feats.npz": {
+      "sha256": "db00af3c9ed48725b75180e4a6585b2fbaeac37fcae22f45cd6a50819f569999",
+      "url": "cultures/europe/feats.npz"
+    },
+    "europe/kf_01.jpg": {
+      "sha256": "acaa8028bdd8e711e19c0a874a48e251ca71c3bd0e3ce47062c680815f01b0b2",
+      "url": "cultures/europe/kf_01.jpg"
+    },
+    "europe/kf_02.jpg": {
+      "sha256": "94bf553b9089e85dbcefb6ad9fcdb38ab6f030ca4287ed1852849057f13bc7c1",
+      "url": "cultures/europe/kf_02.jpg"
+    },
+    "europe/kf_03.jpg": {
+      "sha256": "676a3dda08475afd621f76fb3c5b47bbe357d0ca68443eafe9b3a21294a894fe",
+      "url": "cultures/europe/kf_03.jpg"
+    },
+    "europe/kf_04.jpg": {
+      "sha256": "386cc841aafc3fd313a4feb160194f89c8361f34ff8d53bc640a41b3a3f5bfa5",
+      "url": "cultures/europe/kf_04.jpg"
+    },
+    "europe/kf_05.jpg": {
+      "sha256": "e9bacd01355e10f06bb42fe5e1920d0d9582773d7f0cf527b613e84de7e5a8fc",
+      "url": "cultures/europe/kf_05.jpg"
+    },
+    "europe/kf_06.jpg": {
+      "sha256": "9fdb31a71fa56616f2f70d7dcb03999b1956e8b663bff6610d9abff6c8920666",
+      "url": "cultures/europe/kf_06.jpg"
+    },
+    "europe/kf_07.jpg": {
+      "sha256": "94d8de8cc0e13213b574aba6a67d77137456b2e0af28d3863c0808b3f32f6c92",
+      "url": "cultures/europe/kf_07.jpg"
+    },
+    "europe/kf_08.jpg": {
+      "sha256": "a525d9188f5ff58a119ecd6d2fa00e4f3ebcd416c38c937da19ffd345c75cf94",
+      "url": "cultures/europe/kf_08.jpg"
+    },
+    "europe/kf_09.jpg": {
+      "sha256": "1ca23f5dd28caff0a5d0427959b92d84d8991a7514aafe2919d030bb7f636a61",
+      "url": "cultures/europe/kf_09.jpg"
+    },
+    "europe/kf_10.jpg": {
+      "sha256": "5c2236c08718c87b42d6a6a381a76c424bbcd138ce9ce9a6f2f5affc57ca881d",
+      "url": "cultures/europe/kf_10.jpg"
+    },
+    "europe/kf_11.jpg": {
+      "sha256": "3aa843764db9d543930ac3f94cb41da5ceb22f375885e710323d6d3555fff597",
+      "url": "cultures/europe/kf_11.jpg"
+    },
+    "europe/kf_12.jpg": {
+      "sha256": "872391ff6cd86f5c28a5fa3d8744a2c2b3432a26ff97315ebb6ce835c7b8c79c",
+      "url": "cultures/europe/kf_12.jpg"
+    },
+    "europe/kf_13.jpg": {
+      "sha256": "b316af25119ee7eb7aaac276e687b638a4fdb4c2565ba3f9cba4571e85b88128",
+      "url": "cultures/europe/kf_13.jpg"
+    },
+    "europe/kf_14.jpg": {
+      "sha256": "39bc53126189247b90d1375f5b2871c9f7d956e36f1e4e6b408ca5d15f71405a",
+      "url": "cultures/europe/kf_14.jpg"
+    },
+    "europe/kf_15.jpg": {
+      "sha256": "55379d6bb6544998f2c8ae944ee848704c0a71a040b985da04b0f0d190006be8",
+      "url": "cultures/europe/kf_15.jpg"
+    },
+    "europe/kf_16.jpg": {
+      "sha256": "40173658f914cd0c218da2d55b63780aafe514054665a7484aa3ab03bab84116",
+      "url": "cultures/europe/kf_16.jpg"
+    },
+    "europe/kf_17.jpg": {
+      "sha256": "e9fad8848286ccadfef1fa609cf0dca95692b88f43ebb99139254a7768b6d27f",
+      "url": "cultures/europe/kf_17.jpg"
+    },
+    "europe/kf_18.jpg": {
+      "sha256": "ab3664ce59882821bfdc9df296d0a5db6aa4338bd91b3f15b4fefdd5edfb14a8",
+      "url": "cultures/europe/kf_18.jpg"
+    },
+    "europe/kf_19.jpg": {
+      "sha256": "13b7eb0adc7bc4245d80f38873ed92918c9ab68b7e1f800618d4c4acd9c38417",
+      "url": "cultures/europe/kf_19.jpg"
+    },
+    "europe/kf_20.jpg": {
+      "sha256": "bd2d0e02ba4616223ec74ec2d4637ccf8e18d2b25fd52d0e561cefb3feb83878",
+      "url": "cultures/europe/kf_20.jpg"
+    },
+    "europe/kf_21.jpg": {
+      "sha256": "c6aca12c47945bd6e23ff55d098f8aae44022bf22995f52b23c8d5ebb4a28670",
+      "url": "cultures/europe/kf_21.jpg"
+    },
+    "europe/kf_22.jpg": {
+      "sha256": "6c795e980f758d7bc67714eff576218f795f1f9a578815950c80f5ee2a7bfd36",
+      "url": "cultures/europe/kf_22.jpg"
+    },
+    "europe/kf_23.jpg": {
+      "sha256": "c6c9adf359f05e4bb844f9b3eb7ef2fed7ff34aec8c46ebdef33634c075d9e50",
+      "url": "cultures/europe/kf_23.jpg"
+    },
+    "europe/kf_24.jpg": {
+      "sha256": "5d502dc51b1923a4fae522d1f7ef7a8443d1ba412546a99d79d2e9c0fc3012db",
+      "url": "cultures/europe/kf_24.jpg"
+    },
+    "europe/kf_25.jpg": {
+      "sha256": "89c069943374b7835c2c393f0c5b3d1ad5da99e5383cac55829aa584ecd20ffe",
+      "url": "cultures/europe/kf_25.jpg"
+    },
+    "europe/kf_26.jpg": {
+      "sha256": "c0e7796c23b50d5e76004d4ef7e68c3ce8c98cdccae0137b215bc89da42bcc3e",
+      "url": "cultures/europe/kf_26.jpg"
+    },
+    "europe/kf_27.jpg": {
+      "sha256": "33e450a569827240d04017d2aef85f4b175c64dc21694317def4774e58eff02d",
+      "url": "cultures/europe/kf_27.jpg"
+    },
+    "europe/kf_28.jpg": {
+      "sha256": "fd9c89e3c447bf0aa1439cb190b49d2bfe3aa6ab2f07043b1deb4c62c3dc43d6",
+      "url": "cultures/europe/kf_28.jpg"
+    },
+    "europe/kf_29.jpg": {
+      "sha256": "ae0b753a6e84cea89947b1e192d59a58339689f2d5e26e480a84dcd7767e3600",
+      "url": "cultures/europe/kf_29.jpg"
+    },
+    "europe/kf_30.jpg": {
+      "sha256": "4071fda50ebc33afc3af5ea19c56bbd2d53a03c435a0d88a98e20dfdf56047fe",
+      "url": "cultures/europe/kf_30.jpg"
+    },
+    "europe/kf_31.jpg": {
+      "sha256": "c1bcae7a44729b278adf28145b68f0e5462d28060e584b0165aa287319c66c6c",
+      "url": "cultures/europe/kf_31.jpg"
+    },
+    "europe/kf_32.jpg": {
+      "sha256": "c99b6759313101fb91d2eccbb677a7f2614dc982660361412a493ea38f26e723",
+      "url": "cultures/europe/kf_32.jpg"
+    },
+    "europe/kf_33.jpg": {
+      "sha256": "ea6d88c9194b459d13276cc6a6239d7676195357979566b7b7508549e8b5fb09",
+      "url": "cultures/europe/kf_33.jpg"
+    },
+    "europe/kf_34.jpg": {
+      "sha256": "88108b987e3879604bc535c719ad403b5a84a005794f5d56f51ccffe1260e5de",
+      "url": "cultures/europe/kf_34.jpg"
+    },
+    "europe/kf_35.jpg": {
+      "sha256": "ecc1f54ccbed0235798d4f6470cedc2e8fca47cfd95097661f74c4ac6797e79a",
+      "url": "cultures/europe/kf_35.jpg"
+    },
+    "europe/kf_36.jpg": {
+      "sha256": "353d8f6008f89638a886ec6f088e7eb0a5b3f4191109320c19e1db4198be8d90",
+      "url": "cultures/europe/kf_36.jpg"
+    },
+    "europe/kf_37.jpg": {
+      "sha256": "5c9e5eeb0d5390de78ffa90ce0ff762953aafa19625ed5dbd7af093ed0fd5abd",
+      "url": "cultures/europe/kf_37.jpg"
+    },
+    "europe/kf_38.jpg": {
+      "sha256": "a5ef906f670976c9cd8d9ec60d4ba54fbf333e5833d6631914ad113b10e5919e",
+      "url": "cultures/europe/kf_38.jpg"
+    },
+    "europe/kf_39.jpg": {
+      "sha256": "f433c6175a916154098b01c2aaa0bccc639f4e25816a45a60010684e53ee0043",
+      "url": "cultures/europe/kf_39.jpg"
+    },
+    "europe/kf_40.jpg": {
+      "sha256": "6c55e5b88e2c0c25a335fa9e1713686d5855b58f6a000e51e3c76fa7169d99c4",
+      "url": "cultures/europe/kf_40.jpg"
+    },
+    "europe/kf_41.jpg": {
+      "sha256": "861c8f57a41a67d3d5fd55db1f33a60fa07314f96dfcc99504ea80c1141899c4",
+      "url": "cultures/europe/kf_41.jpg"
+    },
+    "europe/kf_42.jpg": {
+      "sha256": "cf95a4fd2710810c91984cb5460979df311df2bc8796b38fdd59d8622e97938a",
+      "url": "cultures/europe/kf_42.jpg"
+    },
+    "europe/kf_43.jpg": {
+      "sha256": "e989b7bda2e37a57d55c0db89f919526529e0eedd39e43f23bcbf026e97bc37f",
+      "url": "cultures/europe/kf_43.jpg"
+    },
+    "europe/kf_44.jpg": {
+      "sha256": "8d953b101fa60dac7c8c5500ad73ec1f4b9250c645c0a1380fc361a004b0cd9c",
+      "url": "cultures/europe/kf_44.jpg"
+    },
+    "europe/kf_45.jpg": {
+      "sha256": "c769261ae895cbd35e2b47acbee3876e8328c0560ea5980434e2f711c3b6d24e",
+      "url": "cultures/europe/kf_45.jpg"
+    },
+    "europe/kf_46.jpg": {
+      "sha256": "04364c33f5e3171a56491a48c5f95d86a88ce2a119e9054fa5278d8ea49f6890",
+      "url": "cultures/europe/kf_46.jpg"
+    },
+    "europe/kf_47.jpg": {
+      "sha256": "829509879a9606090218bd493f996069e100b7ad518380780cff511d1f30422c",
+      "url": "cultures/europe/kf_47.jpg"
+    },
+    "europe/kf_48.jpg": {
+      "sha256": "04cb21477aa503c57459e4b8dbb41319207e3aab8b622de6b9e579a135383d89",
+      "url": "cultures/europe/kf_48.jpg"
+    },
+    "europe/map.jpg": {
+      "sha256": "0f240ed4f34aaf937017a238f238d857e135f2ddc5e49bb45b3eac4bf07d78e2",
+      "url": "cultures/europe/map.jpg"
+    },
+    "europe/map.json": {
+      "sha256": "e505e3731cf38be4fa165dd2406785121cab58314cf3bd61adb7a6f8882d2363",
+      "url": "cultures/europe/map.json"
+    },
+    "europe/pins.json": {
+      "sha256": "85390a8e70c664c0f5b1556365b011986a11997482b4a1395eb0240beb2398bf",
+      "url": "cultures/europe/pins.json"
+    },
+    "japan/feats.npz": {
+      "sha256": "68c235bf7dc9fda1edb1d7b8092a7d9ac9673ef0149e9dad92d9b3b25d11d3c6",
+      "url": "cultures/japan/feats.npz"
+    },
+    "japan/kf_01.jpg": {
+      "sha256": "6e5314be32ef529eeec453319c69abc3d2be42d19960ed4455f4e181bf1940c3",
+      "url": "cultures/japan/kf_01.jpg"
+    },
+    "japan/kf_02.jpg": {
+      "sha256": "5eec2aaf90a9a8665c66c5bde6b594bbf2d799653d2fc8f5808838bee2b84509",
+      "url": "cultures/japan/kf_02.jpg"
+    },
+    "japan/kf_03.jpg": {
+      "sha256": "80c778429008a7ab7b9c52402a67ee608f2e9adbebe6824d8106bed6fc359f39",
+      "url": "cultures/japan/kf_03.jpg"
+    },
+    "japan/kf_04.jpg": {
+      "sha256": "697deee118bcf2668b293f00eb95fc4f334dd447018c4103381852a78d71957d",
+      "url": "cultures/japan/kf_04.jpg"
+    },
+    "japan/kf_05.jpg": {
+      "sha256": "d2c5feb07b87e4c5d8ee6073a1f27856083151e604e6ad2ec854f67e6812ec9b",
+      "url": "cultures/japan/kf_05.jpg"
+    },
+    "japan/kf_06.jpg": {
+      "sha256": "acc5602d328c53c587057b9e5eeb416b44883788be0da4b555b0ae43c13f32c6",
+      "url": "cultures/japan/kf_06.jpg"
+    },
+    "japan/kf_07.jpg": {
+      "sha256": "acbc2eca3791442d7b107b0d0d73c85b1c593aa2622643974ccb97f328cc0052",
+      "url": "cultures/japan/kf_07.jpg"
+    },
+    "japan/kf_08.jpg": {
+      "sha256": "c51263ff7c8806023653476cece8b513870404137a1088e0e092e0078725831f",
+      "url": "cultures/japan/kf_08.jpg"
+    },
+    "japan/kf_09.jpg": {
+      "sha256": "1f9b0c02e31e1efb2dfe826b8d0a4395f427e755b75d68ae92855e151d2d29ba",
+      "url": "cultures/japan/kf_09.jpg"
+    },
+    "japan/kf_10.jpg": {
+      "sha256": "83baf897ce6f20674ed24f3c5258580ff9ecdb8b18be54ad7b44dc34a73f7f61",
+      "url": "cultures/japan/kf_10.jpg"
+    },
+    "japan/kf_11.jpg": {
+      "sha256": "d4e82eab23ff5c8b4d24b696c27214de57e121885e71c5aa901243413de98d2a",
+      "url": "cultures/japan/kf_11.jpg"
+    },
+    "japan/kf_12.jpg": {
+      "sha256": "f5d67042ff80f2a5f0dbf6265b4e3edd9ceff6c49e494412cee81e3d5c493624",
+      "url": "cultures/japan/kf_12.jpg"
+    },
+    "japan/kf_13.jpg": {
+      "sha256": "acf90c8aea0bc7437fdd26c27a73cb8907ab3dbbb3a928529acda2ecce2ced5e",
+      "url": "cultures/japan/kf_13.jpg"
+    },
+    "japan/kf_14.jpg": {
+      "sha256": "66105672ca5609f826bb3f1d518bf0a892089efebb3a1c10f513543b5a5b920e",
+      "url": "cultures/japan/kf_14.jpg"
+    },
+    "japan/kf_15.jpg": {
+      "sha256": "31a5c407da4daefe9a9e86c4fef2f613041fdbc71903c274607a181a2b684a6b",
+      "url": "cultures/japan/kf_15.jpg"
+    },
+    "japan/kf_16.jpg": {
+      "sha256": "e773b72e3696468e1d31aefb144ab688b8b6a036a6f51df84ce450a688fdd1dd",
+      "url": "cultures/japan/kf_16.jpg"
+    },
+    "japan/kf_17.jpg": {
+      "sha256": "b283f3d5a943cde67de8ba4e87eab951cbabb9c1a348fa08f6fb0668ba4956ae",
+      "url": "cultures/japan/kf_17.jpg"
+    },
+    "japan/kf_18.jpg": {
+      "sha256": "a96a31a6ed5b9a575de42e12f35fe0236e8bfb83c666b4677e0110e7a3439c61",
+      "url": "cultures/japan/kf_18.jpg"
+    },
+    "japan/kf_19.jpg": {
+      "sha256": "0c47d7ba5b136196d14464ef3d6606f34cb531ba68ab95f1d72368ec09519360",
+      "url": "cultures/japan/kf_19.jpg"
+    },
+    "japan/kf_20.jpg": {
+      "sha256": "d486ea53bc0f1cfbe4791b74f8e327097462ebc1f1c54bee6eead60c3bd34776",
+      "url": "cultures/japan/kf_20.jpg"
+    },
+    "japan/kf_21.jpg": {
+      "sha256": "d76c9e67de1adc66b02ea80e455d4e5c6631c3e6471199a74cfd1304da5f676c",
+      "url": "cultures/japan/kf_21.jpg"
+    },
+    "japan/kf_22.jpg": {
+      "sha256": "ac2a4188d7dd8f388249ef894b2c35f27891384eafed2e9d94f1f18a137e650a",
+      "url": "cultures/japan/kf_22.jpg"
+    },
+    "japan/kf_23.jpg": {
+      "sha256": "33028e163ad6caaf4ae7c36d8597f701f7a7e18a42571bcb7de52d7c95e41d6c",
+      "url": "cultures/japan/kf_23.jpg"
+    },
+    "japan/kf_24.jpg": {
+      "sha256": "9ee25b19290f47263dad172fe06d4efd1e87f2df680fe349e8c603619435bec9",
+      "url": "cultures/japan/kf_24.jpg"
+    },
+    "japan/kf_25.jpg": {
+      "sha256": "e98b7383d4d7ee4a584ed9fd54ffb0b9d5cee5c92ea8371e9e82d00f4c150af0",
+      "url": "cultures/japan/kf_25.jpg"
+    },
+    "japan/kf_26.jpg": {
+      "sha256": "1fd8b7826a04d421868f2057d160fe659ec72225be8dc053081938d19440a2cb",
+      "url": "cultures/japan/kf_26.jpg"
+    },
+    "japan/kf_27.jpg": {
+      "sha256": "b3ef0828489fb676c95a4d4c780056e7263b65997c00284082643e466a2a6d74",
+      "url": "cultures/japan/kf_27.jpg"
+    },
+    "japan/kf_28.jpg": {
+      "sha256": "9aecf9c7af6d31211d69bcbf4941b1c2ed7462bba0ddf3ef38e8a8f31783da00",
+      "url": "cultures/japan/kf_28.jpg"
+    },
+    "japan/kf_29.jpg": {
+      "sha256": "b9d2fe0df9cf327f6de031fae0992177580b4410d5cffbbdf2ead455a31301cb",
+      "url": "cultures/japan/kf_29.jpg"
+    },
+    "japan/kf_30.jpg": {
+      "sha256": "c801813c7c817824ec1eb54716f760f1f6e777987a78ae94c61acfe72d864dc9",
+      "url": "cultures/japan/kf_30.jpg"
+    },
+    "japan/kf_31.jpg": {
+      "sha256": "33505c4e5fb98e9f98c0247036b92b148949c1f262c22b3eebd1f89451f357f9",
+      "url": "cultures/japan/kf_31.jpg"
+    },
+    "japan/kf_32.jpg": {
+      "sha256": "4ae6903d958cb1a568f6402f2079073216b798a0eb2898af4df625d9d89b677f",
+      "url": "cultures/japan/kf_32.jpg"
+    },
+    "japan/kf_33.jpg": {
+      "sha256": "9abff7705dc22519a775b3ae5c5ccab5ea9c6bc6475df4db44ab6782a943cedd",
+      "url": "cultures/japan/kf_33.jpg"
+    },
+    "japan/kf_34.jpg": {
+      "sha256": "b8ef52783110f1d4f295090ca986e0e139173bfb6ebf24547ad29f0fd8664c02",
+      "url": "cultures/japan/kf_34.jpg"
+    },
+    "japan/kf_35.jpg": {
+      "sha256": "88ed385972c4d932753ec38a51f83f00de960a96a859e205f4973654e8cf1e8c",
+      "url": "cultures/japan/kf_35.jpg"
+    },
+    "japan/kf_36.jpg": {
+      "sha256": "600e7574045e4d708f8d41a0062afd25a40d38f689cc282fb0c860e50df41e9a",
+      "url": "cultures/japan/kf_36.jpg"
+    },
+    "japan/kf_37.jpg": {
+      "sha256": "827b4a0403fcf59a9d04d55ca26113c252ff23f942997a9cdfa4eedef0923adc",
+      "url": "cultures/japan/kf_37.jpg"
+    },
+    "japan/kf_38.jpg": {
+      "sha256": "de3d6115abd93cfe7cb62142873c322ce69228be745a8936df3270b6d67b80aa",
+      "url": "cultures/japan/kf_38.jpg"
+    },
+    "japan/kf_39.jpg": {
+      "sha256": "80df516cf4e6972ae0132526ed69a459b2d6ab2e30a8f36f6b39c1aeab6b9bbd",
+      "url": "cultures/japan/kf_39.jpg"
+    },
+    "japan/kf_40.jpg": {
+      "sha256": "a9fe293fbd3ec354666a5a3c9b99d3a6204b3e7d7dbf8f627200cb3da49dafc1",
+      "url": "cultures/japan/kf_40.jpg"
+    },
+    "japan/kf_41.jpg": {
+      "sha256": "92dfe761568cc9379dcfb7ad60876dab97d60e104a7e039ba73b1104b2d7e9bd",
+      "url": "cultures/japan/kf_41.jpg"
+    },
+    "japan/kf_42.jpg": {
+      "sha256": "fb4096e68e18df4c7d6cc1983e001439d656294e4853af0a570c0c426a236b1c",
+      "url": "cultures/japan/kf_42.jpg"
+    },
+    "japan/kf_43.jpg": {
+      "sha256": "0a8a5a87beb0f70794c0b2f04b650c86c53c75908d8e1fbae9828218dfe4be46",
+      "url": "cultures/japan/kf_43.jpg"
+    },
+    "japan/kf_44.jpg": {
+      "sha256": "5cf0c132e51a82480a85960d483d372ca1695045b81ff8838558625bb2c149ee",
+      "url": "cultures/japan/kf_44.jpg"
+    },
+    "japan/kf_45.jpg": {
+      "sha256": "8724e61ed93eb0b0bf8b4fb3f4affafb26d9cd9ea45027000b55367e827fb2eb",
+      "url": "cultures/japan/kf_45.jpg"
+    },
+    "japan/kf_46.jpg": {
+      "sha256": "2092d90f4642f208b0cdaf7bfdef862ea3d8dd9ee5b4cfce43fbb939e33fd615",
+      "url": "cultures/japan/kf_46.jpg"
+    },
+    "japan/kf_47.jpg": {
+      "sha256": "78dc27abe94e8b5629f2906cb2677321fd5959d557f1db529b2f63acbbf9718c",
+      "url": "cultures/japan/kf_47.jpg"
+    },
+    "japan/kf_48.jpg": {
+      "sha256": "d40bdd9bcca85bf16ad9d78eb6ef0d26cc34f24e38b1354f52f49be04203e8b4",
+      "url": "cultures/japan/kf_48.jpg"
+    },
+    "japan/kf_49.jpg": {
+      "sha256": "5ad9718cd167b8873e6361029edd31ae9a24b0280a5972201130f25d631f8911",
+      "url": "cultures/japan/kf_49.jpg"
+    },
+    "japan/kf_50.jpg": {
+      "sha256": "0d58f5c1d02a2dbf6666fa2fe258dd2e2ca0e808da3297558f894d9e2f001bf7",
+      "url": "cultures/japan/kf_50.jpg"
+    },
+    "japan/kf_51.jpg": {
+      "sha256": "46a1c6d3801f023a15a198a5ab094c02ebf36974ea421dc53c32cc2af2216d17",
+      "url": "cultures/japan/kf_51.jpg"
+    },
+    "japan/kf_52.jpg": {
+      "sha256": "813d17ac4f8e7cc233f4a6264806068e8d8ff2a45689dfb7957e9242eaecfc26",
+      "url": "cultures/japan/kf_52.jpg"
+    },
+    "japan/kf_53.jpg": {
+      "sha256": "e72d78a5c2ed7d8cbd5952bac11096b1d602e1226c7acda294c9414e3f5a1105",
+      "url": "cultures/japan/kf_53.jpg"
+    },
+    "japan/map.jpg": {
+      "sha256": "5449bb548f3ededd229b335a710368f0eee5d99f408ef0850de5782cee305ede",
+      "url": "cultures/japan/map.jpg"
+    },
+    "japan/map.json": {
+      "sha256": "e2f6b1de50140c5d838ff53d946bedef1499dc7cc012371167fa1a084e7824f7",
+      "url": "cultures/japan/map.json"
+    },
+    "japan/pins.json": {
+      "sha256": "5908cb978407def4de207ed5d9128c174248c67b114a3280ae1e8717aa999f2c",
+      "url": "cultures/japan/pins.json"
+    },
+    "korea/feats.npz": {
+      "sha256": "04d298f7bc560d061d68df3e7127fa4adb85b120c13a3a2f35bc684840150a7d",
+      "url": "cultures/korea/feats.npz"
+    },
+    "korea/kf_01.jpg": {
+      "sha256": "30d9bb8801858b3a08ef672f2687b99d0e916e1bec9b304b3025fadd88d56fae",
+      "url": "cultures/korea/kf_01.jpg"
+    },
+    "korea/kf_02.jpg": {
+      "sha256": "09307111979adb65b20257d68c8391844d12622f4471a5a61d6b4d1082fbe816",
+      "url": "cultures/korea/kf_02.jpg"
+    },
+    "korea/kf_03.jpg": {
+      "sha256": "e824c4af8f25b77701e2007b93ede4988deb1404b6e2d5e4e10637d03475ec2f",
+      "url": "cultures/korea/kf_03.jpg"
+    },
+    "korea/kf_04.jpg": {
+      "sha256": "313b5ee6ed6e576325cf17aaa901738774995fa51c849a225678621273301e0f",
+      "url": "cultures/korea/kf_04.jpg"
+    },
+    "korea/kf_05.jpg": {
+      "sha256": "adc6c5987c32552f55903f02289979cd6cd2c47cda2acaa50e9b1ead76d29f8a",
+      "url": "cultures/korea/kf_05.jpg"
+    },
+    "korea/kf_06.jpg": {
+      "sha256": "a3eba8093c1374e71d785d2cf9d7789259dab4831b5b8d9ac6544bc6744e7f03",
+      "url": "cultures/korea/kf_06.jpg"
+    },
+    "korea/kf_07.jpg": {
+      "sha256": "b93ee76eda8cd14a82269e85b75fc72bc6df2020e3495edc025eb02b9a8fe4c4",
+      "url": "cultures/korea/kf_07.jpg"
+    },
+    "korea/kf_08.jpg": {
+      "sha256": "59537e6b365e72384ac686c665c75773b4031b70abeac65797650f74a516809d",
+      "url": "cultures/korea/kf_08.jpg"
+    },
+    "korea/kf_09.jpg": {
+      "sha256": "e2a445431861ed7fd4aab4842aecbf0c62f719ccb8f994d5d88da8ac00f7d897",
+      "url": "cultures/korea/kf_09.jpg"
+    },
+    "korea/kf_10.jpg": {
+      "sha256": "ead8d4544c6db58406680d33c891304872944da5a42431700ed7b4b708d0da55",
+      "url": "cultures/korea/kf_10.jpg"
+    },
+    "korea/kf_11.jpg": {
+      "sha256": "8d7d77054d039a892e95fe9eb0a7745c7780c891532b13949de05efd47b3d473",
+      "url": "cultures/korea/kf_11.jpg"
+    },
+    "korea/kf_12.jpg": {
+      "sha256": "9b65b7d12c0c0b8f0d4dc2523257c6a9a0385f77b0eed7edab79702b177d4a19",
+      "url": "cultures/korea/kf_12.jpg"
+    },
+    "korea/kf_13.jpg": {
+      "sha256": "d1062cd0d27973875e3f24276c02c73589969ee516a3c739926cd39fc3e9bef9",
+      "url": "cultures/korea/kf_13.jpg"
+    },
+    "korea/kf_14.jpg": {
+      "sha256": "9722f53bd47beb767683f6d220a869b3d9162d0647781caeb0f4d14b91bb121c",
+      "url": "cultures/korea/kf_14.jpg"
+    },
+    "korea/kf_15.jpg": {
+      "sha256": "13b005a9f878fd38b39bf64efed2a224cf8645997b2650ca60c57850728bc109",
+      "url": "cultures/korea/kf_15.jpg"
+    },
+    "korea/kf_16.jpg": {
+      "sha256": "5411bc9bfec872f28287b1ea5628970501c4a1aa64d5eea4b01d10807e647afa",
+      "url": "cultures/korea/kf_16.jpg"
+    },
+    "korea/kf_17.jpg": {
+      "sha256": "accafe64b966cf9b2c4c235d117148e67b36319e0784cae8a22ef7a99420cfd5",
+      "url": "cultures/korea/kf_17.jpg"
+    },
+    "korea/kf_18.jpg": {
+      "sha256": "4fc03185d369685764b8a26390c536743486611380946a3bbf60be2450907c1a",
+      "url": "cultures/korea/kf_18.jpg"
+    },
+    "korea/kf_19.jpg": {
+      "sha256": "c83ccc19b9079f0ce7d53f950220b6a48fbea95b649b9aef63cdaf049c85c8d3",
+      "url": "cultures/korea/kf_19.jpg"
+    },
+    "korea/kf_20.jpg": {
+      "sha256": "59bea9a00e3774a818ab11191052819b99ee26c692d965baa8673a1b44aaad7f",
+      "url": "cultures/korea/kf_20.jpg"
+    },
+    "korea/kf_21.jpg": {
+      "sha256": "f2a78d99956c36ff8771bb4debef103e89bef195d6d6d1fc7d9bd9e5f1d0a2fd",
+      "url": "cultures/korea/kf_21.jpg"
+    },
+    "korea/kf_22.jpg": {
+      "sha256": "f3b212bceb4facdb36b79e0e93e92193acb236f8a2f0971a376cd5d6a84cf8b9",
+      "url": "cultures/korea/kf_22.jpg"
+    },
+    "korea/kf_23.jpg": {
+      "sha256": "25b37805e1b4225f7a246b5b1dbdc0ccdae6d6903b0edc4a52cf1630e35aa951",
+      "url": "cultures/korea/kf_23.jpg"
+    },
+    "korea/kf_24.jpg": {
+      "sha256": "f865be9a2e48d1265dd0d69f01fdd4627adff9e42f1072dd1d90e318ce90ab93",
+      "url": "cultures/korea/kf_24.jpg"
+    },
+    "korea/kf_25.jpg": {
+      "sha256": "c7be5751cf940c4da337d4a4239a81029bde97f4049d537c07fc9c77d1b2d43c",
+      "url": "cultures/korea/kf_25.jpg"
+    },
+    "korea/kf_26.jpg": {
+      "sha256": "ae9ce241d169c7b62f0fb1d4c73f007d785f9367d68f2aca81d3109180d3ba5a",
+      "url": "cultures/korea/kf_26.jpg"
+    },
+    "korea/kf_27.jpg": {
+      "sha256": "85d2e1fd99f07e741c18600613502a072c7bd858661a3728b23e60740175d337",
+      "url": "cultures/korea/kf_27.jpg"
+    },
+    "korea/kf_28.jpg": {
+      "sha256": "c3482992341fde02b860f58d1d1d14dada7ff08435aa0ce5ca34b31ede4bcbc5",
+      "url": "cultures/korea/kf_28.jpg"
+    },
+    "korea/kf_29.jpg": {
+      "sha256": "5a393ca9c7f467c82638efce265fa32c1c0582a8129a202528042c1ae2d94930",
+      "url": "cultures/korea/kf_29.jpg"
+    },
+    "korea/kf_30.jpg": {
+      "sha256": "fe75add8b2df3abb5b664d07b149b8a179a1630af0e2fdf4e19b61692d85717c",
+      "url": "cultures/korea/kf_30.jpg"
+    },
+    "korea/kf_31.jpg": {
+      "sha256": "7a3fd0191398e3cc4939f8f5749d92068356e70bc4f4c455948ff1f4e56cc6b9",
+      "url": "cultures/korea/kf_31.jpg"
+    },
+    "korea/kf_32.jpg": {
+      "sha256": "a3fe2018e1eb8591cda06c597e0dd728748c8b4447a86c87785cf0b6983550b2",
+      "url": "cultures/korea/kf_32.jpg"
+    },
+    "korea/kf_33.jpg": {
+      "sha256": "e453578d83da2db95b7c3b2fbb664d71312128519ff2b995648da83435d723f8",
+      "url": "cultures/korea/kf_33.jpg"
+    },
+    "korea/kf_34.jpg": {
+      "sha256": "dcd85009db06240184968c7bd95fd447e1e2da0c8e2f51e66c9180c17336b122",
+      "url": "cultures/korea/kf_34.jpg"
+    },
+    "korea/kf_35.jpg": {
+      "sha256": "cd68fb0eb620692292c3ac8429f29cb6272da301ce31aa0d25750f7c11b08783",
+      "url": "cultures/korea/kf_35.jpg"
+    },
+    "korea/kf_36.jpg": {
+      "sha256": "fe90416117746ef1fdcca76c7cda25e0d9eccdad3f3b0ca2feaf35c2ef572a23",
+      "url": "cultures/korea/kf_36.jpg"
+    },
+    "korea/kf_37.jpg": {
+      "sha256": "f70730de744993a19062e430b47617ed5ab173948ae2023e921bfeefe174a7d2",
+      "url": "cultures/korea/kf_37.jpg"
+    },
+    "korea/kf_38.jpg": {
+      "sha256": "8ad2a7989bee8291cf6469769d29856e23c8faeba02da3a1f724bce600ad2e68",
+      "url": "cultures/korea/kf_38.jpg"
+    },
+    "korea/kf_39.jpg": {
+      "sha256": "d5cac095c468cabc726cd3db3fe7c3341b7008bdd4b1dd5af5bc415020dfde99",
+      "url": "cultures/korea/kf_39.jpg"
+    },
+    "korea/kf_40.jpg": {
+      "sha256": "8023fc3560bde501a2c268527b454a14aa8fe75c3cb476e359043435ce21153b",
+      "url": "cultures/korea/kf_40.jpg"
+    },
+    "korea/kf_41.jpg": {
+      "sha256": "b4913f91daca676fc39db5ddec2661976dc7a40dd9eaccf18a4c3cd954dc9b15",
+      "url": "cultures/korea/kf_41.jpg"
+    },
+    "korea/kf_42.jpg": {
+      "sha256": "3b380ac026542b01a56d7272123d18bd1b528dede272d57ce4f5b424415122bd",
+      "url": "cultures/korea/kf_42.jpg"
+    },
+    "korea/kf_43.jpg": {
+      "sha256": "8ec8bd530fcea269b8ca193131736625aaccaff4f9673ce2149b12b388e2225b",
+      "url": "cultures/korea/kf_43.jpg"
+    },
+    "korea/kf_44.jpg": {
+      "sha256": "165c2a3abac7c690d1e2236b7e281e3229721ded5019969cda472c880ed613ae",
+      "url": "cultures/korea/kf_44.jpg"
+    },
+    "korea/kf_45.jpg": {
+      "sha256": "d0d43552031868fe834de298c1fda47ea06f3905913cd1dc3bbc0c47165fbdff",
+      "url": "cultures/korea/kf_45.jpg"
+    },
+    "korea/kf_46.jpg": {
+      "sha256": "bfa26de238c92504d258f2048f516944a50266ce7ea269243caf16a26375b16a",
+      "url": "cultures/korea/kf_46.jpg"
+    },
+    "korea/kf_47.jpg": {
+      "sha256": "6a588b7e08d5ecd5524ea04316fbcc6ba8539cd378290ca4c81f6e049b54cdbe",
+      "url": "cultures/korea/kf_47.jpg"
+    },
+    "korea/kf_48.jpg": {
+      "sha256": "c28a98a36b3ed66527899ea698e5635a63d6ec6a1260f54059204032dab066ba",
+      "url": "cultures/korea/kf_48.jpg"
+    },
+    "korea/kf_49.jpg": {
+      "sha256": "5dbd759eb27051f1beefbdb891fcdf1c2e3ed1c2b24d6ef0508ff0fb295d54b5",
+      "url": "cultures/korea/kf_49.jpg"
+    },
+    "korea/kf_50.jpg": {
+      "sha256": "8dc88003883b75478f1335584ecdef0e62ba12ffd02c7656ff20977209a22d75",
+      "url": "cultures/korea/kf_50.jpg"
+    },
+    "korea/kf_51.jpg": {
+      "sha256": "cd7f29de1e19140d7d87d0beb459db9caaf981e5f5c3690016b83e22dd88647b",
+      "url": "cultures/korea/kf_51.jpg"
+    },
+    "korea/kf_52.jpg": {
+      "sha256": "e9aacae7b93ac54a359741bc5adcea2350456ec06f6718b3b8d4bd8a54894157",
+      "url": "cultures/korea/kf_52.jpg"
+    },
+    "korea/kf_53.jpg": {
+      "sha256": "16ab3721e167f32fe579f8e5b4a723384b5b92b1bca27dac26a98c9f71d002c9",
+      "url": "cultures/korea/kf_53.jpg"
+    },
+    "korea/kf_54.jpg": {
+      "sha256": "aa5bea68287d88a4cf9ab2e682d42b3f6f1f9256c25f3805ecada02b0643da4b",
+      "url": "cultures/korea/kf_54.jpg"
+    },
+    "korea/kf_55.jpg": {
+      "sha256": "a92f2973e0b415ee30cc61f22068c0a9fb2cdc8a2490e09e8bb31b4268375139",
+      "url": "cultures/korea/kf_55.jpg"
+    },
+    "korea/kf_56.jpg": {
+      "sha256": "a3e627d7adfc2ee6752f9aa7b563092516eccb373146a15d1d97f1d2150496da",
+      "url": "cultures/korea/kf_56.jpg"
+    },
+    "korea/kf_57.jpg": {
+      "sha256": "4ef7cbeb34a24068093827969ebee41d51e515a339b30d0c37187294214e010f",
+      "url": "cultures/korea/kf_57.jpg"
+    },
+    "korea/kf_58.jpg": {
+      "sha256": "96919e1e728cbd3753b4ed08ec774b9039289c88c7756ec03c65afb9408c07d7",
+      "url": "cultures/korea/kf_58.jpg"
+    },
+    "korea/map.jpg": {
+      "sha256": "9dd7073dce1820ab3b4ed9cdcd508814f4a6050c2f81bcaec068d90998745b3a",
+      "url": "cultures/korea/map.jpg"
+    },
+    "korea/map.json": {
+      "sha256": "7172b1bba29b75891ea951ead088f69c0a3718cca56ff8916e767dcf1282a95f",
+      "url": "cultures/korea/map.json"
+    },
+    "russia/feats.npz": {
+      "sha256": "e6cd72f825893d810b322e09e597ea6d110a76b70023722258a6a81a6d0465c6",
+      "url": "cultures/russia/feats.npz"
+    },
+    "russia/kf_01.jpg": {
+      "sha256": "f81ed2d899963b3a228233c73917b0f04c4fc6af8c4cc19f64edd0c605456094",
+      "url": "cultures/russia/kf_01.jpg"
+    },
+    "russia/kf_02.jpg": {
+      "sha256": "add1104890ac0866529a574cca617119785aeed8dc8a52944f66caee16908549",
+      "url": "cultures/russia/kf_02.jpg"
+    },
+    "russia/kf_03.jpg": {
+      "sha256": "4ac19fd6af035d6b0c323bb37fd9eb3a357a8e51d1cebca426d4c8f69e69ed61",
+      "url": "cultures/russia/kf_03.jpg"
+    },
+    "russia/kf_04.jpg": {
+      "sha256": "f3d3104f1969ab6b098d49326054f8ba0a52ba9714dc938a10e690ac610edb44",
+      "url": "cultures/russia/kf_04.jpg"
+    },
+    "russia/kf_05.jpg": {
+      "sha256": "b254fa0ef769babca034f4144f222aad7de8c5f1ef1bf1505d3f8d768b023094",
+      "url": "cultures/russia/kf_05.jpg"
+    },
+    "russia/kf_06.jpg": {
+      "sha256": "68929f76f96d4cb000f88386db9625f9300ffe5336fceafff0323552248d5abe",
+      "url": "cultures/russia/kf_06.jpg"
+    },
+    "russia/kf_07.jpg": {
+      "sha256": "f327c6f16996dcfcac90efc8a3de89557b5de9ba228a3630d88d16d84b5b67a1",
+      "url": "cultures/russia/kf_07.jpg"
+    },
+    "russia/kf_08.jpg": {
+      "sha256": "eb568f37bce0c3966c83efcff49297185aa1e75c359d132328a0749a1c573e6d",
+      "url": "cultures/russia/kf_08.jpg"
+    },
+    "russia/kf_09.jpg": {
+      "sha256": "9edc95f363b3c57afaba42aeb7b0b3c4a85d07b5b00a2a504acfb2d375f66856",
+      "url": "cultures/russia/kf_09.jpg"
+    },
+    "russia/kf_10.jpg": {
+      "sha256": "ad05e4f796865c8139a620063c21cc94cf1ed755bea0c4e3aa609ec5832b1664",
+      "url": "cultures/russia/kf_10.jpg"
+    },
+    "russia/kf_11.jpg": {
+      "sha256": "3843dfe77624d0e2f9f1663ad3786baedbe202b435d799dac2409cb30e134f03",
+      "url": "cultures/russia/kf_11.jpg"
+    },
+    "russia/kf_12.jpg": {
+      "sha256": "ccba7a9f9534d35cb2b1d117c974777355f3d57bac8d96f6e1b879996eb504ff",
+      "url": "cultures/russia/kf_12.jpg"
+    },
+    "russia/kf_13.jpg": {
+      "sha256": "42bcf8dbcb04d223facccaa71acd860d1a7d41bf1c3d3715b9bf1b7164ea7521",
+      "url": "cultures/russia/kf_13.jpg"
+    },
+    "russia/kf_14.jpg": {
+      "sha256": "6f20507d9641f643cc9556e621225450b578c5f2e63d74ac5b1c0958f72cb21b",
+      "url": "cultures/russia/kf_14.jpg"
+    },
+    "russia/kf_15.jpg": {
+      "sha256": "681bd38c408be08fd3191fb16f0026a9fa77be4d117fa83d562de9255852b0c1",
+      "url": "cultures/russia/kf_15.jpg"
+    },
+    "russia/kf_16.jpg": {
+      "sha256": "1957c783b47e463ebe64af294bc9be7879a04447b284a1b6db8e111fe093fdeb",
+      "url": "cultures/russia/kf_16.jpg"
+    },
+    "russia/kf_17.jpg": {
+      "sha256": "cf3df9393a19000020e369f2697e7d5f2270d55af07167dc1693a2f501fe02c3",
+      "url": "cultures/russia/kf_17.jpg"
+    },
+    "russia/kf_18.jpg": {
+      "sha256": "605a5972f6b02dccad2c905a74d8e6d7656bdd165895d88f06b769a726ddce4a",
+      "url": "cultures/russia/kf_18.jpg"
+    },
+    "russia/kf_19.jpg": {
+      "sha256": "9df0f27ba3cfae367cb22c6ce44179392b628b4147aa56c31043645f500c12be",
+      "url": "cultures/russia/kf_19.jpg"
+    },
+    "russia/kf_20.jpg": {
+      "sha256": "b6678021d6a623772e22e12349fc2fa2bb840c5bb70140931132521fc305ba9c",
+      "url": "cultures/russia/kf_20.jpg"
+    },
+    "russia/kf_21.jpg": {
+      "sha256": "7fbfa2c2d3857174e79902b027881e5ec02e5cf2a79582ccfdbcd2883ad09d7f",
+      "url": "cultures/russia/kf_21.jpg"
+    },
+    "russia/kf_22.jpg": {
+      "sha256": "5919fc422fac048f124ef4bafe4816030ac61dce6cb3e35e04d3db93a6be09a8",
+      "url": "cultures/russia/kf_22.jpg"
+    },
+    "russia/kf_23.jpg": {
+      "sha256": "c5874bda50d5c779e8933866b39834423ea7a015a6d1ce2225425b4cbb19753d",
+      "url": "cultures/russia/kf_23.jpg"
+    },
+    "russia/kf_24.jpg": {
+      "sha256": "145d625bd3dba517abdd868fc2a5d18dfcd0625412a2bf755a1d37c9f98512e1",
+      "url": "cultures/russia/kf_24.jpg"
+    },
+    "russia/kf_25.jpg": {
+      "sha256": "b3faee6b7089d9273daa804a566eb33209d94aacd77d21eb73c09ce539b54fbc",
+      "url": "cultures/russia/kf_25.jpg"
+    },
+    "russia/kf_26.jpg": {
+      "sha256": "f8f2d0f41fd2f8365b25f1b99e60033f3482b4600950e2f67647aaecc2457bad",
+      "url": "cultures/russia/kf_26.jpg"
+    },
+    "russia/kf_27.jpg": {
+      "sha256": "83c6639abc699c8b41f5d99fc4ab8b5c0bf3edbcbd22967304ea0808ff5d38ef",
+      "url": "cultures/russia/kf_27.jpg"
+    },
+    "russia/kf_28.jpg": {
+      "sha256": "72549e58077d0d4d0dc2c48f9bff262603e20c4634bc60c2cedf768f7cbf9458",
+      "url": "cultures/russia/kf_28.jpg"
+    },
+    "russia/kf_29.jpg": {
+      "sha256": "74ba04f2f840511dc25b9bec3dbf757aa602a2d8cc07eaf5dc75e9daac35c33e",
+      "url": "cultures/russia/kf_29.jpg"
+    },
+    "russia/kf_30.jpg": {
+      "sha256": "5a99c2e3a6fe0a8d3fe5404d39e2739ec6814d677d08c0690222547f1167865f",
+      "url": "cultures/russia/kf_30.jpg"
+    },
+    "russia/kf_31.jpg": {
+      "sha256": "09201192a2e5c9df112b0e1ef7f2e1458923722798941423da82ecd2c42d0269",
+      "url": "cultures/russia/kf_31.jpg"
+    },
+    "russia/kf_32.jpg": {
+      "sha256": "806a8d225c026caac2c81402b4c2d559a13f92b26c80c1de76905da60da07b6c",
+      "url": "cultures/russia/kf_32.jpg"
+    },
+    "russia/kf_33.jpg": {
+      "sha256": "5973b7eb020d92a249682aed71a6fe55bc4647fadf87ab4703961c9f95246814",
+      "url": "cultures/russia/kf_33.jpg"
+    },
+    "russia/kf_34.jpg": {
+      "sha256": "28c9d27345d00004b0e91497f2a028697fb7a2d978c3994f42fa32f4a1921f85",
+      "url": "cultures/russia/kf_34.jpg"
+    },
+    "russia/kf_35.jpg": {
+      "sha256": "de5ae6a853446f9493d0c3a610b02e59cdad4e658b61b1d7a6e2084dad7c07c5",
+      "url": "cultures/russia/kf_35.jpg"
+    },
+    "russia/kf_36.jpg": {
+      "sha256": "969668989ebf5d2d0054eaf56570f399cad76c3f22030d97c7d9c3426fb2f6a2",
+      "url": "cultures/russia/kf_36.jpg"
+    },
+    "russia/kf_37.jpg": {
+      "sha256": "4b79709dc1de282fb70f0a7017456506161b87a8fb6be539763f8bbb2c01adad",
+      "url": "cultures/russia/kf_37.jpg"
+    },
+    "russia/kf_38.jpg": {
+      "sha256": "13762032c38c62a8a3b1015215f006f4f53571fa8c80c50d8bbd9bff4419f04c",
+      "url": "cultures/russia/kf_38.jpg"
+    },
+    "russia/kf_39.jpg": {
+      "sha256": "edc5ac73e1fd1a5dc265ca9c16287a99bf6cb2e26cae402d18a94d0660cab6a8",
+      "url": "cultures/russia/kf_39.jpg"
+    },
+    "russia/kf_40.jpg": {
+      "sha256": "5afe5dc967d8ae8310aedca8b2c7a7b4e118248b9b1937e6cde62ef71b7a62fd",
+      "url": "cultures/russia/kf_40.jpg"
+    },
+    "russia/kf_41.jpg": {
+      "sha256": "8153d3c8d6b5478bade2594b6120d5c1308b0200ac026b6d1a97f75237f351b4",
+      "url": "cultures/russia/kf_41.jpg"
+    },
+    "russia/kf_42.jpg": {
+      "sha256": "0dcfc22ce716c052a0156a8b2c400f1d890bccee62d0fd14da076b16eddfe333",
+      "url": "cultures/russia/kf_42.jpg"
+    },
+    "russia/kf_43.jpg": {
+      "sha256": "4bb661ed3fb79f7da6522214f760dd893889efe08fcdeb856c7ed3ae7d6cdd6d",
+      "url": "cultures/russia/kf_43.jpg"
+    },
+    "russia/kf_44.jpg": {
+      "sha256": "b40c4fc03b0eadbfcbcba33b3647e07ad88390cf017641f17f7a92cfdbd857cf",
+      "url": "cultures/russia/kf_44.jpg"
+    },
+    "russia/kf_45.jpg": {
+      "sha256": "304b6a3afede448095704d6c0b1fbf48d33c99f315efa830d8bf458fee704861",
+      "url": "cultures/russia/kf_45.jpg"
+    },
+    "russia/kf_46.jpg": {
+      "sha256": "8bc7e4b089995dc77baafd258359a04b1bc07513caa651c6822bc0ba840856d0",
+      "url": "cultures/russia/kf_46.jpg"
+    },
+    "russia/kf_47.jpg": {
+      "sha256": "bd04aa0e7145a4ffd9e118f49abfbf1e0fd4c0b5c50d1197f7baea59c5d96d65",
+      "url": "cultures/russia/kf_47.jpg"
+    },
+    "russia/kf_48.jpg": {
+      "sha256": "40cb0b98d6d93f1ba49f853ef6291adc94eb52f7b4dcc8a1caee2fe754ffa4ae",
+      "url": "cultures/russia/kf_48.jpg"
+    },
+    "russia/kf_49.jpg": {
+      "sha256": "477f2dae2733700c699ffb183aed2e2de39a19d5b148885e7819d3868326087b",
+      "url": "cultures/russia/kf_49.jpg"
+    },
+    "russia/kf_50.jpg": {
+      "sha256": "232160f7d4c9fb49ed9df0caf68e7f19a9eee2e71d852559745adda7e7d26686",
+      "url": "cultures/russia/kf_50.jpg"
+    },
+    "russia/kf_51.jpg": {
+      "sha256": "f85b91b2e13adbd32915fff015789987e2d9fd21d5549461dcba85a15fb58f08",
+      "url": "cultures/russia/kf_51.jpg"
+    },
+    "russia/kf_52.jpg": {
+      "sha256": "f7868bfcbd9836ad5977b64fc9bee798543d14a79dd26fb5ea1aca94c6b95c0e",
+      "url": "cultures/russia/kf_52.jpg"
+    },
+    "russia/kf_53.jpg": {
+      "sha256": "4d6bd65dd9dc07557f19bb3605c53636bc332fa9433410a321b8f2537a300609",
+      "url": "cultures/russia/kf_53.jpg"
+    },
+    "russia/kf_54.jpg": {
+      "sha256": "c63d975c0ab0688f620fa2e88acb20172013f615ba2da6b9e81de38075939ce4",
+      "url": "cultures/russia/kf_54.jpg"
+    },
+    "russia/map.jpg": {
+      "sha256": "9119bae7045235a55dc00915ef353100b02650dd5c147fc3e0027b4017ebfb89",
+      "url": "cultures/russia/map.jpg"
+    },
+    "russia/map.json": {
+      "sha256": "a5201160bb5b1e90b67c3c3397c1e570bb2e6e2bd38cf2e0fbae2e4d2e857262",
+      "url": "cultures/russia/map.json"
+    },
+    "russia/pins.json": {
+      "sha256": "8e9177b470b6a5b878375e3c719f7cdbfff2cbb707caeafa8e98cd43923abe64",
+      "url": "cultures/russia/pins.json"
+    }
+  },
   "catalog": {
     "catalog.json": {
       "sha256": "256899393fed654b7ebe3019f3c1437f2ab631a3c8346045fa298ca14d33fc4e",
@@ -1709,5 +3287,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "27c6ca163911eae13debc7e6ed3f7b456800012369cca4edb303e828403c1e84"
+  "sig": "1376db780f746599b2a03f1838fe6cd58bf7d2d1acffab970705cfee16a0961d"
 }
