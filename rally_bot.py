@@ -3774,6 +3774,31 @@ def popup_seen(dev, shot, how):
         quiet_err("popup_seen", _e)
 
 
+def black_screen(shot):
+    """The game shows a (nearly) black picture - it happens for a while after a start / restart (owner 25 Oct: Rory)."""
+    try:
+        return shot is not None and float(shot.mean()) < 8 and float(shot.std()) < 6
+    except Exception:
+        return False
+
+
+def wait_not_black(dev, log, stop, secs=20, limit=120):
+    """Black screen: tap nothing, wait until the game shows a picture, then let it settle `secs` s (owner: 20 s).
+    -> True when the picture came back, False when it stayed black for `limit` s."""
+    t0 = time.time()
+    log(f"[*] The game screen is black - waiting for it (nothing is tapped)")
+    while not stop.is_set() and time.time() - t0 < limit:
+        _nap(stop, 3)
+        try:
+            if not black_screen(dev.screenshot()):
+                log(f"[+] The game picture is back after {time.time() - t0:.0f}s - letting it settle {secs}s")
+                _nap(stop, secs)
+                return True
+        except Exception as _e:
+            quiet_err("wait_not_black", _e)
+    return False
+
+
 def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
     """Close whatever covers the game (offers, event pop-ups, full-screen sales, dialogs) so the bot can carry on with
     what it was doing. Uses your popup_* pictures first; on a screen it does not know it presses Back, but only when it
@@ -3789,6 +3814,9 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
         if stop.is_set():
             break
         shot = dev.screenshot()
+        if black_screen(shot):                             # nothing to close on a black picture: wait for the game instead
+            wait_not_black(dev, log, stop)
+            return closed
         _poplib_learn(pending, shot, log)
         pending = None
         if screen_state(shot, cfg) == "unknown" and safety_stop(dev, shot, cfg, log, stop):
@@ -4770,6 +4798,8 @@ def sync_culture_pack(log=print):
                 continue
             want = str((meta or {}).get("sha256", ""))
             target = root / name
+            if name.endswith("/pins.json") and target.exists() and (USER / "admin.txt").exists():
+                continue                                     # owner 25 Oct: his own pins on this PC are never overwritten (Russia pins lost 13:11)
             if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == want:
                 continue
             data = _download(urllib.parse.urljoin(base, (meta or {}).get("url", "cultures/" + urllib.parse.quote(name))), 8_000_000)
@@ -4836,6 +4866,8 @@ def sync_catalog_pack(log=print):
                 continue
             want = str((meta or {}).get("sha256", ""))
             target = root / name
+            if name.endswith("/pins.json") and target.exists() and (USER / "admin.txt").exists():
+                continue                                     # owner 25 Oct: his own pins on this PC are never overwritten (Russia pins lost 13:11)
             if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == want:
                 continue
             if target.exists() and name != "catalog.json":
@@ -5774,6 +5806,7 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
     good, last_note, last_fg = 0, 0.0, time.time()
     not_ready_since, last_clear, last_kick = None, 0.0, 0.0
     loading_since, app_restarted = None, False                 # stuck on the loading / "Connecting" screen -> close and reopen Evony once
+    black_since, black_restart = None, False                   # black picture after a start: wait (and restart the emulator once if it stays)
     end = time.time() + cfg["game_load_timeout"]
     while time.time() < end and not stop.is_set():
         if pause_gate():                                       # paused meanwhile: no clicks, no timeout, start counting again after the resume
@@ -5791,6 +5824,22 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
                 good, not_ready_since = 0, None
                 end = time.time() + cfg["game_load_timeout"]
                 continue
+        if black_screen(screen):                               # black after a start: wait, tap nothing (owner 25 Oct)
+            good = 0
+            black_since = black_since or time.time()
+            if time.time() - black_since > 150 and allow_emu_restart and not black_restart:
+                black_restart = True
+                log("[!] The game screen stayed black for 2.5 min - restarting the emulator once")
+                return restart_emulator(dev, cfg, log, stop, "the game screen stayed black")
+            if time.time() - last_note > 30:
+                last_note = time.time()
+                log("[*] The game screen is black - waiting for it (nothing is tapped)")
+            _nap(stop, 3)
+            continue
+        if black_since:
+            log(f"[+] The game picture is back after {time.time() - black_since:.0f}s")
+            black_since = None
+            end = max(end, time.time() + 60)
         closed = False
         for name in list_templates("popup_"):
             h = find(screen, name, 0.85)
@@ -5854,6 +5903,12 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
                 start_app(dev.adb, dev.serial, pkg)
         _nap(stop, 3)
     if not stop.is_set():
+        try:                                                   # Rory 25 Oct 13:22: a game restart run from inside this wait
+            if ready_screen(dev.screenshot(), cfg):            # used up its time - the game IS loaded: no emulator restart
+                log("[+] The game is loaded (the wait ran out during another restart) - carrying on")
+                return True
+        except Exception as _e:
+            quiet_err("wait_stable", _e)
         if allow_emu_restart and cfg.get("load_restart_emulator", True) and cfg.get("auto_launch_emulator"):
             now = time.time()
             hist = _LOAD_RESTARTS.setdefault(dev.serial, [])
@@ -7328,6 +7383,30 @@ class FlowRecorder:
         return {"steps": len(self.steps), "path": str(self.dir)}
 
 
+def calm_drag(shot, fx, fy, tx, ty):
+    """Move a drag (same direction and length) so it starts on empty ground - road, grass, water - not on a building.
+    A drag that starts on a building is taken as a tap and opens its ring (Rory 25 Oct 13:03, going to the Tavern pin).
+    Picks the candidate start with the least detail (buildings are busy pictures). -> (fx, fy, tx, ty)."""
+    try:
+        g = cv2.cvtColor(shot, cv2.COLOR_BGR2GRAY) if shot is not None else None
+        if g is None:
+            return fx, fy, tx, ty
+        lap = np.abs(cv2.Laplacian(g, cv2.CV_32F))
+        best, best_v = (0, 0), None
+        for ox in (0, -120, 120, -200, 200):
+            for oy in (0, -150, 150, -250, 250):
+                a, b, c, d = fx + ox, fy + oy, tx + ox, ty + oy
+                if min(a, c) < 100 or max(a, c) > 440 or min(b, d) < 200 or max(b, d) > 760:
+                    continue                                  # both ends stay on the map, away from the game's buttons
+                x0, y0 = int(a) - 22, int(b) - 22
+                v = float(lap[y0:y0 + 44, x0:x0 + 44].mean()) + (abs(ox) + abs(oy)) * 0.004   # prefer staying close
+                if best_v is None or v < best_v:
+                    best, best_v = (ox, oy), v
+        return fx + best[0], fy + best[1], tx + best[0], ty + best[1]
+    except Exception:
+        return fx, fy, tx, ty
+
+
 class CityNav:
     """Moves around the city map and remembers where the camera is (relative to the top-left corner)."""
 
@@ -7341,6 +7420,8 @@ class CityNav:
     def halted(self):
         """Stop pressed, or this step's time limit passed: every camera move checks it (Kiravik 24 Oct 14:57: Stop clicked
         9 times while aiming at the Market, the instance kept going)."""
+        if self.dev.serial in TASK_ABORT:                     # the watchdog stopped this task (owner 25 Oct: stop the task, retry later)
+            return True
         return self.stop.is_set() or (self.deadline is not None and time.time() > self.deadline)
 
     def localize(self, shot=None):
@@ -7368,6 +7449,7 @@ class CityNav:
                 self.seen_city = True
             if not sc:
                 lost += 1
+                self.log(f"[i]   camera: this view is not found on the city map ({lost}/7)")
                 if lost >= 7:
                     if not getattr(self, "quiet", False):
                         self.log("[!]   the screen is not recognised as the city (ad or window in the way?)")
@@ -7379,14 +7461,15 @@ class CityNav:
             if abs(px - mid_x) <= tol and abs(py - mid_y) <= tol:
                 self.log(f"[i]   camera at {round(self.cx)},{round(self.cy)} (match {sc:.2f}), target on screen at {round(px)},{round(py)}")
                 return True
-            mx = max(-210, min(210, px - mid_x))              # how far the picture has to move (finger moves the other way)
-            my = max(-320, min(320, py - mid_y))
+            mx = max(-330, min(330, px - mid_x))              # how far the picture has to move (owner 25 Oct: one long drag, not many short ones)
+            my = max(-500, min(500, py - mid_y))
+            self.log(f"[i]   camera at {round(self.cx)},{round(self.cy)} (match {sc:.2f}) - target {round(px - mid_x)},{round(py - mid_y)} px away, dragging")
             if abs(mx) < 30 and abs(my) < 30:                 # a short drag may count as a TAP on a building: overshoot and come back
                 ux, uy = (1.0 if mx >= 0 else -1.0), (1.0 if my >= 0 else -1.0)
-                self.dev.swipe(270 + ux * 100, 440 + uy * 100, 270 - ux * 100, 440 - uy * 100, 450)
+                self.dev.swipe(*calm_drag(self.dev.screenshot(), 270 + ux * 100, 440 + uy * 100, 270 - ux * 100, 440 - uy * 100), 450)
                 _nap(self.stop, self.pause, self.pause + 0.3)
                 continue                                      # next round sees the overshoot and drags back
-            self.dev.swipe(270 + mx / 2, 440 + my / 2, 270 - mx / 2, 440 - my / 2, 450)
+            self.dev.swipe(*calm_drag(self.dev.screenshot(), 270 + mx / 2, 440 + my / 2, 270 - mx / 2, 440 - my / 2), 450)
             _nap(self.stop, self.pause, self.pause + 0.3)
         return False
 
@@ -7408,6 +7491,7 @@ class CityNav:
             shot = before if before is not None else self.dev.screenshot()
             return 0.0, 0.0, shot
         before = self._settled() if before is None else before
+        fx, fy, tx, ty = calm_drag(before, fx, fy, tx, ty)
         self.dev.swipe(int(fx), int(fy), int(tx), int(ty), 600)
         _nap(self.stop, self.pause, self.pause + 0.3)
         after = self._settled()
@@ -7437,8 +7521,8 @@ class CityNav:
             rx, ry = want_dx - mx, want_dy - my
             if abs(rx) < 25 and abs(ry) < 25 or self.halted():
                 break
-            sx = max(-200, min(200, rx))              # one drag at a time; each is measured (patch tracking)
-            sy = max(-300, min(300, ry))
+            sx = max(-330, min(330, rx))              # one long drag at a time (owner 25 Oct), ends kept off the side icon columns
+            sy = max(-500, min(500, ry))
             # dragging the finger left/up moves the camera right/down.
             # A short drag can be read by the game as a TAP on a building (that opened Prison, Rare Books ...), so a
             # short move is done as one long drag past the target and a second long drag back.
@@ -8747,11 +8831,21 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         tile, _, bname = name.partition("|")               # -> tap); the Activity tile is only the teacher for a building not pinned yet
         if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
             zoom_out_city(dev, stop, log)                   # learned pictures are taken / searched at the widest zoom
+        if bname.strip().lower() == "prison":             # owner 25 Oct: City Buff > City Labor jumps to the Prison
+            if city_buff_jump(dev, cfg, log, stop) and open_building_here(dev, cfg, log, stop, "Prison",
+                                                                         spots=BUFF_PRISON_SPOTS, how="the City Labor jump"):
+                return True
+            if stop.is_set():
+                return False
+            leave_to_city(dev, cfg, stop, log)
         if bname and _pinned(dev, bname.strip()) and city_map(dev) is not None:
             leave_to_city(dev, cfg, stop, log)
             if find_learned_building(dev, cfg, log, stop, bname.strip()):
                 return True
-            log(f"[i]   {bname.strip()}: not reached by the map - trying the Activity route")
+            if stop.is_set():                              # owner 25 Oct: Stop took 33 s walking the fallback routes
+                return False
+            log(f"[!]   {bname.strip()}: not reached by the map (Prison anchor) - no Activity route for pinned buildings, trying later")
+            return False                                   # owner 25 Oct 16:28: tasks work with the map, not the Activity window
         elif bname and task.get("no_tile"):                   # Black Market keep-going: the learned building picture first
             leave_to_city(dev, cfg, stop, log)
             if find_learned_building(dev, cfg, log, stop, bname.strip()):
@@ -8759,6 +8853,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         try:
             r = activity_go(dev, cfg, log, stop, tile.strip(), route=(kind == "via"))
         except Exception as e:
+            if stop.is_set():
+                return False
             log(f"[i]   Activity route to {bname or tile}: {e} - using the city map instead")
             leave_to_city(dev, cfg, stop, log)
             r = None
@@ -8772,7 +8868,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return True                                    # Go on the Wheel tile opens the Wheel page itself (no Tavern menu)
         if r and (not bname or open_building_here(dev, cfg, log, stop, bname.strip())):
             return True
-        if not bname:
+        if not bname or stop.is_set():
             return False
         leave_to_city(dev, cfg, stop, log)
         if find_learned_building(dev, cfg, log, stop, bname.strip()):     # learned from an earlier Go (tile gone today)
@@ -10233,6 +10329,14 @@ def run_champions(dev, cfg, log, stop):
     row = ch_row(serial)
     taps_used = row.get("taps") or {} if row.get("taps_day") == day else {}
     greets_used = row.get("greets") or {} if row.get("greets_day") == day else {}
+    # Owner 25 Oct (Kiravik): the saved count said "done today" while the game still had taps / greets left, so the bot
+    # opened the page and did nothing. The game's own counter wins over the saved one.
+    if t_used is not None and t_used < CH_TAPS and sum(int(v) for v in taps_used.values()) > t_used:
+        log(f"[i]   Champions: the game shows {t_used}/{CH_TAPS} taps used - the saved count was wrong, using the game's")
+        taps_used = {}
+    if g_used is not None and g_used < CH_GREETS and sum(int(v) for v in greets_used.values()) > g_used:
+        log(f"[i]   Champions: the game shows {g_used}/{CH_GREETS} greets used - the saved count was wrong, using the game's")
+        greets_used = {}
     if not plan:                                           # default: everything on the champion shown, or the first active one
         cur = None
         for _ in range(4):                                 # the name read is flaky: try a few pictures
@@ -10254,6 +10358,7 @@ def run_champions(dev, cfg, log, stop):
         need_t = max(0, plan[name]["taps"] - int(taps_used.get(name, 0)))
         need_g = max(0, plan[name]["greets"] - int(greets_used.get(name, 0)))
         if not (need_t or need_g):
+            log(f"[i]   Champions: {name} - today's taps and greets already done")
             continue
         if not ch_goto(dev, stop, log, name):
             log(f"[!]  Champions: could not reach {name}")
@@ -11080,6 +11185,7 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
         log(f"[i]   after Go the menu at ({x},{y}) is '{nm or '?'}', not {bname}")
         close_ring(dev, stop, (x, y + 60))
     rd_snap(dev.screenshot(), "ago_6_nobuilding")
+    log(f"[i]   {bname}: tapped {len(spots or [])} spot(s) at the expected place - no building menu opened")
     return False
 
 
@@ -11923,12 +12029,179 @@ def run_map_city(dev, cfg, log, stop):
         f"{W}x{H} px, {drags[0]} moves, {round(time.time() - t0)} s (solve {round(time.time() - t1)} s)")
 
 
+_BUFF_SWIPES = {}                                          # serial -> swipes down the City Buff list to City Labor
+CITY_BUFF_ICON = (27, 114)                                 # buff icon under the avatar (owner recording 25 Oct 16:02)
+
+
+def city_buff_jump(dev, cfg, log, stop):
+    """Owner 25 Oct: the game's own jump. City -> buff icon (top-left) -> City Buff page -> row 'City Labor' -> its arrow:
+    the game returns to the city with the camera centred on the PRISON. Only City Labor jumps to a building (every other
+    row opens Use Item). Used for Labor and as the camera ANCHOR for every other pinned building.
+    -> True when back on the city after the jump."""
+    leave_to_city(dev, cfg, stop, log)
+    if stop.is_set():
+        return False
+    dev.tap(*CITY_BUFF_ICON)
+    _nap(stop, 1.6, 2.0)
+    shot = dev.screenshot()
+    if not rd_seen(shot, ["City Buff"], region=(100, 0, 340, 70)):
+        rd_snap(shot, "buff_0_nopage")
+        log("[i]   City Buff: the buff page did not open")
+        leave_to_city(dev, cfg, stop, log)
+        return False
+    hit = None
+    known = _BUFF_SWIPES.get(dev.serial, 0)               # swipes it took last time: do them blind, read only from there
+    for _ in range(max(0, known - 1)):
+        if stop.is_set():
+            return False
+        dev.swipe(270, 740, 270, 300, 1200)
+        _nap(stop, 0.5, 0.6)
+    done = max(0, known - 1)
+    if done:
+        _nap(stop, 0.6, 0.8)
+        shot = dev.screenshot()
+    for i in range(12):                                    # active buffs sit at the top - the row moves, find it by its words
+        if stop.is_set():
+            return False
+        hit = find_text(shot, ["City Labor"], region=(120, 70, 360, 860), cutoff=0.72)
+        dy = 22
+        if not hit:                                        # the gold title reads badly (Kiravik 16:16): the white line under it
+            hit = find_text(shot, ["instantly gain resources", "resources from Main City"], region=(120, 70, 360, 860), cutoff=0.72)
+            dy = -5
+        if hit and hit[1] <= 800:
+            _BUFF_SWIPES[dev.serial] = done
+            break
+        hit = None
+        if i < 8:
+            dev.swipe(270, 740, 270, 300, 1200)            # list up, held (owner holds the finger: no glide, sharp picture)
+            done += 1
+        else:
+            dev.swipe(270, 300, 270, 740, 1200)            # overshot: back down
+            done -= 1
+        _nap(stop, 0.9, 1.1)
+        shot = dev.screenshot()
+    if not hit:
+        rd_snap(shot, "buff_1_norow")
+        log("[i]   City Buff: no 'City Labor' row found")
+        leave_to_city(dev, cfg, stop, log)
+        return False
+    dev.tap(505, min(900, hit[1] + dy))                    # the row's arrow (right side, middle of the row)
+    _nap(stop, 2.2, 2.6)
+    shot = dev.screenshot()
+    if rd_seen(shot, ["City Buff"], region=(100, 0, 340, 70)):
+        dev.tap(270, min(900, hit[1] + 30))                # owner tapped the row itself - try that too
+        _nap(stop, 2.2, 2.6)
+        shot = dev.screenshot()
+    if view_of(shot, cfg) != "city":
+        rd_snap(shot, "buff_2_nocity")
+        log("[i]   City Buff: the City Labor jump did not land on the city")
+        leave_to_city(dev, cfg, stop, log)
+        return False
+    log("[i]   City Buff: jumped to the Prison (City Labor)")
+    return True
+
+
+BUFF_PRISON_SPOTS = [(290, 480), (270, 490), (300, 450), (260, 455), (290, 520)]   # Prison in the middle after the jump
+
+
+def buff_anchor(dev, cfg, log, stop, cmap):
+    """Camera anchor: City Labor jump -> camera on the Prison -> where is the camera on the map? -> (cx, cy) or None."""
+    if not city_buff_jump(dev, cfg, log, stop):
+        return None
+    shot = dev.screenshot()
+    r = cmap.locate(shot)
+    if r:
+        log(f"[i]   anchor: Prison jump - camera at {round(r[0])},{round(r[1])}")
+        return r[0], r[1]
+    pin = culture_pin(dev, "Prison")
+    if pin is None:
+        log("[i]   anchor: Prison jump, but the view is not on the map and there is no Prison pin")
+        return None
+    cx, cy = pin[0] - BUFF_PRISON_SPOTS[0][0], pin[1] - BUFF_PRISON_SPOTS[0][1]
+    log(f"[i]   anchor: Prison jump - camera taken from the Prison pin {round(pin[0])},{round(pin[1])}")
+    return cx, cy
+
+
+_DRAG_SCALE = {}          # serial -> map pixels moved per finger pixel (learned by jump_to_pin)
+
+
+def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
+    """Owner 25 Oct: reach a pinned building like a jump, no roaming. 1) anchor: drag to the city's top-left corner until
+    the map stops (the edge is the only camera place the game always returns to the same); read the camera once there.
+    2) split the whole corner->pin vector into 1-4 fixed drags (each <= 330 x 500 px, ends off the side button columns),
+    NO looking between them. 3) wait 1 s for the glide / spring-back, ONE check on the map -> the pin's screen place.
+    -> (sx, sy) or None (then the caller's closed loop takes over)."""
+    import math
+    x, y, w, h = CITY_VIEW
+    mid_x, mid_y = x + w / 2, y + h / 2
+    t0 = time.time()
+    shot = dev.screenshot()                                # owner 25 Oct 15:15: no corner reset - start from where the camera is
+    if find_detail_icon(shot):
+        close_ring(dev, stop, (270, 490))
+        shot = dev.screenshot()
+    r = cmap.locate(shot)                                  # already looking at the pin? then no jump at all
+    if r and 90 <= mapx - r[0] <= 450 and 200 <= mapy - r[1] <= 780:
+        return mapx - r[0], mapy - r[1]
+    a = buff_anchor(dev, cfg, log, stop, cmap)             # owner 25 Oct 16:28: EVERY trip starts at the Prison (City Labor jump)
+    if a:
+        r = a
+    elif not r:
+        log("[i]   jump: no anchor and this view is not on the map - using the step-by-step route")
+        return None
+    cx, cy = r[0], r[1]
+    dx, dy = (mapx - cx) - mid_x, (mapy - cy) - mid_y      # how far the camera has to move (map px)
+    if abs(dx) < 120 and abs(dy) < 150 and 90 <= mapx - cx <= 450 and 200 <= mapy - cy <= 780:
+        return mapx - cx, mapy - cy                        # already on screen: no drag at all
+    k_scale = _DRAG_SCALE.get(dev.serial, 1.0)             # learned: the map moves k x the finger (25 Oct: 1.3-1.44 x)
+    fdx, fdy = dx / k_scale, dy / k_scale                  # finger distance
+    n = max(1, math.ceil(max(abs(fdx), abs(fdy)) / 250))   # owner: short fixed segments (<= 250 px), linear 550 ms each
+    n = min(n, 8)
+    sx_, sy_ = fdx / n, fdy / n
+    log(f"[i]   jump: camera at {round(cx)},{round(cy)} - pin {round(mapx)},{round(mapy)} - {n} fixed drag(s) of {round(sx_)},{round(sy_)} (scale {k_scale:.2f})")
+    for k in range(n):                                     # fixed drags, no looking in between
+        if stop.is_set():
+            return None
+        fx, fy = 270 + sx_ / 2, 480 + sy_ / 2
+        tx, ty = 270 - sx_ / 2, 480 - sy_ / 2
+        fx, tx = max(100, min(440, fx)), max(100, min(440, tx))   # safe zone (no HUD under the finger)
+        fy, ty = max(200, min(760, fy)), max(200, min(760, ty))
+        dev.swipe(int(fx), int(fy), int(tx), int(ty), 550)
+        _nap(stop, 0.35, 0.45)
+    _nap(stop, 1.0, 1.1)                                   # glide + spring-back finish
+    shot = dev.screenshot()
+    if find_detail_icon(shot):
+        close_ring(dev, stop, (270, 490))
+        shot = dev.screenshot()
+    r = cmap.locate(shot)                                  # the one check
+    if not r:
+        log("[i]   jump: the view after the drags is not found on the map - using the step-by-step route")
+        return None
+    nav.cx, nav.cy = r[0], r[1]
+    moved = ((nav.cx - cx) ** 2 + (nav.cy - cy) ** 2) ** 0.5
+    finger = (fdx ** 2 + fdy ** 2) ** 0.5
+    if finger > 150 and moved > 50:                         # learn how far the map really moves per finger pixel
+        k_new = max(0.6, min(2.5, moved / finger))
+        _DRAG_SCALE[dev.serial] = round(0.5 * k_scale + 0.5 * k_new, 3) if dev.serial in _DRAG_SCALE else round(k_new, 3)
+    sx, sy = mapx - nav.cx, mapy - nav.cy
+    log(f"[i]   jump: camera at {round(nav.cx)},{round(nav.cy)} after {time.time() - t0:.0f}s - pin on screen at {round(sx)},{round(sy)} (map moved {moved / max(1, finger):.2f} x the finger)")
+    if 90 <= sx <= 450 and 200 <= sy <= 780:
+        return sx, sy
+    return None
+
+
 def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
     """Closed loop on the own map: locate -> drag the difference -> locate again, until map point (mapx, mapy) is near
     the middle of the view. -> the point's screen place (sx, sy), or None."""
     x, y, w, h = CITY_VIEW
     mid_x, mid_y = x + w / 2, y + h / 2
+    try:
+        at = jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy)
+        if at:
+            return at
+    except Exception as _e:
+        quiet_err("jump_to_pin", _e)
     lost = 0
+    prev_cam = None
     for i in range(8):
         if stop.is_set():
             return None
@@ -11947,9 +12220,15 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
         lost = 0
         nav.cx, nav.cy = r[0], r[1]
         sx, sy = mapx - nav.cx, mapy - nav.cy
-        if abs(sx - mid_x) <= tol and abs(sy - mid_y) <= tol:
+        # owner 25 Oct: reach the building, don't polish the camera - anywhere safely on screen is good enough
+        # (a building near the city edge can never be centred: the map springs back, Kiravik looped 2 min on the Tavern)
+        if (abs(sx - mid_x) <= tol and abs(sy - mid_y) <= tol) or (90 <= sx <= 450 and 200 <= sy <= 780):
             log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} on the map ({r[2]} points), target on screen at {round(sx)},{round(sy)}")
             return sx, sy
+        if i and prev_cam and abs(prev_cam[0] - nav.cx) < 15 and abs(prev_cam[1] - nav.cy) < 15:
+            log("[!]   camera: the last drag did not move the map (a button or building under the finger?)")
+        prev_cam = (nav.cx, nav.cy)
+        log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} ({r[2]} points) - target {round(sx - mid_x)},{round(sy - mid_y)} px from the middle, moving (round {i + 1})")
         nav.pan(sx - mid_x, sy - mid_y)                    # measured drags (the diamond's edge stops them safely)
     return None
 
@@ -11977,7 +12256,11 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
             log(f"[i]   {bname}: picture match {mv:.2f} near the map place - tapping the map place")
     if not (60 <= spot[0] <= 470 and 150 <= spot[1] <= 820):
         return None
-    if open_building_here(dev, cfg, log, stop, bname, spots=[spot], how=f"the city map (match {mv:.2f})"):
+    # Kiravik 25 Oct 14:02: camera reached the Tavern pin, but one tap exactly on the pin hit the ground (no ring) and the
+    # map route gave up. A pin is a hand-placed point: try it, then a few spots around it.
+    near = [spot] + [(spot[0] + ox, spot[1] + oy) for ox, oy in ((0, -40), (0, 35), (-45, 0), (45, 0), (-35, -35), (35, -35))]
+    near = [(x, y) for x, y in near if 60 <= x <= 470 and 150 <= y <= 820]
+    if open_building_here(dev, cfg, log, stop, bname, spots=near, how=f"the city map (match {mv:.2f})"):
         try:                                               # refresh the place and the picture (open_building_here learned it)
             m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8")) if p.with_suffix(".json").exists() else {"dx": 0, "dy": 0}
             m2["map"] = [round(nav.cx + spot[0]), round(nav.cy + spot[1])]
@@ -15731,7 +16014,35 @@ def prepare(cfg, log):
 INSTANCE_GUARD = None        # set by the sold edition: callable(serial) -> bool
 
 
+TASK_ABORT = set()        # serials whose current city task the watchdog stopped (camera loops check it)
 HEARTBEAT = {}            # serial -> last time the instance wrote a log line
+
+
+def game_responds(serial, adb):
+    """Is the game alive? Watch the screen 4 s (timers, animations), then a small harmless scroll in the middle and look
+    again. Any change = alive. Only a screen that never changes is frozen. -> True / False (None = could not tell)."""
+    try:
+        d = Device(serial, adb)
+        a = cv2.cvtColor(d.screenshot(), cv2.COLOR_BGR2GRAY)
+        time.sleep(4)
+        b = cv2.cvtColor(d.screenshot(), cv2.COLOR_BGR2GRAY)
+        if float(np.mean(cv2.absdiff(a, b))) > 1.5:
+            return True
+        d.swipe(270, 620, 270, 520, 400)                     # a short scroll: lists move, the map moves, nothing is tapped
+        time.sleep(2.5)
+        c = cv2.cvtColor(d.screenshot(), cv2.COLOR_BGR2GRAY)
+        if float(np.mean(cv2.absdiff(b, c))) > 1.5:
+            return True
+        d.back()                                              # owner: scroll OR back - a live game always reacts to Back
+        time.sleep(2.5)
+        shot = d.screenshot()
+        e = cv2.cvtColor(shot, cv2.COLOR_BGR2GRAY)
+        if float(np.mean(cv2.absdiff(c, e))) > 1.5:
+            cancel_quit_dialog(d, shot, lambda *_: None)      # Back on the city asks to quit: say Cancel
+            return True
+        return False
+    except Exception:
+        return False                                          # no screenshot at all = the emulator does not answer
 QUIET_UNTIL = {}          # serial -> end of a planned long wait (cool-down) the watchdog must not count as stuck
 
 
@@ -15745,6 +16056,8 @@ def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
 
     def log(msg, *a, **k):                                   # every log line = this instance is alive (see watchdog below)
         HEARTBEAT[serial] = time.time()
+        if isinstance(msg, str) and ("failed" in msg or "Duty:" in msg or "rally list" in msg):
+            TASK_ABORT.discard(serial)                       # the stopped task has ended: normal work again
         return _log0(msg, *a, **k)
     HEARTBEAT[serial] = time.time()
 
@@ -15760,10 +16073,22 @@ def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
                 continue
             limit = int(merge_device_cfg(cfg, serial).get("no_progress_seconds", 300) or 0)
             idle = now - max(HEARTBEAT.get(serial, now), QUIET_UNTIL.get(serial, 0))
+            if limit and idle >= min(180, limit * 0.6) and serial not in TASK_ABORT and now - last_force >= 600:
+                TASK_ABORT.add(serial)                        # first: stop the stuck task, it is retried later (no restart)
+                log(f"[!] No progress for {idle / 60:.0f} min - stopping the current task, it is tried again later")
+                HEARTBEAT[serial] = now - idle                # keep counting from the real last progress
+                continue
             if not limit or idle < limit or now - last_force < 600:
                 continue
             last_force = now
-            log(f"[!] No progress for {idle / 60:.0f} min - force restarting the emulator")
+            alive = game_responds(serial, adb)                # owner 25 Oct: frozen = the screen never changes, even when touched
+            if alive:
+                log(f"[i] No progress for {idle / 60:.0f} min, but the game still reacts (the screen changes) - not restarting, "
+                    "the task was stopped and the normal rules carry on")
+                HEARTBEAT[serial] = now
+                TASK_ABORT.discard(serial)
+                continue
+            log(f"[!] No progress for {idle / 60:.0f} min and the screen does not change even when touched - force restarting the emulator")
             try:
                 mcfg = merge_device_cfg(cfg, serial)
                 notify(mcfg, serial, f"Stuck with no progress for {idle / 60:.0f} min - force restarting the emulator.")
