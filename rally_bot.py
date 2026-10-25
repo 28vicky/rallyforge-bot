@@ -12831,6 +12831,7 @@ def run_royal_thief(dev, cfg, log, stop):
 # No free march: stay on the monster until it is rallied (owner 23 Oct 08:20) - only a march line to it or the monster
 # disappearing makes the bot move on. 'max_wait' minutes > 0 sets a limit (0 = no limit, the default).
 # Skipped: a monster that is gone (no Attack / other name on its page) or that a march line is already going to.
+MR_RUN_MIN = 30                          # one non-stop run lasts at most this long, then the main loop checks in (owner 25 Oct)
 MR_POLL_MIN = 1                          # look for a new target this often (monsters die fast - owner 23 Oct)
 MR_FORGET_MIN = 30                       # a target that was started / skipped is not tried again for this long
 MR_CENTER = (272, 480)                   # the searched tile sits in the middle of the map
@@ -13215,8 +13216,32 @@ def run_monster_rally(dev, cfg, log, stop):
     """The universal pop-up closer is held off meanwhile: it closed the rally time window by its X (Kiravik 23 Oct)."""
     was = getattr(dev, "_guard_busy", False)
     dev._guard_busy = True
+    serial = getattr(dev, "serial", "")
+    t_start = time.time()
     try:
-        return _run_monster_rally(dev, cfg, log, stop)
+        # Owner 25 Oct: once running, monster rallies go on non-stop. Only an Auto-Join renewal or another task /
+        # routine that is due interrupts them (done in between, then the rallies carry on).
+        while True:
+            _TL.mr_go_on = _TL.mr_idle = False
+            _run_monster_rally(dev, cfg, log, stop)
+            if stop.is_set() or not _TL.mr_go_on:
+                return
+            if time.time() - t_start > MR_RUN_MIN * 60:
+                return
+            if getattr(dev, "aj_next", 0) and time.time() >= dev.aj_next:
+                log("[*]  Monster rally: Auto-Join needs renewing - doing that, the rallies go on after it")
+                return
+            try:
+                other = [t for t in city_tasks_due(cfg, getattr(_TL, "city_last", None) or {}, serial)
+                         if t.get("name") != "duty:monster_rally"]
+            except Exception as _e:
+                quiet_err("monster_rally_other_due", _e)
+                other = []
+            if other:
+                log(f"[*]  Monster rally: {len(other)} other task(s) due - doing them, the rallies go on after")
+                return
+            if _TL.mr_idle:                                  # nothing to rally right now: wait on the map for new coordinates
+                _nap(stop, 20, 25)
     finally:
         dev._guard_busy = was
 
@@ -13239,6 +13264,7 @@ def _run_monster_rally(dev, cfg, log, stop):
         if not any(f"{t.get('x')},{t.get('y')}" == hold for t in targets):
             mr_save(serial, hold=None)                       # gone from the list (dead / too old)
     if not targets:
+        _TL.mr_go_on = _TL.mr_idle = True
         return later(MR_POLL_MIN, "no Telegram coordinate matches the monster list")
     keep_free = int(float(rd_opt(cfg, "monster_rally", "keep_free", 0) or 0))
     max_wait = float(rd_opt(cfg, "monster_rally", "max_wait", 0) or 0) * 60          # 0 = stay until it is rallied
@@ -13466,7 +13492,9 @@ def _run_monster_rally(dev, cfg, log, stop):
         started += 1
         continue                                             # owner 25 Oct: straight to the next monster
     if started:
+        _TL.mr_go_on = True
         return later(1, f"{started} rally(s) started, looking for the next one")
+    _TL.mr_go_on = _TL.mr_idle = True
     later(MR_POLL_MIN, "every coordinate tried was gone or taken")
 
 RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
@@ -14497,7 +14525,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                     nav_state.clear()
                 # time budget per duty (Kiravik 24 Oct 15:14: Champions sat on a purchase page for 10+ min with no log line):
                 # 20 min, 50 for the city map; over it, the next tap aborts the duty and the attempt-2 path takes over
-                _TL.duty_deadline = time.time() + (50 if duty_id == "map_city" else DUTY_BUDGET_MIN) * 60
+                _TL.duty_deadline = time.time() + (50 if duty_id == "map_city" else MR_RUN_MIN + 10 if duty_id == "monster_rally" else DUTY_BUDGET_MIN) * 60
                 if not ensure_view(dev, cfg, stop, log, "world" if on_map else "city") and not stop.is_set():
                     log(f"[!] Could not get back to the {'world map' if on_map else 'city view'}")
                 clear_popups(dev, cfg, log, stop, want_city=not on_map)   # close offers / pop-ups first, then do the task
@@ -15587,6 +15615,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             log(f"[i] Picture collector: {e}")
                     if now >= aj_next[0] or AJ_ASK.pop(serial, False):
                         aj_next[0] = now + auto_join_renew(dev, cfg, log, stop, act)
+                        dev.aj_next = aj_next[0]                # monster rallies step aside when the renewal is due
                     elif tasks_active(cfg, serial) and now >= city_block[0] and (due := city_tasks_due(cfg, city_last, serial)):
                         if map_only(due):                                  # monster rallies: straight from the rally list to the map
                             log(f"[*] Auto-Join is running - going to the world map for {len(due)} task(s)")
