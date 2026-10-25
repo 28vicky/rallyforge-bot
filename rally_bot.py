@@ -11150,6 +11150,7 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
         log(f"[i]   after Go the menu at ({x},{y}) is '{nm or '?'}', not {bname}")
         close_ring(dev, stop, (x, y + 60))
     rd_snap(dev.screenshot(), "ago_6_nobuilding")
+    log(f"[i]   {bname}: tapped {len(spots or [])} spot(s) at the expected place - no building menu opened")
     return False
 
 
@@ -12050,7 +12051,11 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
             log(f"[i]   {bname}: picture match {mv:.2f} near the map place - tapping the map place")
     if not (60 <= spot[0] <= 470 and 150 <= spot[1] <= 820):
         return None
-    if open_building_here(dev, cfg, log, stop, bname, spots=[spot], how=f"the city map (match {mv:.2f})"):
+    # Kiravik 25 Oct 14:02: camera reached the Tavern pin, but one tap exactly on the pin hit the ground (no ring) and the
+    # map route gave up. A pin is a hand-placed point: try it, then a few spots around it.
+    near = [spot] + [(spot[0] + ox, spot[1] + oy) for ox, oy in ((0, -40), (0, 35), (-45, 0), (45, 0), (-35, -35), (35, -35))]
+    near = [(x, y) for x, y in near if 60 <= x <= 470 and 150 <= y <= 820]
+    if open_building_here(dev, cfg, log, stop, bname, spots=near, how=f"the city map (match {mv:.2f})"):
         try:                                               # refresh the place and the picture (open_building_here learned it)
             m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8")) if p.with_suffix(".json").exists() else {"dx": 0, "dy": 0}
             m2["map"] = [round(nav.cx + spot[0]), round(nav.cy + spot[1])]
