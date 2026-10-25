@@ -7424,6 +7424,7 @@ class CityNav:
                 self.seen_city = True
             if not sc:
                 lost += 1
+                self.log(f"[i]   camera: this view is not found on the city map ({lost}/7)")
                 if lost >= 7:
                     if not getattr(self, "quiet", False):
                         self.log("[!]   the screen is not recognised as the city (ad or window in the way?)")
@@ -7437,6 +7438,7 @@ class CityNav:
                 return True
             mx = max(-380, min(380, px - mid_x))              # how far the picture has to move (owner 25 Oct: one long drag, not many short ones)
             my = max(-540, min(540, py - mid_y))
+            self.log(f"[i]   camera at {round(self.cx)},{round(self.cy)} (match {sc:.2f}) - target {round(px - mid_x)},{round(py - mid_y)} px away, dragging")
             if abs(mx) < 30 and abs(my) < 30:                 # a short drag may count as a TAP on a building: overshoot and come back
                 ux, uy = (1.0 if mx >= 0 else -1.0), (1.0 if my >= 0 else -1.0)
                 self.dev.swipe(*calm_drag(self.dev.screenshot(), 270 + ux * 100, 440 + uy * 100, 270 - ux * 100, 440 - uy * 100), 450)
