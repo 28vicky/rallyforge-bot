@@ -1971,7 +1971,7 @@ const FIXED_BUILDINGS = ["Keep", "Tavern", "Shrine", "Pasture", "Academy", "Mili
   "Victory Column", "Wonder", "Fountain of the Gods", "Wisdom Dome", "Dragon Cliff", "Holy Palace", "Art Hall",
   "Subordinate City", "Battlefield", "Barracks", "Archer Camp", "Stables", "Arsenal",
   "Warehouse", "Hospital", "Market", "Prison", "Trap Factory", "Embassy", "Workshop", "War Hall", "Council of State",
-  "Bounty Cave", "Army Camp", "Walls", "Archer Tower 1", "Archer Tower 2"];
+  "Bounty Cave", "Army Camp", "Walls", "Archer Tower 1", "Archer Tower 2", "Forge"];
 function pinBuildingsDialog(culture) {
   const st = { c: culture, sel: null, pins: {}, size: null };
   const body = h("div", { class: "pinbox" });
