@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## RELEASED 25 Oct 12:55 IST - 2.5.17 = 2.5.16 + fix/bluestacks-zoom (window-message zoom -> real Ctrl+scroll x3 -> pinch, plain log) + feat/pin-all-buildings (pin tool lists every building, one name each; old pins renamed Walls / Archer Tower 1 / Council of State). Owner still pinning on his PC: publish cultures/*/pins.json from the PC next.
+
 ## RELEASED 25 Oct 12:30 IST - 2.5.16 = 2.5.15 + fix/autojoin-renew-rallies-off (Auto-Join renewed when bot joining is off; Kiravik/Stalds 2 h expired). Doc claude/autojoin_and_pins_next_25oct.md.
 
 ## RELEASED 25 Oct 12:20 IST - 2.5.15 = 2.5.14 (T79-rw restart fixes + chat check) + feat/culture-pins (T76 steps 1-3, wheel fixes, duties give up after 8 min) + fix/side-status-wrap. All rows marked ready earlier (T56-T70) were already in main. Owner PC: do NOT need the update for the fixes (PC copy patched), but installing 2.5.15 is now safe - it has everything.
