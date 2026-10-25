@@ -12562,7 +12562,7 @@ def mr_preset_loaded(shot):
     return not rd_seen(shot, ["Select a Main General"], region=(0, 450, 540, 170))
 
 
-MR_PANEL_TAP = (50, 147)                  # world map: the folded "March" pill / the open panel's header (toggles it)
+MR_PANEL_TAP = (50, 147)                  # world map: folded "> March" pill opens it; tapping the open "v March n/6" bar folds it (owner 25 Oct)
 
 
 def mr_to_map(dev, cfg, stop, tries=3):
@@ -12589,7 +12589,7 @@ def mr_return_secs(dev, cfg, stop, log):
         opened = True
     rd_snap(shot, "mrally_march_panel")
     if opened or mk:
-        for spot in (MR_PANEL_TAP, (22, 147)):               # fold it again (owner: keep it minimised)
+        for spot in (MR_PANEL_TAP, (150, 147)):              # fold it again: tap the "March n/6" bar (owner: keep it minimised)
             if not rt_marches(dev.screenshot()):
                 break
             dev.tap(*spot)
