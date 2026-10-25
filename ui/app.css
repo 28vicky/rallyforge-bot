@@ -1692,3 +1692,5 @@ select.pick-open{border-color:var(--accent1)}
 .dline .dtx b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dline .dbadge{flex:0 1 auto;min-width:0;max-width:45%;overflow:hidden;text-overflow:ellipsis}
 .sph .spt .dbadge{display:inline-block;margin-top:6px;max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
+.mrage{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mrage .segb{text-transform:none;letter-spacing:0}

@@ -2184,12 +2184,27 @@ function monsterRallyTab(serial) {
   // ---- rules
   const num = (k, label, hint, d, max) => h("label", { class: "mrfield" }, h("span", { class: "lab" }, label),
     h("input", { type: "number", min: 0, max, value: optVal(k, d), onchange: (e) => setOpt({ [k]: e.target.value }) }), h("small", { class: "hint" }, hint));
+  // Owner 25 Oct: quick picks for how old a Telegram coordinate may be + any own number (more than 30 if wanted)
+  const ageField = () => {
+    const cur = +optVal("max_age", 10) || 10;
+    const box = h("input", { type: "number", min: 1, max: 600, value: cur, "aria-label": "Minutes", onchange: (e) => pick(+e.target.value) });
+    const btns = [5, 10, 15, 30].map((m) => h("button", { type: "button", class: "segb" + (m === cur ? " on" : ""), onclick: () => pick(m) }, m + " min"));
+    const pick = (m) => {
+      m = Math.max(1, Math.min(600, Math.round(m) || 10));
+      box.value = m;
+      btns.forEach((b, i) => b.classList.toggle("on", [5, 10, 15, 30][i] === m));
+      setOpt({ max_age: m });
+    };
+    return h("label", { class: "mrfield" }, h("span", { class: "lab" }, "Use coordinates up to"),
+      h("div", { class: "mrage" }, h("div", { class: "seg small" }, ...btns), box),
+      h("small", { class: "hint" }, "minutes old · pick one or type your own"));
+  };
   const rulesCard = () => panel(null, h("div", { class: "cardhead" }, h("h3", {}, "Rules")),
     h("div", { class: "mrfields" },
       num("max_wait", "Give up on a monster after", "minutes without a free march \u00b7 0 = stay until it is rallied", 0, 120),
       num("keep_free", "Marches kept free", "for joining other rallies", 0, 5),
       num("keep_stamina", "Keep stamina", "never start a rally under this", 100, 9999),
-      num("max_age", "Coordinates up to", "minutes old", 30, 600)),
+      ageField()),
     h("label", { class: "tgl", style: { marginTop: "12px" } }, h("input", { type: "checkbox", checked: optVal("skip_busy", true) !== false, onchange: (e) => setOpt({ skip_busy: e.target.checked }) }), h("span", { class: "sw" }),
       h("span", {}, "Skip a monster that a march is already going to")));
   // ---- coordinates Telegram has now
@@ -2197,7 +2212,7 @@ function monsterRallyTab(serial) {
   const ago = (t) => { const s = Math.max(0, Math.round(coords.now - t)); return s < 60 ? s + " s" : s < 3600 ? Math.round(s / 60) + " min" : Math.round(s / 3600) + " h"; };
   const paintCoords = () => {
     cbox.innerHTML = "";
-    const maxAge = (+optVal("max_age", 30) || 30) * 60;
+    const maxAge = (+optVal("max_age", 10) || 10) * 60;
     const items = (coords.items || []).filter((c) => !isBoss(c.name)).slice(0, 40);
     if (!items.length) {
       cbox.appendChild(h("div", { class: "mrempty" }, h("b", {}, "No coordinates from Telegram yet"),

@@ -12724,7 +12724,7 @@ def mr_targets(cfg, tried, serial=None):
     """Telegram coordinates of monsters that sit on a preset (Monster rallies tab), best first (newest, then nearest).
     -> [{name, level, x, y, km, t, rule, rank}]"""
     rules = mr_rules(cfg)
-    age = float(rd_opt(cfg, "monster_rally", "max_age", 30) or 30) * 60
+    age = float(rd_opt(cfg, "monster_rally", "max_age", 10) or 10) * 60
     now = time.time()
     feed, _ = feed_get(_feed_keep[0] if _feed_keep[0] is not None else int(cfg.get("tg_keep_min", 60) or 0))
     try:
@@ -13329,7 +13329,7 @@ DUTY_LIBRARY = [
               {"k": "max_wait", "label": "Give up on a monster after (min, 0 = wait until it is rallied)", "type": "number", "min": 0, "max": 120, "def": 0},
               {"k": "keep_free", "label": "Marches to keep free for joining", "type": "number", "min": 0, "max": 5, "def": 0},
               {"k": "keep_stamina", "label": "Keep at least this much stamina", "type": "number", "min": 0, "max": 9999, "def": 100},
-              {"k": "max_age", "label": "Ignore coordinates older than (min)", "type": "number", "min": 1, "max": 600, "def": 30},
+              {"k": "max_age", "label": "Ignore coordinates older than (min)", "type": "number", "min": 1, "max": 600, "def": 10},
               {"k": "skip_busy", "label": "Skip a monster a march is already going to", "type": "bool", "def": True}]},
 ]
 DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
