@@ -7305,6 +7305,30 @@ class FlowRecorder:
         return {"steps": len(self.steps), "path": str(self.dir)}
 
 
+def calm_drag(shot, fx, fy, tx, ty):
+    """Move a drag (same direction and length) so it starts on empty ground - road, grass, water - not on a building.
+    A drag that starts on a building is taken as a tap and opens its ring (Rory 25 Oct 13:03, going to the Tavern pin).
+    Picks the candidate start with the least detail (buildings are busy pictures). -> (fx, fy, tx, ty)."""
+    try:
+        g = cv2.cvtColor(shot, cv2.COLOR_BGR2GRAY) if shot is not None else None
+        if g is None:
+            return fx, fy, tx, ty
+        lap = np.abs(cv2.Laplacian(g, cv2.CV_32F))
+        best, best_v = (0, 0), None
+        for ox in (0, -120, 120, -200, 200):
+            for oy in (0, -150, 150, -250, 250):
+                a, b, c, d = fx + ox, fy + oy, tx + ox, ty + oy
+                if min(a, c) < 30 or max(a, c) > 510 or min(b, d) < 160 or max(b, d) > 800:
+                    continue                                  # both ends stay on the map, away from the game's buttons
+                x0, y0 = int(a) - 22, int(b) - 22
+                v = float(lap[y0:y0 + 44, x0:x0 + 44].mean()) + (abs(ox) + abs(oy)) * 0.004   # prefer staying close
+                if best_v is None or v < best_v:
+                    best, best_v = (ox, oy), v
+        return fx + best[0], fy + best[1], tx + best[0], ty + best[1]
+    except Exception:
+        return fx, fy, tx, ty
+
+
 class CityNav:
     """Moves around the city map and remembers where the camera is (relative to the top-left corner)."""
 
@@ -7360,10 +7384,10 @@ class CityNav:
             my = max(-320, min(320, py - mid_y))
             if abs(mx) < 30 and abs(my) < 30:                 # a short drag may count as a TAP on a building: overshoot and come back
                 ux, uy = (1.0 if mx >= 0 else -1.0), (1.0 if my >= 0 else -1.0)
-                self.dev.swipe(270 + ux * 100, 440 + uy * 100, 270 - ux * 100, 440 - uy * 100, 450)
+                self.dev.swipe(*calm_drag(self.dev.screenshot(), 270 + ux * 100, 440 + uy * 100, 270 - ux * 100, 440 - uy * 100), 450)
                 _nap(self.stop, self.pause, self.pause + 0.3)
                 continue                                      # next round sees the overshoot and drags back
-            self.dev.swipe(270 + mx / 2, 440 + my / 2, 270 - mx / 2, 440 - my / 2, 450)
+            self.dev.swipe(*calm_drag(self.dev.screenshot(), 270 + mx / 2, 440 + my / 2, 270 - mx / 2, 440 - my / 2), 450)
             _nap(self.stop, self.pause, self.pause + 0.3)
         return False
 
@@ -7385,6 +7409,7 @@ class CityNav:
             shot = before if before is not None else self.dev.screenshot()
             return 0.0, 0.0, shot
         before = self._settled() if before is None else before
+        fx, fy, tx, ty = calm_drag(before, fx, fy, tx, ty)
         self.dev.swipe(int(fx), int(fy), int(tx), int(ty), 600)
         _nap(self.stop, self.pause, self.pause + 0.3)
         after = self._settled()
