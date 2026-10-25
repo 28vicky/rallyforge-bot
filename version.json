@@ -1,9 +1,9 @@
 {
-  "version": "2.5.15",
-  "notes": "Faster city mapping with culture maps, Wheel and duty fixes",
+  "version": "2.5.16",
+  "notes": "Auto-Join renewal fixed",
   "files": {
     "rally_bot.py": {
-      "sha256": "9f8374e211a06b480c98d1ca4449b77fd3515aaf57fc8d77b2a75303dfb61a87"
+      "sha256": "2d4b67eabdb92e6be3bcf6963e0a4d1d3c7db9e3d7e96b8dd21493b3a69e5dc6"
     },
     "web_app.py": {
       "sha256": "debef39b921ecfbb766debe14c2746681e60e56bf98b9838974cb8dfc7e314f6"
@@ -18,7 +18,7 @@
       "sha256": "9e4be6ae10e966a20e8839d258cbd03e94c4b503d346087328560d1044418010"
     },
     "ui/changelog.js": {
-      "sha256": "0af81ae2d0da4813deff092cfc82a9e38023e0aea24a99b0ec01eb11629bd6b7"
+      "sha256": "eb7c8413b941cd44d5661c92573b03ccc75a69ce1bf3a732d5761bc3bfc57d7b"
     },
     "ui/dialogs.js": {
       "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
@@ -3287,5 +3287,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "1376db780f746599b2a03f1838fe6cd58bf7d2d1acffab970705cfee16a0961d"
+  "sig": "b7219b8a631f55c090bd99dd3b085ee2ffa68d9b5ace8bbed05298c296239cbf"
 }
