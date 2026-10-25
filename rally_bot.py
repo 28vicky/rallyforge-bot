@@ -12028,22 +12028,26 @@ def city_buff_jump(dev, cfg, log, stop):
     for i in range(12):                                    # active buffs sit at the top - the row moves, find it by its words
         if stop.is_set():
             return False
-        hit = find_text(shot, ["City Labor"], region=(120, 70, 360, 860), cutoff=0.8)
+        hit = find_text(shot, ["City Labor"], region=(120, 70, 360, 860), cutoff=0.72)
+        dy = 22
+        if not hit:                                        # the gold title reads badly (Kiravik 16:16): the white line under it
+            hit = find_text(shot, ["instantly gain resources", "resources from Main City"], region=(120, 70, 360, 860), cutoff=0.72)
+            dy = -5
         if hit and hit[1] <= 800:
             break
         hit = None
         if i < 8:
-            dev.swipe(270, 760, 270, 330, 700)             # list up
+            dev.swipe(270, 720, 270, 380, 1500)            # list up, slow (owner holds the finger: no glide, sharp picture)
         else:
-            dev.swipe(270, 300, 270, 730, 700)             # overshot: back down
-        _nap(stop, 0.9, 1.2)
+            dev.swipe(270, 380, 270, 720, 1500)            # overshot: back down
+        _nap(stop, 1.3, 1.6)
         shot = dev.screenshot()
     if not hit:
         rd_snap(shot, "buff_1_norow")
         log("[i]   City Buff: no 'City Labor' row found")
         leave_to_city(dev, cfg, stop, log)
         return False
-    dev.tap(505, min(900, hit[1] + 22))                    # the row's arrow (right side, middle of the row)
+    dev.tap(505, min(900, hit[1] + dy))                    # the row's arrow (right side, middle of the row)
     _nap(stop, 2.2, 2.6)
     shot = dev.screenshot()
     if rd_seen(shot, ["City Buff"], region=(100, 0, 340, 70)):
