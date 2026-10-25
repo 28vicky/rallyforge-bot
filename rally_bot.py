@@ -11660,14 +11660,33 @@ def zoom_out_full(dev, cfg, stop, log):
     if cfg.get("zoom_out", False):
         zoom_out_city(dev, stop, log)
     name = (load_config().get("device_names") or {}).get(dev.serial)
+    use_real = False
     for i in range(6):
         if stop.is_set():
             return
         before = dev.screenshot()
-        if not wheel_zoom_out(dev, log, name):
+        if not (real_wheel_zoom_out(dev, log, name, stop=stop) if use_real else wheel_zoom_out(dev, log, name)):
             return
         _nap(stop, 1.0, 1.3)
         sc = _view_scale(before, dev.screenshot())
+        if (not sc or sc >= 0.97) and i == 0 and not use_real:
+            # Owner 25 Oct: on testers' BlueStacks the Ctrl+wheel window message changes nothing and the bot said "fully
+            # out". A real Ctrl + scroll down (what the owner does by hand) works there: try it a few times first.
+            for k in range(3):
+                if stop.is_set():
+                    return
+                b2 = dev.screenshot()
+                if not real_wheel_zoom_out(dev, log, name, stop=stop):
+                    break
+                _nap(stop, 1.0, 1.3)
+                s2 = _view_scale(b2, dev.screenshot())
+                if s2 and s2 < 0.97:
+                    log(f"[i]   zoom: the real Ctrl+scroll worked (try {k + 1})")
+                    sc, use_real = s2, True
+                    break
+            else:
+                log("[i]   zoom: neither Ctrl+wheel nor a real Ctrl+scroll changed the view - the city is fully out (or this emulator does not zoom)")
+                return
         if not sc or sc >= 0.97:
             log(f"[i]   zoom: fully out after {i} more notch(es)")
             return
