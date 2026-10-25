@@ -7397,6 +7397,8 @@ class CityNav:
     def halted(self):
         """Stop pressed, or this step's time limit passed: every camera move checks it (Kiravik 24 Oct 14:57: Stop clicked
         9 times while aiming at the Market, the instance kept going)."""
+        if self.dev.serial in TASK_ABORT:                     # the watchdog stopped this task (owner 25 Oct: stop the task, retry later)
+            return True
         return self.stop.is_set() or (self.deadline is not None and time.time() > self.deadline)
 
     def localize(self, shot=None):
@@ -15530,6 +15532,7 @@ def prepare(cfg, log):
 INSTANCE_GUARD = None        # set by the sold edition: callable(serial) -> bool
 
 
+TASK_ABORT = set()        # serials whose current city task the watchdog stopped (camera loops check it)
 HEARTBEAT = {}            # serial -> last time the instance wrote a log line
 QUIET_UNTIL = {}          # serial -> end of a planned long wait (cool-down) the watchdog must not count as stuck
 
@@ -15544,6 +15547,8 @@ def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
 
     def log(msg, *a, **k):                                   # every log line = this instance is alive (see watchdog below)
         HEARTBEAT[serial] = time.time()
+        if isinstance(msg, str) and ("failed" in msg or "Duty:" in msg or "rally list" in msg):
+            TASK_ABORT.discard(serial)                       # the stopped task has ended: normal work again
         return _log0(msg, *a, **k)
     HEARTBEAT[serial] = time.time()
 
@@ -15559,6 +15564,11 @@ def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
                 continue
             limit = int(merge_device_cfg(cfg, serial).get("no_progress_seconds", 300) or 0)
             idle = now - max(HEARTBEAT.get(serial, now), QUIET_UNTIL.get(serial, 0))
+            if limit and idle >= min(180, limit * 0.6) and serial not in TASK_ABORT and now - last_force >= 600:
+                TASK_ABORT.add(serial)                        # first: stop the stuck task, it is retried later (no restart)
+                log(f"[!] No progress for {idle / 60:.0f} min - stopping the current task, it is tried again later")
+                HEARTBEAT[serial] = now - idle                # keep counting from the real last progress
+                continue
             if not limit or idle < limit or now - last_force < 600:
                 continue
             last_force = now
