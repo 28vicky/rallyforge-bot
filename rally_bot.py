@@ -15534,6 +15534,24 @@ INSTANCE_GUARD = None        # set by the sold edition: callable(serial) -> bool
 
 TASK_ABORT = set()        # serials whose current city task the watchdog stopped (camera loops check it)
 HEARTBEAT = {}            # serial -> last time the instance wrote a log line
+
+
+def game_responds(serial, adb):
+    """Is the game alive? Watch the screen 4 s (timers, animations), then a small harmless scroll in the middle and look
+    again. Any change = alive. Only a screen that never changes is frozen. -> True / False (None = could not tell)."""
+    try:
+        d = Device(serial, adb)
+        a = cv2.cvtColor(d.screenshot(), cv2.COLOR_BGR2GRAY)
+        time.sleep(4)
+        b = cv2.cvtColor(d.screenshot(), cv2.COLOR_BGR2GRAY)
+        if float(np.mean(cv2.absdiff(a, b))) > 1.5:
+            return True
+        d.swipe(270, 620, 270, 520, 400)                     # a short scroll: lists move, the map moves, nothing is tapped
+        time.sleep(2.5)
+        c = cv2.cvtColor(d.screenshot(), cv2.COLOR_BGR2GRAY)
+        return float(np.mean(cv2.absdiff(b, c))) > 1.5
+    except Exception:
+        return False                                          # no screenshot at all = the emulator does not answer
 QUIET_UNTIL = {}          # serial -> end of a planned long wait (cool-down) the watchdog must not count as stuck
 
 
@@ -15572,7 +15590,14 @@ def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
             if not limit or idle < limit or now - last_force < 600:
                 continue
             last_force = now
-            log(f"[!] No progress for {idle / 60:.0f} min - force restarting the emulator")
+            alive = game_responds(serial, adb)                # owner 25 Oct: frozen = the screen never changes, even when touched
+            if alive:
+                log(f"[i] No progress for {idle / 60:.0f} min, but the game still reacts (the screen changes) - not restarting, "
+                    "the task was stopped and the normal rules carry on")
+                HEARTBEAT[serial] = now
+                TASK_ABORT.discard(serial)
+                continue
+            log(f"[!] No progress for {idle / 60:.0f} min and the screen does not change even when touched - force restarting the emulator")
             try:
                 mcfg = merge_device_cfg(cfg, serial)
                 notify(mcfg, serial, f"Stuck with no progress for {idle / 60:.0f} min - force restarting the emulator.")
