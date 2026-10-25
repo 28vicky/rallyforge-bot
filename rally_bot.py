@@ -12557,6 +12557,11 @@ def mr_rules(cfg):
     return out
 
 
+def mr_preset_loaded(shot):
+    """Alliance War troop page: a general is set (no 'Select a Main General' card). An empty preset = its general is out."""
+    return not rd_seen(shot, ["Select a Main General"], region=(0, 450, 540, 170))
+
+
 def mr_rule_for(rules, name, level):
     """-> (index, rule) of the first row that fits this monster, or (None, None)."""
     low = str(name or "").lower().strip()
@@ -12778,6 +12783,11 @@ def _run_monster_rally(dev, cfg, log, stop):
         log(f"[*]  Monster rally: {why} - again at {time.strftime('%H:%M', time.localtime(time.time() + minutes * 60))}")
 
     targets = mr_targets(cfg, tried)
+    hold = row.get("hold")                                  # a monster reached but not started (preset out / window): first
+    if hold:
+        targets.sort(key=lambda t: f"{t.get('x')},{t.get('y')}" != hold)
+        if not any(f"{t.get('x')},{t.get('y')}" == hold for t in targets):
+            mr_save(serial, hold=None)                       # gone from the list (dead / too old)
     if not targets:
         return later(MR_POLL_MIN, "no Telegram coordinate matches the monster list")
     keep_free = int(float(rd_opt(cfg, "monster_rally", "keep_free", 0) or 0))
@@ -12884,12 +12894,31 @@ def _run_monster_rally(dev, cfg, log, stop):
         if got == "other":
             log(f"[*]  Monster rally: {label} - another monster stands there ({page}), skipped")
             continue
-        n = RT_PRESETS.index(preset) if preset in RT_PRESETS else 0
-        for _ in range(2):                                   # the first tap on a preset is sometimes lost
-            dev.tap(62 + n * 61, 115)
-            _nap(stop, 0.6, 0.8)
-        shot = dev.screenshot()
-        rd_snap(shot, "mrally_troops")
+        # Owner 25 Oct: never March on an empty preset (its general is still out on another rally) - try the other
+        # presets that have this monster; none loaded = keep this monster first in line and come back soon.
+        lvl = tgt.get("level") or 0
+        cands = [preset] + [r["preset"] for r in mr_rules(cfg) if r["preset"] != preset and mr_rule_for([r], tgt.get("name"), lvl)[1]]
+        cands = list(dict.fromkeys(cands))
+        used = None
+        for p_ in cands:
+            n = RT_PRESETS.index(p_) if p_ in RT_PRESETS else 0
+            for _ in range(2):                               # the first tap on a preset is sometimes lost
+                dev.tap(62 + n * 61, 115)
+                _nap(stop, 0.6, 0.8)
+            shot = dev.screenshot()
+            rd_snap(shot, "mrally_troops")
+            if mr_preset_loaded(shot):
+                used = p_
+                break
+            log(f"[*]  Monster rally: {label} - preset {p_} is empty (its general is still out)")
+        if not used:
+            rd_snap(shot, "mrally_empty_preset")
+            dev.back()                                       # the troop page (not the map): back to the monster
+            _nap(stop, 1.0, 1.3)
+            tried.pop(key, None)
+            mr_save(serial, hold=key)
+            return later(0.5, f"{label} - every preset for it is out, trying this monster again first")
+        preset = used
         sta = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (280, 820, 260, 55))))
         if keep_sta and len(sta) >= 2 and sta[-2] - sta[-1] < keep_sta:
             dev.back()
@@ -12907,11 +12936,30 @@ def _run_monster_rally(dev, cfg, log, stop):
             shot = dev.screenshot()
         dev.tap(*MR_MARCH)                                   # fixed spot (the gold label is rarely read, PC 23 Oct); checked below
         _nap(stop, 1.5, 1.8)
-        shot = dev.screenshot()
-        if rd_seen(shot, ["Select a Preset"], region=(0, 120, 540, 60)):
-            rd_snap(shot, "mrally_stuck")
-            dev.back()
-            raise RuntimeError("the march did not leave (no troops?)")
+        went = False
+        for i_ in range(4):                                  # started = back on the map; a warning window = it did not go
+            shot = dev.screenshot()
+            if rd_seen(shot, ["Select a Preset"], region=(0, 120, 540, 60)) and i_ < 3:
+                _nap(stop, 0.8, 1.0)                         # the troop page can stay a moment after March
+                continue
+            if rd_seen(shot, ["Select a Preset"], region=(0, 120, 540, 60)):
+                rd_snap(shot, "mrally_stuck")
+                dev.back()
+                tried.pop(key, None)
+                mr_save(serial, hold=key)
+                return later(0.5, f"{label} - the march did not leave (no troops?), trying this monster again first")
+            if view_of(shot, cfg) in ("landscape", "world"):
+                went = True
+                break
+            _nap(stop, 0.8, 1.0)
+        if not went:                                         # owner 25 Oct 20:59: a warning came up, it was logged as started
+            rd_snap(shot, "mrally_march_window")
+            log(f"[!]  Monster rally: {label} - March did not go (a window came up) - closing it")
+            clear_popups(dev, cfg, log, stop, rounds=3, want_city=False)
+            tried.pop(key, None)
+            mr_save(serial, hold=key)
+            return later(0.5, f"{label} - not started, trying this monster again first")
+        mr_save(serial, hold=None)
         log(f"[+]  Monster rally: started on {label} - {mode} min, preset {preset}")
         return later(1, "rally started, looking for the next one")
     later(MR_POLL_MIN, "every coordinate tried was gone or taken")
