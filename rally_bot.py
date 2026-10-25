@@ -4770,6 +4770,8 @@ def sync_culture_pack(log=print):
                 continue
             want = str((meta or {}).get("sha256", ""))
             target = root / name
+            if name.endswith("/pins.json") and target.exists() and (USER / "admin.txt").exists():
+                continue                                     # owner 25 Oct: his own pins on this PC are never overwritten (Russia pins lost 13:11)
             if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == want:
                 continue
             data = _download(urllib.parse.urljoin(base, (meta or {}).get("url", "cultures/" + urllib.parse.quote(name))), 8_000_000)
@@ -4836,6 +4838,8 @@ def sync_catalog_pack(log=print):
                 continue
             want = str((meta or {}).get("sha256", ""))
             target = root / name
+            if name.endswith("/pins.json") and target.exists() and (USER / "admin.txt").exists():
+                continue                                     # owner 25 Oct: his own pins on this PC are never overwritten (Russia pins lost 13:11)
             if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == want:
                 continue
             if target.exists() and name != "catalog.json":
