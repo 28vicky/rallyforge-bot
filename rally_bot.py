@@ -169,7 +169,8 @@ DEFAULTS = {
     "settle_seconds": 8,
     "restart_settle_seconds": 25,           # after a game / emulator (re)start: settle at least this long, no red wifi icon (owner 25 Oct)
     "restart_skip_max_idle": 180,           # over the restart budget, still restart when the list showed no rallies for this long (s)
-    "game_restarts_per_hour": 2,            # Evony restarts per instance per hour, except must-restarts (frozen game etc.); 0 = no limit                    # after the game looks loaded: wait this long (and until the screen is calm) before any task
+    "game_restarts_per_hour": 2,
+    "chat_check_minutes": 10,               # no rally on the list for this long -> read the Alliance chat to tell quiet from broken (0 = off)            # Evony restarts per instance per hour, except must-restarts (frozen game etc.); 0 = no limit                    # after the game looks loaded: wait this long (and until the screen is calm) before any task
     "watchdog_seconds": 60,
     "no_progress_seconds": 300,           # no log line for this long while running -> force restart the emulator (0 = off)
     # generals: names = pictures in the generals folder, "" = keep whatever the preset set
@@ -6054,6 +6055,119 @@ def others_see_rallies(serial, within=150, allies_only=True):
     now = time.time()
     allies = {s for pair in list(_ALLIES) if serial in pair for s in pair if s != serial}
     return any((s in allies if allies_only else s != serial) and now - t < within for s, t in list(_RALLY_SEEN.items()))
+
+
+# ------------------------------------------------------------ alliance chat check (owner 25 Oct)
+# A rally list can stop updating while the game looks fine. Every rally posts "<name> started an Alliance War: LvN
+# <Monster>(K:.. X:..,Y:..) Join Now / N secs ago" in the Alliance chat tab (unless an alliance hides war messages),
+# so the chat tells whether rallies are really happening - for any user, any server, with or without other instances.
+CHAT_BAR = (200, 910)          # the chat line at the bottom of the city / map view (same place on both)
+CHAT_ALLIANCE_TAB = (338, 94)  # chat tabs: 4 equal tabs, Alliance = 2nd from the right (3rd only during Battlefield)
+CHAT_STATE = {}                # serial -> {"last", "nowar", "off", "broken", "noally"}
+_AGO = re.compile(r"(\d{1,3})?\s*(sec|secs|second|seconds|min|mins|minute|minutes|hour|hours|day|days)\s*ago", re.I)
+
+
+def _chat_age(text):
+    """'19 secs ago' -> 19. The number is sometimes lost by OCR on the yellow bubbles ('min ago'): then a middle guess."""
+    m = _AGO.search(text or "")
+    if not m:
+        return None
+    u = m.group(2).lower()
+    unit = 1 if u.startswith("sec") else 60 if u.startswith("min") else 3600 if u.startswith("hour") else 86400
+    n = int(m.group(1)) if m.group(1) else (30 if unit == 1 else 1 if not u.endswith("s") else 2)
+    return n * unit
+
+
+def read_alliance_chat(dev, cfg, log, stop):
+    """Open chat > Alliance tab, read it, close it. -> ("noally", None) | ("ok", [(monster, age_s), ...] war messages,
+    newest last) | ("fail", why)."""
+    import difflib
+    if not ensure_view(dev, cfg, stop, None, "city") and not ensure_view(dev, cfg, stop, None, "landscape"):
+        return "fail", "could not reach the city or map view"
+    dev.tap(*CHAT_BAR)
+    _nap(stop, 1.5, 2.0)
+    try:
+        shot = dev.screenshot()
+        if not find_text(shot, ["Chat"], region=(150, 5, 240, 60), cutoff=0.7):
+            return "fail", "the chat did not open"
+        if not find_text(shot, ["Alliance"], region=(180, 65, 360, 60), cutoff=0.7):
+            dev.tap(*CHAT_ALLIANCE_TAB)
+            _nap(stop, 1.2, 1.6)
+            shot = dev.screenshot()
+            if not find_text(shot, ["Alliance"], region=(180, 65, 360, 60), cutoff=0.7):
+                try:
+                    cv2.imwrite(str(USER / "debug" / f"chat_check_fail_{re.sub(r'[^0-9A-Za-z]', '_', dev.serial)}.png"), shot)
+                except Exception as _e:
+                    quiet_err("read_alliance_chat", _e)
+                return "fail", "the Alliance chat tab was not found"
+        if find_text(shot, ["join an alliance", "join alliance", "not in an alliance"], region=(0, 100, 540, 800), cutoff=0.75):
+            return "noally", None
+        lines = sorted(ocr_lines(shot[100:880]), key=lambda l: min(w[2] for w in l[1]))
+        wars, pending = [], None
+        for text, words in lines:
+            low = text.lower()
+            if "alliance war" in low or "started an" in low:
+                pending = [None, None]
+            if pending is not None and pending[0] is None:
+                names = MONSTER_NAMES + [n for grp in MONSTER_CATALOG for n, _ in grp[1]]
+                exact = [n for n in names if n.lower() in low]
+                best = max(exact, key=len) if exact else None
+                if not best:                                 # the light-blue part of a name can be lost ('Pumpkin' for Pumpkin Monster)
+                    firsts = [n for n in names if len(n.split()) > 1 and re.search(r"\b" + re.escape(n.split()[0].lower()) + r"\b", low)]
+                    best = firsts[0] if len(firsts) == 1 else None
+                if not best:
+                    sc = {n: difflib.SequenceMatcher(None, n.lower(), low).find_longest_match(0, len(n), 0, len(low)).size / len(n)
+                          for n in names if len(n) >= 4}
+                    cand = max(sc, key=sc.get) if sc else None
+                    best = cand if cand and sc[cand] >= 0.85 else None
+                if best:
+                    pending[0] = best
+            age = _chat_age(text)
+            if age is not None and pending is not None:
+                wars.append((pending[0] or "?", age))
+                pending = None
+        return "ok", wars
+    finally:
+        dev.back()                                           # Back closes the chat page (never pressed on the city itself)
+        _nap(stop, 1.0, 1.4)
+
+
+def chat_war_check(dev, cfg, log, stop, serial):
+    """-> "broken" (wars started in chat that this list never showed / not in an alliance), "quiet", "ok" or "skip"."""
+    st = CHAT_STATE.setdefault(serial, {"last": 0.0, "nowar": 0, "off": False, "broken": 0, "noally": 0})
+    now = time.time()
+    st["last"] = now
+    res, wars = read_alliance_chat(dev, cfg, log, stop)
+    if res == "fail":
+        log(f"[i] Chat check: {wars} - skipped")
+        return "skip"
+    if res == "noally":
+        st["noally"] += 1
+        log(f"[!] Chat check: the Alliance chat says to join an alliance ({st['noally']}x in a row)")
+        return "broken"
+    st["noally"] = 0
+    if not wars:
+        st["nowar"] += 1
+        if st["nowar"] >= 6 and now - _RALLY_SEEN.get(serial, 0) < 3600:   # joins rallies but chat never shows a war: hidden
+            st["off"] = True
+            log("[i] Chat check: this alliance's chat never shows rallies - chat check turned off for this instance")
+        else:
+            log("[i] Chat check: no rally messages in the Alliance chat - quiet time")
+        return "quiet"
+    st["nowar"] = 0
+    seen = _RALLY_SEEN.get(serial, 0)
+    # a rally started 30 s - 4 min ago is still open: the list must have shown rally cards since it started
+    missed = [(m, a) for m, a in wars if 30 <= a <= 240 and seen < now - a]
+    if missed:
+        names = ", ".join(sorted({m for m, _ in missed}))
+        log(f"[!] Chat check: the Alliance chat shows rallies started {min(a for _, a in missed)}-{max(a for _, a in missed)}s ago "
+            f"({names}) but this rally list showed none - the game is not updating")
+        return "broken"
+    recent = [w for w in wars if w[1] <= 240]
+    log("[i] Chat check: " + (f"{len(recent)} recent rally message(s), the list showed rallies - all fine" if recent
+                              else "no recent rally in the Alliance chat - quiet time"))
+    return "ok" if recent else "quiet"
+
 
 
 _GAME_RESTARTS = {}        # serial -> times Evony was restarted (last hour)
@@ -13681,6 +13795,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     last_march = [None]                   # march time of the rally find_target just chose
     latency = [None]                      # seconds the bot itself needs between reading a rally and pressing March
     last_ok = [time.time()]               # last time ADB gave us a screenshot
+    t_started = [time.time()]             # this run of the instance began (no chat check in the first minutes)
     still = {"sig": None, "since": None}  # screen that should be moving but is not
     stale_hits = [0]                      # empty-list checks in a row while other instances saw rallies
     empty_list = {"checks": 0, "reopens": 0, "last": 0.0, "stale": 0, "restarts": []}   # empty / out-of-date rally list: looks, reopens, last reopen, Evony restarts
@@ -14451,6 +14566,25 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         stale_hits[0] = 0
                 except Exception as _e:
                     quiet_err("run_device", _e)
+            ck = CHAT_STATE.get(serial) or {}
+            ck_every = int(cfg.get("chat_check_minutes", 10) or 0) * 60
+            if ck_every and st == "rally_list" and not ck.get("off") and now - _RALLY_SEEN.get(serial, 0) > ck_every \
+                    and now - ck.get("last", 0) > ck_every and now - t_started[0] > ck_every:
+                verdict = chat_war_check(dev, cfg, log, stop, serial)   # no rally on this list for 10 min: is the game really quiet?
+                ck = CHAT_STATE[serial]
+                if verdict == "broken":
+                    ck["broken"] = ck.get("broken", 0) + 1
+                    if ck["broken"] > 5:                                # owner: after 5 tries stop restarting for the same case
+                        if ck["broken"] == 6:
+                            notify(cfg, serial, "Chat check: still broken after 5 restarts (" +
+                                   ("not in an alliance" if ck.get("noally") else "rallies in chat never reach the list") + ") - please check this instance.")
+                            log("[!] Chat check: 5 restarts did not help - not restarting for this any more, alert sent")
+                    else:
+                        log(f"[!] Chat check: restarting Evony (try {ck['broken']} of 5)")
+                        force_restart_game(dev, cfg, log, stop, must=True)
+                else:
+                    ck["broken"] = 0
+                continue
             if not moving and st in ("rally_list", "unknown"):      # rally countdown bars (green) on the list: their numbers tick every second
                 try:
                     hsv = cv2.cvtColor(screen[150:800:3, ::3], cv2.COLOR_BGR2HSV)
