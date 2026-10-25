@@ -1667,3 +1667,9 @@ select.pick-open{border-color:var(--accent1)}
 .citymap .cmrow{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--line);gap:8px}
 .citymap .cmrow.off{opacity:.55}
 .citymap .cmname{font-size:13px}
+
+/* long duty status (e.g. Black Market "Waiting for gems ...") never squeezes the duty name or the side panel title */
+.dline .dtx{min-width:120px}
+.dline .dtx b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dline .dbadge{flex:0 1 auto;min-width:0;max-width:45%;overflow:hidden;text-overflow:ellipsis}
+.sph .spt .dbadge{display:inline-block;margin-top:6px;max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
