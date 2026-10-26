@@ -386,11 +386,23 @@ def log_names(hours=168):
 _DIGEST_NUM = re.compile(r"\d+(?:[.,:]\d+)*")
 
 
+_PROBLEM_WORDS = ("stuck", "unknown page", "unknown pop", "unknown monster", "unknown_monsters", "error", "fail", "restart",
+                  "timeout", "traceback", "lost", "crash", "missing", "not recognised")
+
+
+def is_problem_line(text):
+    """True if a log line's text looks like a problem. Severity markers can't be used: problem and routine lines both use [*]."""
+    t = text.lower()
+    return any(w in t for w in _PROBLEM_WORDS)
+
+
 def group_log_lines(lines, top=40):
-    """Group log lines ('HH:MM:SS [name] text') that differ only by numbers/times: -> [{n, first, last, who, text}], most frequent first.
+    """Group log lines ('HH:MM:SS [name] text', or a (day, line) pair) that differ only by numbers/times:
+    -> [{n, first, last, first_day, last_day, who, text, problem}]. Problem groups come first (by count), then the rest (by count).
     Continued lines (error traces) are skipped."""
     groups = {}
-    for ln in lines:
+    for item in lines:
+        day, ln = item if isinstance(item, tuple) else ("", item)
         m = _LOG_LINE.match(ln)
         if not m:
             continue
@@ -401,29 +413,30 @@ def group_log_lines(lines, top=40):
         t = ln[:8]
         g = groups.get(key)
         if g is None:
-            groups[key] = {"n": 1, "first": t, "last": t, "who": who, "text": text[:160]}
+            groups[key] = {"n": 1, "first": t, "last": t, "first_day": day, "last_day": day, "who": who, "text": text[:160],
+                           "problem": is_problem_line(text)}
         else:
             g["n"] += 1
-            g["last"] = t
-    return sorted(groups.values(), key=lambda g: (-g["n"], g["first"]))[:top]
+            g["last"], g["last_day"] = t, day
+    return sorted(groups.values(), key=lambda g: (not g["problem"], -g["n"], g["first_day"], g["first"]))[:top]
 
 
 def log_digest(hours=24, name="", top=40):
     """Digest of the saved logs of the last `hours` hours (one instance if `name`): repeated lines grouped with a count."""
     cut = time.time() - hours * 3600
     tag = f"[{name}]" if name else ""
-    lines, total = [], 0
+    lines = []
     for f, day0 in _log_files(hours):
         try:
             text = f.read_text(encoding="utf-8", errors="replace").splitlines()
         except Exception:
             continue
+        day = f"{f.stem[4:8]}-{f.stem[8:10]}-{f.stem[10:12]}"
         for ln in text:
             m = _LOG_LINE.match(ln)
             if m and day0 + int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3)) >= cut and (not tag or ln[9:].startswith(tag)):
-                lines.append(ln)
-    total = len(lines)
-    return {"total": total, "groups": group_log_lines(lines, top)}
+                lines.append((day, ln))
+    return {"total": len(lines), "groups": group_log_lines(lines, top)}
 
 
 def export_log(path, hours=24, name=""):
