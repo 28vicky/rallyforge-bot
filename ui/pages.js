@@ -2275,6 +2275,34 @@ PAGES.reports = function () {
   return h("div", {}, panel(null, h("div", { class: "rephead" }, h("div", {}, h("h3", {}, "Rally report"), h("small", { class: "sub" }, "Which instance joined which monsters. Today counts from the game's daily reset; it survives app restarts.")), seg)), body);
 };
 
+// Log digest: repeated log lines grouped with a count, so a support chat reads 40 lines instead of 4000
+function logDigestCard() {
+  const st = { hours: 24 }, body = h("div", { class: "digest" });
+  let last = null;
+  const who = h("select", { "aria-label": "Instance", onchange: load }, h("option", { value: "" }, "All instances"));
+  api("log_names", {}, { quiet: true }).then((r) => { for (const n of (r && r.names) || []) who.appendChild(h("option", { value: n }, n)); }).catch(() => {});
+  const spans = [[1, "1 h"], [6, "6 h"], [24, "24 h"], [72, "3 d"], [168, "7 d"]];
+  const seg = segPick(st, "hours", spans, { small: true, label: "Time", after: load });
+  const copy = h("button", { class: "btn sm", type: "button", disabled: true, onclick: async () => {
+    const text = last.groups.map((g) => `${g.n}x ${g.who ? "[" + g.who + "] " : ""}${g.text} (${g.first}-${g.last})`).join("\n");
+    try { await navigator.clipboard.writeText(text); } catch (e) { const t = h("textarea", {}); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+    toast("The digest is copied. Paste it into the chat.", "ok");
+  } }, "Copy digest");
+  async function load() {
+    body.innerHTML = ""; copy.disabled = true; last = null;
+    const j = await act(api("log_digest", { hours: +st.hours, name: who.value }, { quiet: true }));
+    if (!j) { body.appendChild(h("div", { class: "empty" }, "Could not read the log.")); return; }
+    if (!j.groups.length) { body.appendChild(h("div", { class: "empty" }, "No log lines in this period.")); return; }
+    last = j; copy.disabled = false;
+    body.appendChild(h("div", { class: "hint" }, `${j.total} lines, ${j.groups.length} different. Most frequent first.`));
+    j.groups.forEach((g) => body.appendChild(h("div", { class: "digrow" }, h("span", { class: "dign" }, g.n + "×"),
+      h("div", { class: "digtxt" }, h("span", {}, g.text), h("small", {}, (g.who ? g.who + " · " : "") + (g.first === g.last ? g.first : g.first + " – " + g.last))))));
+  }
+  load();
+  return panel("Log digest", h("div", { class: "hint", style: { marginBottom: "10px" } }, "Repeated lines grouped with a count. Copy it into a chat instead of the whole log."),
+    h("div", { class: "logsave" }, h("div", { class: "field" }, h("label", {}, "Time"), seg), h("div", { class: "field" }, h("label", {}, "Instance"), who), copy), body);
+}
+
 PAGES.logs = function () {
   const save = panel("Save the log", h("div", { class: "hint", style: { marginBottom: "10px" } }, "Pick how much and which instance, then save a small zip in Downloads to send for support."),
     saveLogRow(),
@@ -2282,5 +2310,5 @@ PAGES.logs = function () {
       btn("Open logs folder", () => act(api("open_logs")), "sm")));
   const live = panel("Live log - all instances", h("div", { class: "row", style: { marginBottom: "10px" } },
       btn("Clear", async () => { await act(api("clear_log")); S.logs = []; logViews.forEach((v) => (v.el.innerHTML = "")); }, "sm")), logBox(null, true));
-  return h("div", {}, save, live);
+  return h("div", {}, save, logDigestCard(), live);
 };

@@ -383,6 +383,49 @@ def log_names(hours=168):
     return sorted(names, key=str.lower)
 
 
+_DIGEST_NUM = re.compile(r"\d+(?:[.,:]\d+)*")
+
+
+def group_log_lines(lines, top=40):
+    """Group log lines ('HH:MM:SS [name] text') that differ only by numbers/times: -> [{n, first, last, who, text}], most frequent first.
+    Continued lines (error traces) are skipped."""
+    groups = {}
+    for ln in lines:
+        m = _LOG_LINE.match(ln)
+        if not m:
+            continue
+        who, text = m.group(4) or "", ln[m.end():].strip()
+        if not text:
+            continue
+        key = (who, _DIGEST_NUM.sub("#", text)[:160])
+        t = ln[:8]
+        g = groups.get(key)
+        if g is None:
+            groups[key] = {"n": 1, "first": t, "last": t, "who": who, "text": text[:160]}
+        else:
+            g["n"] += 1
+            g["last"] = t
+    return sorted(groups.values(), key=lambda g: (-g["n"], g["first"]))[:top]
+
+
+def log_digest(hours=24, name="", top=40):
+    """Digest of the saved logs of the last `hours` hours (one instance if `name`): repeated lines grouped with a count."""
+    cut = time.time() - hours * 3600
+    tag = f"[{name}]" if name else ""
+    lines, total = [], 0
+    for f, day0 in _log_files(hours):
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        except Exception:
+            continue
+        for ln in text:
+            m = _LOG_LINE.match(ln)
+            if m and day0 + int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3)) >= cut and (not tag or ln[9:].startswith(tag)):
+                lines.append(ln)
+    total = len(lines)
+    return {"total": total, "groups": group_log_lines(lines, top)}
+
+
 def export_log(path, hours=24, name=""):
     """Write a zip with the log lines of the last `hours` hours (only instance `name` if given). -> number of lines."""
     import zipfile
