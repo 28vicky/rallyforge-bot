@@ -2288,8 +2288,7 @@ function logDigestCard() {
   const shown = () => (last ? (all ? last.groups : last.groups.filter((g) => g.problem)) : []);
   const toggle = h("label", { class: "chk" }, h("input", { type: "checkbox", onchange: (e) => { all = e.target.checked; render(); } }), " Show everything");
   const copy = h("button", { class: "btn sm", type: "button", disabled: true, onclick: async () => {
-    const text = shown().map((g) => `${g.n}x ${g.who ? "[" + g.who + "] " : ""}${g.text} (${span(g)})`).join("
-");
+    const text = shown().map((g) => `${g.n}x ${g.who ? "[" + g.who + "] " : ""}${g.text} (${span(g)})`).join("\n");
     try { await navigator.clipboard.writeText(text); } catch (e) { const t = h("textarea", {}); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
     toast("The digest is copied. Paste it into the chat.", "ok");
   } }, "Copy digest");
