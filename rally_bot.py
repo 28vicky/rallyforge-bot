@@ -12034,8 +12034,13 @@ def try_culture_match(dev, cfg, log, stop, nav=None):
             d = _map_dir(dev)
             d.mkdir(parents=True, exist_ok=True)
             was = city_culture(dev)
-            if not was or was.get("culture") != name or (d / "map.json").exists():
+            if not was or was.get("culture") != name:
                 _drop_own_places(dev)                      # places learned on another map do not fit this one
+            if (d / "map.json").exists():                  # 27 Oct: an old own map left here wiped every mapped building on
+                try:                                       # each Map my city run - keep it aside once, never wipe again
+                    (d / "map.json").replace(d / "map_prev.json")
+                except OSError:
+                    pass
             (d / "culture.json").write_text(json.dumps({"culture": name, "score": pts, "second": second,
                                                         "at": time.strftime("%Y-%m-%d %H:%M")}), encoding="utf-8")
             _CITY_MAPS.pop(str(getattr(dev, "serial", "default")), None)
