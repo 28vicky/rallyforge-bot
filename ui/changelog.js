@@ -1,5 +1,9 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.18", date: "2026-10-27",
+    new: ["The Logs page opens on a short Problems summary: repeated messages are grouped with a count, and Copy digest copies it in one go. \"Show everything\" brings back the full log."],
+    fixed: ["Trips around your city are faster and more reliable: the bot reaches buildings such as the Tavern even when a pop-up or floating icon gets in the way.",
+      "The game is restarted far less often for no reason: other instances only count as your allies after you have really rallied together."] },
   { v: "2.5.17", date: "2026-10-25",
     fixed: ["Map my city zooms the city out on emulators that ignored it before (such as some BlueStacks versions): if the first way does nothing, the bot tries a real Ctrl + scroll, then a two-finger pinch."] },
   { v: "2.5.16", date: "2026-10-25",
