@@ -9907,14 +9907,19 @@ def run_crazy_eggs(dev, cfg, log, stop):
             continue
         # the Lucky Hammer: one free forced try per day on the egg that is cooling down
         want = conf["lucky"]
-        if want and not lucky_used and lucky_tries < 2 and lucky_n != 0:
+        if lucky_used and lucky_n and lucky_n > 0:          # Skip 27 Oct 20:44: marked used this morning, but the game still
+            lucky_used = False                              # shows 1 Lucky Hammer -> the game's counter decides
+        if want and not lucky_used and lucky_tries < 3 and lucky_n != 0:
             waits = [(i, e[1]) for i, e in enumerate(eggs) if e and e[0] == "wait"]
-            if want == "max":
-                want = str(max(int(k) for k in conf["eggs"]))
+            if want == "max":                               # no egg settings saved yet ({}) -> the dearest egg seen on screen
+                costs_all = [int(k) for k in conf["eggs"]] or [int(v) for v in slot_cost.values() if str(v).isdigit()]
+                want = str(max(costs_all)) if costs_all else ""
             slot = next((i for i, _ in waits if slot_cost.get(i) == want), None)
             if slot is None and waits and not any(slot_cost.get(i) for i, _ in waits):
-                costs = sorted(int(k) for k in conf["eggs"])
-                if int(want) == costs[-1]:
+                costs = sorted(int(k) for k in conf["eggs"]) or [int(want)] if want else []
+                if not costs:
+                    pass
+                elif int(want) == costs[-1]:
                     slot = max(waits, key=lambda t: t[1])[0]       # the dearest egg has the longest wait
                 elif int(want) == costs[0]:
                     slot = min(waits, key=lambda t: t[1])[0]
@@ -9925,9 +9930,14 @@ def run_crazy_eggs(dev, cfg, log, stop):
                 dev.tap(*CE_EGG[slot])
                 _nap(stop, 1.2, 1.7)
                 if ce_lucky_confirm(dev, stop):
-                    lucky_used = True
-                    ce_save(serial, lucky_day=day)
                     ce_close_panel(dev, stop)
+                    _nap(stop, 0.8, 1.2)
+                    left_n = ce_read_count(dev.screenshot(), CE_LUCKY)
+                    if left_n is None or lucky_n is None or left_n < lucky_n:      # the counter went down = really used
+                        lucky_used = True
+                        ce_save(serial, lucky_day=day)
+                    else:
+                        log(f"[i]   Crazy Eggs: Lucky Hammer still shows {left_n} after Confirm - trying again")
                 else:
                     log("[i]   Crazy Eggs: no Lucky Hammer dialog appeared")
                     dev.tap(*CE_CLOSE)
@@ -10341,6 +10351,7 @@ def run_wheel(dev, cfg, log, stop):
         dev.tap(*WHEEL_BTN[pick])
         last_pick = pick
         shown = spent = False
+        s2 = shot
         t0 = time.time()
         while time.time() - t0 < 9 and not stop.is_set():
             stop.wait(0.4)
@@ -10354,6 +10365,18 @@ def run_wheel(dev, cfg, log, stop):
                     spent = True
                     stop.wait(1.5)                         # let the wheel stop turning
                     break
+        if not (shown or spent):                          # Skip 27 Oct 20:37/20:40: after 3-4 x100 presses an unknown window
+            rd_snap(s2, f"wheel_nospin_{fails + 1}")         # covered the Wheel (recovery then needed 2 Backs) - picture it,
+            for _ in range(3):                               # tap outside to close it, and count the press if the coins dropped
+                if wheel_on_page(s2) and not wheel_reward_panel(s2) and wheel_coins(s2) is not None:
+                    break
+                dev.tap(270, 110)
+                stop.wait(0.7)
+                s2 = dev.screenshot()
+            c2 = wheel_coins(s2) if wheel_on_page(s2) else None
+            if c2 is not None and coins - c2 >= WHEEL_COST[pick]:
+                coins, spent = c2 + WHEEL_COST[pick], True   # counted down by the normal path below
+                log(f"[i]   Wheel: the {pick}-spin went through behind a window the bot does not know (picture saved)")
         if not (shown or spent):
             fails += 1
             log(f"[i]   Wheel: the {pick}-spin button did not spin ({fails}/3)")
@@ -11958,7 +11981,11 @@ def culture_pin(dev, bname):
         return None
     pins = culture_pins(cult["culture"])
     want = re.sub(r"[^a-z]+", "", str(bname).lower())
-    return next((v for k, v in pins.items() if re.sub(r"[^a-z]+", "", k.lower()) == want), None)
+    v = next((v for k, v in pins.items() if re.sub(r"[^a-z]+", "", k.lower()) == want), None)
+    # Pins are set on the map picture, whose pixel (0,0) is the CITY_VIEW corner of a keyframe; navigation works in
+    # screen-corner places (screen = place - camera). Stalds / Rory / Kiravik 27 Oct: every culture-pin tap landed
+    # ~80,100 px up-left of the building (stairs instead of the Tavern) -> shift the pin into the navigation frame.
+    return [v[0] + CITY_VIEW[0], v[1] + CITY_VIEW[1]] if v else None
 
 
 def _drop_own_places(dev):
