@@ -12222,7 +12222,7 @@ MOVABLE_BUILDINGS = ("Market", "Barracks", "Prison", "Hospital", "Embassy", "War
                      "Archer Camp", "Trap Factory", "Workshop", "War Hall", "Forge")   # owner 27 Oct: players move these
 
 
-def building_pictures(dev, names):
+def building_pictures(dev, names, own=False):
     """Saved pictures of these buildings from every instance on this PC whose city has the SAME culture (owner 27 Oct:
     when the names can't be read, match the pictures already in the database). -> {name: [(img, dx, dy), ...]}"""
     cult = (city_culture(dev) or {}).get("culture")
@@ -12231,7 +12231,7 @@ def building_pictures(dev, names):
         return out
     for d in LEARN_DIR.iterdir():
         try:
-            if not d.is_dir() or d == _map_dir(dev):
+            if not d.is_dir() or (d == _map_dir(dev) and not own):
                 continue
             if json.loads((d / "culture.json").read_text(encoding="utf-8")).get("culture") != cult:
                 continue
@@ -12263,7 +12263,7 @@ def match_building_pictures(shot, pics, skip=()):
             continue
         best = None
         for img, dx, dy in lst:
-            for f in (1.0, 0.9, 1.1):
+            for f in (1.0, 0.9, 1.1, 0.8, 0.7, 0.6):        # pictures learned at a closer zoom are bigger than the sweep's
                 t = img if f == 1.0 else cv2.resize(img, None, fx=f, fy=f, interpolation=cv2.INTER_LINEAR)
                 if t.shape[0] >= area.shape[0] or t.shape[1] >= area.shape[1]:
                     continue
@@ -12321,14 +12321,25 @@ def run_map_movable(dev, cfg, log, stop, only=None):
                                   "checking": checking, "seen": sorted(b for b in seen_all if b in want and b not in found),
                                   "missing": [b for b in want if b not in found], "kept": kept, "t0": round(t0)}))
     log(f"[*] Movable buildings: looking for {len(want)} on {len(stops)} stops (names shown while a finger is held)")
-    pics = building_pictures(dev, [b for b in want if b not in found])
+    # Owner 27 Oct 23:58: picture FIRST. At every stop the screen is matched against the saved pictures of every movable
+    # building (all instances of this culture, this one too): a sure match is saved at once (no tap), a building already
+    # mapped somewhere else is moved to where it is now, an unsure match is checked by tapping it (ring name). Names are
+    # read (finger hold) only while buildings are still missing. Pins the user placed are never touched.
+    user_pins = set()
+    for b in want:
+        try:
+            if json.loads(_learn_path(dev, b).with_suffix(".json").read_text(encoding="utf-8")).get("by") == "user":
+                user_pins.add(b)
+        except Exception:
+            pass
+    pics = {n: v for n, v in building_pictures(dev, want, own=True).items() if n not in user_pins}
     log(f"[i]   finger hold: {dev.hold_mode()}; saved pictures of the same culture: "
         + (", ".join(f"{n} x{len(v)}" for n, v in pics.items()) if pics else "none"))
     empty = 0                                              # stops in a row with no name read (switch the hold way after 3)
     t0 = time.time()
     for i, (sx, sy) in enumerate(stops):
-        if stop.is_set() or len(found) == len(want):
-            break
+        if stop.is_set() or (len(found) == len(want) and (only or not pics)):   # with pictures: the whole sweep runs,
+            break                                          # so a building moved in the game gets its pin moved too
         duty_progress()
         left = round((time.time() - t0) / i * (len(stops) - i) / 60) if i else None   # minutes left, from the pace so far
         prog = (f"Mapping movable buildings: stop {i + 1} of {len(stops)} ({round(100 * i / len(stops))}%)"
@@ -12344,15 +12355,38 @@ def run_map_movable(dev, cfg, log, stop, only=None):
             log(f"[i]   stop {i + 1}: could not get there - next")
             leave_to_city(dev, cfg, stop, log)
             continue
-        try:
-            labels, _held_img, _ = look_with_names(dev, stop, nav, shots=1)   # one held picture: reading was ~30 of the ~40 s per stop
+        labels, names, _held_img = [], [], None
+        if pics:                                           # 1) pictures, on the screen at rest
+            rest = dev.screenshot()
+            hits = match_building_pictures(rest, pics)
+            for n, px, py, sc in sorted(hits, key=lambda hh: -hh[3]):
+                rival = max([o[3] for o in hits if o[0] != n and abs(o[1] - px) < 50 and abs(o[2] - py) < 50] or [0])
+                mxy = [round(nav.cx + px), round(nav.cy + py)]
+                sure = sc >= 0.85 and sc - rival >= 0.05
+                if sure and n not in found:
+                    learn_building(dev, rest, n, px, py)
+                    found[n] = mxy
+                    log(f"[+]   {n}: mapped by its picture ({sc:.2f}) at {px},{py}")
+                elif sure and n in found and n not in user_pins and ((mxy[0] - found[n][0]) ** 2 + (mxy[1] - found[n][1]) ** 2) ** 0.5 > 90:
+                    learn_building(dev, rest, n, px, py)   # the building was moved in the game: the pin follows it
+                    log(f"[+]   {n}: moved - the picture ({sc:.2f}) is at {mxy}, the pin was at {found[n]}; pin updated")
+                    found[n] = mxy
+                elif n not in found and sc >= 0.70:
+                    labels.append((n, mxy[0], mxy[1] + 30))
+                    names.append(n)
+                    log(f"[i]   stop {i + 1}: {n} picture matched ({sc:.2f}) at {px},{py} - checking it")
+        if len(found) == len(want):                        # all mapped: only the pictures are checked (moved buildings)
+            continue
+        try:                                               # 2) names (finger held), only while buildings are missing
+            more, _held_img, _ = look_with_names(dev, stop, nav, shots=1)   # one held picture: reading was ~30 of the ~40 s per stop
+            labels += [l for l in more if BUILDING_ALIASES.get(l[0], l[0]) not in names]
         except InstanceStopped:
             raise
         except Exception as e:
             log(f"[i]   stop {i + 1}: names not read ({e})")
             continue
         names = sorted({n for n, _, _ in labels})
-        if i < 2:                                          # owner 27 Oct (K on BlueStacks): keep what the held screen showed
+        if i < 2 and _held_img is not None:                                          # owner 27 Oct (K on BlueStacks): keep what the held screen showed
             try:
                 cv2.imwrite(str(USER / "debug" / f"held_{re.sub(r'[^0-9A-Za-z]', '_', dev.serial)}_{i + 1}_{dev.hold_mode()}.png"), _held_img)
             except Exception as _e:
@@ -12362,13 +12396,6 @@ def run_map_movable(dev, cfg, log, stop, only=None):
             old = dev.hold_mode()
             log(f"[i]   no names on 3 stops with the '{old}' finger hold - trying '{dev.next_hold_mode() or 'swipe'}'")
             empty = 0
-        if pics:                                           # names missing or not read: look for the saved pictures too
-            got = {BUILDING_ALIASES.get(n, n) for n in names}
-            here = dev.screenshot()
-            for n, px, py, sc in match_building_pictures(here, pics, skip=set(found) | got):
-                labels.append((n, round(nav.cx + px), round(nav.cy + py + 30)))
-                names.append(n)
-                log(f"[i]   stop {i + 1}: {n} picture matched ({sc:.2f}) at {px},{py} - checking it")
         seen_all.update(names)
         log(f"[i]   stop {i + 1}/{len(stops)}: names {', '.join(sorted(set(names))) if names else '(none read)'}")
         # Owner 27 Oct 22:33: no chasing one name across the city. Tap the names that are ON THIS SCREEN, read the menu
