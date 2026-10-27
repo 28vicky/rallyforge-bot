@@ -1081,6 +1081,11 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .logsave{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
 .logsave .field{margin:0;min-width:170px}
 .logsave .field select{width:100%}
+.digest{margin-top:12px;max-height:420px;overflow:auto}
+.digrow{display:flex;gap:12px;align-items:flex-start;padding:8px 4px;border-top:1px solid var(--line,rgba(128,128,128,.2))}
+.dign{min-width:52px;text-align:center;font-weight:600;font-variant-numeric:tabular-nums;padding:2px 8px;border-radius:999px;background:rgba(128,128,128,.16)}
+.digtxt{display:flex;flex-direction:column;min-width:0;overflow-wrap:anywhere}
+.digtxt small{color:var(--mute)}
 /* Black Market picture picker: tap a card to buy it */
 .bmsum{font-size:14px;color:var(--fg);padding:10px 12px;border-radius:var(--r2);background:var(--bgc);border:1px solid var(--line)}
 .bmbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}

@@ -2156,6 +2156,16 @@ class Api:
     def log_names(self, p):
         return {"names": rb.log_names()}
 
+    def log_digest(self, p):
+        """Repeated log lines grouped with a count (last `hours` h, all instances or one) - for the Logs page card."""
+        try:
+            hours = min(max(int(p.get("hours", 24)), 1), 168)
+        except Exception:
+            hours = 24
+        d = rb.log_digest(hours, str(p.get("name") or "").strip())
+        d["hours"] = hours
+        return d
+
     def save_log(self, p):
         """Save the log as a zip in Downloads: last `hours` hours (1 h .. 7 days), all instances or one."""
         try:

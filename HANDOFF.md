@@ -9,6 +9,8 @@ Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony ra
 - Risk: a real alliance needs 3 shared rallies before the stale-list restart works, so detection is slower.
 - The log line 'Lost for too long' is printed on every Evony restart, whatever the cause.
 - After release, check Rory's restart count with the log digest: it was about 179 per week.
+## READY (26 Oct) - feat/log-digest
+- Logs page card "Problems" digest: Problems view by default, "Show everything" toggle, "Copy digest" button, dates on first/last occurrence. New functions group_log_lines + log_digest in rally_bot.py, Api.log_digest in web_app.py (UI in the Logs page). NOT live tested in the real app - previewed from the repo only. Release chat: merge with the next batch (no VERSION/changelog edits yet).
 
 ## HANDOFF 25 Oct 14:25 IST (read first) - published 2.5.17; owner PC runs MORE than 2.5.17
 - Published today: 2.5.14 (restart wait 30 s, watchdog, calm game, restart budget, cross-server, alliance chat check), 2.5.15 (+ culture pins T76, wheel fixes, side status wrap), 2.5.16 (Auto-Join renew with bot joining off - confirmed working), 2.5.17 (BlueStacks zoom fallbacks, pin list every building).
