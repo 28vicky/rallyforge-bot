@@ -1691,7 +1691,8 @@ select.pick-open{border-color:var(--accent1)}
 .pinwrap.picking .pinimg{cursor:crosshair}
 .pinstage{position:relative;transform-origin:0 0;will-change:transform}
 .pinwrap.panning .pinimg{cursor:grabbing}
-.pinmapcol{display:flex;flex-direction:column;gap:6px;min-width:0}
+.pinmapcol{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+.pinmapcol .pinzoom{align-self:stretch}
 .pinzoom{display:flex;gap:4px;justify-content:flex-end;line-height:normal}
 .pindot.ghost{background:transparent;border-style:dashed;opacity:.85}
 .pindot.ghost em{background:rgba(0,0,0,.4)}
