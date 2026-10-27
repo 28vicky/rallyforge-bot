@@ -12178,6 +12178,11 @@ def buff_anchor(dev, cfg, log, stop, cmap):
         return None
     shot = dev.screenshot()
     r = cmap.locate(shot)
+    rd_snap(shot, "nav_anchor")
+    if r:
+        log(f"[i]   nav: anchor_locate=hit cx={round(r[0])} cy={round(r[1])} points={r[2]} shot=debug/duty_nav_anchor.png")
+    else:
+        log("[i]   nav: anchor_locate=miss shot=debug/duty_nav_anchor.png")
     if r:
         log(f"[i]   anchor: Prison jump - camera at {round(r[0])},{round(r[1])}")
         return r[0], r[1]
@@ -12208,14 +12213,24 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
         close_ring(dev, stop, (270, 490))
         shot = dev.screenshot()
     r = cmap.locate(shot)                                  # already looking at the pin? then no jump at all
+    rd_snap(shot, "nav_initial")
+    if r:
+        log(f"[i]   nav: initial_locate=hit cx={round(r[0])} cy={round(r[1])} points={r[2]} shot=debug/duty_nav_initial.png")
+    else:
+        log("[i]   nav: initial_locate=miss shot=debug/duty_nav_initial.png")
     if r and 90 <= mapx - r[0] <= 450 and 200 <= mapy - r[1] <= 780:
+        log(f"[i]   nav: origin_used=initial cx={round(r[0])} cy={round(r[1])}")
         return mapx - r[0], mapy - r[1]
     a = buff_anchor(dev, cfg, log, stop, cmap)             # owner 25 Oct 16:28: EVERY trip starts at the Prison (City Labor jump)
     if a:
+        log(f"[i]   nav: origin_used=anchor cx={round(a[0])} cy={round(a[1])}")
         r = a
     elif not r:
+        log("[i]   nav: origin_used=none")
         log("[i]   jump: no anchor and this view is not on the map - using the step-by-step route")
         return None
+    else:
+        log(f"[i]   nav: origin_used=initial cx={round(r[0])} cy={round(r[1])}")
     cx, cy = r[0], r[1]
     dx, dy = (mapx - cx) - mid_x, (mapy - cy) - mid_y      # how far the camera has to move (map px)
     if abs(dx) < 120 and abs(dy) < 150 and 90 <= mapx - cx <= 450 and 200 <= mapy - cy <= 780:
@@ -12265,6 +12280,7 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
     try:
         at = jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy)
         if at:
+            log(f"[i]   nav: goto_on_map=success via=jump sx={round(at[0])} sy={round(at[1])}")
             return at
     except Exception as _e:
         quiet_err("jump_to_pin", _e)
@@ -12272,6 +12288,7 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
     prev_cam = None
     for i in range(8):
         if stop.is_set():
+            log("[i]   nav: goto_on_map=failure reason=stopped")
             return None
         shot = nav._settled() if i else dev.screenshot()
         if find_detail_icon(shot):
@@ -12282,6 +12299,7 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
             lost += 1
             if lost >= 3:
                 log("[i]   the screen is not found on the city map (zoomed differently, window in the way, or the city changed?)")
+                log("[i]   nav: goto_on_map=failure reason=map_not_located")
                 return None
             leave_to_city(dev, cfg, stop, log)
             continue
@@ -12292,12 +12310,14 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
         # (a building near the city edge can never be centred: the map springs back, Kiravik looped 2 min on the Tavern)
         if (abs(sx - mid_x) <= tol and abs(sy - mid_y) <= tol) or (90 <= sx <= 450 and 200 <= sy <= 780):
             log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} on the map ({r[2]} points), target on screen at {round(sx)},{round(sy)}")
+            log(f"[i]   nav: goto_on_map=success via=closed_loop sx={round(sx)} sy={round(sy)}")
             return sx, sy
         if i and prev_cam and abs(prev_cam[0] - nav.cx) < 15 and abs(prev_cam[1] - nav.cy) < 15:
             log("[!]   camera: the last drag did not move the map (a button or building under the finger?)")
         prev_cam = (nav.cx, nav.cy)
         log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} ({r[2]} points) - target {round(sx - mid_x)},{round(sy - mid_y)} px from the middle, moving (round {i + 1})")
         nav.pan(sx - mid_x, sy - mid_y)                    # measured drags (the diamond's edge stops them safely)
+    log("[i]   nav: goto_on_map=failure reason=attempts_exhausted")
     return None
 
 
