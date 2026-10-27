@@ -14435,6 +14435,427 @@ def _run_monster_rally(dev, cfg, log, stop):
     _TL.mr_go_on = _TL.mr_idle = True
     later(MR_POLL_MIN, "every coordinate tried was gone or taken")
 
+# --- Event duties (tester recordings 22-26 Oct: Legion Hunting, Garuda, Windmill, Eagle, Star Trail, Duel, Taotie,
+# Great Expedition, Valuable Event, Super Value Return). Events come and go: when the event row / icon is not there the
+# duty logs it and is done for the day (rd_nothing), never a failure. Only Claim / Free buttons are pressed; a green
+# Claim is checked by its colour, prices / gems / Buy / packages are never pressed (RD_DANGER).
+EV_BACK = (46, 40)                                       # round Back arrow, top-left of every event page
+EV_CLOSE_SPOT = (110, 250)                               # empty spot above a "Congratulations!" panel on event pages
+
+
+def ev_greenish(shot, x, y, w=30, h=10):
+    """The button under (x, y) is green (Claim / Free), not grey (Claimed) or gold (a price)."""
+    try:
+        p = shot[max(0, y - h):y + h, max(0, x - w):x + w].reshape(-1, 3).astype(int)
+        b, g, r = p[:, 0].mean(), p[:, 1].mean(), p[:, 2].mean()
+        return g > r + 15 and g > b + 15
+    except Exception:
+        return False
+
+
+def ev_find_btn(shot, words, region, green=True):
+    """-> (x, y) of a button whose whole text is one of `words` ('Claim' never matches 'Claimed'), or None."""
+    import difflib
+    want = [w.lower() for w in words]
+    for text, ws in rd_lines(shot, region):
+        low = text.lower().strip(".,:;!() ")
+        if "claimed" in low or any(d in low for d in RD_DANGER):
+            continue
+        if any(low == w or difflib.SequenceMatcher(None, low, w).ratio() >= 0.8 for w in want):
+            x = int(sum(s[1] for s in ws) / len(ws))
+            y = int(sum(s[2] for s in ws) / len(ws))
+            if not green or ev_greenish(shot, x, y):
+                return x, y
+    return None
+
+
+def ev_close(dev, stop):
+    """Close 'Congratulations!' panels on an event page (tap above the panel, never below it: Buy buttons sit there)."""
+    for _ in range(4):
+        if stop.is_set() or not wheel_reward_panel(dev.screenshot()):
+            return
+        dev.tap(*EV_CLOSE_SPOT)
+        _nap(stop, 0.9, 1.2)
+
+
+def ev_claims(dev, stop, region=(260, 170, 280, 780), words=("Claim",), scrolls=2, limit=40):
+    """Press every green Claim in a quest list (the claimed rows drop to the bottom), scrolling when none is in view.
+    -> number pressed."""
+    n = miss = 0
+    while n < limit and not stop.is_set():
+        shot = dev.screenshot()
+        p = ev_find_btn(shot, list(words), region)
+        if p:
+            dev.tap(*p)
+            n += 1
+            miss = 0
+            _nap(stop, 1.2, 1.6)
+            ev_close(dev, stop)
+            continue
+        if miss >= scrolls:
+            break
+        miss += 1
+        x, y, w, h = region
+        dev.swipe(270, y + h - 60, 270, y + 120, 600)
+        _nap(stop, 1.0, 1.3)
+    return n
+
+
+def ev_red_spots(shot, region, lo=25, hi=400):
+    """Small bright-red dots (the game's 'something to claim' badge / red X) in region -> [(x, y)] screen pixels."""
+    x0, y0, w, h = region
+    hsv = cv2.cvtColor(shot[y0:y0 + h, x0:x0 + w], cv2.COLOR_BGR2HSV)
+    m = cv2.inRange(hsv, (0, 150, 150), (8, 255, 255)) | cv2.inRange(hsv, (172, 150, 150), (180, 255, 255))
+    n, _, st, cen = cv2.connectedComponentsWithStats(m)
+    return [(int(cen[i][0]) + x0, int(cen[i][1]) + y0) for i in range(1, n) if lo <= st[i][4] <= hi]
+
+
+def ev_close_x(dev, stop, region=(420, 110, 120, 140)):
+    """Close a quest window by its red X (top-right, ~496,148 on the recordings); Back when no X is seen."""
+    spots = ev_red_spots(dev.screenshot(), region, 40, 1500)
+    if spots:
+        dev.tap(*spots[0])
+    else:
+        dev.back()
+    _nap(stop, 1.0, 1.3)
+
+
+def ev_level_rewards(dev, stop, region=(0, 190, 150, 190), limit=12):
+    """Battle-pass pages (Wind Power Storage, Expedition Trial, Hall of Historic Generals...): the level icon left of
+    the points bar carries a red badge while a free level reward waits. Tap it, close the reward, repeat."""
+    n = 0
+    for _ in range(limit):
+        if stop.is_set():
+            break
+        dots = ev_red_spots(dev.screenshot(), region)
+        if not dots:
+            break
+        x, y = dots[0]
+        dev.tap(x, y + 4)                                # the badge sits on the icon (recordings: 55,213 / 66,294)
+        _nap(stop, 1.3, 1.7)
+        ev_close(dev, stop)
+        n += 1
+    return n
+
+
+def ev_challenge(dev, stop, log, what, tabs=()):
+    """Open 'Challenge Quest' on a battle-pass page, claim every quest (in each of `tabs`), close it. -> claims."""
+    if not rd_tap(dev, stop, ["Challenge Quest", "Challenge"], region=(330, 150, 210, 300), cutoff=0.7, wait=(1.6, 2.0)):
+        rd_snap(dev.screenshot(), "ev_challenge_" + what.replace(" ", "_"))
+        return 0
+    n = 0
+    for t in (tabs or ("",)):
+        if t and not rd_tap(dev, stop, [t], region=(0, 250, 540, 140), cutoff=0.75):
+            continue
+        n += ev_claims(dev, stop, region=(300, 330, 240, 560))
+    ev_close_x(dev, stop)
+    return n
+
+
+def ev_center(dev, cfg, log, stop):
+    """From the city: open the Event Center (icon picture, else its caption). -> True when its list shows."""
+    if not city_task_target(dev, cfg, log, stop, {"name": "Event Center", "target": "tpl:event_center_icon|Center"}, None):
+        return False
+    _nap(stop, 1.8, 2.3)
+    return rd_seen(dev.screenshot(), ["Event Center"], region=(100, 0, 340, 70))
+
+
+def ev_open(dev, cfg, log, stop, tab, names, title):
+    """Event Center > tab > the row of this event (scrolls the list). -> True when opened; False = event not running."""
+    if not ev_center(dev, cfg, log, stop):
+        raise RuntimeError("the Event Center did not open")
+    rd_tap(dev, stop, [tab], region=(0, 55, 540, 80))
+    dev.swipe(270, 300, 270, 800, 500)                  # back to the top of the list
+    _nap(stop, 0.9, 1.2)
+    for i in range(7):
+        shot = dev.screenshot()
+        p = rd_find(shot, names, region=(0, 150, 540, 780), cutoff=0.75)
+        if p:
+            dev.tap(p[0], p[1])
+            _nap(stop, 2.2, 2.8)
+            return True
+        if stop.is_set():
+            break
+        dev.swipe(270, 800, 270, 420, 600)
+        _nap(stop, 1.0, 1.3)
+    rd_snap(dev.screenshot(), "ev_missing_" + title.replace(" ", "_"))
+    log(f"[i]   {title}: not in the Event Center now (event not running) - done for today")
+    rd_nothing()
+    return False
+
+
+def ev_tab(dev, stop, words):
+    return rd_tap(dev, stop, words, region=(0, 55, 540, 190), cutoff=0.72)
+
+
+def run_ev_legion(dev, cfg, log, stop):
+    if not ev_open(dev, cfg, log, stop, "Limited", ["Legion Hunting"], "Legion Hunting"):
+        return
+    n = ev_claims(dev, stop)
+    log(f"[+]  Legion Hunting: {n} reward(s) claimed")
+
+
+def run_ev_garuda(dev, cfg, log, stop):
+    if not ev_open(dev, cfg, log, stop, "Activities", ["Garuda Trial"], "Garuda Trial"):
+        return
+    ev_tab(dev, stop, ["Garuda's Treasure", "Treasure"])
+    n = ev_claims(dev, stop)
+    log(f"[+]  Garuda Trial: {n} treasure reward(s) claimed")
+
+
+def ev_count(shot, region):
+    nums = rd_numbers(" ".join(t for t, _ in rd_lines(shot, region)))
+    return nums[0] if nums else None
+
+
+def run_ev_windmill(dev, cfg, log, stop):
+    """Wishful Windmill Festival: free wish, allies' blessings (Claim All), Wind Power quests + level rewards, then
+    (option) Summon Wind x10 with Wind items until the daily 100 and its chest. Never buys Wind items."""
+    if not ev_open(dev, cfg, log, stop, "Limited", ["Wishful Windmill Festival", "Windmill Festival"], "Windmill"):
+        return
+    got = []
+    ev_tab(dev, stop, ["Windmill Wish"])
+    if rd_tap(dev, stop, ["Free"], region=(120, 860, 300, 100), whole=True, wait=(1.6, 2.0)):
+        ev_close(dev, stop)
+        got.append("free wish")
+    dev.tap(488, 286)                                    # Wind Blessings Prize (allies' blessings)
+    _nap(stop, 1.6, 2.0)
+    if rd_seen(dev.screenshot(), ["Wind Blessings"], region=(60, 160, 420, 120)):
+        if rd_tap(dev, stop, ["Claim All"], region=(150, 700, 240, 120), cutoff=0.75, wait=(1.6, 2.0)):
+            got.append("blessings")
+        ev_close(dev, stop)
+        if rd_seen(dev.screenshot(), ["Wind Blessings"], region=(60, 160, 420, 120)):
+            ev_close_x(dev, stop)
+    if ev_tab(dev, stop, ["Wind Power Storage", "Wind Power"]):
+        n = ev_challenge(dev, stop, log, "windmill") + ev_level_rewards(dev, stop)
+        if n:
+            got.append(f"{n} quest/level reward(s)")
+    if rd_opt(cfg, "ev_windmill", "summon", True) and ev_tab(dev, stop, ["Windmill Wish"]):
+        s = 0
+        for _ in range(11):
+            shot = dev.screenshot()
+            have = ev_count(shot, (70, 262, 120, 36))      # Wind items owned (~124,280)
+            prog = re.search(r"(\d+)\s*/\s*100", " ".join(t for t, _ in rd_lines(shot, (150, 785, 240, 36))))
+            if have is None or have < 10 or (prog and int(prog.group(1)) >= 100) or stop.is_set():
+                break
+            if not rd_tap(dev, stop, ["Summon Wind x10"], region=(0, 880, 280, 80), cutoff=0.7, wait=(2.0, 2.6)):
+                break
+            ev_close(dev, stop)
+            s += 1
+        if s:
+            got.append(f"{s * 10} summons")
+        prog = re.search(r"(\d+)\s*/\s*100", " ".join(t for t, _ in rd_lines(dev.screenshot(), (150, 785, 240, 36))))
+        if prog and int(prog.group(1)) >= 100:
+            dev.tap(64, 787)                             # the daily 100-summons chest
+            _nap(stop, 1.4, 1.8)
+            ev_close(dev, stop)
+    log("[+]  Windmill: " + (", ".join(got) if got else "nothing to claim"))
+
+
+EV_REDEEM_SLIDER = ((171, 476), (440, 476))              # redeem window: amount slider, dragged to the max
+EV_REDEEM_OK = (270, 612)                                # its green cost button
+
+
+def ev_redeem_rows(dev, stop, log, what, limit=14):
+    """Redeem tab: each row with a green Redeem -> slider to max -> confirm. Stops when nothing is given (coins out)."""
+    n = 0
+    for _ in range(limit):
+        if stop.is_set():
+            break
+        p = ev_find_btn(dev.screenshot(), ["Redeem"], (380, 200, 160, 740))
+        if not p:
+            dev.swipe(270, 860, 270, 520, 600)
+            _nap(stop, 1.0, 1.3)
+            p = ev_find_btn(dev.screenshot(), ["Redeem"], (380, 200, 160, 740))
+            if not p:
+                break
+        dev.tap(*p)
+        _nap(stop, 1.3, 1.7)
+        dev.swipe(*EV_REDEEM_SLIDER[0], *EV_REDEEM_SLIDER[1], 700)
+        _nap(stop, 0.8, 1.0)
+        shot = dev.screenshot()
+        if not ev_greenish(shot, *EV_REDEEM_OK, w=60):
+            rd_snap(shot, "ev_redeem_" + what)
+            ev_close_x(dev, stop, region=(420, 300, 120, 160))
+            break
+        dev.tap(*EV_REDEEM_OK)
+        _nap(stop, 1.4, 1.8)
+        if not wheel_reward_panel(dev.screenshot()):     # not enough coins: the window stays - close it and stop
+            ev_close_x(dev, stop, region=(420, 300, 120, 160))
+            break
+        ev_close(dev, stop)
+        n += 1
+    return n
+
+
+def run_ev_eagle(dev, cfg, log, stop):
+    if not ev_open(dev, cfg, log, stop, "Limited", ["Eagle of Freedom"], "Eagle of Freedom"):
+        return
+    n = ev_claims(dev, stop)
+    r = 0
+    if rd_opt(cfg, "ev_eagle", "redeem", False) and ev_tab(dev, stop, ["Redeem"]):
+        r = ev_redeem_rows(dev, stop, log, "eagle")
+    log(f"[+]  Eagle of Freedom: {n} quest reward(s) claimed" + (f", {r} redeem(s)" if r else ""))
+
+
+def run_ev_star_trail(dev, cfg, log, stop):
+    if not ev_open(dev, cfg, log, stop, "Limited", ["Grace of Star Trail", "Star Trail"], "Grace of Star Trail"):
+        return
+    if not rd_tap(dev, stop, ["Star Trail Gift", "Gift"], region=(420, 90, 120, 120), cutoff=0.7):
+        dev.tap(495, 128)
+        _nap(stop, 1.6, 2.0)
+    p = ev_find_btn(dev.screenshot(), ["Claim"], (380, 100, 160, 140), green=False)
+    if not p:
+        log("[i]   Grace of Star Trail: daily gift already claimed")
+        rd_nothing()
+        return
+    dev.tap(p[0], p[1] - 20)                             # the coin pile above the word
+    _nap(stop, 1.4, 1.8)
+    ev_close(dev, stop)
+    log("[+]  Grace of Star Trail: daily gift claimed")
+
+
+def run_ev_duel(dev, cfg, log, stop):
+    """Alliance Duel: the round result (Result tab) and the Prosperity Point quests (Level Rewards > +)."""
+    if not ev_open(dev, cfg, log, stop, "Competition", ["Alliance Duel"], "Alliance Duel"):
+        return
+    got = 0
+    if ev_tab(dev, stop, ["Result"]):
+        p = ev_find_btn(dev.screenshot(), ["Claim"], (250, 860, 290, 90))
+        if p:
+            dev.tap(*p)
+            _nap(stop, 1.4, 1.8)
+            ev_close(dev, stop)
+            got += 1
+    if ev_tab(dev, stop, ["Level Rewards"]):
+        dev.tap(482, 423)                                # "+" at the end of the Prosperity bar
+        _nap(stop, 1.6, 2.0)
+        if rd_seen(dev.screenshot(), ["Prosperity Point"], region=(60, 160, 420, 80)):
+            for t in ("Gathering", "Alliance", "Ambition"):
+                if rd_tap(dev, stop, [t], region=(20, 290, 500, 60), whole=True, cutoff=0.8):
+                    got += ev_claims(dev, stop, region=(300, 360, 220, 520), scrolls=1)
+            ev_close_x(dev, stop, region=(440, 160, 100, 80))
+    log(f"[+]  Alliance Duel: {got} reward(s) claimed")
+
+
+def run_ev_taotie(dev, cfg, log, stop):
+    """Taotie's Challenge: View Rewards (points targets). Summon Orders are left for the user (Summon / Redeem)."""
+    if not ev_open(dev, cfg, log, stop, "Activities", ["Taotie's Challenge", "Taotie"], "Taotie's Challenge"):
+        return
+    if not rd_tap(dev, stop, ["View Rewards"], region=(380, 860, 160, 100), cutoff=0.7):
+        dev.tap(457, 874)
+        _nap(stop, 1.6, 2.0)
+    n = ev_claims(dev, stop, region=(260, 60, 280, 880), scrolls=1)
+    log(f"[+]  Taotie's Challenge: {n} target reward(s) claimed")
+
+
+def run_ev_expedition(dev, cfg, log, stop):
+    """Great Expedition: Expedition Trial quests + level rewards; (option) one free-dice roll a run."""
+    if not ev_open(dev, cfg, log, stop, "Limited", ["Great Expedition"], "Great Expedition"):
+        return
+    got = 0
+    if rd_opt(cfg, "ev_expedition", "roll", False) and ev_tab(dev, stop, ["Great Expedition"]):
+        have = ev_count(dev.screenshot(), (40, 260, 120, 40))
+        if have and have > 0 and rd_tap(dev, stop, ["Roll Once"], region=(270, 900, 270, 60), cutoff=0.75, wait=(3.0, 3.6)):
+            ev_close(dev, stop)
+            got += 1
+    if ev_tab(dev, stop, ["Expedition Trial"]):
+        got += ev_challenge(dev, stop, log, "expedition") + ev_level_rewards(dev, stop)
+    log(f"[+]  Great Expedition: {got} reward(s)")
+
+
+def ev_bottom_icon(dev, stop, captions, titles):
+    """Open an event icon of the bottom row by its caption (the row shifts with the events). -> True when its page
+    (one of `titles` in the title bar) shows."""
+    shot = dev.screenshot()
+    p = rd_find(shot, captions, region=(0, 780, 470, 120), cutoff=0.7)
+    if not p:
+        return False
+    dev.tap(p[0], max(700, p[1] - 45))              # icon above its caption (recordings: caption ~885, taps ~835)
+    _nap(stop, 2.2, 2.8)
+    return rd_seen(dev.screenshot(), titles, region=(80, 0, 380, 70))
+
+
+EV_FREE_WORDS = ["Free", "Daily Free", "Claimable"]
+
+
+def ev_free_on_page(dev, stop, limit=6):
+    """Press the free things on one store-like page: green Claim / Free buttons and 'Daily Free' / 'Claimable' chests
+    (their icon sits just above the word). Never a price, Buy or package line. -> number pressed."""
+    n = 0
+    for _ in range(limit):
+        if stop.is_set():
+            break
+        shot = dev.screenshot()
+        p = ev_find_btn(shot, ["Claim", "Free"], (0, 150, 540, 800))
+        if p:
+            dev.tap(*p)
+        else:
+            q = ev_find_btn(shot, ["Daily Free", "Claimable", "Free"], (0, 100, 540, 300), green=False)
+            if not q:
+                break
+            dev.tap(q[0], max(110, q[1] - 22))
+        _nap(stop, 1.4, 1.8)
+        ev_close(dev, stop)
+        n += 1
+    return n
+
+
+def ev_sweep_tabs(dev, stop, log, what, page_fn, strip=(0, 84, 540, 16), pages=8):
+    """Walk the tab strip at the top of a store-like event (Valuable Event, Super Value Return): open every tab that
+    shows a red badge, run page_fn on it, swipe the strip on. -> total from page_fn."""
+    total, seen = 0, set()
+    last = None
+    for _ in range(pages):
+        if stop.is_set():
+            break
+        shot = dev.screenshot()
+        sig = cv2.resize(cv2.cvtColor(shot[55:110, :], cv2.COLOR_BGR2GRAY), (54, 6)).tobytes()
+        if sig == last:
+            break                                        # the strip did not move: its end
+        last = sig
+        for x, y in ev_red_spots(shot, strip, 30, 130):   # tab badges: y~92 on the recordings
+            key = (x // 20, sig)
+            if key in seen:
+                continue
+            seen.add(key)
+            dev.tap(max(20, x - 45), 112)                 # badge = top-right corner of the tab icon
+            _nap(stop, 1.6, 2.0)
+            total += page_fn(dev, stop)
+        dev.swipe(460, 115, 80, 125, 700)
+        _nap(stop, 1.2, 1.5)
+    return total
+
+
+def run_ev_valuable(dev, cfg, log, stop):
+    """Valuable Event: every tab with a red badge, its free claims (Limited Offer daily Free, Super Blazon free chest,
+    Active Monthly Card claims, General Vault / Treasury daily free...)."""
+    if not ev_bottom_icon(dev, stop, ["Valuable Event", "Valuable"], ["Valuable Event"]):
+        log("[i]   Valuable Event: icon not on the city screen now - done for today")
+        rd_nothing()
+        return
+    n = ev_sweep_tabs(dev, stop, log, "valuable", ev_free_on_page)
+    log(f"[+]  Valuable Event: {n} free item(s) claimed")
+
+
+def ev_pass_page(dev, stop):
+    """A Super Value Return tab: battle-pass quests (Challenge Quest) + level rewards, else its free claims."""
+    if rd_seen(dev.screenshot(), ["Challenge Quest", "Challenge"], region=(330, 150, 210, 300)):
+        return ev_challenge(dev, stop, None, "pass", tabs=("Daily Tasks",)) + ev_level_rewards(dev, stop)
+    return ev_free_on_page(dev, stop, limit=3)
+
+
+def run_ev_super_value(dev, cfg, log, stop):
+    """Super Value Return (bottom-left icon, its caption follows the featured tab): Hall of Historic Generals, Soul of
+    Spiritual Beast... quests and level rewards on every tab with a red badge."""
+    if not ev_bottom_icon(dev, stop, ["Super Value", "Historic", "Spiritual Beast", "Spiritual"], ["Super Value Return"]):
+        log("[i]   Super Value Return: icon not on the city screen now - done for today")
+        rd_nothing()
+        return
+    n = ev_sweep_tabs(dev, stop, log, "super_value", ev_pass_page)
+    log(f"[+]  Super Value Return: {n} reward(s) claimed")
+
+
 RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
             "general_chest": run_general_chest, "vip_claim": run_vip_claim, "recruit_citizens": run_recruit_citizens,
             "civilization_card": run_civilization_card, "empire_depot": run_empire_depot, "lucky_raffle": run_lucky_raffle,
@@ -14443,6 +14864,9 @@ RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor
             "troop_healing": run_troop_healing, "activity_chests": run_activity_chests, "gate_visitors": run_gate_visitors,
             "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes,
             "wisdom_dome_tokens": run_wisdom_dome_tokens, "royal_thief": run_royal_thief,
+            "ev_legion": run_ev_legion, "ev_garuda": run_ev_garuda, "ev_windmill": run_ev_windmill, "ev_eagle": run_ev_eagle,
+            "ev_star_trail": run_ev_star_trail, "ev_duel": run_ev_duel, "ev_taotie": run_ev_taotie,
+            "ev_expedition": run_ev_expedition, "ev_valuable": run_ev_valuable, "ev_super_value": run_ev_super_value,
             "monster_rally": run_monster_rally}
 
 
@@ -14612,6 +15036,39 @@ DUTY_LIBRARY = [
               {"k": "keep_stamina", "label": "Keep at least this much stamina", "type": "number", "min": 0, "max": 9999, "def": 100},
               {"k": "max_age", "label": "Ignore coordinates older than (min)", "type": "number", "min": 1, "max": 600, "def": 10},
               {"k": "skip_busy", "label": "Skip a monster a march is already going to", "type": "bool", "def": True}]},
+    {"id": "ev_legion", "group": "Events", "title": "Legion Hunting", "every_min": 180, "verified": False,
+     "note": "Event Center > Limited > Legion Hunting: claims every finished quest. Skipped while the event is not on.",
+     "target": "self:", "steps": ["ev_legion"]},
+    {"id": "ev_garuda", "group": "Events", "title": "Garuda Trial", "every_min": 180, "verified": False,
+     "note": "Event Center > Activities > Garuda Trial > Garuda's Treasure: claims every reward the alliance reached.",
+     "target": "self:", "steps": ["ev_garuda"]},
+    {"id": "ev_windmill", "group": "Events", "title": "Wishful Windmill", "every_min": 240, "verified": False,
+     "note": "Free wish, allies' blessings (Claim All), Wind Power quests and level rewards. Can also summon with your Wind items up to the daily 100 and open its chest. Never buys Wind items.",
+     "target": "self:", "steps": ["ev_windmill"],
+     "opts": [{"k": "summon", "label": "Summon with Wind items up to 100 a day", "type": "bool", "def": True}]},
+    {"id": "ev_eagle", "group": "Events", "title": "Eagle of Freedom", "every_min": 240, "verified": False,
+     "note": "Claims the finished quests. Can also spend the traded goods on the Redeem tab, top row first (off by default).",
+     "target": "self:", "steps": ["ev_eagle"],
+     "opts": [{"k": "redeem", "label": "Redeem traded goods (top row first)", "type": "bool", "def": False}]},
+    {"id": "ev_star_trail", "group": "Events", "title": "Grace of Star Trail", "every_min": 0, "verified": False,
+     "note": "Event Center > Limited > Grace of Star Trail > Star Trail Gift: the free daily gift. Never draws or buys.",
+     "target": "self:", "steps": ["ev_star_trail"]},
+    {"id": "ev_duel", "group": "Events", "title": "Alliance Duel", "every_min": 240, "verified": False,
+     "note": "Event Center > Competition > Alliance Duel: the round result reward and the Prosperity Point quests (Gathering, Alliance, Ambition).",
+     "target": "self:", "steps": ["ev_duel"]},
+    {"id": "ev_taotie", "group": "Events", "title": "Taotie's Challenge", "every_min": 240, "verified": False,
+     "note": "Event Center > Activities > Taotie's Challenge > View Rewards: claims the points targets. Summon Orders are left for you.",
+     "target": "self:", "steps": ["ev_taotie"]},
+    {"id": "ev_expedition", "group": "Events", "title": "Great Expedition", "every_min": 240, "verified": False,
+     "note": "Expedition Trial quests and level rewards. Can also roll a free die each run (off by default).",
+     "target": "self:", "steps": ["ev_expedition"],
+     "opts": [{"k": "roll", "label": "Roll one die each run (uses owned dice)", "type": "bool", "def": False}]},
+    {"id": "ev_valuable", "group": "Events", "title": "Valuable Event free claims", "every_min": 240, "verified": False,
+     "note": "Opens every Valuable Event tab with a red badge and takes only what is free (daily Free package, free Blazon chest, Active Monthly Card claims, daily free chests). Never buys.",
+     "target": "self:", "steps": ["ev_valuable"]},
+    {"id": "ev_super_value", "group": "Events", "title": "Super Value Return rewards", "every_min": 240, "verified": False,
+     "note": "Super Value Return (Hall of Historic Generals, Soul of Spiritual Beast...): daily quest claims and free level rewards on every tab with a red badge. Never buys.",
+     "target": "self:", "steps": ["ev_super_value"]},
 ]
 DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
 
