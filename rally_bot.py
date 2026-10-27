@@ -8823,6 +8823,9 @@ def run_step(dev, cfg, log, stop, step):
     cmd, _, arg = step.partition(" ")
     cmd, arg = cmd.lower(), arg.strip()
     if cmd == "ring_name":
+        ok = _RING_OK.get(getattr(dev, "serial", ""))
+        if ok and time.time() - ok[1] < 30 and (not arg or arg.lower() in ok[0].lower()):
+            return                                         # Rob 27 Oct 20:12: the name was just read (10-15 s each) - no 2nd read
         shot = dev.screenshot()
         try:
             cv2.imwrite(str(USER / "debug" / f"ring_{(arg or 'x').replace(' ', '_')}.png"), shot)
@@ -11309,6 +11312,7 @@ def _activity_go(dev, cfg, log, stop, tile, probe=False, route=False):
 
 
 
+_RING_OK = {}                                                       # serial -> (building, time) of the last confirmed ring
 RING_OWN_ITEMS = {"tavern": ("recruit", "wheel", "fortune")}        # words only this building's ring menu carries
 RING_OWN_ITEMS_TEXT = {"tavern": ["Wheel of Fortune", "Wheel of"]}
 
@@ -11346,6 +11350,7 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
                            rd_seen(shot, RING_OWN_ITEMS_TEXT.get(want, []), region=(0, 100, 540, 760)))
         if by_item or want in nm or any(difflib.SequenceMatcher(None, want, w).ratio() >= 0.8 for w in re.findall(r"[a-z ]+", nm)):
             log(f"[i]   {bname} reached by {how} ({x},{y})")
+            _RING_OK[getattr(dev, "serial", "")] = (bname, time.time())
             learn_building(dev, before, bname, x, y)
             return True
         log(f"[i]   after Go the menu at ({x},{y}) is '{nm or '?'}', not {bname}")
