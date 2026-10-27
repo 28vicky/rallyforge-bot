@@ -12310,94 +12310,140 @@ def run_map_movable(dev, cfg, log, stop, only=None):
         except Exception:
             pass
     kept = len(found)
+    # Owner 28 Oct 00:10: a pin that already WORKED (a task opened its building through it) is trusted - never searched
+    # again, never moved by the mapper. Only a task that later fails at it drops the 'worked' mark (see find_on_map).
+    user_pins, trusted = set(), set()
+    for b in want:
+        try:
+            m = json.loads(_learn_path(dev, b).with_suffix(".json").read_text(encoding="utf-8"))
+            if m.get("by") == "user":
+                user_pins.add(b)
+            elif m.get("map") and m.get("worked"):
+                trusted.add(b)
+        except Exception:
+            pass
     if found:
-        log(f"[i]   already mapped here (kept): {', '.join(found)}")
+        log(f"[i]   already mapped here (kept): {', '.join(found)}"
+            + (f" - pins that worked in a task (trusted): {', '.join(b for b in found if b in trusted or b in user_pins)}" if trusted or user_pins else ""))
     if only and len(found) == len(want):
         log(f"[i]   {', '.join(want)}: already mapped - nothing to look for")
         return list(found)
+    pics = {n: v for n, v in building_pictures(dev, want, own=True).items() if n not in user_pins}
+    need_confirm = {b for b in found if b in pics and b not in trusted and b not in user_pins}   # kept pins a picture can re-check
+    confirmed, moved_cand = set(), {}
+
+    def missing():
+        return [b for b in want if b not in found]
+
+    def done_all():
+        return not missing() and need_confirm <= confirmed
+
+    if not missing():                                      # owner 28 Oct: once mapped, use the pins - only the stops that
+        stops = [s for s in stops                          # hold a pin that has not worked yet are visited (picture check)
+                 if any(x + s[0] - 20 <= found[b][0] <= x + s[0] + w + 20 and y + s[1] - 20 <= found[b][1] <= y + s[1] + h + 20
+                        for b in need_confirm)]
+        if not stops:
+            log(f"[+] Movable buildings: all {len(want)} already mapped and their pins worked or can't be checked by picture - nothing to do")
+            return list(found)
+        log(f"[i]   all mapped - checking only the {len(stops)} stop(s) with pins that have not worked in a task yet")
+
+    # Names (finger hold): remember per emulator which way of holding shows them (owner 28 Oct: K and GK-P lost ~16 s
+    # per stop on holds that never showed a name). 'none' = this emulator shows no names: pictures only (retried weekly).
+    hold_f = _map_dir(dev) / "hold.json"
+    names_ok = True
+    try:
+        hj = json.loads(hold_f.read_text(encoding="utf-8"))
+        if hj.get("mode") == "none" and time.time() - hj.get("t", 0) < 7 * 86400:
+            names_ok = False
+        elif hj.get("mode") in ("motion", "window", "swipe"):
+            dev._hold_mode = hj["mode"]
+    except Exception:
+        pass
+
+    def save_hold(mode):
+        try:
+            hold_f.parent.mkdir(parents=True, exist_ok=True)
+            hold_f.write_text(json.dumps({"mode": mode, "t": time.time()}), encoding="utf-8")
+        except Exception as _e:
+            quiet_err("save_hold", _e)
 
     def act_map(stop_no, checking=None):                   # live activity panel (structured: the page does not parse text)
         log("@act " + json.dumps({"k": "map", "stop": stop_no, "stops": len(stops), "found": list(found)[kept:],
                                   "checking": checking, "seen": sorted(b for b in seen_all if b in want and b not in found),
-                                  "missing": [b for b in want if b not in found], "kept": kept, "t0": round(t0)}))
-    log(f"[*] Movable buildings: looking for {len(want)} on {len(stops)} stops (names shown while a finger is held)")
-    # Owner 27 Oct 23:58: picture FIRST. At every stop the screen is matched against the saved pictures of every movable
-    # building (all instances of this culture, this one too): a sure match is saved at once (no tap), a building already
-    # mapped somewhere else is moved to where it is now, an unsure match is checked by tapping it (ring name). Names are
-    # read (finger hold) only while buildings are still missing. Pins the user placed are never touched.
-    user_pins = set()
-    for b in want:
-        try:
-            if json.loads(_learn_path(dev, b).with_suffix(".json").read_text(encoding="utf-8")).get("by") == "user":
-                user_pins.add(b)
-        except Exception:
-            pass
-    pics = {n: v for n, v in building_pictures(dev, want, own=True).items() if n not in user_pins}
-    log(f"[i]   finger hold: {dev.hold_mode()}; saved pictures of the same culture: "
-        + (", ".join(f"{n} x{len(v)}" for n, v in pics.items()) if pics else "none"))
-    empty = 0                                              # stops in a row with no name read (switch the hold way after 3)
+                                  "missing": missing(), "kept": kept, "t0": round(t0)}))
+    log(f"[*] Movable buildings: looking for {len(missing())} of {len(want)} on {len(stops)} stops - pictures first, names only when needed")
+    log(f"[i]   finger hold: {dev.hold_mode() if names_ok else 'off (this emulator shows no names - pictures only)'}; "
+        "saved pictures of the same culture: " + (", ".join(f"{n} x{len(v)}" for n, v in pics.items()) if pics else "none"))
+    state = {"empty": 0}
     t0 = time.time()
-    for i, (sx, sy) in enumerate(stops):
-        if stop.is_set() or (len(found) == len(want) and (only or not pics)):   # with pictures: the whole sweep runs,
-            break                                          # so a building moved in the game gets its pin moved too
-        duty_progress()
-        left = round((time.time() - t0) / i * (len(stops) - i) / 60) if i else None   # minutes left, from the pace so far
-        prog = (f"Mapping movable buildings: stop {i + 1} of {len(stops)} ({round(100 * i / len(stops))}%)"
-                + (f", about {max(1, left)} min left" if left is not None else "")
-                + (f" - found {len(found)}: {', '.join(found)}" if found else " - none found yet"))
-        log("@act " + json.dumps({"k": "step", "text": prog}))
-        act_map(i + 1)
-        if i:
-            log(f"[i]   {prog}")
-        nav = CityNav(dev, stop, log)
-        at = goto_on_map(dev, cfg, log, stop, nav, cmap, sx + x + w / 2, sy + y + h / 2, tol=120)
-        if at is None:
-            log(f"[i]   stop {i + 1}: could not get there - next")
-            leave_to_city(dev, cfg, stop, log)
-            continue
-        labels, names, _held_img = [], [], None
-        if pics:                                           # 1) pictures, on the screen at rest
-            rest = dev.screenshot()
-            hits = match_building_pictures(rest, pics)
-            for n, px, py, sc in sorted(hits, key=lambda hh: -hh[3]):
-                rival = max([o[3] for o in hits if o[0] != n and abs(o[1] - px) < 50 and abs(o[2] - py) < 50] or [0])
-                mxy = [round(nav.cx + px), round(nav.cy + py)]
-                sure = sc >= 0.85 and sc - rival >= 0.05
-                if sure and n not in found:
-                    learn_building(dev, rest, n, px, py)
-                    found[n] = mxy
-                    log(f"[+]   {n}: mapped by its picture ({sc:.2f}) at {px},{py}")
-                elif sure and n in found and n not in user_pins and ((mxy[0] - found[n][0]) ** 2 + (mxy[1] - found[n][1]) ** 2) ** 0.5 > 90:
-                    learn_building(dev, rest, n, px, py)   # the building was moved in the game: the pin follows it
-                    log(f"[+]   {n}: moved - the picture ({sc:.2f}) is at {mxy}, the pin was at {found[n]}; pin updated")
-                    found[n] = mxy
-                elif n not in found and sc >= 0.70:
-                    labels.append((n, mxy[0], mxy[1] + 30))
-                    names.append(n)
-                    log(f"[i]   stop {i + 1}: {n} picture matched ({sc:.2f}) at {px},{py} - checking it")
-        if len(found) == len(want):                        # all mapped: only the pictures are checked (moved buildings)
-            continue
-        try:                                               # 2) names (finger held), only while buildings are missing
+    skipped = []                                           # stops whose names were not read in the first pass
+
+    def pictures_at(i, nav):
+        """Match the saved pictures on the screen at rest. -> (labels, names) of unsure matches to check by tap."""
+        labels, names = [], []
+        if not pics:
+            return labels, names
+        rest = dev.screenshot()
+        hits = match_building_pictures(rest, pics)
+        for n, px, py, sc in sorted(hits, key=lambda hh: -hh[3]):
+            rival = max([o[3] for o in hits if o[0] != n and abs(o[1] - px) < 50 and abs(o[2] - py) < 50] or [0])
+            mxy = [round(nav.cx + px), round(nav.cy + py)]
+            sure = sc >= 0.85 and sc - rival >= 0.05
+            if sure and n not in found:
+                learn_building(dev, rest, n, px, py)
+                found[n] = mxy
+                log(f"[+]   {n}: mapped by its picture ({sc:.2f}) at {px},{py}")
+            elif sure and n in found:
+                if ((mxy[0] - found[n][0]) ** 2 + (mxy[1] - found[n][1]) ** 2) ** 0.5 <= 90:
+                    if n in need_confirm and n not in confirmed:
+                        log(f"[i]   {n}: the pin is still right (picture {sc:.2f})")
+                    confirmed.add(n)
+                elif n in need_confirm and n not in moved_cand:
+                    moved_cand[n] = (rest.copy(), px, py, mxy, sc)   # moved? decided after the sweep (only if the old spot is empty)
+            elif n not in found and sc >= 0.70:
+                labels.append((n, mxy[0], mxy[1] + 30))
+                names.append(n)
+                log(f"[i]   stop {i + 1}: {n} picture matched ({sc:.2f}) at {px},{py} - checking it")
+        return labels, names
+
+    def names_at(i, nav, labels, names):
+        """Hold a finger so the game shows the names, read them, tap the movable ones on this screen. -> False to skip."""
+        nonlocal names_ok
+        try:
             more, _held_img, _ = look_with_names(dev, stop, nav, shots=1)   # one held picture: reading was ~30 of the ~40 s per stop
             labels += [l for l in more if BUILDING_ALIASES.get(l[0], l[0]) not in names]
         except InstanceStopped:
             raise
         except Exception as e:
             log(f"[i]   stop {i + 1}: names not read ({e})")
-            continue
+            return False
+        got_names = sorted({BUILDING_ALIASES.get(n, n) for n, _, _ in more}) if more else []
         names = sorted({n for n, _, _ in labels})
         if i < 2 and _held_img is not None:                                          # owner 27 Oct (K on BlueStacks): keep what the held screen showed
             try:
                 cv2.imwrite(str(USER / "debug" / f"held_{re.sub(r'[^0-9A-Za-z]', '_', dev.serial)}_{i + 1}_{dev.hold_mode()}.png"), _held_img)
             except Exception as _e:
                 quiet_err("run_map_movable", _e)
-        empty = 0 if names else empty + 1
-        if empty >= 3 and dev.hold_mode() != "swipe":      # this way of holding shows no names here: try the next one
+        if got_names:
+            state["empty"] = 0
+            save_hold(dev.hold_mode())                     # this way works here: the next run starts with it
+        else:
+            state["empty"] += 1
+        if state["empty"] >= 3:
             old = dev.hold_mode()
-            log(f"[i]   no names on 3 stops with the '{old}' finger hold - trying '{dev.next_hold_mode() or 'swipe'}'")
-            empty = 0
+            if old == "swipe":                             # every way tried, no name ever shown: pictures only from now on
+                names_ok = False
+                save_hold("none")
+                log("[!]   no names shown with any finger hold (motion, window, swipe) - this emulator maps by pictures only "
+                    "from now on; what stays missing: City map card > Fix pins")
+            else:
+                log(f"[i]   no names on 3 stops with the '{old}' finger hold - trying '{dev.next_hold_mode() or 'swipe'}'")
+            state["empty"] = 0
         seen_all.update(names)
         log(f"[i]   stop {i + 1}/{len(stops)}: names {', '.join(sorted(set(names))) if names else '(none read)'}")
+        return tap_names(i, nav, labels)
+
+    def tap_names(i, nav, labels):
         # Owner 27 Oct 22:33: no chasing one name across the city. Tap the names that are ON THIS SCREEN, read the menu
         # that opens and save WHATEVER movable building it names; at most 3 taps per name, then the next stop.
         todo = []
@@ -12408,7 +12454,7 @@ def run_map_movable(dev, cfg, log, stop, only=None):
                 tried.add(key)
                 todo.append((nb, mx, my))
         for nb, mx, my in todo:
-            if stop.is_set() or len(found) == len(want):
+            if stop.is_set() or not missing():
                 break
             loc = cmap.locate(dev.screenshot())            # the camera after the previous taps (a ring zooms the city a little)
             if loc:
@@ -12416,7 +12462,7 @@ def run_map_movable(dev, cfg, log, stop, only=None):
             sx, sy = int(mx - nav.cx), int(my - 30 - nav.cy)
             act_map(i + 1, nb)
             if not (70 <= sx <= 420 and 160 <= sy <= 800):
-                later.setdefault(nb, []).append((mx, my))  # near the screen edge / under the HUD: the second pass goes there
+                later.setdefault(nb, []).append((mx, my))  # near the screen edge / under the HUD: the second look goes there
                 continue
             for tx, ty in [(sx, sy), (sx, sy + 35), (sx, sy - 35)]:
                 if stop.is_set() or not (70 <= tx <= 420 and 160 <= ty <= 800):
@@ -12444,6 +12490,63 @@ def run_map_movable(dev, cfg, log, stop, only=None):
             if nb not in found:
                 later.setdefault(nb, []).append((mx, my))
             leave_to_city(dev, cfg, stop, log)
+        return True
+
+    def visit(i, label):
+        duty_progress()
+        sx, sy = stops[i]
+        nav = CityNav(dev, stop, log)
+        at = goto_on_map(dev, cfg, log, stop, nav, cmap, sx + x + w / 2, sy + y + h / 2, tol=120)
+        if at is None:
+            log(f"[i]   {label} {i + 1}: could not get there - next")
+            leave_to_city(dev, cfg, stop, log)
+            return None
+        return nav
+
+    # Pass 1 (owner 28 Oct): pictures at every stop; the finger hold only while a missing building has NO saved picture
+    # (pictures can't find it). Ends as soon as every building is mapped and every kept pin is checked.
+    for i in range(len(stops)):
+        if stop.is_set() or done_all():
+            break
+        left = round((time.time() - t0) / i * (len(stops) - i) / 60) if i else None   # minutes left, from the pace so far
+        prog = (f"Mapping movable buildings: stop {i + 1} of {len(stops)} ({round(100 * i / len(stops))}%)"
+                + (f", about {max(1, left)} min left" if left is not None else "")
+                + (f" - found {len(found)}: {', '.join(found)}" if found else " - none found yet"))
+        log("@act " + json.dumps({"k": "step", "text": prog}))
+        act_map(i + 1)
+        if i:
+            log(f"[i]   {prog}")
+        nav = visit(i, "stop")
+        if nav is None:
+            continue
+        labels, names = pictures_at(i, nav)
+        if not missing():
+            continue
+        blind = [b for b in missing() if b not in pics]    # no picture of it anywhere: only its name can find it
+        if names_ok and blind:
+            names_at(i, nav, labels, names)
+        else:
+            if labels:
+                tap_names(i, nav, labels)                  # unsure picture matches: checked by tap (ring name)
+            skipped.append(i)
+    if done_all() and len(stops) > 1:
+        log(f"[+]   everything found - the sweep ended early after {round((time.time() - t0) / 60, 1)} min")
+    # Pass 2: buildings that HAVE a picture but did not match (another level / skin): names, only on the stops skipped
+    # above, nearest first (the camera is at the end of the sweep).
+    if missing() and names_ok and skipped and not stop.is_set():
+        log(f"[*]   still missing {', '.join(missing())} - reading names on {len(skipped)} stop(s)")
+        for i in reversed(skipped):
+            if stop.is_set() or not missing() or not names_ok:
+                break
+            act_map(i + 1)
+            nav = visit(i, "names stop")
+            if nav is not None:
+                names_at(i, nav, [], [])
+    for n, (shot_m, px, py, mxy, sc) in moved_cand.items():   # moved in the game: only when the old pin was not confirmed
+        if n not in confirmed and n not in trusted and n not in user_pins:
+            learn_building(dev, shot_m, n, px, py)
+            log(f"[+]   {n}: moved - the picture ({sc:.2f}) is at {mxy}, the pin was at {found[n]}; pin updated")
+            found[n] = mxy
     # Second pass (owner 27 Oct 22:33): after the whole sweep, only the buildings still missing, straight to where their
     # name was seen (centred on screen this time).
     for nb in [b for b in want if b not in found and later.get(b)]:
@@ -13054,10 +13157,17 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
         try:                                               # refresh the place and the picture (open_building_here learned it)
             m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8")) if p.with_suffix(".json").exists() else {"dx": 0, "dy": 0}
             m2["map"] = [round(nav.cx + spot[0]), round(nav.cy + spot[1])]
+            m2["worked"] = time.strftime("%Y-%m-%d %H:%M")   # owner 28 Oct: this pin opened its building - the mapper trusts it
             p.with_suffix(".json").write_text(json.dumps(m2), encoding="utf-8")
         except Exception:
             pass
         return True
+    try:                                                   # arrived but it did not open: the next Map my city checks this pin again
+        m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
+        if m2.pop("worked", None):
+            p.with_suffix(".json").write_text(json.dumps(m2), encoding="utf-8")
+    except Exception:
+        pass
     return False
 
 # --- Alliance page ------------------------------------------------------------------------------------------------
@@ -14663,6 +14773,8 @@ def run_now_tasks(cfg, serial):
     out = []
     for tid in run_now_list(serial):
         if tid.startswith("duty:") and tid[5:] in DUTY_BY_ID:
+            if tid[5:] in MAP_HEAVY and not map_slot(serial):
+                continue                                         # 2 others are mapping: stays queued, joins rallies meanwhile
             d = DUTY_BY_ID[tid[5:]]
             t = {k: d[k] for k in ("target", "steps", "no_tile", "go_page") if k in d}
             t["name"], t["count"] = tid, d.get("count", 1)
@@ -15323,6 +15435,32 @@ DUTY_BUDGET_MIN = 8      # owner 25 Oct: a duty that cannot finish is left after
 MAP_DUTIES = {"monster_rally"}             # duties that work on the world map: no trip to the city before / after (owner 25 Oct)
 
 
+MAP_HEAVY = {"map_city", "map_movable"}   # city mapping runs (long camera sweeps)
+MAP_AT_ONCE = 2                            # owner 28 Oct: at most 2 instances map at the same time - the others keep joining
+_MAP_SLOTS = {}                            # rallies, and the PC stays fast (8 at once: 12-50 s per camera move)
+_MAP_SLOT_LOCK = threading.Lock()
+
+
+def map_slot(serial, take=False):
+    """Is there room for this instance to map its city now? take=True also books the place. -> True / False"""
+    with _MAP_SLOT_LOCK:
+        now = time.time()
+        for k in [k for k, t in _MAP_SLOTS.items() if now - t > 60 * 60]:   # a run that never let go (crash): freed after 1 h
+            _MAP_SLOTS.pop(k, None)
+        if serial in _MAP_SLOTS:
+            return True
+        if len(_MAP_SLOTS) >= MAP_AT_ONCE:
+            return False
+        if take:
+            _MAP_SLOTS[serial] = now
+        return True
+
+
+def map_slot_free(serial):
+    with _MAP_SLOT_LOCK:
+        _MAP_SLOTS.pop(serial, None)
+
+
 def map_only(tasks):
     """True when every task in the list works on the world map (no city view needed)."""
     return bool(tasks) and all(str(t.get("name", "")).startswith("duty:") and t["name"][5:] in MAP_DUTIES for t in tasks)
@@ -15330,6 +15468,13 @@ def map_only(tasks):
 
 def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
     """From the city screen: run each due task (open it, run its steps, go back)."""
+    try:
+        return _run_city_tasks(dev, cfg, log, stop, tasks, last_run)
+    finally:                                                 # stopped / crashed in a mapping run: its place is free again
+        map_slot_free(getattr(dev, "serial", ""))
+
+
+def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
     nav_state = {}
     _TL.city_last = last_run                                 # the Black Market keep-going run looks at what else is due
     dev.arm_guard(cfg, log, stop)
@@ -15343,6 +15488,9 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         log(f"[*] {'Duty' if duty_id else 'City task'}: {shown}")
         log("@act " + json.dumps({"k": "step", "text": f"{'Duty' if duty_id else 'City task'}: {shown}"}))     # shown under 'Now executing'
         last_run[name] = time.time()
+        if duty_id in MAP_HEAVY and not map_slot(getattr(dev, "serial", ""), take=True):
+            log(f"[i] '{shown}': {MAP_AT_ONCE} other instances are mapping their city - this one waits its turn (joins rallies meanwhile)")
+            continue                                         # still in the 'run now' list: it starts when a place is free
         for rid in (name, "task:" + name):                      # a 'run now' request is used up once the task is started
             run_now_done(getattr(dev, "serial", ""), rid)
         result = None
@@ -15360,7 +15508,7 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                     nav_state.clear()
                 # time budget per duty (Kiravik 24 Oct 15:14: Champions sat on a purchase page for 10+ min with no log line):
                 # 20 min, 50 for the city map; over it, the next tap aborts the duty and the attempt-2 path takes over
-                _TL.duty_deadline = time.time() + (50 if duty_id == "map_city" else MR_RUN_MIN + 10 if duty_id == "monster_rally" else DUTY_BUDGET_MIN) * 60
+                _TL.duty_deadline = time.time() + (50 if duty_id in MAP_HEAVY else MR_RUN_MIN + 10 if duty_id == "monster_rally" else DUTY_BUDGET_MIN) * 60
                 if not ensure_view(dev, cfg, stop, log, "world" if on_map else "city") and not stop.is_set():
                     log(f"[!] Could not get back to the {'world map' if on_map else 'city view'}")
                 clear_popups(dev, cfg, log, stop, want_city=not on_map)   # close offers / pop-ups first, then do the task
@@ -15398,6 +15546,8 @@ def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         if duty_id and result is not None and not stop.is_set():
             if duty_record(getattr(dev, "serial", ""), duty_id, *result, nothing=bool(result[0] and getattr(_TL, "rd_nothing", False))) == "gaveup":
                 duty_failed_report(dev, cfg, log, shown, result[1])
+        if duty_id in MAP_HEAVY:
+            map_slot_free(getattr(dev, "serial", ""))
         if not on_map:                                       # map duties: the rally list is reached from the map (Alliance button)
             leave_to_city(dev, cfg, stop, log)
     log("@act " + json.dumps({"k": "step", "text": "Idle - tasks done, back to the rallies"}))   # the instance list stops showing the task
