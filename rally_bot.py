@@ -12143,7 +12143,7 @@ def run_map_movable(dev, cfg, log, stop):
     x, y, w, h = CITY_VIEW
     stops = []                                             # camera places a good half view apart, row by row (serpentine)
     for kx, ky, _, _ in sorted(cmap.kf, key=lambda k: (round(k[1] / 300), k[0])):
-        if not any(abs(kx - sx) < w * 0.55 and abs(ky - sy) < h * 0.45 for sx, sy in stops):
+        if not any(abs(kx - sx) < w * 0.75 and abs(ky - sy) < h * 0.6 for sx, sy in stops):   # 22:36: 19 -> 12 stops on Russia
             stops.append((kx, ky))
     rows = {}
     for sx, sy in stops:
@@ -12171,7 +12171,7 @@ def run_map_movable(dev, cfg, log, stop):
             leave_to_city(dev, cfg, stop, log)
             continue
         try:
-            labels, _, _ = look_with_names(dev, stop, nav)
+            labels, _, _ = look_with_names(dev, stop, nav, shots=1)   # one held picture: reading was ~30 of the ~40 s per stop
         except InstanceStopped:
             raise
         except Exception as e:
