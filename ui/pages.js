@@ -2049,9 +2049,8 @@ function pinBuildingsDialog(culture) {
       h("button", { class: "btn small", type: "button", title: "Zoom in", "aria-label": "Zoom in", onclick: () => zoomAt(1.5, wrap.clientWidth / 2, wrap.clientHeight / 2) }, "+"),
       h("button", { class: "btn small", type: "button", title: "Zoom out", "aria-label": "Zoom out", onclick: () => zoomAt(1 / 1.5, wrap.clientWidth / 2, wrap.clientHeight / 2) }, "\u2212"),
       h("button", { class: "btn small", type: "button", title: "Whole map", onclick: () => { st.z = 1; st.px = st.py = 0; view(); } }, "Fit"));
-    wrap.appendChild(zbar);
     view();
-    body.appendChild(h("div", { class: "pingrid" }, list, wrap));
+    body.appendChild(h("div", { class: "pingrid" }, list, h("div", { class: "pinmapcol" }, zbar, wrap)));   // zoom buttons above the map: never over a building
     body.appendChild(h("p", { class: "hint" }, done + " of " + FIXED_BUILDINGS.length + " pinned on the " + cap(st.c) + " map. Pins are saved at once and used by every instance matched to this culture."));
   };
   const load = async (c) => {
