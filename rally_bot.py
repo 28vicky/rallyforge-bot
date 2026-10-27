@@ -6914,7 +6914,7 @@ def safe_shift(before, after, cmd_dx, cmd_dy):
     diff = float(cv2.absdiff(before[y:y + h, x:x + w], after[y:y + h, x:x + w]).mean())
     if diff < 2.0:                                         # the picture did not change: the map did not move (edge)
         return 0.0, 0.0
-    return cmd_dx * 1.45, cmd_dy * 1.45                    # it moved but the match is not trustworthy: use the finger (the map follows it ~1.45x)
+    return cmd_dx * 1.0, cmd_dy * 1.0                      # it moved but the match is not trustworthy: use the finger (slow hold-still drags measured exactly 1.00x on Kiravik 27 Oct; 1.45x was the old fast swipe's glide)
 
 
 def match_building(text, cutoff=0.82):
@@ -11275,7 +11275,16 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
         if want == "keep" and ch_on_page(shot):            # the champion's heart can open the Champion page itself
             return True
         if not find_detail_icon(shot):
-            continue
+            # Kiravik 27 Oct 19:02: a 'Congratulations! 25 Stamina' reward window sat over the Tavern and took all 7
+            # taps. A window in the way -> close it, then tap this spot once more.
+            if view_of(shot, cfg) != "city" or rd_seen(shot, ["Congratulations", "Claim", "Confirm", "OK"], region=(60, 300, 420, 400)):
+                log(f"[i]   {bname}: a window is in the way at ({x},{y}) - closing it and tapping again")
+                clear_popups(dev, cfg, log, stop, rounds=2)
+                dev.tap(x, y)
+                _nap(stop, 1.2, 1.5)
+                shot = dev.screenshot()
+            if not find_detail_icon(shot):
+                continue
         nm = (ring_building_name(shot) or ("",))[0].lower()
         if want in nm or any(difflib.SequenceMatcher(None, want, w).ratio() >= 0.8 for w in re.findall(r"[a-z ]+", nm)):
             log(f"[i]   {bname} reached by {how} ({x},{y})")
