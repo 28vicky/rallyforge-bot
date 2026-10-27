@@ -10289,71 +10289,87 @@ def run_wheel(dev, cfg, log, stop):
     fails = 0
     closes = 0
     last_pick = big
+    coins = None                                           # owner 27 Oct: spin fast - read the coins once, then count them down
+    since_read = 0                                         # (re-read every 10 presses); 6-8 text reads per spin took ~19 s
+    ready = False                                          # True right after a closed panel: the page is known, no re-check
     while not stop.is_set():
-        shot = dev.screenshot()
-        if wheel_reward_panel(shot):                       # a reward panel is still up: its Continue button, else empty ground
-            closes += 1
-            if closes > 8:                                 # Rob 25 Oct 03:10: the x100 panel never closed -> 17 min without a log line
-                rd_snap(shot, "wheel_panel_stuck")
-                raise RuntimeError(f"the Wheel reward panel does not close (after {done} spin(s))")
-            dev.tap(*(WHEEL_BTN[last_pick] if closes % 2 else (270, 110)))   # owner 25 Oct: the spin button's own spot or
-                                                           # outside closes it (tapped only while the panel is seen = no extra spin)
-            _nap(stop, 0.8, 1.1)
-            continue
-        closes = 0
-        if not wheel_on_page(shot):
-            raise RuntimeError(f"left the Wheel of Fortune page (after {done} spin(s))")   # failed = tried again later, not 'done'
-        coins = wheel_coins(shot)
-        for _ in range(3):                                 # Skip 27 Oct 20:01: one bad read ended the run after 200 spins
-            if coins is not None or stop.is_set():
-                break
-            _nap(stop, 0.8, 1.1)
+        if not ready:
             shot = dev.screenshot()
-            coins = wheel_coins(shot) if wheel_on_page(shot) and not wheel_reward_panel(shot) else None
-        if coins is None:
-            rd_snap(shot, "wheel_coins_unread")
-            raise RuntimeError(f"could not read the Wheel coins (after {done} spin(s))")
+            if wheel_reward_panel(shot):                   # a reward panel is still up: its button spot, else empty ground
+                closes += 1
+                if closes > 8:                             # Rob 25 Oct 03:10: the x100 panel never closed -> 17 min without a log line
+                    rd_snap(shot, "wheel_panel_stuck")
+                    raise RuntimeError(f"the Wheel reward panel does not close (after {done} spin(s))")
+                dev.tap(*(WHEEL_BTN[last_pick] if closes % 2 else (270, 110)))   # owner 25 Oct: the spin button's own spot or
+                stop.wait(0.6)                             # outside closes it (tapped only while the panel is seen = no extra spin)
+                continue
+            closes = 0
+            if not wheel_on_page(shot):
+                raise RuntimeError(f"left the Wheel of Fortune page (after {done} spin(s))")   # failed = tried again later, not 'done'
+        if coins is None or since_read >= 10:
+            shot = dev.screenshot()
+            c = wheel_coins(shot)
+            for _ in range(3):                             # Skip 27 Oct 20:01: one bad read ended the run after 200 spins
+                if c is not None or stop.is_set():
+                    break
+                stop.wait(0.8)
+                shot = dev.screenshot()
+                c = wheel_coins(shot) if wheel_on_page(shot) and not wheel_reward_panel(shot) else None
+            if c is None and coins is None:
+                rd_snap(shot, "wheel_coins_unread")
+                raise RuntimeError(f"could not read the Wheel coins (after {done} spin(s))")
+            coins, since_read = (c if c is not None else coins), 0
+        ready = False
         left = (target - done) if target else None
         if left is not None and left <= 0:
             log(f"[+]  Wheel: {done} spin(s) done")
             break
         pick = next((b for b in (100, 10, 1) if b <= big and (left is None or b <= left) and coins - WHEEL_COST[b] >= reserve), None)
         if pick is None:
+            if since_read:                                 # counted down, not read: read once before stopping
+                since_read = 10
+                continue
             log(f"[+]  Wheel: stopped after {done} spin(s) - {coins:,} coins left (cost/keep-at-least {reserve:,})")
             break
         dev.tap(*WHEEL_BTN[pick])
         last_pick = pick
         shown = spent = False
-        for _ in range(14):
-            _nap(stop, 0.5, 0.7)
+        t0 = time.time()
+        while time.time() - t0 < 9 and not stop.is_set():
+            stop.wait(0.4)
             s2 = dev.screenshot()
             if wheel_reward_panel(s2):
                 shown = True
                 break
-            c2 = wheel_coins(s2) if wheel_on_page(s2) else None
-            if c2 is not None and coins - c2 >= WHEEL_COST[pick]:      # Spin once shows no panel: the coins dropping = it spun
-                spent = True
-                _nap(stop, 1.5, 2.0)                       # let the wheel stop turning
-                break
+            if pick == 1:                                  # Spin once shows no panel: the coins dropping = it spun
+                c2 = wheel_coins(s2) if wheel_on_page(s2) else None
+                if c2 is not None and coins - c2 >= WHEEL_COST[pick]:
+                    spent = True
+                    stop.wait(1.5)                         # let the wheel stop turning
+                    break
         if not (shown or spent):
             fails += 1
             log(f"[i]   Wheel: the {pick}-spin button did not spin ({fails}/3)")
             if fails >= 3:
                 raise RuntimeError(f"the {pick}-spin button did not spin 3 times (after {done} spin(s))")
+            since_read = 10                                # re-read the coins and the page before trying again
             continue
         fails = 0
         done += pick
+        coins -= WHEEL_COST[pick]
+        since_read += 1
         wheel_spun_today(serial, pick)
-        log(f"[i]   Wheel: {done} spin(s) done ({coins - WHEEL_COST[pick]:,} coins left)")
-        for _ in range(4 if shown else 0):                                 # close the panel: the button's own spot (owner 25 Oct)
-            if not wheel_reward_panel(dev.screenshot()):
+        log(f"[i]   Wheel: {done} spin(s) done (about {coins:,} coins left)")
+        if spent:
+            ready = True
+            continue
+        for k in range(6):                                 # close the panel: the button's own spot (owner 25 Oct), every other
+            dev.tap(*(WHEEL_BTN[pick] if k % 2 == 0 else (270, 110)))     # try outside; tapped only while the panel is seen
+            stop.wait(0.5)
+            s3 = dev.screenshot()
+            if not wheel_reward_panel(s3):
+                ready = wheel_on_page(s3)                  # small title read: the next press only on the Wheel page
                 break
-            dev.tap(*WHEEL_BTN[pick])
-            _nap(stop, 0.8, 1.1)
-            if not wheel_reward_panel(dev.screenshot()):
-                break
-            dev.tap(270, 110)
-            _nap(stop, 0.6, 0.9)
     return done
 
 
