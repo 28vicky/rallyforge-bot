@@ -1687,3 +1687,10 @@ select.pick-open{border-color:var(--accent1)}
 .pinimg{display:block;max-width:100%;max-height:66vh;width:auto;height:auto;user-select:none}
 .pindot{touch-action:none;position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;border:3px solid var(--accent1,#c2410c);box-shadow:0 0 0 2px rgba(0,0,0,.35);cursor:grab}
 .pindot em{position:absolute;left:14px;top:-5px;white-space:nowrap;font-style:normal;font-size:11px;font-weight:700;color:#fff;background:rgba(0,0,0,.6);padding:1px 5px;border-radius:4px;pointer-events:none}
+/* Plots mode (27 Oct): numbered plot pins; named buildings shown grey for reference */
+.pindot.plot{width:10px;height:10px;margin:-5px 0 0 -5px;border-width:2px;background:var(--accent1,#c2410c)}
+.pindot.plot em{left:50%;top:-18px;transform:translateX(-50%);padding:0 4px;font-size:10px}
+.pindot.plot.hl{width:16px;height:16px;margin:-8px 0 0 -8px;background:#fff;box-shadow:0 0 0 3px #facc15}
+.pindot.ref{pointer-events:none;background:#9ca3af;border-color:#4b5563;opacity:.75}
+.pindot.ref em{background:rgba(0,0,0,.45);font-weight:500}
+.pinempty{padding:14px 12px;font-size:13px;color:var(--muted,#6b7280)}

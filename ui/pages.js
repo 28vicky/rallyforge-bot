@@ -1970,61 +1970,102 @@ const FIXED_BUILDINGS = ["Keep", "Tavern", "Shrine", "Pasture", "Academy", "Mili
   "Research Factory", "Wall", "Archer Tower", "Watchtower", "Rally Spot", "Bunker", "Victory Column", "Wonder",
   "Fountain of the Gods", "Wisdom Dome", "Dragon Cliff", "Holy Palace", "Art Hall", "Council of Senate", "Subordinate City", "Battlefield"];
 function pinBuildingsDialog(culture) {
-  const st = { c: culture, sel: null, pins: {}, size: null };
+  // Two modes: Buildings = the fixed buildings by name; Plots (27 Oct) = every plot a building can stand on, numbered
+  // P1..Pn by clicking (hand-placed buildings' plots too). The per-instance survey taps each plot once and reads its name.
+  const st = { c: culture, mode: "buildings", sel: null, pins: {}, size: null, hl: null };
   const body = h("div", { class: "pinbox" });
   const cap = (c) => c.charAt(0).toUpperCase() + c.slice(1);
   const norm = (x) => x.toLowerCase().replace(/[^a-z]/g, "");
-  const pinOf = (b) => { const k = Object.keys(st.pins).find((k) => norm(k) === norm(b)); return k ? st.pins[k] : null; };
+  const isPlot = (k) => /^P\d+$/.test(k);
+  const pinOf = (b) => { const k = Object.keys(st.pins).find((k) => !isPlot(k) && norm(k) === norm(b)); return k ? st.pins[k] : null; };
+  const plots = () => Object.keys(st.pins).filter(isPlot).sort((a, b) => a.slice(1) - b.slice(1)).map((k) => st.pins[k]);
   const save = async (name, xy) => {
     const r = await act(api("culture_pin_set", { culture: st.c, name, map: xy }));
     if (r) { st.pins = r.pins; draw(); }
   };
+  const savePlots = async (list) => {                    // one write for all plots; local first so fast clicks never race
+    for (const k of Object.keys(st.pins)) if (isPlot(k)) delete st.pins[k];
+    list.forEach((xy, i) => { st.pins["P" + (i + 1)] = xy; });
+    draw();
+    const r = await act(api("culture_plots_set", { culture: st.c, plots: list }));
+    if (r) { st.pins = r.pins; draw(); }
+  };
+  const undo = () => { const l = plots(); if (l.length) savePlots(l.slice(0, -1)); };
   const nextFree = () => FIXED_BUILDINGS.find((b) => !pinOf(b)) || null;
   const draw = () => {
     body.innerHTML = "";
-    const done = FIXED_BUILDINGS.filter(pinOf).length;
-    body.appendChild(h("div", { class: "seg small pinseg" }, ["europe", "russia", "china", "korea", "japan", "arabia", "america"].map((c) =>
-      h("button", { class: "segb" + (st.c === c ? " on" : ""), type: "button", onclick: () => load(c) }, cap(c)))));
-    body.appendChild(h("p", { class: "hint" }, st.sel ? "Click on the map where the " + st.sel + " is. Drag a pin to move it." :
+    const P = st.mode === "plots";
+    const done = FIXED_BUILDINGS.filter(pinOf).length, pl = plots();
+    body.appendChild(h("div", { class: "row", style: { gap: "10px", flexWrap: "wrap", alignItems: "center" } },
+      h("div", { class: "seg small pinseg" }, ["europe", "russia", "china", "korea", "japan", "arabia", "america"].map((c) =>
+        h("button", { class: "segb" + (st.c === c ? " on" : ""), type: "button", onclick: () => load(c) }, cap(c)))),
+      h("div", { class: "seg small pinseg" }, [["buildings", "Buildings"], ["plots", "Plots"]].map(([m, t]) =>
+        h("button", { class: "segb" + (st.mode === m ? " on" : ""), type: "button", onclick: () => { st.mode = m; st.hl = null; draw(); } }, t)))));
+    body.appendChild(h("p", { class: "hint" }, P
+      ? "Click every plot a building can stand on, inside the wall - also where players build their own (Market, Prison, Barracks...). Each click adds the next number. Drag a number to move it; × removes it and the numbers after it move down."
+      : st.sel ? "Click on the map where the " + st.sel + " is. Drag a pin to move it." :
       done === FIXED_BUILDINGS.length ? "Every building is pinned on the " + cap(st.c) + " map." : "Pick a building on the left, then click it on the map."));
-    const list = h("div", { class: "pinlist" }, FIXED_BUILDINGS.map((b) => {
-      const p = pinOf(b);
-      return h("div", { class: "pinrow" + (st.sel === b ? " on" : ""), onclick: () => { st.sel = b; draw(); } },
-        h("span", {}, b),
-        p ? h("span", { class: "row", style: { gap: "6px" } }, h("span", { class: "dbadge ok" }, "Pinned"),
-          h("button", { class: "pinx", type: "button", title: "Remove pin", onclick: (e) => { e.stopPropagation(); save(b, null); } }, "\u00d7"))
-          : h("span", { class: "dbadge todo" }, "To pin"));
-    }));
+    const list = P
+      ? h("div", { class: "pinlist" }, pl.length ? pl.map((xy, i) =>
+          h("div", { class: "pinrow" + (st.hl === i ? " on" : ""), onclick: () => { st.hl = st.hl === i ? null : i; draw(); } },
+            h("span", {}, "Plot " + (i + 1)),
+            h("button", { class: "pinx", type: "button", title: "Remove plot " + (i + 1), onclick: (e) => { e.stopPropagation(); st.hl = null; savePlots(pl.filter((_, j) => j !== i)); } }, "×")))
+          : h("div", { class: "pinempty" }, "No plots yet. Click the first plot on the map - it becomes Plot 1."))
+      : h("div", { class: "pinlist" }, FIXED_BUILDINGS.map((b) => {
+          const p = pinOf(b);
+          return h("div", { class: "pinrow" + (st.sel === b ? " on" : ""), onclick: () => { st.sel = b; draw(); } },
+            h("span", {}, b),
+            p ? h("span", { class: "row", style: { gap: "6px" } }, h("span", { class: "dbadge ok" }, "Pinned"),
+              h("button", { class: "pinx", type: "button", title: "Remove pin", onclick: (e) => { e.stopPropagation(); save(b, null); } }, "×"))
+              : h("span", { class: "dbadge todo" }, "To pin"));
+        }));
     const img = h("img", { class: "pinimg", src: "/api/culture_img?c=" + st.c + "&k=" + encodeURIComponent(window.KEY), alt: cap(st.c) + " map", draggable: false });
-    const wrap = h("div", { class: "pinwrap" + (st.sel ? " picking" : "") }, img);
+    const wrap = h("div", { class: "pinwrap" + (st.sel || P ? " picking" : "") }, img);
     const toMap = (e) => { const r = img.getBoundingClientRect();
-      return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * st.size[0], Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * st.size[1]]; };
-    img.onclick = (e) => { if (st.dragged || !st.sel || !st.size) return; const b = st.sel; st.sel = null; save(b, toMap(e)).then(() => { st.sel = nextFree(); draw(); }); };
-    if (st.size) for (const b of FIXED_BUILDINGS) {
-      const p = pinOf(b); if (!p) continue;
-      const dot = h("span", { class: "pindot", title: b, style: { left: (p[0] * 100 / st.size[0]) + "%", top: (p[1] * 100 / st.size[1]) + "%" } }, h("em", {}, b));
-      dot.onpointerdown = (e) => {                       // drag a pin: pointer captured, no page scroll, no click on the map after it
+      return [Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * st.size[0]), Math.round(Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * st.size[1])]; };
+    img.onclick = (e) => {
+      if (st.dragged || !st.size) return;
+      if (P) { savePlots([...pl, toMap(e)]); return; }
+      if (!st.sel) return;
+      const b = st.sel; st.sel = null; save(b, toMap(e)).then(() => { st.sel = nextFree(); draw(); });
+    };
+    const dotAt = (p, label, cls, onDrop) => {
+      const dot = h("span", { class: "pindot" + cls, title: label, style: { left: (p[0] * 100 / st.size[0]) + "%", top: (p[1] * 100 / st.size[1]) + "%" } }, h("em", {}, label));
+      if (onDrop) dot.onpointerdown = (e) => {          // drag a pin: pointer captured, no page scroll, no click on the map after it
         e.preventDefault(); e.stopPropagation();
         dot.setPointerCapture(e.pointerId);
         st.dragged = false;
         const move = (ev) => { st.dragged = true; const m = toMap(ev); dot.style.left = (m[0] * 100 / st.size[0]) + "%"; dot.style.top = (m[1] * 100 / st.size[1]) + "%"; };
         const up = (ev) => {
           dot.removeEventListener("pointermove", move); dot.removeEventListener("pointerup", up);
-          if (st.dragged) save(b, toMap(ev));
+          if (st.dragged) onDrop(toMap(ev));
           setTimeout(() => { st.dragged = false; }, 0);
         };
         dot.addEventListener("pointermove", move); dot.addEventListener("pointerup", up);
       };
       dot.onclick = (e) => e.stopPropagation();
       wrap.appendChild(dot);
+    };
+    if (st.size) {
+      for (const b of FIXED_BUILDINGS) { const p = pinOf(b); if (p) dotAt(p, b, P ? " ref" : "", P ? null : (xy) => save(b, xy)); }
+      if (P) pl.forEach((xy, i) => dotAt(xy, String(i + 1), " plot" + (st.hl === i ? " hl" : ""), (m) => savePlots(pl.map((q, j) => (j === i ? m : q)))));
     }
     body.appendChild(h("div", { class: "pingrid" }, list, wrap));
-    body.appendChild(h("p", { class: "hint" }, done + " of " + FIXED_BUILDINGS.length + " pinned on the " + cap(st.c) + " map. Pins are saved at once and used by every instance matched to this culture."));
+    body.appendChild(P
+      ? h("div", { class: "row", style: { justifyContent: "space-between", alignItems: "center", gap: "8px" } },
+          h("p", { class: "hint", style: { margin: 0 } }, pl.length + " plot" + (pl.length === 1 ? "" : "s") + " on the " + cap(st.c) + " map. Grey pins are the named buildings - their plots need no number. Saved at once."),
+          Object.assign(btn("Undo last", undo, "sm"), { disabled: !pl.length, title: "Undo the last plot (Ctrl+Z)" }))
+      : h("p", { class: "hint" }, done + " of " + FIXED_BUILDINGS.length + " pinned on the " + cap(st.c) + " map. Pins are saved at once and used by every instance matched to this culture."));
   };
+  const onKey = (e) => {                                 // Ctrl+Z = undo the last plot while the dialog is open
+    if (!body.isConnected) { document.removeEventListener("keydown", onKey); return; }
+    if (st.mode === "plots" && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
+  };
+  document.addEventListener("keydown", onKey);
   const load = async (c) => {
     const r = await act(api("culture_pins_get", { culture: c }));
     if (!r) return;
-    st.c = c; st.pins = r.pins; st.size = r.size; st.sel = nextFree(); draw();
+    st.c = c; st.pins = r.pins; st.size = r.size; st.sel = nextFree(); st.hl = null; draw();
   };
   modal({ title: "Pin buildings", wide: true, body, buttons: [{ label: "Done", cls: "pri" }] });
   load(culture);

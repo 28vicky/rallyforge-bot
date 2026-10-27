@@ -2317,6 +2317,21 @@ class Api:
         (d / "pins.json").write_text(json.dumps(pins, indent=1), encoding="utf-8")
         return self.culture_pins_get({"culture": c})
 
+    def culture_plots_set(self, p):
+        """Owner tool (Plots mode, 27 Oct): replace all numbered plot pins P1..Pn of a culture in one write, so removing
+        a plot re-packs the numbers. Named building pins are kept as they are."""
+        if not (rb.USER / "admin.txt").exists():
+            raise ApiError("Only the owner can pin plots.")
+        c = str(p.get("culture") or "").lower()
+        d = rb.culture_dir(c)
+        if not d:
+            raise ApiError("Pick a culture first.")
+        pins = {k: v for k, v in rb.culture_pins(c).items() if not re.fullmatch(r"P\d+", k)}
+        for i, xy in enumerate(p.get("plots") or [], 1):
+            pins["P%d" % i] = [round(float(xy[0])), round(float(xy[1]))]
+        (d / "pins.json").write_text(json.dumps(pins, indent=1), encoding="utf-8")
+        return self.culture_pins_get({"culture": c})
+
     def city_map_info(self, p):
         """The instance's city map for the City map card: built? views / date, mapping progress, and the buildings the
         duties need - found (pinned on the map), seen (picture only) or not yet. Only buildings, no small markers (owner)."""
