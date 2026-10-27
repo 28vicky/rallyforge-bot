@@ -1078,6 +1078,35 @@ class Device:
         t.start()
         return t
 
+    def slow_drag(self, x1, y1, x2, y2, ms=600, hold_ms=220):
+        """Inertia-free map drag (owner 25 Oct): finger down, moved slowly in small steps over ~ms, then held STILL for
+        hold_ms before lifting at the same spot - the game then moves the map exactly with the finger and never glides
+        on (a quick `input swipe` glides 0x-1.45x of the finger). Falls back to a plain swipe when this emulator
+        cannot do motion events. -> True when the slow drag was used."""
+        self.acted = time.time()
+        if getattr(self, "no_motion", False):
+            self.swipe(x1, y1, x2, y2, max(ms, 450))
+            return False
+        sx, sy = self.sx, self.sy
+        r = self._run("shell", "input", "motionevent", "DOWN", str(int(x1 * sx)), str(int(y1 * sy)))
+        if r.returncode != 0 or b"nknown" in (r.stderr or b"") + (r.stdout or b""):
+            self.no_motion = True
+            self.swipe(x1, y1, x2, y2, max(ms, 450))
+            return False
+        n = max(6, int(ms / 50))                             # one adb call takes ~40-70 ms: enough steps to spread over ~ms
+        t0 = time.time()
+        for i in range(1, n + 1):
+            k = i / n
+            self._run("shell", "input", "motionevent", "MOVE", str(int((x1 + (x2 - x1) * k) * sx)),
+                      str(int((y1 + (y2 - y1) * k) * sy)))
+            want = t0 + ms / 1000.0 * k                      # keep the finger on a steady slow pace
+            if want > time.time():
+                time.sleep(min(0.08, want - time.time()))
+        time.sleep(hold_ms / 1000.0)                         # hold still: no momentum when the finger lifts
+        self._run("shell", "input", "motionevent", "MOVE", str(int(x2 * sx)), str(int(y2 * sy)))
+        self._run("shell", "input", "motionevent", "UP", str(int(x2 * sx)), str(int(y2 * sy)))
+        return True
+
     def hold_start(self, x, y, x2, y2):
         """Put a finger on the screen at (x, y), move it to (x2, y2) in a few small steps and KEEP IT DOWN
         (the game shows the building names only while a finger that has moved is still down). Call hold_end()
@@ -7560,10 +7589,12 @@ class CityNav:
             return 0.0, 0.0, shot
         before = self._settled() if before is None else before
         fx, fy, tx, ty = calm_drag(before, fx, fy, tx, ty)
-        self.dev.swipe(int(fx), int(fy), int(tx), int(ty), 600)
-        _nap(self.stop, self.pause, self.pause + 0.3)
+        self.dev.slow_drag(int(fx), int(fy), int(tx), int(ty))   # hold-still drag: no glide (owner 25 Oct)
+        _nap(self.stop, 0.4, 0.5)
         after = self._settled()
         dx, dy = safe_shift(before, after, tx - fx, ty - fy)
+        fl = max(1.0, ((tx - fx) ** 2 + (ty - fy) ** 2) ** 0.5)
+        self.log(f"[i]   nav: drag finger={round(tx - fx)},{round(ty - fy)} map={round(dx)},{round(dy)} ratio={((dx * dx + dy * dy) ** 0.5) / fl:.2f}")
         if abs(dx) < 3 and abs(dy) < 3 and find_detail_icon(after):   # the drag was taken as a tap on a building
             self.log("[i]   the drag opened a building's ring instead of moving the map - closing it")
             close_ring(self.dev, self.stop, (270, 490))
@@ -12235,38 +12266,67 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
     dx, dy = (mapx - cx) - mid_x, (mapy - cy) - mid_y      # how far the camera has to move (map px)
     if abs(dx) < 120 and abs(dy) < 150 and 90 <= mapx - cx <= 450 and 200 <= mapy - cy <= 780:
         return mapx - cx, mapy - cy                        # already on screen: no drag at all
-    k_scale = _DRAG_SCALE.get(dev.serial, 1.0)             # learned: the map moves k x the finger (25 Oct: 1.3-1.44 x)
-    fdx, fdy = dx / k_scale, dy / k_scale                  # finger distance
-    n = max(1, math.ceil(max(abs(fdx), abs(fdy)) / 250))   # owner: short fixed segments (<= 250 px), linear 550 ms each
-    n = min(n, 8)
-    sx_, sy_ = fdx / n, fdy / n
-    log(f"[i]   jump: camera at {round(cx)},{round(cy)} - pin {round(mapx)},{round(mapy)} - {n} fixed drag(s) of {round(sx_)},{round(sy_)} (scale {k_scale:.2f})")
-    for k in range(n):                                     # fixed drags, no looking in between
-        if stop.is_set():
-            return None
-        fx, fy = 270 + sx_ / 2, 480 + sy_ / 2
-        tx, ty = 270 - sx_ / 2, 480 - sy_ / 2
+    k_scale = _DRAG_SCALE.get(dev.serial, 1.0)             # learned: map px moved per finger px (slow drag: ~1.0 expected)
+    log(f"[i]   jump: camera at {round(cx)},{round(cy)} - pin {round(mapx)},{round(mapy)} - {round(dx)},{round(dy)} px away (scale {k_scale:.2f})")
+    before = dev.screenshot()
+    t_lim = t0 + 30                                        # plan 25 Oct: max ~6 drags / 30 s, then the task fails and retries later
+    zero = 0
+    for k in range(6):                                     # closed loop: slow drag -> measure the real move -> correct
+        if stop.is_set() or time.time() > t_lim or dev.serial in TASK_ABORT:
+            break
+        sx, sy = mapx - cx, mapy - cy                      # pin on screen now (estimated)
+        if 90 <= sx <= 450 and 200 <= sy <= 780:           # safely on screen: tap it, don't polish the camera
+            break
+        rx, ry = sx - mid_x, sy - mid_y                    # remaining camera move (map px)
+        fdx = max(-330.0, min(330.0, rx / k_scale))        # finger move, one long drag at a time
+        fdy = max(-500.0, min(500.0, ry / k_scale))
+        ln = (fdx * fdx + fdy * fdy) ** 0.5
+        if ln < 60:                                        # tiny drags are ignored or act as taps: stretch to 60 px
+            fdx, fdy = (fdx / ln * 60, fdy / ln * 60) if ln else (0.0, 60.0)
+        fx, fy = 270 + fdx / 2, 480 + fdy / 2
+        tx, ty = 270 - fdx / 2, 480 - fdy / 2
         fx, tx = max(100, min(440, fx)), max(100, min(440, tx))   # safe zone (no HUD under the finger)
         fy, ty = max(200, min(760, fy)), max(200, min(760, ty))
-        dev.swipe(int(fx), int(fy), int(tx), int(ty), 550)
-        _nap(stop, 0.35, 0.45)
-    _nap(stop, 1.0, 1.1)                                   # glide + spring-back finish
-    shot = dev.screenshot()
-    if find_detail_icon(shot):
+        fx, fy, tx, ty = calm_drag(before, fx, fy, tx, ty)        # start on empty ground: never opens a ring
+        dev.slow_drag(int(fx), int(fy), int(tx), int(ty))
+        _nap(stop, 0.4, 0.5)
+        after = nav._settled()
+        mdx, mdy = safe_shift(before, after, tx - fx, ty - fy)    # map content shift on screen (cheap, no map match)
+        fl = max(1.0, ((tx - fx) ** 2 + (ty - fy) ** 2) ** 0.5)
+        ratio = ((mdx * mdx + mdy * mdy) ** 0.5) / fl
+        log(f"[i]   nav: drag {k + 1} finger={round(tx - fx)},{round(ty - fy)} map={round(mdx)},{round(mdy)} ratio={ratio:.2f}")
+        if ratio < 0.15:                                   # 0x: nothing moved - a pop-up, a ring or the city edge
+            zero += 1
+            if find_detail_icon(after):
+                close_ring(dev, stop, (270, 490))
+                after = dev.screenshot()
+            elif zero == 1:
+                clear_popups(dev, cfg, log, stop, rounds=2)
+                after = dev.screenshot()
+            else:
+                log("[i]   jump: the map does not move here (city edge?) - checking the map")
+                before = after
+                break
+            before = after
+            continue
+        zero = 0
+        cx, cy = cx - mdx, cy - mdy                        # the map moved by (mdx, mdy) on screen -> camera moved the other way
+        if fl > 150:
+            k_new = max(0.6, min(2.5, ratio))
+            k_scale = round(0.5 * k_scale + 0.5 * k_new, 3) if dev.serial in _DRAG_SCALE else round(k_new, 3)
+            _DRAG_SCALE[dev.serial] = k_scale
+        before = after
+    if find_detail_icon(before):
         close_ring(dev, stop, (270, 490))
-        shot = dev.screenshot()
-    r = cmap.locate(shot)                                  # the one check
+        before = dev.screenshot()
+    r = cmap.locate(before)                                # the one real check on the map
     if not r:
         log("[i]   jump: the view after the drags is not found on the map - using the step-by-step route")
         return None
     nav.cx, nav.cy = r[0], r[1]
-    moved = ((nav.cx - cx) ** 2 + (nav.cy - cy) ** 2) ** 0.5
-    finger = (fdx ** 2 + fdy ** 2) ** 0.5
-    if finger > 150 and moved > 50:                         # learn how far the map really moves per finger pixel
-        k_new = max(0.6, min(2.5, moved / finger))
-        _DRAG_SCALE[dev.serial] = round(0.5 * k_scale + 0.5 * k_new, 3) if dev.serial in _DRAG_SCALE else round(k_new, 3)
+    err = ((nav.cx - cx) ** 2 + (nav.cy - cy) ** 2) ** 0.5
     sx, sy = mapx - nav.cx, mapy - nav.cy
-    log(f"[i]   jump: camera at {round(nav.cx)},{round(nav.cy)} after {time.time() - t0:.0f}s - pin on screen at {round(sx)},{round(sy)} (map moved {moved / max(1, finger):.2f} x the finger)")
+    log(f"[i]   jump: camera at {round(nav.cx)},{round(nav.cy)} after {time.time() - t0:.0f}s - pin on screen at {round(sx)},{round(sy)} (dead-reckoning was {round(err)} px off)")
     if 90 <= sx <= 450 and 200 <= sy <= 780:
         return sx, sy
     return None
