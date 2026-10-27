@@ -6101,7 +6101,9 @@ _RALLY_SEEN = {}          # serial -> last time that instance saw rally cards (g
 
 
 _RALLY_ENDS = {}          # serial -> [(monster, end time, seen at)] rallies read on its list (last hour)
-_ALLIES = {}              # frozenset({serial, serial}) -> last time both saw the same rally = same alliance
+_ALLIES = {}              # frozenset({serial, serial}) -> [(monster, end time, confirmed at)]: separate rallies both read = same alliance
+_ALLY_MIN_RALLIES = 3     # one shared rally can be a coincidence: allies need this many separate ones...
+_ALLY_WINDOW = 1800       # ...within the last 30 min (a link that is not re-confirmed expires)
 
 
 _RALLY_LEVEL = {}         # (monster, end time // 15) -> level read on the card (so a missed-rally check respects level rules)
@@ -6123,7 +6125,17 @@ def note_rally(serial, mon, left, level=None):
     _RALLY_ENDS[serial] = mine
     for other, rows in list(_RALLY_ENDS.items()):
         if other != serial and any(m == mon and abs(e - end) <= 12 and now - t < 3600 for m, e, t in rows):
-            _ALLIES[frozenset((serial, other))] = now
+            links = _ALLIES.setdefault(frozenset((serial, other)), [])
+            links[:] = [l for l in links if now - l[2] < _ALLY_WINDOW]
+            if not any(l[0] == mon and abs(l[1] - end) <= 12 for l in links):     # the same rally read again is not a new match
+                links.append((mon, end, now))
+
+
+def _allies_of(serial):
+    """Instances matched with `serial` by enough separate rallies in the last 30 min (a link that is not re-confirmed expires)."""
+    now = time.time()
+    return {s for pair, links in list(_ALLIES.items()) if serial in pair for s in pair if s != serial
+            and sum(1 for l in list(links) if now - l[2] < _ALLY_WINDOW) >= _ALLY_MIN_RALLIES}
 
 
 def missed_rallies(serial, cfg):
@@ -6131,7 +6143,7 @@ def missed_rallies(serial, cfg):
     for more than 45 s, which this instance never read - its list is out of date. Monsters this instance does not
     join are ignored. No alliance match yet: any other instance counts."""
     now = time.time()
-    allies = {s for pair in list(_ALLIES) if serial in pair for s in pair if s != serial}   # owner 25 Oct: only the same alliance -
+    allies = _allies_of(serial)   # owner 25 Oct: only the same alliance -
     # instances on other servers (or not matched yet) see other rallies; comparing with them made lone instances restart for nothing
     mine = _RALLY_ENDS.get(serial, [])
     out, seen = [], set()
@@ -6157,7 +6169,7 @@ def others_see_rallies(serial, within=150, allies_only=True):
     Instances in another alliance (or not matched yet) do not count: their list can be busy while this one is truly quiet.
     allies_only=False: any other instance counts (an instance whose list never loaded cannot be matched to its alliance)."""
     now = time.time()
-    allies = {s for pair in list(_ALLIES) if serial in pair for s in pair if s != serial}
+    allies = _allies_of(serial)
     return any((s in allies if allies_only else s != serial) and now - t < within for s, t in list(_RALLY_SEEN.items()))
 
 
