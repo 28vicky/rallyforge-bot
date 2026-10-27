@@ -1966,12 +1966,11 @@ function cityMapCard(serial) {
 
 // ---- Pin buildings (owner tool, 25 Oct; every city building offered since 25 Oct 12:45): click each building once on every culture map; pins ship to every user
 //      of that culture (cultures/<c>/pins.json). Buildings players place themselves are not offered (their spot differs).
+// Owner 27 Oct: only buildings that sit in the same place in every city (no Market, Barracks, Prison... - players move those; no Bunker / Bounty Cave)
 const FIXED_BUILDINGS = ["Keep", "Tavern", "Shrine", "Pasture", "Academy", "Military Academy", "Ideal Land",
-  "Triumphal Arch", "Research Factory", "Watchtower", "Rally Spot", "Bunker",
+  "Triumphal Arch", "Research Factory", "Walls", "Archer Tower 1", "Archer Tower 2", "Watchtower", "Rally Spot",
   "Victory Column", "Wonder", "Fountain of the Gods", "Wisdom Dome", "Dragon Cliff", "Holy Palace", "Art Hall",
-  "Subordinate City", "Battlefield", "Barracks", "Archer Camp", "Stables", "Arsenal",
-  "Warehouse", "Hospital", "Market", "Prison", "Trap Factory", "Embassy", "Workshop", "War Hall", "Council of State",
-  "Bounty Cave", "Army Camp", "Walls", "Archer Tower 1", "Archer Tower 2", "Forge"];
+  "Council of State", "Subordinate City", "Battlefield"];
 function pinBuildingsDialog(culture) {
   const st = { c: culture, sel: null, pins: {}, size: null, suggest: {}, z: 1, px: 0, py: 0 };
   const body = h("div", { class: "pinbox" });
