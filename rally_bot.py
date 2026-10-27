@@ -11280,7 +11280,8 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
             if view_of(shot, cfg) != "city" or rd_seen(shot, ["Congratulations", "Claim", "Confirm", "OK"], region=(60, 300, 420, 400)):
                 log(f"[i]   {bname}: a window is in the way at ({x},{y}) - closing it and tapping again")
                 clear_popups(dev, cfg, log, stop, rounds=2)
-                dev.tap(x, y)
+                y = min(820, y + 50)                       # the game floats reward icons (chest, quest) ABOVE a building:
+                dev.tap(x, y)                              # the tap hit that icon - the building's body sits below it
                 _nap(stop, 1.2, 1.5)
                 shot = dev.screenshot()
             if not find_detail_icon(shot):
@@ -12427,7 +12428,7 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
         return None
     # Kiravik 25 Oct 14:02: camera reached the Tavern pin, but one tap exactly on the pin hit the ground (no ring) and the
     # map route gave up. A pin is a hand-placed point: try it, then a few spots around it.
-    near = [spot] + [(spot[0] + ox, spot[1] + oy) for ox, oy in ((0, -40), (0, 35), (-45, 0), (45, 0), (-35, -35), (35, -35))]
+    near = [spot] + [(spot[0] + ox, spot[1] + oy) for ox, oy in ((0, 45), (-45, 20), (45, 20), (0, 80), (-40, -30), (0, -40))]   # lower spots first: icons float above a building (Kiravik Tavern chest 27 Oct)
     near = [(x, y) for x, y in near if 60 <= x <= 470 and 150 <= y <= 820]
     if open_building_here(dev, cfg, log, stop, bname, spots=near, how=f"the city map (match {mv:.2f})"):
         try:                                               # refresh the place and the picture (open_building_here learned it)
