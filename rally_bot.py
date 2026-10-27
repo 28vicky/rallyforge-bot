@@ -12150,7 +12150,7 @@ def run_map_movable(dev, cfg, log, stop):
         rows.setdefault(round(sy / 300), []).append((sx, sy))
     stops = [p for i, r in enumerate(sorted(rows)) for p in (sorted(rows[r]) if i % 2 == 0 else sorted(rows[r], reverse=True))]
     want = [b for b in MOVABLE_BUILDINGS]
-    found, tried, seen_all = {}, set(), set()
+    found, tried, seen_all, later = {}, set(), set(), {}
     log(f"[*] Movable buildings: looking for {len(want)} on {len(stops)} stops (names shown while a finger is held)")
     t0 = time.time()
     for i, (sx, sy) in enumerate(stops):
@@ -12180,25 +12180,69 @@ def run_map_movable(dev, cfg, log, stop):
         names = sorted({n for n, _, _ in labels})
         seen_all.update(names)
         log(f"[i]   stop {i + 1}/{len(stops)}: names {', '.join(names) if names else '(none read)'}")
+        # Owner 27 Oct 22:33: no chasing one name across the city. Tap the names that are ON THIS SCREEN, read the menu
+        # that opens and save WHATEVER movable building it names; at most 3 taps per name, then the next stop.
+        todo = []
         for n, mx, my in labels:
-            b = BUILDING_ALIASES.get(n, n)
-            if b not in want or b in found or (b, round(mx / 80), round(my / 80)) in tried:
+            nb = BUILDING_ALIASES.get(n, n)
+            key = (round(mx / 80), round(my / 80))
+            if nb in want and nb not in found and key not in tried:
+                tried.add(key)
+                todo.append((nb, mx, my))
+        for nb, mx, my in todo:
+            if stop.is_set() or len(found) == len(want):
+                break
+            loc = cmap.locate(dev.screenshot())            # the camera after the previous taps (a ring zooms the city a little)
+            if loc:
+                nav.cx, nav.cy = loc[0], loc[1]
+            sx, sy = int(mx - nav.cx), int(my - 30 - nav.cy)
+            if not (70 <= sx <= 420 and 160 <= sy <= 800):
+                later.setdefault(nb, []).append((mx, my))  # near the screen edge / under the HUD: the second pass goes there
                 continue
-            tried.add((b, round(mx / 80), round(my / 80)))
-            log(f"[*]   {b}: name seen at map {mx},{my} - opening it to check")
-            p = _learn_path(dev, b)
+            for tx, ty in [(sx, sy), (sx, sy + 35), (sx, sy - 35)]:
+                if stop.is_set() or not (70 <= tx <= 420 and 160 <= ty <= 800):
+                    continue
+                before = dev.screenshot()
+                dev.tap(tx, ty)
+                _nap(stop, 1.2, 1.5)
+                shot = dev.screenshot()
+                if not find_detail_icon(shot):
+                    continue                               # no menu opened (ground): next spot
+                rn = (ring_building_name(shot) or ("",))[0]
+                got = match_building(rn.split(",")[0]) if rn else None
+                close_ring(dev, stop, (tx, ty + 60))
+                _nap(stop, 0.6, 0.8)
+                if got in want and got not in found:
+                    learn_building(dev, before, got, tx, ty)   # picture + map place of this instance
+                    found[got] = [round(nav.cx + tx), round(nav.cy + ty)]
+                    log(f"[+]   {got}: mapped (menu read at {tx},{ty}" + ("" if got == nb else f", the name said {nb}") + ")")
+                    if got == nb:
+                        break
+                else:
+                    log(f"[i]   the menu at {tx},{ty} is '{rn or '?'}'" + (" (already mapped)" if got in found else "") + f" - looking for {nb}")
+                    if got in found and got == nb:
+                        break
+            if nb not in found:
+                later.setdefault(nb, []).append((mx, my))
+            leave_to_city(dev, cfg, stop, log)
+    # Second pass (owner 27 Oct 22:33): after the whole sweep, only the buildings still missing, straight to where their
+    # name was seen (centred on screen this time).
+    for nb in [b for b in want if b not in found and later.get(b)]:
+        for mx, my in later[nb][:2]:
+            if stop.is_set() or nb in found:
+                break
+            duty_progress()
+            log(f"[*]   second look: {nb} (name seen at map {mx},{my})")
             try:
-                ok = find_on_map(dev, cfg, log, stop, b, None, {"map": [mx, my - 30], "dx": 0, "dy": 0}, p)
+                ok = find_on_map(dev, cfg, log, stop, nb, None, {"map": [mx, my - 30], "dx": 0, "dy": 0}, _learn_path(dev, nb))
             except InstanceStopped:
                 raise
             except Exception as e:
-                log(f"[i]   {b}: {e}")
+                log(f"[i]   {nb}: {e}")
                 ok = None
             if ok:
-                found[b] = [mx, my - 30]
-                log(f"[+]   {b}: mapped")
-            else:
-                log(f"[i]   {b}: menu did not open there - not saved")
+                found[nb] = [mx, my - 30]
+                log(f"[+]   {nb}: mapped (second look)")
             leave_to_city(dev, cfg, stop, log)
     miss = [b for b in want if b not in found]
     log(f"[*] Movable buildings: {len(found)} of {len(want)} mapped in {round((time.time() - t0) / 60)} min"
