@@ -15458,6 +15458,32 @@ def map_slot(serial, take=False):
         return True
 
 
+_MAP_WAIT_SAID = {}
+
+
+def map_wait_note(serial, log):
+    """Owner 28 Oct 00:43 ('I started many times, it seems not working'): a mapping run queued behind the 2 that run
+    shows it - in the log (every 5 min) and on the instance's 'Now executing' line."""
+    if not any(t[5:] in MAP_HEAVY for t in run_now_list(serial) if t.startswith("duty:")) or map_slot(serial):
+        _MAP_WAIT_SAID.pop(serial, None)
+        _MAP_WAIT_SAID.pop(serial + "#t", None)
+        return
+    if time.time() - _MAP_WAIT_SAID.get(serial + "#t", 0) < 30:   # the rally loop calls this every few seconds
+        return
+    _MAP_WAIT_SAID[serial + "#t"] = time.time()
+    with _MAP_SLOT_LOCK:
+        busy = list(_MAP_SLOTS)
+    names = load_config().get("device_names") or {}
+    who = ", ".join(names.get(s_, s_) for s_ in busy)
+    waiting = [s_ for s_, ids in ((load_duty_state().get("_run_now") or {}).items())
+               if s_ not in busy and any(str(t)[5:] in MAP_HEAVY for t in ids or [])]
+    text = f"Map my city queued - {who} mapping now ({MAP_AT_ONCE} at a time); {len(waiting)} waiting, starts by itself"
+    log("@act " + json.dumps({"k": "step", "text": text}))
+    if time.time() - _MAP_WAIT_SAID.get(serial, 0) > 300:
+        _MAP_WAIT_SAID[serial] = time.time()
+        log(f"[i] {text} - joining rallies meanwhile")
+
+
 def map_slot_free(serial):
     with _MAP_SLOT_LOCK:
         _MAP_SLOTS.pop(serial, None)
@@ -16692,6 +16718,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             bm_first = bool(target) and bm_priority_due(cfg, serial)   # Black Market 'until the gem floor' goes before joining (owner 24 Oct)
             if (not target or run_now_list(serial) or bm_first) and tasks_active(cfg, serial) and st == "rally_list" and now >= city_block[0]:
                 due = city_tasks_due(cfg, city_last, serial)
+                map_wait_note(serial, log)
                 if due:
                     log(f"[*] {'No rally waiting' if not target else 'Black Market comes first' if bm_first and not run_now_list(serial) else 'A task was started by hand'} - going to the city for {len(due)} task(s)")
                     if map_only(due):                                  # monster rallies: from the rally list straight to the map
