@@ -8891,6 +8891,11 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "map_city":
         run_map_city(dev, cfg, log, stop)
         return
+    if cmd == "map_movable":
+        leave_to_city(dev, cfg, stop, log)
+        zoom_out_full(dev, cfg, stop, log)
+        run_map_movable(dev, cfg, log, stop)
+        return
     if cmd == "test_pins":
         run_test_pins(dev, cfg, log, stop)
         return
@@ -12096,6 +12101,79 @@ def zoom_out_full(dev, cfg, stop, log):
     dev.zoomed_out = True
 
 
+MOVABLE_BUILDINGS = ("Market", "Barracks", "Prison", "Hospital", "Embassy", "Warehouse", "Stable", "Arsenal",
+                     "Archer Camp", "Trap Factory", "Workshop", "War Hall", "Forge")   # owner 27 Oct: players move these
+
+
+def run_map_movable(dev, cfg, log, stop):
+    """Map my city, part 2 (owner 27 Oct): the fixed buildings come from the culture pins; the MOVABLE ones are different
+    in every city, so: visit every stop of the city map, hold a finger down so the game shows the building names, read
+    them, and for each movable building seen go there, open its menu (the menu name is checked) and save its place.
+    Only a building whose menu opened is saved. -> list of the buildings mapped."""
+    cmap = city_map(dev)
+    if cmap is None or not cmap.kf:
+        log("[!] Movable buildings: no city map - run Map my city first")
+        return []
+    x, y, w, h = CITY_VIEW
+    stops = []                                             # camera places a good half view apart, row by row (serpentine)
+    for kx, ky, _, _ in sorted(cmap.kf, key=lambda k: (round(k[1] / 300), k[0])):
+        if not any(abs(kx - sx) < w * 0.55 and abs(ky - sy) < h * 0.45 for sx, sy in stops):
+            stops.append((kx, ky))
+    rows = {}
+    for sx, sy in stops:
+        rows.setdefault(round(sy / 300), []).append((sx, sy))
+    stops = [p for i, r in enumerate(sorted(rows)) for p in (sorted(rows[r]) if i % 2 == 0 else sorted(rows[r], reverse=True))]
+    want = [b for b in MOVABLE_BUILDINGS]
+    found, tried, seen_all = {}, set(), set()
+    log(f"[*] Movable buildings: looking for {len(want)} on {len(stops)} stops (names shown while a finger is held)")
+    t0 = time.time()
+    for i, (sx, sy) in enumerate(stops):
+        if stop.is_set() or len(found) == len(want):
+            break
+        duty_progress()
+        log("@act " + json.dumps({"k": "step", "text": f"Duty: Movable buildings {i + 1}/{len(stops)}"}))
+        nav = CityNav(dev, stop, log)
+        at = goto_on_map(dev, cfg, log, stop, nav, cmap, sx + x + w / 2, sy + y + h / 2, tol=120)
+        if at is None:
+            log(f"[i]   stop {i + 1}: could not get there - next")
+            leave_to_city(dev, cfg, stop, log)
+            continue
+        try:
+            labels, _, _ = look_with_names(dev, stop, nav)
+        except InstanceStopped:
+            raise
+        except Exception as e:
+            log(f"[i]   stop {i + 1}: names not read ({e})")
+            continue
+        names = sorted({n for n, _, _ in labels})
+        seen_all.update(names)
+        log(f"[i]   stop {i + 1}/{len(stops)}: names {', '.join(names) if names else '(none read)'}")
+        for n, mx, my in labels:
+            b = BUILDING_ALIASES.get(n, n)
+            if b not in want or b in found or (b, round(mx / 80), round(my / 80)) in tried:
+                continue
+            tried.add((b, round(mx / 80), round(my / 80)))
+            log(f"[*]   {b}: name seen at map {mx},{my} - opening it to check")
+            p = _learn_path(dev, b)
+            try:
+                ok = find_on_map(dev, cfg, log, stop, b, None, {"map": [mx, my - 30], "dx": 0, "dy": 0}, p)
+            except InstanceStopped:
+                raise
+            except Exception as e:
+                log(f"[i]   {b}: {e}")
+                ok = None
+            if ok:
+                found[b] = [mx, my - 30]
+                log(f"[+]   {b}: mapped")
+            else:
+                log(f"[i]   {b}: menu did not open there - not saved")
+            leave_to_city(dev, cfg, stop, log)
+    miss = [b for b in want if b not in found]
+    log(f"[*] Movable buildings: {len(found)} of {len(want)} mapped in {round((time.time() - t0) / 60)} min"
+        + (f" ({', '.join(found)})" if found else "") + (f"; not found: {', '.join(miss)}" if miss else ""))
+    return list(found)
+
+
 def run_test_pins(dev, cfg, log, stop):
     """Developer test (owner 27 Oct): on an instance that uses its culture's map, go to EVERY fixed building by its culture
     pin and open its menu (the menu name is checked; nothing is pressed). Ends with a summary of what opened and what not,
@@ -12150,6 +12228,7 @@ def run_map_city(dev, cfg, log, stop):
     zoom_out_full(dev, cfg, stop, log)
     nav = CityNav(dev, stop, log, pause=0.6)
     if try_culture_match(dev, cfg, log, stop, nav):
+        run_map_movable(dev, cfg, log, stop)               # owner 27 Oct: fixed buildings = culture pins, movable ones = searched
         return
     x, y, w, h = CITY_VIEW
     STEPX, STEPY = int(w * 0.5), int(h * 0.6)          # one step in GAME px: views overlap half sideways, 40 % up/down. The
@@ -13971,6 +14050,9 @@ DUTY_LIBRARY = [
     {"id": "tavern_catalog", "group": "Common tasks", "title": "General library (Tavern portraits)", "every_min": 1440, "verified": False,
      "note": "Tavern > Recruit > Portraits: reads every general (picture + name) and adds the new ones to the general library. Nothing is recruited.",
      "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "tavern_catalog"]},
+    {"id": "map_movable", "group": "Common tasks", "title": "Test: map movable buildings", "every_min": 0, "verified": False,
+     "note": "Walks the whole city with a finger held so the names show, finds the movable buildings (Market, Prison, Barracks...), opens each to check and saves its place. Map my city does this too.",
+     "target": "self:", "steps": ["map_movable"]},
     {"id": "test_pins", "group": "Common tasks", "title": "Test: every culture pin", "every_min": 0, "verified": False,
      "note": "Goes to every fixed building by its culture pin and opens its menu (nothing is pressed), then says which did not open. Only on an instance that uses its culture's map.",
      "target": "self:", "steps": ["test_pins"]},
