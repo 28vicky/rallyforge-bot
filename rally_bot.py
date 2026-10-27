@@ -8891,6 +8891,9 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "map_city":
         run_map_city(dev, cfg, log, stop)
         return
+    if cmd == "test_pins":
+        run_test_pins(dev, cfg, log, stop)
+        return
     if cmd == "text":
         dev.text(arg)
         _nap(stop, 0.8, 1.2)
@@ -12093,6 +12096,52 @@ def zoom_out_full(dev, cfg, stop, log):
     dev.zoomed_out = True
 
 
+def run_test_pins(dev, cfg, log, stop):
+    """Developer test (owner 27 Oct): on an instance that uses its culture's map, go to EVERY fixed building by its culture
+    pin and open its menu (the menu name is checked; nothing is pressed). Ends with a summary of what opened and what not,
+    so the shipped pins can be checked before a release. Pictures of the misses: debug/duty_pintest_<name>.png."""
+    cult = city_culture(dev)
+    if not cult:
+        log("[!] Pin test: this instance does not use a culture map (it has its own map) - run it on a culture-matched instance")
+        return
+    if city_map(dev) is None:
+        log("[!] Pin test: no city map loaded")
+        return
+    name = cult["culture"]
+    pins = culture_pins(name)
+    if not pins:
+        log(f"[!] Pin test: no pins for {name.title()}")
+        return
+    log(f"[*] Pin test: {len(pins)} {name.title()} pins")
+    ok, bad = [], []
+    tmp = USER / "debug" / "pintest"
+    tmp.mkdir(parents=True, exist_ok=True)
+    for b in sorted(pins):
+        if stop.is_set():
+            break
+        duty_progress()                                    # 20+ buildings take longer than the stuck-duty limit
+        leave_to_city(dev, cfg, stop, log)
+        t0 = time.time()
+        pin = culture_pin(dev, b)
+        try:
+            r = find_on_map(dev, cfg, log, stop, b, None, {"map": pin, "dx": 0, "dy": 0}, tmp / f"{re.sub(r'[^A-Za-z]+', '_', b)}.png")
+        except InstanceStopped:
+            raise
+        except Exception as e:
+            log(f"[!]   Pin test: {b}: {e}")
+            r = None
+        secs = round(time.time() - t0)
+        if r:
+            ok.append(b)
+            log(f"[+]   Pin test: {b} opened ({secs} s)")
+        else:
+            bad.append(b)
+            rd_snap(dev.screenshot(), f"pintest_{re.sub(r'[^A-Za-z]+', '_', b)}")
+            log(f"[!]   Pin test: {b} NOT opened ({secs} s) - picture debug/duty_pintest_{re.sub(r'[^A-Za-z]+', '_', b)}.png")
+        leave_to_city(dev, cfg, stop, log)
+    log(f"[*] Pin test {name.title()}: {len(ok)} of {len(ok) + len(bad)} opened" + (f"; NOT opened: {', '.join(bad)}" if bad else " - all good"))
+
+
 def run_map_city(dev, cfg, log, stop):
     """Duty 'Map my city': at the widest zoom, explore the city from the current view (each direction once from every
     view, one measured drag per step), keep every view that shows buildings and is new ground, then solve all the
@@ -13922,6 +13971,9 @@ DUTY_LIBRARY = [
     {"id": "tavern_catalog", "group": "Common tasks", "title": "General library (Tavern portraits)", "every_min": 1440, "verified": False,
      "note": "Tavern > Recruit > Portraits: reads every general (picture + name) and adds the new ones to the general library. Nothing is recruited.",
      "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "tavern_catalog"]},
+    {"id": "test_pins", "group": "Common tasks", "title": "Test: every culture pin", "every_min": 0, "verified": False,
+     "note": "Goes to every fixed building by its culture pin and opens its menu (nothing is pressed), then says which did not open. Only on an instance that uses its culture's map.",
+     "target": "self:", "steps": ["test_pins"]},
     {"id": "reach_tavern", "group": "Common tasks", "title": "Test: go to Tavern", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Tavern and opens its menu (nothing is pressed).",
      "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern"]},
