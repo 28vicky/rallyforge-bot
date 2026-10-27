@@ -10055,11 +10055,24 @@ WHEEL_COINS_BOX = (234, 128, 190, 48)
 WHEEL_ICON = (141, 328)                                              # "Wheel of Fortune" in the Tavern's ring menu
 
 
+WHEEL_COINS_TIGHT = (225, 132, 155, 40)                  # the number only (the '+' button left out)
+
+
 def wheel_coins(img):
-    x, y, w, h = WHEEL_COINS_BOX
-    txt = " ".join(t for t, _ in ocr_lines(img[y:y + h, x:x + w], 3.0))
-    d = re.sub(r"[^0-9]", "", txt)
-    return int(d) if d else None
+    """The coin total. Rob 27 Oct 20:12: the PC's OCR dropped a clear '27,337,900' (low confidence) -> several reads:
+    the usual one, the tight box at two zooms, then a digits-only line read that ignores confidence."""
+    tries = [(WHEEL_COINS_BOX, 3.0), (WHEEL_COINS_TIGHT, 3.0), (WHEEL_COINS_TIGHT, 2.0)]
+    for (x, y, w, h), sc in tries:
+        d = re.sub(r"[^0-9]", "", " ".join(t for t, _ in ocr_lines(img[y:y + h, x:x + w], sc)))
+        if len(d) >= 2:
+            return int(d)
+    try:
+        x, y, w, h = WHEEL_COINS_TIGHT
+        g = cv2.resize(cv2.cvtColor(img[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY), None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+        d = re.sub(r"[^0-9]", "", pytesseract.image_to_string(g, config="--psm 7 -c tessedit_char_whitelist=0123456789,"))
+        return int(d) if len(d) >= 2 else None
+    except Exception:
+        return None
 
 
 def wheel_on_page(img):
