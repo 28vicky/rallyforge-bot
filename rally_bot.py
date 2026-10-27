@@ -896,7 +896,7 @@ class Device:
             dl = getattr(_TL, "duty_deadline", None)         # a duty over its time budget: its next action aborts it (the runner
             if dl and time.time() > dl:                       # then closes pop-ups, leaves to the city and tries once more)
                 _TL.duty_deadline = None
-                raise RuntimeError("took too long - stopped (a window or page it does not know?)")
+                raise RuntimeError(f"no progress for {DUTY_BUDGET_MIN} min - stopped (stuck on a window or page it does not know?)")
         return subprocess.run([self.adb, "-s", self.serial, *a], capture_output=True,
                               timeout=timeout, creationflags=NOWIN)
 
@@ -2520,6 +2520,13 @@ def housekeeping(log=None):
 
 # ------------------------------------------------------------------ helpers
 _TL = threading.local()                 # per bot thread: pace + speed counters
+
+
+def duty_progress(minutes=None):
+    """Owner 27 Oct: the duty time limit is for a STUCK task only - a task that is getting things done (a spin, a buy)
+    calls this, and the limit starts again from now."""
+    if getattr(_TL, "duty_deadline", None):
+        _TL.duty_deadline = time.time() + (minutes or DUTY_BUDGET_MIN) * 60
 
 
 class InstanceStopped(RuntimeError):
@@ -10355,6 +10362,7 @@ def run_wheel(dev, cfg, log, stop):
             since_read = 10                                # re-read the coins and the page before trying again
             continue
         fails = 0
+        duty_progress()                                    # a spin went through: the stuck-task limit starts again
         done += pick
         coins -= WHEEL_COST[pick]
         since_read += 1
@@ -13001,8 +13009,9 @@ def run_royal_thief(dev, cfg, log, stop):
 
     shot = dev.screenshot()
     p = rd_find(shot, ["Invite"], region=(0, 220, 130, 560), cutoff=0.75, whole=True)
-    if not p:
-        return                                              # no invite = no thief to kill
+    if not p:                                               # no invite = no thief to kill (Kiravik 27 Oct 20:23: said nothing)
+        rd_snap(shot, "thief_0_noinvite")
+        return later(RT_POLL_MIN, "no Invite button on the city screen (no thief invitation right now)")
     dev.tap(p[0], max(100, p[1] - 18))
     _nap(stop, 2.0, 2.5)
     shot = dev.screenshot()
@@ -13022,7 +13031,7 @@ def run_royal_thief(dev, cfg, log, stop):
             break
     if not target:
         dev.back()
-        return
+        return later(RT_POLL_MIN, f"no new thief in the Invitation list ({len(rows)} row(s), all done today)")
     y, who = target
     dev.tap(438, max(100, y - 8))                           # green Go on that row
     _nap(stop, 2.5, 3.0)
