@@ -892,7 +892,7 @@ class Device:
 
     def _run(self, *a, timeout=20):
         if len(a) > 1 and a[0] == "shell" and a[1] == "input":      # a tap / swipe / text: never while the instance is paused
-            pause_gate()
+            halt_check()                                     # paused = wait; stopped = the task ends before this tap
             dl = getattr(_TL, "duty_deadline", None)         # a duty over its time budget: its next action aborts it (the runner
             if dl and time.time() > dl:                       # then closes pop-ups, leaves to the city and tries once more)
                 _TL.duty_deadline = None
@@ -1000,6 +1000,7 @@ class Device:
 
     def screenshot(self):
         """Always returns a 540x960 image so templates work on any emulator resolution."""
+        halt_check()                                         # Pause / Stop take effect at the next look at the screen
         t0 = time.time()
         img = self._grab()
         p = getattr(_TL, "perf", None)
@@ -2519,6 +2520,21 @@ def housekeeping(log=None):
 
 # ------------------------------------------------------------------ helpers
 _TL = threading.local()                 # per bot thread: pace + speed counters
+
+
+class InstanceStopped(RuntimeError):
+    """Stop was pressed: the next screenshot / tap / text read ends whatever task is running (owner 27 Oct)."""
+
+
+def halt_check():
+    """Owner 27 Oct: Stop and Pause act at once, never after a task finishes. Paused -> wait here (nothing is read or
+    pressed); stopped -> raise InstanceStopped so the running task ends now. Only in an instance's own thread."""
+    if getattr(_TL, "ctl", None) is None:
+        return
+    pause_gate()
+    st = getattr(_TL, "stop", None)
+    if st is not None and st.is_set():
+        raise InstanceStopped("stopped by the user")
 
 
 def pause_gate():
@@ -6934,6 +6950,7 @@ def match_building(text, cutoff=0.82):
 def ocr_lines(img, scale=2.0, bright=False):
     """OCR with word boxes grouped into lines: [(text, [(word, cx, cy, w, h), ...]), ...] in image pixels.
     bright=True keeps only light pixels (the names are light text on dark pills)."""
+    halt_check()                                         # a text read takes seconds on a busy PC: none after Pause / Stop
     g = cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
     if bright:
         g = 255 - cv2.threshold(g, 150, 255, cv2.THRESH_BINARY)[1]
