@@ -12350,13 +12350,14 @@ def run_map_movable(dev, cfg, log, stop, only=None):
     # Names (finger hold): remember per emulator which way of holding shows them (owner 28 Oct: K and GK-P lost ~16 s
     # per stop on holds that never showed a name). 'none' = this emulator shows no names: pictures only (retried weekly).
     hold_f = _map_dir(dev) / "hold.json"
-    names_ok = True
-    try:
+    names_ok, proven = True, set()                         # proven = holds that showed names: never given up (Rob 28 Oct 00:26:
+    try:                                                   # 3 empty stops at the city edge switched a working hold away)
         hj = json.loads(hold_f.read_text(encoding="utf-8"))
         if hj.get("mode") == "none" and time.time() - hj.get("t", 0) < 7 * 86400:
             names_ok = False
         elif hj.get("mode") in ("motion", "window", "swipe"):
             dev._hold_mode = hj["mode"]
+            proven.add(hj["mode"])
     except Exception:
         pass
 
@@ -12426,8 +12427,9 @@ def run_map_movable(dev, cfg, log, stop, only=None):
                 quiet_err("run_map_movable", _e)
         if got_names:
             state["empty"] = 0
+            proven.add(dev.hold_mode())
             save_hold(dev.hold_mode())                     # this way works here: the next run starts with it
-        else:
+        elif dev.hold_mode() not in proven:                # a hold that worked: a stop with nothing to read is just empty
             state["empty"] += 1
         if state["empty"] >= 3:
             old = dev.hold_mode()
