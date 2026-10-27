@@ -6837,6 +6837,7 @@ EXPECTED_BUILDINGS = [                                                # what a f
 OPTIONAL_BUILDINGS = ("Military Academy", "Triumphal Arch")           # not every city has them (keep level / not built)
 RESOURCE_BUILDINGS = ("Quarry", "Sawmill", "Mine", "Farm")
 LABEL_VIEW = (10, 95, 435, 705)                                        # where building names are read (x, y, w, h)
+ALLIANCE_TAP = (493, 705)                 # the Alliance button, right column above Mail (540x960) - the way to Alliance War
 CITY_VIEW = (80, 100, 360, 690)         # x, y, w, h of the map area that is not covered by buttons (540x960)
 DEFAULT_CITY_ICONS = {                   # the buttons on the right of the city screen (540x960)
     "Daily event": [491, 105], "Login Gifts": [491, 190], "Follow Us": [491, 260],
@@ -15794,6 +15795,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         mail_backs = [0]
         hidden_taps = [0]
         war_row_taps = [0]
+        ally_taps = [0]
         view_toggles = [0]
         last_toggle = [0.0]
         for _ in range(8):
@@ -15925,6 +15927,13 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             elif st == "city" and cfg.get("rally_nav_tap"):
                 dev.tap(*cfg["rally_nav_tap"])
                 log("[*] Tapped the saved spot to reach the rally list")
+            elif st == "city" and ally_taps[0] < 2:           # Rory 27 Oct: the rally button shows a countdown + badge and its
+                ally_taps[0] += 1                              # picture no longer matches - go the Alliance way instead (Alliance
+                ax, ay = cfg.get("alliance_tap") or ALLIANCE_TAP   # button, always bottom right above Mail -> 'Alliance War' row)
+                dev.tap(int(ax), int(ay))
+                log(f"[*] Rally button not recognised - tapped the Alliance button ({ax},{ay})")
+                nap(1.5, 2.2)
+                continue
             elif st == "city" and outside_taps[0] < 3:       # the navigation button is hidden: probably a card-style pop-up (no X) over the city
                 outside_taps[0] += 1
                 prev = screen
@@ -15957,6 +15966,13 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             elif st == "city":
                 log("[!] In the city but no navigation button is visible - waiting (add the rally_icon picture or "
                     "set the tap position on the Tasks tab; Back could open the quit dialog)")
+                seen = [t for t in getattr(dev, "no_nav_times", []) if time.time() - t < 600] + [time.time()]
+                dev.no_nav_times = seen
+                if len(seen) >= 3:                         # Rory 27 Oct: this repeated for 10+ min with no rally joined - restart
+                    dev.no_nav_times = []                  # the game instead of waiting forever (never stay stuck)
+                    log("[!] No way to the rally list 3 times in 10 minutes - restarting Evony")
+                    force_restart_game(dev, cfg, log, stop, reason="no way to the rally list from the city")
+                    return False
                 nap(5)
                 return False
             elif has_template("rally_screen") or has_template("popup_exit_cancel"):
