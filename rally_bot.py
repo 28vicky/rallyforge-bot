@@ -12157,7 +12157,13 @@ def run_map_movable(dev, cfg, log, stop):
         if stop.is_set() or len(found) == len(want):
             break
         duty_progress()
-        log("@act " + json.dumps({"k": "step", "text": f"Duty: Movable buildings {i + 1}/{len(stops)}"}))
+        left = round((time.time() - t0) / i * (len(stops) - i) / 60) if i else None   # minutes left, from the pace so far
+        prog = (f"Mapping movable buildings: stop {i + 1} of {len(stops)} ({round(100 * i / len(stops))}%)"
+                + (f", about {max(1, left)} min left" if left is not None else "")
+                + (f" - found {len(found)}: {', '.join(found)}" if found else " - none found yet"))
+        log("@act " + json.dumps({"k": "step", "text": prog}))
+        if i:
+            log(f"[i]   {prog}")
         nav = CityNav(dev, stop, log)
         at = goto_on_map(dev, cfg, log, stop, nav, cmap, sx + x + w / 2, sy + y + h / 2, tol=120)
         if at is None:
