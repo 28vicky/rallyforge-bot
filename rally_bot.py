@@ -13009,6 +13009,24 @@ def rt_marches(img):
     return busy, total, (min(waits) if waits else None)
 
 
+def rt_go_rows(img):
+    """Invitation list: -> y of each row's green Go button (x 390-480), top to bottom."""
+    a = img[90:850, 390:480].astype(int)
+    b, g, r = a[..., 0], a[..., 1], a[..., 2]
+    ys = list(np.where(((g > 30) & (g > r + 25) & (g > b + 20)).mean(axis=1) > 0.5)[0])
+    rows, start, prev = [], None, None
+    for y in ys + [10 ** 6]:
+        if start is None:
+            start = prev = y
+            continue
+        if y - prev > 3:
+            if 25 <= prev - start <= 80:
+                rows.append(90 + int(start + prev) // 2)
+            start = y
+        prev = y
+    return rows
+
+
 def run_royal_thief(dev, cfg, log, stop):
     serial = getattr(dev, "serial", "")
     day = _game_day()
@@ -13036,6 +13054,10 @@ def run_royal_thief(dev, cfg, log, stop):
     for t, ws in rd_lines(shot, (0, 90, 540, 760)):
         if "thief" in t.lower():
             rows.append(int(sum(s[2] for s in ws) / len(ws)))
+    if not rows:                                            # faint brown "Royal Thief" on beige is often not read
+        rows = rt_go_rows(shot)                             # (Kiravik 27 Oct 20:37) - the green Go buttons are
+        if rows:
+            log(f"[i]  Royal Thief: {len(rows)} row(s) found by their Go button")
     target = None
     for y in rows:                                          # the inviter's name sits on the line above "Royal Thief"
         who = " ".join(t for t, _ in rd_lines(shot, (60, max(0, y - 40), 300, 30))).strip() or f"row{y}"
@@ -13124,6 +13146,19 @@ def run_royal_thief(dev, cfg, log, stop):
         leave_to_city(dev, cfg, stop, log)
         return later(RT_RECHECK_MIN, "no March button")
     shot = dev.screenshot()
+    if rd_seen(shot, ["cannot send more troops", "cannot send more"], region=(0, 150, 540, 450)):
+        rd_snap(shot, "thief_7_full")                       # owner's recording 27 Oct 20:39: all marches out -> this note
+        mk = None
+        if not rt_marches(shot):                            # folded "> March" pill: open it to read the return times
+            dev.tap(67, 143)
+            _nap(stop, 1.2, 1.6)
+            mk = rt_marches(dev.screenshot())
+            dev.tap(67, 143)                                # fold it again (it hides the map)
+        else:
+            mk = rt_marches(shot)
+        wait = ((mk[2] if mk and mk[2] else 120) + 20)
+        leave_to_city(dev, cfg, stop, log)
+        return later(max(1, -(-wait // 60)), "no free march (all marches out)")
     if rd_seen(shot, ["Select a Preset"], region=(0, 120, 540, 60)):
         rd_snap(shot, "thief_7")
         leave_to_city(dev, cfg, stop, log)
