@@ -12159,8 +12159,9 @@ def city_buff_jump(dev, cfg, log, stop):
     if done:
         _nap(stop, 0.6, 0.8)
         shot = dev.screenshot()
-    for i in range(12):                                    # active buffs sit at the top - the row moves, find it by its words
-        if stop.is_set():
+    same = 0
+    for i in range(18):                                    # active buffs sit at the top - the row moves, find it by its words
+        if stop.is_set():                                  # (Kiravik 27 Oct: 6 long buffs on top, the row sat past 8 swipes)
             return False
         hit = find_text(shot, ["City Labor"], region=(120, 70, 360, 860), cutoff=0.72)
         dy = 22
@@ -12171,7 +12172,8 @@ def city_buff_jump(dev, cfg, log, stop):
             _BUFF_SWIPES[dev.serial] = done
             break
         hit = None
-        if i < 8:
+        prev = shot
+        if i < 14:
             dev.swipe(270, 740, 270, 300, 1200)            # list up, held (owner holds the finger: no glide, sharp picture)
             done += 1
         else:
@@ -12179,6 +12181,12 @@ def city_buff_jump(dev, cfg, log, stop):
             done -= 1
         _nap(stop, 0.9, 1.1)
         shot = dev.screenshot()
+        if float(cv2.absdiff(prev[70:900], shot[70:900]).mean()) < 1.5:   # the list did not move: end of the page
+            same += 1
+            if same >= 2 and i < 14:
+                break                                      # bottom reached without the row - no point swiping on
+        else:
+            same = 0
     if not hit:
         rd_snap(shot, "buff_1_norow")
         log("[i]   City Buff: no 'City Labor' row found")
@@ -12252,16 +12260,20 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
     if r and 90 <= mapx - r[0] <= 450 and 200 <= mapy - r[1] <= 780:
         log(f"[i]   nav: origin_used=initial cx={round(r[0])} cy={round(r[1])}")
         return mapx - r[0], mapy - r[1]
-    a = buff_anchor(dev, cfg, log, stop, cmap)             # owner 25 Oct 16:28: EVERY trip starts at the Prison (City Labor jump)
-    if a:
-        log(f"[i]   nav: origin_used=anchor cx={round(a[0])} cy={round(a[1])}")
-        r = a
-    elif not r:
-        log("[i]   nav: origin_used=none")
-        log("[i]   jump: no anchor and this view is not on the map - using the step-by-step route")
-        return None
-    else:
+    # Owner 27 Oct: the camera is measured after every slow drag now, so the current view is a good enough start -
+    # the City Buff (Prison) anchor is only the fallback when the view is NOT found on the map (on Kiravik the buff
+    # list is long and 'City Labor' was never found: ~2 min lost on every trip, the task then parked).
+    if r:
         log(f"[i]   nav: origin_used=initial cx={round(r[0])} cy={round(r[1])}")
+    else:
+        a = buff_anchor(dev, cfg, log, stop, cmap)
+        if a:
+            log(f"[i]   nav: origin_used=anchor cx={round(a[0])} cy={round(a[1])}")
+            r = a
+        else:
+            log("[i]   nav: origin_used=none")
+            log("[i]   jump: no anchor and this view is not on the map - using the step-by-step route")
+            return None
     cx, cy = r[0], r[1]
     dx, dy = (mapx - cx) - mid_x, (mapy - cy) - mid_y      # how far the camera has to move (map px)
     if abs(dx) < 120 and abs(dy) < 150 and 90 <= mapx - cx <= 450 and 200 <= mapy - cy <= 780:
