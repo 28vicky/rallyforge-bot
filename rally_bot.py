@@ -3962,7 +3962,7 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
             cv2.imwrite(str(USER / "debug" / "stuck_before_restart.png"), _end)
         except Exception:
             pass
-        force_restart_game(dev, cfg, log, stop, must=True)
+        force_restart_game(dev, cfg, log, stop, must=True, reason="stuck on the same screen")
         closed += 1
     return closed
 
@@ -6223,7 +6223,7 @@ _GAME_RESTARTS = {}        # serial -> times Evony was restarted (last hour)
 _ON_LIST = {}              # serial -> last time the instance was on its rally list
 
 
-def force_restart_game(dev, cfg, log, stop, must=False):
+def force_restart_game(dev, cfg, log, stop, must=False, reason="reason not given"):
     """Close Evony completely, open it again and wait until it is stable (used when the bot is lost).
     Owner 25 Oct: restarts must be rare (73 in one morning; each costs minutes and loads the PC -> more lag -> more
     restarts). At most game_restarts_per_hour (2) per instance unless `must` (frozen game, ring menu, asked from the
@@ -6249,7 +6249,7 @@ def force_restart_game(dev, cfg, log, stop, must=False):
             else "it has not been on the rally list for 3 min") + " - restarting anyway")
     _GAME_RESTARTS[dev.serial] = hist + [now]
     pkg = evony_package(dev.adb, dev.serial, cfg)
-    log("[!] Lost for too long - restarting Evony")
+    log(f"[!] Closing and reopening Evony - {reason}")
     LOADING[dev.serial] = ("restart", time.time())
     _adb(dev.adb, dev.serial, "shell", "am", "force-stop", pkg)
     _nap(stop, 3, 4)
@@ -8551,7 +8551,7 @@ def run_market(dev, cfg, log, stop):
     if left_for == "stall":
         bm_save(serial, next_at=0, wait_gems=False)
         try:
-            force_restart_game(dev, cfg, log, stop, must=True)
+            force_restart_game(dev, cfg, log, stop, must=True, reason="Battle Mode stalled")
         except Exception as e:
             log(f"[!] Black Market: restarting Evony failed: {e}")
     elif left_for:
@@ -9186,7 +9186,7 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
     try:
         lg = log or (lambda m: None)
         lg("[!] Recovery went round in circles 3 times in 5 min - restarting Evony")
-        force_restart_game(dev, cfg, lg, stop)
+        force_restart_game(dev, cfg, lg, stop, reason="recovery kept going in circles")
         return _ensure_view(dev, cfg, stop, log, want, tries)
     finally:
         _VIEW_RESTARTING.discard(serial)
@@ -13832,7 +13832,7 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     if res and res[2] and nav.absolute:                      # the camera place is read from the picture each time: only close the ring
         if not close_ring(dev, stop, res[2]):
             log("[!]   the ring menu would not close - restarting Evony so nothing is pressed by mistake")
-            force_restart_game(dev, cfg, log, stop, must=True)
+            force_restart_game(dev, cfg, log, stop, must=True, reason="ring menu would not close")
             return None
     elif res and res[2]:                                     # the label shows where the building really is on the screen: re-anchor the camera
         lx, ly = res[2]
@@ -13843,7 +13843,7 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
             nav.cx, nav.cy = tx - lx, ty - (ly - 35)
         if not close_ring(dev, stop, res[2]):
             log("[!]   the ring menu would not close - restarting Evony so nothing is pressed by mistake")
-            force_restart_game(dev, cfg, log, stop, must=True)
+            force_restart_game(dev, cfg, log, stop, must=True, reason="ring menu would not close")
             return None
     elif levels or res is not None:                          # read on the Detail page (i icon): back out to the city and make sure the ring is gone
         leave_to_city(dev, cfg, stop)
@@ -14086,7 +14086,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             return False
         empty_list["restarts"].append(t)
         log(f"[!] {why} - restarting Evony")
-        force_restart_game(dev, cfg, log, stop)
+        force_restart_game(dev, cfg, log, stop, reason=why)
         return True
     lost_since = [None]                   # since when we have been off the rally list (kept across game restarts)
     restarts = []                         # when the emulator was restarted (to stop restart loops)
@@ -14448,7 +14448,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         if city_fails[0] >= 2:
             log(f"[!] Could not reach the city screen {city_fails[0]} times in a row - restarting the game")
             city_fails[0] = 0
-            force_restart_game(dev, cfg, log, stop)
+            force_restart_game(dev, cfg, log, stop, reason="city screen not reachable")
             return
         log(msg)
         city_block[0] = time.time() + 600
@@ -14491,14 +14491,14 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             log("[!] The game kept lagging for over 2 min")
             dev.lag_streak = 0
             war_streak[0] = 0
-            force_restart_game(dev, cfg, log, stop)
+            force_restart_game(dev, cfg, log, stop, reason="game lagged")
             return False
         often = [t for t in getattr(dev, "lag_times", []) if time.time() - t < 600]
         if len(often) >= 8 and time.time() - getattr(dev, "lag_restart_at", 0) > 1800:   # lags again and again (max 1 restart / 30 min)
             log(f"[!] The game lagged {len(often)} times in 10 minutes - restarting Evony")
             dev.lag_times, dev.lag_streak, dev.lag_restart_at = [], 0, time.time()
             war_streak[0] = 0
-            force_restart_game(dev, cfg, log, stop)
+            force_restart_game(dev, cfg, log, stop, reason="game lagged")
             return False
         at_bottom[0] = False                  # the list reopens at the top: the next sweep jumps to the bottom first
         outside_taps = [0]
@@ -14543,7 +14543,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 if _row and war_streak[0] >= 6:                # tapping the row keeps landing back on the Alliance page: restart the game
                     log(f"[!] Tapped 'Alliance War' {war_streak[0]} times without reaching the rally list")
                     war_streak[0] = 0
-                    force_restart_game(dev, cfg, log, stop)
+                    force_restart_game(dev, cfg, log, stop, reason="Alliance War tap never reached the rally list")
                     return False
                 if _row:
                     war_streak[0] += 1
@@ -14767,7 +14767,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             if serial in GAME_RESTART_REQ:                       # Restart game asked from the interface
                 GAME_RESTART_REQ.discard(serial)
                 log("[*] Restart game asked - closing and opening Evony")
-                force_restart_game(dev, cfg, log, stop, must=True)
+                force_restart_game(dev, cfg, log, stop, must=True, reason="restart asked from the interface")
                 continue
             st = screen_state(screen, cfg)
             if st == "rally_list":
@@ -14798,7 +14798,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         restart_emulator(dev, cfg, log, stop, "the game froze twice (does not react to taps)")
                     else:
                         log("[!] The game does not react (same screen after 20 taps, ~3 min) - restarting Evony")
-                        force_restart_game(dev, cfg, log, stop, must=True)
+                        force_restart_game(dev, cfg, log, stop, must=True, reason="game does not react to taps")
                     frozen["last"] = time.time()
                     continue
                 nap(1.0, 1.5)
@@ -14862,7 +14862,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             log("[!] Chat check: 5 restarts did not help - not restarting for this any more, alert sent")
                     else:
                         log(f"[!] Chat check: restarting Evony (try {ck['broken']} of 5)")
-                        force_restart_game(dev, cfg, log, stop, must=True)
+                        force_restart_game(dev, cfg, log, stop, must=True, reason="chat check failed")
                 else:
                     ck["broken"] = 0
                 continue
@@ -14914,7 +14914,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     if stale_hits[0] >= 2:
                         stale_hits[0] = 0
                         log("[!] The rally list is still empty here while instances in the same alliance see rallies - restarting Evony")
-                        force_restart_game(dev, cfg, log, stop)
+                        force_restart_game(dev, cfg, log, stop, reason="rally list empty while allies see rallies")
                     else:
                         log("[!] The rally list is empty here while instances in the same alliance see rallies - reopening it")
                         dev.back()
@@ -14970,7 +14970,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 log(f"[!] The screen has not changed for {frozen_for:.0f}s - restarting Evony")
                 notify(cfg, serial, f"Screen frozen for {frozen_for:.0f}s - restarting Evony.")
                 still["since"] = None
-                force_restart_game(dev, cfg, log, stop, must=True)
+                force_restart_game(dev, cfg, log, stop, must=True, reason="screen frozen")
                 continue
             if lost_too_long(not need_recover):
                 if reclaim_if_kicked(dev, cfg, log, stop, dev.screenshot()):      # not lost: kicked by another device
@@ -14988,7 +14988,7 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     continue
                 lost_restarts.append(nowt)
                 notify(cfg, serial, "Lost for too long - restarting Evony.")
-                force_restart_game(dev, cfg, log, stop)
+                force_restart_game(dev, cfg, log, stop, reason="lost for too long")
                 continue
             if need_recover:
                 unknown = 0
