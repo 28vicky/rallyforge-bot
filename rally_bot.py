@@ -12269,6 +12269,7 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
         log("[i]   nav: initial_locate=miss shot=debug/duty_nav_initial.png")
     if r and 110 <= mapx - r[0] <= 410 and 220 <= mapy - r[1] <= 740:
         log(f"[i]   nav: origin_used=initial cx={round(r[0])} cy={round(r[1])}")
+        nav.cx, nav.cy = r[0], r[1]                        # the caller saves the building's map place from nav (27 Oct: left at 0,0 -> Tavern saved at the corner)
         return mapx - r[0], mapy - r[1]
     # Owner 27 Oct: the camera is measured after every slow drag now, so the current view is a good enough start -
     # the City Buff (Prison) anchor is only the fallback when the view is NOT found on the map (on Kiravik the buff
@@ -12287,6 +12288,7 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
     cx, cy = r[0], r[1]
     dx, dy = (mapx - cx) - mid_x, (mapy - cy) - mid_y      # how far the camera has to move (map px)
     if abs(dx) < 120 and abs(dy) < 150 and 110 <= mapx - cx <= 410 and 220 <= mapy - cy <= 740:
+        nav.cx, nav.cy = cx, cy
         return mapx - cx, mapy - cy                        # already on screen: no drag at all
     k_scale = _DRAG_SCALE.get(dev.serial, 1.0)             # learned: map px moved per finger px (slow drag: ~1.0 expected)
     log(f"[i]   jump: camera at {round(cx)},{round(cy)} - pin {round(mapx)},{round(mapy)} - {round(dx)},{round(dy)} px away (scale {k_scale:.2f})")
