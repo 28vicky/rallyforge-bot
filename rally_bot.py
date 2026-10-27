@@ -7113,7 +7113,7 @@ def emu_window(dev, name=None):
     return hits[0] if hits else None
 
 
-def wheel_zoom_out(dev, log, name=None, notches=6):
+def wheel_zoom_out(dev, log, name=None, notches=6, up=False):
     """Ctrl + mouse wheel down sent to the emulator window (owner 23 Oct: zooms the city out on MuMu and BlueStacks).
     Window messages only - the owner's mouse and the window focus are not touched. -> True when sent."""
     h = emu_window(dev, name)
@@ -7134,11 +7134,11 @@ def wheel_zoom_out(dev, log, name=None, notches=6):
         u32.PostMessageW(t, 0x0100, 0x11, 0x001D0001)                  # WM_KEYDOWN Ctrl
     for _ in range(notches):
         for t in targets:
-            u32.PostMessageW(t, 0x020A, ((-120 & 0xFFFF) << 16) | 0x0008, lp)   # WM_MOUSEWHEEL down + MK_CONTROL
+            u32.PostMessageW(t, 0x020A, (((120 if up else -120) & 0xFFFF) << 16) | 0x0008, lp)   # WM_MOUSEWHEEL down (up = zoom in) + MK_CONTROL
         time.sleep(0.12)
     for t in targets:
         u32.PostMessageW(t, 0x0101, 0x11, 0xC01D0001)                  # WM_KEYUP Ctrl
-    log(f"[i] Zoom out: Ctrl+wheel x{notches} sent to window {h:#x} ({len(targets)} parts)")
+    log(f"[i] Zoom {'in' if up else 'out'}: Ctrl+wheel x{notches} sent to window {h:#x} ({len(targets)} parts)")
     return True
 
 
@@ -12024,6 +12024,19 @@ def zoom_out_full(dev, cfg, stop, log):
         _nap(stop, 1.0, 1.3)
         sc = _view_scale(before, dev.screenshot())
         if (not sc or sc >= 0.97) and i == 0 and not use_real:
+            # Stalds 27 Oct 20:21: the city was ALREADY fully out, so the first notch changed nothing and the bot went to
+            # the real-mouse fallback, which waits up to 2 min x3 while the owner uses the PC. Test with one notch IN:
+            # the view grows = window messages work and the city was fully out -> zoom back out, done.
+            b0 = dev.screenshot()
+            if wheel_zoom_out(dev, log, name, notches=1, up=True):
+                _nap(stop, 1.0, 1.3)
+                s0 = _view_scale(b0, dev.screenshot())
+                if s0 and s0 > 1.03:
+                    wheel_zoom_out(dev, log, name, notches=3)
+                    _nap(stop, 1.0, 1.3)
+                    log("[i]   zoom: the city was already fully out")
+                    dev.zoomed_out = True
+                    return
             # Owner 25 Oct: on testers' BlueStacks the Ctrl+wheel window message changes nothing and the bot said "fully
             # out". A real Ctrl + scroll down (what the owner does by hand) works there: try it a few times first.
             for k in range(3):
