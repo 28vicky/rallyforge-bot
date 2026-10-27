@@ -12043,6 +12043,22 @@ def try_culture_match(dev, cfg, log, stop, nav=None):
     return None
 
 
+def _at_map_zoom(dev, shot):
+    """Is the city at the zoom the maps were made at (fully out)? True when the screen locates on this instance's own
+    map or on a culture map (the locate's pixel check fails at another zoom)."""
+    try:
+        cm = city_map(dev)
+        if cm is not None and cm.locate(shot):
+            return True
+        for c in CULTURES:
+            m = culture_map(c)
+            if m is not None and m.locate(shot):
+                return True
+    except Exception as _e:
+        quiet_err("at_map_zoom", _e)
+    return False
+
+
 def zoom_out_full(dev, cfg, stop, log):
     """All the way out: Ctrl+wheel until the picture stops getting smaller (Kiravik 23 Oct: the two-notch zoom of the duties
     left the city 1.8x bigger than the game's own widest view, so the map needed 56 views instead of ~8)."""
@@ -12072,6 +12088,13 @@ def zoom_out_full(dev, cfg, stop, log):
                     log("[i]   zoom: the city was already fully out")
                     dev.zoomed_out = True
                     return
+            # Owner 27 Oct 22:17 (Kiravik, Stalds, K, Rob all at once): the one-notch test did not show the view growing and
+            # all four waited for the real mouse while the owner used the PC. The city maps were made fully out: when the
+            # screen lines up with this instance's map or a culture map, the zoom is already right - carry on.
+            if _at_map_zoom(dev, dev.screenshot()):
+                log("[i]   zoom: the screen matches the city map - already fully out")
+                dev.zoomed_out = True
+                return
             # Owner 25 Oct: on testers' BlueStacks the Ctrl+wheel window message changes nothing and the bot said "fully
             # out". A real Ctrl + scroll down (what the owner does by hand) works there: try it a few times first.
             for k in range(3):
