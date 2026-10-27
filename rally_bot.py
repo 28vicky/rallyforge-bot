@@ -12267,7 +12267,7 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
         log(f"[i]   nav: initial_locate=hit cx={round(r[0])} cy={round(r[1])} points={r[2]} shot=debug/duty_nav_initial.png")
     else:
         log("[i]   nav: initial_locate=miss shot=debug/duty_nav_initial.png")
-    if r and 90 <= mapx - r[0] <= 450 and 200 <= mapy - r[1] <= 780:
+    if r and 110 <= mapx - r[0] <= 410 and 220 <= mapy - r[1] <= 740:
         log(f"[i]   nav: origin_used=initial cx={round(r[0])} cy={round(r[1])}")
         return mapx - r[0], mapy - r[1]
     # Owner 27 Oct: the camera is measured after every slow drag now, so the current view is a good enough start -
@@ -12286,7 +12286,7 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
             return None
     cx, cy = r[0], r[1]
     dx, dy = (mapx - cx) - mid_x, (mapy - cy) - mid_y      # how far the camera has to move (map px)
-    if abs(dx) < 120 and abs(dy) < 150 and 90 <= mapx - cx <= 450 and 200 <= mapy - cy <= 780:
+    if abs(dx) < 120 and abs(dy) < 150 and 110 <= mapx - cx <= 410 and 220 <= mapy - cy <= 740:
         return mapx - cx, mapy - cy                        # already on screen: no drag at all
     k_scale = _DRAG_SCALE.get(dev.serial, 1.0)             # learned: map px moved per finger px (slow drag: ~1.0 expected)
     log(f"[i]   jump: camera at {round(cx)},{round(cy)} - pin {round(mapx)},{round(mapy)} - {round(dx)},{round(dy)} px away (scale {k_scale:.2f})")
@@ -12297,8 +12297,8 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
         if stop.is_set() or time.time() > t_lim or dev.serial in TASK_ABORT:
             break
         sx, sy = mapx - cx, mapy - cy                      # pin on screen now (estimated)
-        if 90 <= sx <= 450 and 200 <= sy <= 780:           # safely on screen: tap it, don't polish the camera
-            break
+        if 110 <= sx <= 410 and 220 <= sy <= 740:          # safely inside the map area (Kiravik 27 Oct: a pin at x=419 put
+            break                                          # the tap-around spots on the right HUD badges = event page)
         rx, ry = sx - mid_x, sy - mid_y                    # remaining camera move (map px)
         fdx = max(-330.0, min(330.0, rx / k_scale))        # finger move, one long drag at a time
         fdy = max(-500.0, min(500.0, ry / k_scale))
@@ -12349,7 +12349,7 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
     err = ((nav.cx - cx) ** 2 + (nav.cy - cy) ** 2) ** 0.5
     sx, sy = mapx - nav.cx, mapy - nav.cy
     log(f"[i]   jump: camera at {round(nav.cx)},{round(nav.cy)} after {time.time() - t0:.0f}s - pin on screen at {round(sx)},{round(sy)} (dead-reckoning was {round(err)} px off)")
-    if 90 <= sx <= 450 and 200 <= sy <= 780:
+    if 110 <= sx <= 410 and 220 <= sy <= 740:
         return sx, sy
     return None
 
@@ -12390,7 +12390,7 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
         sx, sy = mapx - nav.cx, mapy - nav.cy
         # owner 25 Oct: reach the building, don't polish the camera - anywhere safely on screen is good enough
         # (a building near the city edge can never be centred: the map springs back, Kiravik looped 2 min on the Tavern)
-        if (abs(sx - mid_x) <= tol and abs(sy - mid_y) <= tol) or (90 <= sx <= 450 and 200 <= sy <= 780):
+        if (abs(sx - mid_x) <= tol and abs(sy - mid_y) <= tol) or (110 <= sx <= 410 and 220 <= sy <= 740):
             log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} on the map ({r[2]} points), target on screen at {round(sx)},{round(sy)}")
             log(f"[i]   nav: goto_on_map=success via=closed_loop sx={round(sx)} sy={round(sy)}")
             return sx, sy
@@ -12429,7 +12429,9 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
     # Kiravik 25 Oct 14:02: camera reached the Tavern pin, but one tap exactly on the pin hit the ground (no ring) and the
     # map route gave up. A pin is a hand-placed point: try it, then a few spots around it.
     near = [spot] + [(spot[0] + ox, spot[1] + oy) for ox, oy in ((0, 45), (-45, 20), (45, 20), (0, 80), (-40, -30), (0, -40))]   # lower spots first: icons float above a building (Kiravik Tavern chest 27 Oct)
-    near = [(x, y) for x, y in near if 60 <= x <= 470 and 150 <= y <= 820]
+    near = [(x, y) for x, y in near if 70 <= x <= 420 and 160 <= y <= 800]   # never the HUD columns / bars
+    rd_snap(shot, "nav_arrived")
+    log(f"[i]   nav: arrived - tapping {bname} at {spot} shot=debug/duty_nav_arrived.png")
     if open_building_here(dev, cfg, log, stop, bname, spots=near, how=f"the city map (match {mv:.2f})"):
         try:                                               # refresh the place and the picture (open_building_here learned it)
             m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8")) if p.with_suffix(".json").exists() else {"dx": 0, "dy": 0}
