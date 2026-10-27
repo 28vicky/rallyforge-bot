@@ -7626,14 +7626,10 @@ class CityNav:
             # A short drag can be read by the game as a TAP on a building (that opened Prison, Rare Books ...), so a
             # short move is done as one long drag past the target and a second long drag back.
             ln = (sx * sx + sy * sy) ** 0.5
-            if ln < 200:                                 # the game read a 120 px drag on a building as a TAP (ring opened,
-                ux, uy = (sx / ln, sy / ln) if ln else (0.0, 1.0)   # camera stayed; Kiravik 19:13 x8): always drag far,
-                ax, ay = sx + ux * 200, sy + uy * 200    # then come back
-                d1x, d1y, _ = self._drag(270 + ax / 2, 440 + ay / 2, 270 - ax / 2, 440 - ay / 2)
-                d2x, d2y, _ = self._drag(270 - ux * 100, 440 - uy * 100, 270 + ux * 100, 440 + uy * 100)
-                dx, dy = d1x + d2x, d1y + d2y
-            else:
-                dx, dy, _ = self._drag(270 + sx / 2, 440 + sy / 2, 270 - sx / 2, 440 - sy / 2)
+            if ln < 60:                                  # a tiny drag is taken as a tap: stretch it to 60 px (slow hold-still
+                ux, uy = (sx / ln, sy / ln) if ln else (0.0, 1.0)   # drags never glide, so the old overshoot-and-return is gone)
+                sx, sy = ux * 60, uy * 60
+            dx, dy, _ = self._drag(270 + sx / 2, 440 + sy / 2, 270 - sx / 2, 440 - sy / 2)
             if abs(dx) + abs(dy) < 0.25 * (abs(sx) + abs(sy)):   # moved much less than the finger: the edge
                 mx -= dx
                 my -= dy
@@ -12335,6 +12331,10 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
             continue
         zero = 0
         cx, cy = cx - mdx, cy - mdy                        # the map moved by (mdx, mdy) on screen -> camera moved the other way
+        ra = cmap.locate(after)                            # K 27 Oct: a 330 px drag leaves ~30 px overlap, the frame measure then
+        if ra:                                             # falls back to 'moved like the finger' and drifted 197 px - the map
+            cx, cy = ra[0], ra[1]                          # match is absolute, so it wins whenever it hits
+            log(f"[i]   nav: located cx={round(cx)} cy={round(cy)} points={ra[2]}")
         if fl > 150:
             k_new = max(0.6, min(2.5, ratio))
             k_scale = round(0.5 * k_scale + 0.5 * k_new, 3) if dev.serial in _DRAG_SCALE else round(k_new, 3)
