@@ -12151,6 +12151,15 @@ def run_map_movable(dev, cfg, log, stop):
     stops = [p for i, r in enumerate(sorted(rows)) for p in (sorted(rows[r]) if i % 2 == 0 else sorted(rows[r], reverse=True))]
     want = [b for b in MOVABLE_BUILDINGS]
     found, tried, seen_all, later = {}, set(), set(), {}
+    for b in want:                                         # already mapped on this instance (an earlier run): kept, not searched again
+        try:
+            mp = json.loads(_learn_path(dev, b).with_suffix(".json").read_text(encoding="utf-8")).get("map")
+            if mp:
+                found[b] = mp
+        except Exception:
+            pass
+    if found:
+        log(f"[i]   already mapped here (kept): {', '.join(found)}")
     log(f"[*] Movable buildings: looking for {len(want)} on {len(stops)} stops (names shown while a finger is held)")
     t0 = time.time()
     for i, (sx, sy) in enumerate(stops):
