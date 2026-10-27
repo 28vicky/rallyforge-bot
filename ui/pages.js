@@ -1973,7 +1973,7 @@ const FIXED_BUILDINGS = ["Keep", "Tavern", "Shrine", "Pasture", "Academy", "Mili
   "Warehouse", "Hospital", "Market", "Prison", "Trap Factory", "Embassy", "Workshop", "War Hall", "Council of State",
   "Bounty Cave", "Army Camp", "Walls", "Archer Tower 1", "Archer Tower 2", "Forge"];
 function pinBuildingsDialog(culture) {
-  const st = { c: culture, sel: null, pins: {}, size: null };
+  const st = { c: culture, sel: null, pins: {}, size: null, suggest: {}, z: 1, px: 0, py: 0 };
   const body = h("div", { class: "pinbox" });
   const cap = (c) => c.charAt(0).toUpperCase() + c.slice(1);
   const norm = (x) => x.toLowerCase().replace(/[^a-z]/g, "");
@@ -1989,7 +1989,9 @@ function pinBuildingsDialog(culture) {
     body.appendChild(h("div", { class: "seg small pinseg" }, ["europe", "russia", "china", "korea", "japan", "arabia", "america"].map((c) =>
       h("button", { class: "segb" + (st.c === c ? " on" : ""), type: "button", onclick: () => load(c) }, cap(c)))));
     body.appendChild(h("p", { class: "hint" }, st.sel ? "Click on the map where the " + st.sel + " is. Drag a pin to move it." :
-      done === FIXED_BUILDINGS.length ? "Every building is pinned on the " + cap(st.c) + " map." : "Pick a building on the left, then click it on the map."));
+      done === FIXED_BUILDINGS.length ? "Every building is pinned on the " + cap(st.c) + " map." : "Pick a building on the left, then click it on the map." +
+      (Object.keys(st.suggest).some((b) => !pinOf(b)) ? " Dashed pins are suggestions from the other cultures: click one to accept it or drag it onto the building." : "") +
+      " Scroll or +/- to zoom, drag the map to move it."));
     const list = h("div", { class: "pinlist" }, FIXED_BUILDINGS.map((b) => {
       const p = pinOf(b);
       return h("div", { class: "pinrow" + (st.sel === b ? " on" : ""), onclick: () => { st.sel = b; draw(); } },
@@ -1998,14 +2000,32 @@ function pinBuildingsDialog(culture) {
           h("button", { class: "pinx", type: "button", title: "Remove pin", onclick: (e) => { e.stopPropagation(); save(b, null); } }, "\u00d7"))
           : h("span", { class: "dbadge todo" }, "To pin"));
     }));
+    // Owner 27 Oct: zoom (wheel or +/-) and move the map (drag it) to read the buildings; dots keep their size.
+    // Suggested pins (dashed) = where the other cultures have this building: click to accept, drag to adjust.
     const img = h("img", { class: "pinimg", src: "/api/culture_img?c=" + st.c + "&k=" + encodeURIComponent(window.KEY), alt: cap(st.c) + " map", draggable: false });
-    const wrap = h("div", { class: "pinwrap" + (st.sel ? " picking" : "") }, img);
+    const stage = h("div", { class: "pinstage" }, img);
+    const wrap = h("div", { class: "pinwrap" + (st.sel ? " picking" : "") }, stage);
+    const view = () => { stage.style.transform = "translate(" + st.px + "px," + st.py + "px) scale(" + st.z + ")"; stage.style.setProperty("--iz", 1 / st.z); };
+    const clampPan = () => { const w = wrap.clientWidth, hh = wrap.clientHeight;
+      st.px = Math.min(0, Math.max(w - w * st.z, st.px)); st.py = Math.min(0, Math.max(hh - hh * st.z, st.py)); };
+    const zoomAt = (f, cx, cy) => { const z = Math.max(1, Math.min(6, st.z * f)); if (z === st.z) return;
+      st.px = cx - (cx - st.px) * z / st.z; st.py = cy - (cy - st.py) * z / st.z; st.z = z; clampPan(); view(); };
+    wrap.addEventListener("wheel", (e) => { e.preventDefault(); const r = wrap.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.25 : 0.8, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
     const toMap = (e) => { const r = img.getBoundingClientRect();
       return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * st.size[0], Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * st.size[1]]; };
-    img.onclick = (e) => { if (st.dragged || !st.sel || !st.size) return; const b = st.sel; st.sel = null; save(b, toMap(e)).then(() => { st.sel = nextFree(); draw(); }); };
-    if (st.size) for (const b of FIXED_BUILDINGS) {
-      const p = pinOf(b); if (!p) continue;
-      const dot = h("span", { class: "pindot", title: b, style: { left: (p[0] * 100 / st.size[0]) + "%", top: (p[1] * 100 / st.size[1]) + "%" } }, h("em", {}, b));
+    img.onpointerdown = (e) => {                         // drag the map = move it; a click without moving = place the picked pin
+      if (e.button !== 0) return;
+      e.preventDefault(); img.setPointerCapture(e.pointerId);
+      const sx = e.clientX, sy = e.clientY, ox = st.px, oy = st.py; let moved = false;
+      const move = (ev) => { if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return; moved = true; wrap.classList.add("panning");
+        st.px = ox + ev.clientX - sx; st.py = oy + ev.clientY - sy; clampPan(); view(); };
+      const up = (ev) => { img.removeEventListener("pointermove", move); img.removeEventListener("pointerup", up); wrap.classList.remove("panning");
+        if (moved || !st.sel || !st.size) return; const b = st.sel; st.sel = null; save(b, toMap(ev)).then(() => { st.sel = nextFree(); draw(); }); };
+      img.addEventListener("pointermove", move); img.addEventListener("pointerup", up);
+    };
+    const addDot = (b, p, ghost) => {
+      const dot = h("span", { class: "pindot" + (ghost ? " ghost" : ""), title: ghost ? b + " - suggested: click to accept, drag to adjust" : b,
+        style: { left: (p[0] * 100 / st.size[0]) + "%", top: (p[1] * 100 / st.size[1]) + "%" } }, h("em", {}, b + (ghost ? "?" : "")));
       dot.onpointerdown = (e) => {                       // drag a pin: pointer captured, no page scroll, no click on the map after it
         e.preventDefault(); e.stopPropagation();
         dot.setPointerCapture(e.pointerId);
@@ -2013,21 +2033,33 @@ function pinBuildingsDialog(culture) {
         const move = (ev) => { st.dragged = true; const m = toMap(ev); dot.style.left = (m[0] * 100 / st.size[0]) + "%"; dot.style.top = (m[1] * 100 / st.size[1]) + "%"; };
         const up = (ev) => {
           dot.removeEventListener("pointermove", move); dot.removeEventListener("pointerup", up);
-          if (st.dragged) save(b, toMap(ev));
+          if (st.dragged) save(b, toMap(ev)); else if (ghost) save(b, p);
           setTimeout(() => { st.dragged = false; }, 0);
         };
         dot.addEventListener("pointermove", move); dot.addEventListener("pointerup", up);
       };
       dot.onclick = (e) => e.stopPropagation();
-      wrap.appendChild(dot);
+      stage.appendChild(dot);
+    };
+    if (st.size) for (const b of FIXED_BUILDINGS) {
+      const p = pinOf(b);
+      if (p) addDot(b, p, false);
+      else if (st.suggest[b]) addDot(b, st.suggest[b], true);
     }
+    const zbar = h("div", { class: "pinzoom" },
+      h("button", { class: "btn small", type: "button", title: "Zoom in", "aria-label": "Zoom in", onclick: () => zoomAt(1.5, wrap.clientWidth / 2, wrap.clientHeight / 2) }, "+"),
+      h("button", { class: "btn small", type: "button", title: "Zoom out", "aria-label": "Zoom out", onclick: () => zoomAt(1 / 1.5, wrap.clientWidth / 2, wrap.clientHeight / 2) }, "\u2212"),
+      h("button", { class: "btn small", type: "button", title: "Whole map", onclick: () => { st.z = 1; st.px = st.py = 0; view(); } }, "Fit"));
+    wrap.appendChild(zbar);
+    view();
     body.appendChild(h("div", { class: "pingrid" }, list, wrap));
     body.appendChild(h("p", { class: "hint" }, done + " of " + FIXED_BUILDINGS.length + " pinned on the " + cap(st.c) + " map. Pins are saved at once and used by every instance matched to this culture."));
   };
   const load = async (c) => {
     const r = await act(api("culture_pins_get", { culture: c }));
     if (!r) return;
-    st.c = c; st.pins = r.pins; st.size = r.size; st.sel = nextFree(); draw();
+    if (c !== st.c) { st.z = 1; st.px = st.py = 0; }
+    st.c = c; st.pins = r.pins; st.size = r.size; st.suggest = r.suggest || {}; st.sel = nextFree(); draw();
   };
   modal({ title: "Pin buildings", wide: true, body, buttons: [{ label: "Done", cls: "pri" }] });
   load(culture);

@@ -1689,8 +1689,13 @@ select.pick-open{border-color:var(--accent1)}
 .pinx:hover{opacity:1}
 .pinwrap{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);justify-self:start;line-height:0}   /* the whole map in view: no scrolling while pinning */
 .pinwrap.picking .pinimg{cursor:crosshair}
-.pinimg{display:block;max-width:100%;max-height:66vh;width:auto;height:auto;user-select:none}
-.pindot{touch-action:none;position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;border:3px solid var(--accent1,#c2410c);box-shadow:0 0 0 2px rgba(0,0,0,.35);cursor:grab}
+.pinstage{position:relative;transform-origin:0 0;will-change:transform}
+.pinwrap.panning .pinimg{cursor:grabbing}
+.pinzoom{position:absolute;right:8px;top:8px;display:flex;gap:4px;line-height:normal;z-index:2}
+.pindot.ghost{background:transparent;border-style:dashed;opacity:.85}
+.pindot.ghost em{background:rgba(0,0,0,.4)}
+.pinimg{display:block;cursor:grab;max-width:100%;max-height:66vh;width:auto;height:auto;user-select:none}
+.pindot{touch-action:none;position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;border:3px solid var(--accent1,#c2410c);box-shadow:0 0 0 2px rgba(0,0,0,.35);cursor:grab;transform:scale(var(--iz,1))}
 .pindot em{position:absolute;left:14px;top:-5px;white-space:nowrap;font-style:normal;font-size:11px;font-weight:700;color:#fff;background:rgba(0,0,0,.6);padding:1px 5px;border-radius:4px;pointer-events:none}
 /* long duty status (e.g. Black Market "Waiting for gems ...") never squeezes the duty name or the side panel title */
 .dline .dtx{min-width:120px}

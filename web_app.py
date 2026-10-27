@@ -18,6 +18,7 @@ import os
 import re
 import secrets
 import subprocess
+import statistics
 import sys
 import threading
 import types
@@ -2307,7 +2308,18 @@ class Api:
         if not d:
             raise ApiError("That culture map is not on this PC.")
         meta = json.loads((d / "map.json").read_text(encoding="utf-8"))
-        return {"culture": c, "size": meta.get("size"), "pins": rb.culture_pins(c), "cultures": list(rb.CULTURES)}
+        pins = rb.culture_pins(c)
+        # Owner 27 Oct: fixed buildings sit in the same place in every culture -> suggest a missing pin from the
+        # other cultures' pins (median, needs 2+). The Market is not a fixed building, so it is never suggested.
+        have = {re.sub(r"[^a-z]", "", k.lower()) for k in pins}
+        others = {}
+        for o in rb.CULTURES:
+            if o != c:
+                for k, v in rb.culture_pins(o).items():
+                    others.setdefault(k, []).append(v)
+        suggest = {k: [round(statistics.median(v[0] for v in vs)), round(statistics.median(v[1] for v in vs))]
+                   for k, vs in others.items() if len(vs) >= 2 and k.lower() != "market" and re.sub(r"[^a-z]", "", k.lower()) not in have}
+        return {"culture": c, "size": meta.get("size"), "pins": pins, "suggest": suggest, "cultures": list(rb.CULTURES)}
 
     def culture_pin_set(self, p):
         """Owner tool: set (map [x, y]) or remove (map null) one building's pin on a culture map -> cultures/<c>/pins.json."""
