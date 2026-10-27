@@ -1108,7 +1108,59 @@ class Device:
         self._run("shell", "input", "motionevent", "UP", str(int(x2 * sx)), str(int(y2 * sy)))
         return True
 
+    def hold_mode(self):
+        """How this emulator holds a finger down: 'motion' (adb motion events), 'window' (mouse button held on the
+        emulator window - BlueStacks, owner 27 Oct) or 'swipe' (a slow swipe running meanwhile)."""
+        return getattr(self, "_hold_mode", None) or (("window" if os.name == "nt" else "swipe") if getattr(self, "no_motion", False) else "motion")
+
+    def next_hold_mode(self):
+        """The current way showed no names several times: try the next one. -> the new mode or None when none left."""
+        order = ["motion", "window", "swipe"]
+        i = order.index(self.hold_mode())
+        self._hold_mode = order[i + 1] if i + 1 < len(order) else None
+        return self._hold_mode
+
+    def _win_mouse(self, kind, x, y):
+        """Mouse button message on the emulator window (client pixels scaled from the 540x960 game screen)."""
+        import ctypes
+        from ctypes import wintypes
+        u32 = ctypes.windll.user32
+        h = getattr(self, "_hold_wnd", None)
+        if not h:
+            return False
+        targets = [h]
+        proto = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+        u32.EnumChildWindows(h, proto(lambda c, _: targets.append(c) or True), 0)
+        msg = {"down": 0x0201, "move": 0x0200, "up": 0x0202}[kind]
+        for t in targets:
+            rc = wintypes.RECT()
+            u32.GetClientRect(t, ctypes.byref(rc))
+            if rc.right < 100 or rc.bottom < 100:
+                continue
+            cx, cy = int(x / 540 * rc.right), int(y / 960 * rc.bottom)
+            u32.PostMessageW(t, msg, 0 if kind == "up" else 0x0001, ((cy & 0xFFFF) << 16) | (cx & 0xFFFF))
+        return True
+
     def hold_start(self, x, y, x2, y2):
+        mode = self.hold_mode()
+        if mode == "window":
+            name = (load_config().get("device_names") or {}).get(self.serial)
+            self._hold_wnd = emu_window(self, name)
+            if not self._hold_wnd:
+                self._hold_mode = "swipe"
+                return False
+            self._win_mouse("down", x, y)
+            for i in range(1, 5):
+                time.sleep(0.05)
+                self._win_mouse("move", x + (x2 - x) * i / 4, y + (y2 - y) * i / 4)
+            self._held = (x2, y2)
+            self._held_win = True
+            return True
+        if mode == "swipe":
+            return False
+        return self._hold_motion(x, y, x2, y2)
+
+    def _hold_motion(self, x, y, x2, y2):
         """Put a finger on the screen at (x, y), move it to (x2, y2) in a few small steps and KEEP IT DOWN
         (the game shows the building names only while a finger that has moved is still down). Call hold_end()
         to lift it. -> True when the finger is held; False when this emulator cannot hold a touch (then use swipe_bg)."""
@@ -1127,6 +1179,13 @@ class Device:
 
     def hold_end(self):
         h = getattr(self, "_held", None)
+        if h and getattr(self, "_held_win", False):
+            for k in (1, 2, 3):
+                self._win_mouse("move", h[0], h[1] - 14 * k)
+                time.sleep(0.03)
+            self._win_mouse("up", h[0], h[1] - 42)
+            self._held, self._held_win = None, False
+            return
         if h:
             for k in (1, 2, 3):                                  # keep dragging a little before lifting, so the game never reads it as a tap
                 self._run("shell", "input", "motionevent", "MOVE", str(int(h[0] * self.sx)),
@@ -12163,6 +12222,59 @@ MOVABLE_BUILDINGS = ("Market", "Barracks", "Prison", "Hospital", "Embassy", "War
                      "Archer Camp", "Trap Factory", "Workshop", "War Hall", "Forge")   # owner 27 Oct: players move these
 
 
+def building_pictures(dev, names):
+    """Saved pictures of these buildings from every instance on this PC whose city has the SAME culture (owner 27 Oct:
+    when the names can't be read, match the pictures already in the database). -> {name: [(img, dx, dy), ...]}"""
+    cult = (city_culture(dev) or {}).get("culture")
+    out = {}
+    if not cult or not LEARN_DIR.exists():
+        return out
+    for d in LEARN_DIR.iterdir():
+        try:
+            if not d.is_dir() or d == _map_dir(dev):
+                continue
+            if json.loads((d / "culture.json").read_text(encoding="utf-8")).get("culture") != cult:
+                continue
+        except Exception:
+            continue
+        for n in names:
+            stem = re.sub(r"[^a-z]+", "_", n.lower()).strip("_")
+            png, js = d / (stem + ".png"), d / (stem + ".json")
+            if not png.exists():
+                continue
+            img = cv2.imread(str(png))
+            if img is None:
+                continue
+            try:
+                m = json.loads(js.read_text(encoding="utf-8"))
+            except Exception:
+                m = {}
+            out.setdefault(n, []).append((img, int(m.get("dx", img.shape[1] // 2)), int(m.get("dy", img.shape[0] // 2))))
+    return out
+
+
+def match_building_pictures(shot, pics, skip=()):
+    """Find saved building pictures on this screen (same zoom as the maps: sizes 0.9-1.1 only). -> [(name, x, y, score)]
+    tap points on screen, best per building, score >= 0.72."""
+    hits = []
+    area = shot[90:860, 0:470]
+    for n, lst in pics.items():
+        if n in skip:
+            continue
+        best = None
+        for img, dx, dy in lst:
+            for f in (1.0, 0.9, 1.1):
+                t = img if f == 1.0 else cv2.resize(img, None, fx=f, fy=f, interpolation=cv2.INTER_LINEAR)
+                if t.shape[0] >= area.shape[0] or t.shape[1] >= area.shape[1]:
+                    continue
+                _, v, _, l = cv2.minMaxLoc(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED))
+                if v >= 0.72 and (best is None or v > best[3]):
+                    best = (n, int(l[0] + dx * f), int(l[1] + 90 + dy * f), float(v))
+        if best:
+            hits.append(best)
+    return hits
+
+
 def run_map_movable(dev, cfg, log, stop, only=None):
     """Map my city, part 2 (owner 27 Oct): the fixed buildings come from the culture pins; the MOVABLE ones are different
     in every city, so: visit every stop of the city map, hold a finger down so the game shows the building names, read
@@ -12209,6 +12321,10 @@ def run_map_movable(dev, cfg, log, stop, only=None):
                                   "checking": checking, "seen": sorted(b for b in seen_all if b in want and b not in found),
                                   "missing": [b for b in want if b not in found], "kept": kept, "t0": round(t0)}))
     log(f"[*] Movable buildings: looking for {len(want)} on {len(stops)} stops (names shown while a finger is held)")
+    pics = building_pictures(dev, [b for b in want if b not in found])
+    log(f"[i]   finger hold: {dev.hold_mode()}; saved pictures of the same culture: "
+        + (", ".join(f"{n} x{len(v)}" for n, v in pics.items()) if pics else "none"))
+    empty = 0                                              # stops in a row with no name read (switch the hold way after 3)
     t0 = time.time()
     for i, (sx, sy) in enumerate(stops):
         if stop.is_set() or len(found) == len(want):
@@ -12229,15 +12345,32 @@ def run_map_movable(dev, cfg, log, stop, only=None):
             leave_to_city(dev, cfg, stop, log)
             continue
         try:
-            labels, _, _ = look_with_names(dev, stop, nav, shots=1)   # one held picture: reading was ~30 of the ~40 s per stop
+            labels, _held_img, _ = look_with_names(dev, stop, nav, shots=1)   # one held picture: reading was ~30 of the ~40 s per stop
         except InstanceStopped:
             raise
         except Exception as e:
             log(f"[i]   stop {i + 1}: names not read ({e})")
             continue
         names = sorted({n for n, _, _ in labels})
+        if i < 2:                                          # owner 27 Oct (K on BlueStacks): keep what the held screen showed
+            try:
+                cv2.imwrite(str(USER / "debug" / f"held_{re.sub(r'[^0-9A-Za-z]', '_', dev.serial)}_{i + 1}_{dev.hold_mode()}.png"), _held_img)
+            except Exception as _e:
+                quiet_err("run_map_movable", _e)
+        empty = 0 if names else empty + 1
+        if empty >= 3 and dev.hold_mode() != "swipe":      # this way of holding shows no names here: try the next one
+            old = dev.hold_mode()
+            log(f"[i]   no names on 3 stops with the '{old}' finger hold - trying '{dev.next_hold_mode() or 'swipe'}'")
+            empty = 0
+        if pics:                                           # names missing or not read: look for the saved pictures too
+            got = {BUILDING_ALIASES.get(n, n) for n in names}
+            here = dev.screenshot()
+            for n, px, py, sc in match_building_pictures(here, pics, skip=set(found) | got):
+                labels.append((n, round(nav.cx + px), round(nav.cy + py + 30)))
+                names.append(n)
+                log(f"[i]   stop {i + 1}: {n} picture matched ({sc:.2f}) at {px},{py} - checking it")
         seen_all.update(names)
-        log(f"[i]   stop {i + 1}/{len(stops)}: names {', '.join(names) if names else '(none read)'}")
+        log(f"[i]   stop {i + 1}/{len(stops)}: names {', '.join(sorted(set(names))) if names else '(none read)'}")
         # Owner 27 Oct 22:33: no chasing one name across the city. Tap the names that are ON THIS SCREEN, read the menu
         # that opens and save WHATEVER movable building it names; at most 3 taps per name, then the next stop.
         todo = []
@@ -15927,6 +16060,14 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             elif st == "city" and cfg.get("rally_nav_tap"):
                 dev.tap(*cfg["rally_nav_tap"])
                 log("[*] Tapped the saved spot to reach the rally list")
+            elif st == "city" and not getattr(dev, "nav_zoom_tried", False):
+                dev.nav_zoom_tried = True                      # owner 27 Oct (Rory zoomed in): zoom the city out once and log
+                b0 = dev.screenshot()                          # how much it changed - tells whether zoom works on this emulator
+                log("[*] Rally button not recognised - zooming the city out first")
+                zoom_out_full(dev, cfg, stop, log)
+                sc = _view_scale(b0, dev.screenshot())
+                log(f"[i] Zoom check: view scale {round(sc, 2) if sc else '?'} (below 1 = zoomed out, 1 = no change)")
+                continue
             elif st == "city" and ally_taps[0] < 2:           # Rory 27 Oct: the rally button shows a countdown + badge and its
                 ally_taps[0] += 1                              # picture no longer matches - go the Alliance way instead (Alliance
                 ax, ay = cfg.get("alliance_tap") or ALLIANCE_TAP   # button, always bottom right above Mail -> 'Alliance War' row)
