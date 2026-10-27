@@ -8979,7 +8979,20 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 return False
             log(f"[!]   {bname.strip()}: not reached by the map (Prison anchor) - no Activity route for pinned buildings, trying later")
             return False                                   # owner 25 Oct 16:28: tasks work with the map, not the Activity window
-        elif bname and task.get("no_tile"):                   # Black Market keep-going: the learned building picture first
+        elif (bname and bname.strip() in MOVABLE_BUILDINGS and city_map(dev) is not None
+              and time.time() - _AUTO_FIND.get((dev.serial, bname.strip()), 0) > 6 * 3600):
+            _AUTO_FIND[(dev.serial, bname.strip())] = time.time()   # owner 27 Oct: users rarely press anything - a missing
+            log(f"[*]   {bname.strip()}: not mapped on this city yet - looking for this one building first")   # movable
+            leave_to_city(dev, cfg, stop, log)             # building is searched by itself the first time a task needs it
+            zoom_out_full(dev, cfg, stop, log)
+            if bname.strip() in run_map_movable(dev, cfg, log, stop, only=[bname.strip()]) and not stop.is_set():
+                leave_to_city(dev, cfg, stop, log)
+                if find_learned_building(dev, cfg, log, stop, bname.strip()):
+                    return True
+            if stop.is_set():
+                return False
+            leave_to_city(dev, cfg, stop, log)
+        if bname and task.get("no_tile") and not _pinned(dev, bname.strip()):   # Black Market keep-going: the learned picture first
             leave_to_city(dev, cfg, stop, log)
             if find_learned_building(dev, cfg, log, stop, bname.strip()):
                 return True
@@ -11452,6 +11465,9 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
 LEARN_DIR = USER / "city_learn"
 
 
+_AUTO_FIND = {}                                            # (serial, building) -> when the bot last searched it by itself
+
+
 def _pinned(dev, bname):
     """Does this building have a place on the instance's keyframe map (learned at an earlier open)?"""
     try:
@@ -11488,8 +11504,9 @@ def learn_building(dev, shot, bname, x, y):
             cmap = city_map(dev)                           # (Activity route, learned picture, map) teaches its map place, so the
             if cmap is not None:                           # next visit is locate -> a few measured drags -> tap (owner 24 Oct: the
                 loc = cmap.locate(shot)                    # Activity tile is a teacher, the map is the way)
-                if loc:                                    # (a zoomed-in screen does not locate: the pixel check fails)
-                    meta["map"] = [round(loc[0] + x), round(loc[1] + y)]
+                if loc and meta.get("by") != "user":       # (a zoomed-in screen does not locate: the pixel check fails)
+                    meta["map"] = [round(loc[0] + x), round(loc[1] + y)]   # a pin the user placed (Fix pins) is never moved
+                    meta["by"] = "bot"
         except Exception:
             pass
         (p.with_suffix(".json")).write_text(json.dumps(meta), encoding="utf-8")
@@ -11990,13 +12007,22 @@ def culture_pin(dev, bname):
     cult = city_culture(dev)
     if not cult:
         return None
-    pins = culture_pins(cult["culture"])
+    pins = {**culture_pins(cult["culture"]), **pins_override(dev)}   # Fix pins > Adjust: this instance only (owner 27 Oct)
     want = re.sub(r"[^a-z]+", "", str(bname).lower())
-    v = next((v for k, v in pins.items() if re.sub(r"[^a-z]+", "", k.lower()) == want), None)
+    v = next((v for k, v in reversed(list(pins.items())) if re.sub(r"[^a-z]+", "", k.lower()) == want), None)
     # Pins are set on the map picture, whose pixel (0,0) is the CITY_VIEW corner of a keyframe; navigation works in
     # screen-corner places (screen = place - camera). Stalds / Rory / Kiravik 27 Oct: every culture-pin tap landed
     # ~80,100 px up-left of the building (stairs instead of the Tavern) -> shift the pin into the navigation frame.
     return [v[0] + CITY_VIEW[0], v[1] + CITY_VIEW[1]] if v else None
+
+
+def pins_override(dev):
+    """Fixed-building pins the user moved for THIS instance only (Fix pins > Adjust), in culture map picture pixels.
+    The shipped culture pins never change."""
+    try:
+        return json.loads((_map_dir(dev) / "pins_override.json").read_text(encoding="utf-8"))
+    except Exception:
+        return {}
 
 
 def _drop_own_places(dev):
@@ -12005,7 +12031,7 @@ def _drop_own_places(dev):
         if p.stem not in ("map", "culture") and not p.stem.endswith("_prev"):
             try:
                 m = json.loads(p.read_text(encoding="utf-8"))
-                if "map" in m:
+                if "map" in m and m.get("by") != "user":   # pins the user placed by hand (Fix pins) stay
                     m.pop("map", None)
                     p.write_text(json.dumps(m), encoding="utf-8")
             except Exception:
@@ -12136,7 +12162,7 @@ MOVABLE_BUILDINGS = ("Market", "Barracks", "Prison", "Hospital", "Embassy", "War
                      "Archer Camp", "Trap Factory", "Workshop", "War Hall", "Forge")   # owner 27 Oct: players move these
 
 
-def run_map_movable(dev, cfg, log, stop):
+def run_map_movable(dev, cfg, log, stop, only=None):
     """Map my city, part 2 (owner 27 Oct): the fixed buildings come from the culture pins; the MOVABLE ones are different
     in every city, so: visit every stop of the city map, hold a finger down so the game shows the building names, read
     them, and for each movable building seen go there, open its menu (the menu name is checked) and save its place.
@@ -12154,7 +12180,14 @@ def run_map_movable(dev, cfg, log, stop):
     for sx, sy in stops:
         rows.setdefault(round(sy / 300), []).append((sx, sy))
     stops = [p for i, r in enumerate(sorted(rows)) for p in (sorted(rows[r]) if i % 2 == 0 else sorted(rows[r], reverse=True))]
-    want = [b for b in MOVABLE_BUILDINGS]
+    if only is None:                                       # City map card > Find one building... (asked once, then the file goes)
+        try:
+            f = _map_dir(dev) / "map_only.json"
+            only = json.loads(f.read_text(encoding="utf-8"))
+            f.unlink()
+        except Exception:
+            only = None
+    want = [b for b in MOVABLE_BUILDINGS if not only or b in only]
     found, tried, seen_all, later = {}, set(), set(), {}
     for b in want:                                         # already mapped on this instance (an earlier run): kept, not searched again
         try:
@@ -12163,8 +12196,17 @@ def run_map_movable(dev, cfg, log, stop):
                 found[b] = mp
         except Exception:
             pass
+    kept = len(found)
     if found:
         log(f"[i]   already mapped here (kept): {', '.join(found)}")
+    if only and len(found) == len(want):
+        log(f"[i]   {', '.join(want)}: already mapped - nothing to look for")
+        return list(found)
+
+    def act_map(stop_no, checking=None):                   # live activity panel (structured: the page does not parse text)
+        log("@act " + json.dumps({"k": "map", "stop": stop_no, "stops": len(stops), "found": list(found)[kept:],
+                                  "checking": checking, "seen": sorted(b for b in seen_all if b in want and b not in found),
+                                  "missing": [b for b in want if b not in found], "kept": kept, "t0": round(t0)}))
     log(f"[*] Movable buildings: looking for {len(want)} on {len(stops)} stops (names shown while a finger is held)")
     t0 = time.time()
     for i, (sx, sy) in enumerate(stops):
@@ -12176,6 +12218,7 @@ def run_map_movable(dev, cfg, log, stop):
                 + (f", about {max(1, left)} min left" if left is not None else "")
                 + (f" - found {len(found)}: {', '.join(found)}" if found else " - none found yet"))
         log("@act " + json.dumps({"k": "step", "text": prog}))
+        act_map(i + 1)
         if i:
             log(f"[i]   {prog}")
         nav = CityNav(dev, stop, log)
@@ -12210,6 +12253,7 @@ def run_map_movable(dev, cfg, log, stop):
             if loc:
                 nav.cx, nav.cy = loc[0], loc[1]
             sx, sy = int(mx - nav.cx), int(my - 30 - nav.cy)
+            act_map(i + 1, nb)
             if not (70 <= sx <= 420 and 160 <= sy <= 800):
                 later.setdefault(nb, []).append((mx, my))  # near the screen edge / under the HUD: the second pass goes there
                 continue
@@ -12259,6 +12303,7 @@ def run_map_movable(dev, cfg, log, stop):
                 log(f"[+]   {nb}: mapped (second look)")
             leave_to_city(dev, cfg, stop, log)
     miss = [b for b in want if b not in found]
+    act_map(len(stops))
     log(f"[*] Movable buildings: {len(found)} of {len(want)} mapped in {round((time.time() - t0) / 60)} min"
         + (f" ({', '.join(found)})" if found else "") + (f"; not found: {', '.join(miss)}" if miss else ""))
     return list(found)
@@ -12534,7 +12579,7 @@ def run_map_city(dev, cfg, log, stop):
         if p.stem != "map" and not p.stem.endswith("_prev"):
             try:
                 m = json.loads(p.read_text(encoding="utf-8"))
-                if "map" in m:
+                if "map" in m and m.get("by") != "user":   # pins the user placed by hand (Fix pins) stay
                     m.pop("map", None)
                     p.write_text(json.dumps(m), encoding="utf-8")
             except Exception:

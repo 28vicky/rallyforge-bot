@@ -1897,71 +1897,190 @@ PAGES.duties = function (fixed) {
 
 // ====================================================================== Run a task now (C10): one component - instance Overview (this
 // instance) and Control > Dashboard (every instance). The bot does the picked task next, once, before everything else.
-// ---- City map card (instance Overview): is the city mapped, mapping progress, and the buildings the duties need -
-//      found (pinned on the map) / seen (picture only) / not yet - with a percentage. Buildings only, no small markers (owner 24 Oct).
+// ---- City map card (instance Overview, owner 27 Oct, approved mockup): movable buildings found by the bot / placed by
+//      the user / missing, the culture's fixed buildings (locked), and the everyday action "Find missing" (keeps
+//      everything). "Map my city" only while nothing is mapped; wiping is an explicit "Start over" in the ⋯ menu.
+const cap1 = (c) => c ? c.charAt(0).toUpperCase() + c.slice(1) : "";
+const MV_STATE = { found: ["Found by bot", "ok"], placed: ["Placed by you", "next"], missing: ["Missing", "todo"] };
 function cityMapCard(serial) {
   const root = h("div", { class: "panel citymap" });
-  let last = null;
+  let last = null, menuOpen = false;
   const nowText = () => (((S.now && S.now[serial]) || {}).text || "");
+  const refresh = (j) => { if (j && root.isConnected) { last = JSON.stringify(j) + "|" + nowText(); paint(j); } };
   const paint = (j) => {
     root.innerHTML = "";
-    const m = /Mapping (\d+) views/.exec(nowText());
-    const mapping = m ? parseInt(m[1], 10) : null;
-    const total = j.buildings.length, found = j.buildings.filter((b) => b.state === "found" || b.state === "pinned").length;
-    const pct = total ? Math.round(found * 100 / total) : 0;
-    const head = h("div", { class: "cardhead" },
+    const mv = j.movable || [], fx = j.fixed || [];
+    const nFound = mv.filter((b) => b.state === "found").length, nPlaced = mv.filter((b) => b.state === "placed").length;
+    const miss = mv.filter((b) => b.state === "missing"), mapped = nFound + nPlaced;
+    const anyMapped = mapped > 0 || j.built;
+    const mapping = /^Mapping/.test(nowText());
+    const findMissing = async () => { const r = await act(api("city_map_find", { serial })); if (r) { toast("The bot looks for the missing buildings next on this instance. Everything mapped stays.", "ok"); refresh(r); } };
+    const mapCity = async () => { if (await act(api("run_now_add", { serial, id: "duty:map_city" }))) toast("Map my city runs next on this instance.", "ok"); };
+    // ⋯ menu: Find one building… / Start over…
+    const menu = h("div", { class: "cmmenu", role: "menu", hidden: !menuOpen },
+      h("button", { type: "button", role: "menuitem", disabled: !miss.length || !anyMapped, onclick: () => { closeMenu(); findOneDialog(serial, miss, refresh); } }, "Find one building…"),
+      h("button", { type: "button", role: "menuitem", class: "bad", disabled: !anyMapped, onclick: () => { closeMenu(); startOverDialog(serial, refresh); } },
+        "Start over…", h("small", {}, "Clears what the bot found. Your pins are kept.")));
+    const moreBtn = h("button", { class: "btn iconbtn cmmore", type: "button", "aria-label": "More map options", "aria-haspopup": "menu", "aria-expanded": String(menuOpen),
+      onclick: (e) => { e.stopPropagation(); menuOpen = !menuOpen; menu.hidden = !menuOpen; moreBtn.setAttribute("aria-expanded", String(menuOpen)); } }, ico("more"));
+    const closeMenu = () => { menuOpen = false; menu.hidden = true; moreBtn.setAttribute("aria-expanded", "false"); };
+    const main = !anyMapped ? h("button", { class: "btn pri", type: "button", disabled: mapping, onclick: mapCity }, "Map my city")
+      : miss.length ? h("button", { class: "btn pri", type: "button", disabled: mapping, onclick: findMissing }, "Find missing (" + miss.length + ")")
+      : null;
+    root.appendChild(h("div", { class: "cardhead cmhead" },
       h("div", {}, h("h3", {}, "City map"), h("small", { class: "sub" },
-        mapping !== null ? "Mapping now" : j.culture ? "Culture: " + j.culture.charAt(0).toUpperCase() + j.culture.slice(1) + " (matched " + (j.at || "") + ")"
-          : j.built ? "Mapped " + (j.at || "") + " · " + j.views + " views" : "Not mapped yet")),
-      mapping !== null ? h("span", { class: "dbadge run" }, "Mapping · " + mapping + " views")
-        : j.culture && !found ? h("span", { class: "dbadge ok" }, "\u2713 Matched")
-        : j.built ? h("span", { class: "dbadge ok" }, found + " of " + total + " buildings · " + pct + "%")
-        : h("span", { class: "dbadge" }, "Run Map my city"));
-    root.appendChild(head);
-    if (mapping !== null) {                               // a city at the widest zoom is ~50 views: the bar is a guide, not a promise
-      const est = Math.min(96, Math.round(mapping * 100 / Math.max(50, mapping + 4)));
-      root.appendChild(h("div", { class: "cmbar" }, h("div", { class: "cmfill", style: { width: est + "%" } })));
-      root.appendChild(h("p", { class: "hint" }, "No culture map matched this city, so the bot walks over it once (about 20 minutes). Buildings are pinned as the tasks open them."));
+        mapping ? "Mapping now - see the live panel at the top" : j.culture ? cap1(j.culture) + " culture · fixed buildings from culture pins"
+          : j.built ? "Own map · " + j.views + " views" : "Not mapped yet")),
+      h("div", { class: "cmacts" },
+        anyMapped ? h("button", { class: "btn", type: "button", onclick: () => fixPinsDialog(serial, j, null, refresh) }, "Fix pins") : null,
+        main, anyMapped ? h("div", { class: "cmmorewrap" }, moreBtn, menu) : null)));
+    if (!anyMapped && !mapping) {                      // empty state: one clear action, nothing else
+      root.appendChild(h("div", { class: "cmempty" }, h("b", {}, "This city is not mapped yet"),
+        h("p", { class: "hint" }, "Map my city matches your city to its culture map (fixed buildings are known at once) and then looks for the buildings you move yourself, such as the Market and Barracks.")));
+      return;
     }
-    if (j.built && j.img) {
-      const img = h("img", { class: "cmimg", src: "/api/city_map_img?serial=" + encodeURIComponent(serial) + "&k=" + encodeURIComponent(window.KEY) + "&t=" + (j.at || ""), alt: "City map" });
-      const wrap = h("div", { class: "cmwrap" }, img);
-      if (j.size) for (const b of j.buildings) if (b.map) {
-        wrap.appendChild(h("span", { class: "cmpin", title: b.name, style: { left: (b.map[0] * 100 / j.size[0]) + "%", top: (b.map[1] * 100 / j.size[1]) + "%" } }));
-      }
-      root.appendChild(wrap);
+    // status: movable X of 13, legend, fixed N of N
+    const pct = mv.length ? Math.round(mapped * 100 / mv.length) : 0;
+    root.appendChild(h("section", { class: "cmstat", "aria-label": "Map status" },
+      h("div", { class: "cmstatt" }, h("b", {}, "Movable buildings"), h("span", {}, mapped + " of " + mv.length + " mapped")),
+      h("div", { class: "cmbar", role: "progressbar", "aria-valuenow": String(pct), "aria-valuemin": "0", "aria-valuemax": "100" }, h("div", { class: "cmfill", style: { width: pct + "%" } })),
+      h("div", { class: "cmlegend" },
+        h("span", {}, h("i", { class: "lg bot" }), "Found by bot " + nFound),
+        h("span", {}, h("i", { class: "lg user" }), "Placed by you " + nPlaced),
+        h("span", {}, h("i", { class: "lg miss" }), "Missing " + miss.length),
+        fx.length ? h("span", { class: "cmfixed" }, "Fixed buildings " + fx.length + " of " + fx.length + " ✓") : null)));
+    // map (read-only here: a click opens Fix pins) + list on the right
+    const body = h("div", { class: "cmbody" });
+    if (j.img && j.size) {
+      const wrap = h("button", { class: "cmwrap", type: "button", title: "Open Fix pins", "aria-label": "City map - open Fix pins", onclick: () => fixPinsDialog(serial, j, null, refresh) },
+        h("img", { class: "cmimg", src: "/api/city_map_img?serial=" + encodeURIComponent(serial) + "&k=" + encodeURIComponent(window.KEY) + "&t=" + (j.at || ""), alt: "" }));
+      const at = (p) => ({ left: (p[0] * 100 / j.size[0]) + "%", top: (p[1] * 100 / j.size[1]) + "%" });
+      for (const b of fx) if (b.pic) wrap.appendChild(h("span", { class: "cmdot fixed", title: b.name + " (fixed)", style: at(b.pic) }));
+      for (const b of mv) if (b.pic) wrap.appendChild(h("span", { class: "cmdot " + (b.state === "placed" ? "user" : "bot"), style: at(b.pic) }, h("em", {}, b.name)));
+      body.appendChild(h("div", { class: "cmmapcol" }, wrap, h("small", { class: "hint" }, "Grey dots = fixed (locked) · open Fix pins to move a coloured pin")));
     }
-    if (!total) root.appendChild(h("p", { class: "hint" }, "No duty needs a building yet."));
-    else {
-      const STATE = { found: ["Found", "ok"], pinned: ["Pinned", "ok"], seen: ["Seen", "next"], none: ["To pin", "todo"] };
-      root.appendChild(h("div", { class: "cmlist" }, j.buildings.map((b) => h("div", { class: "cmrow" + (b.on ? "" : " off"), title: "Needed by: " + b.duties.join(", ") + (b.on ? "" : " (switched off)") },
-        h("span", { class: "cmname" }, b.name), h("span", { class: "dbadge " + STATE[b.state][1] }, STATE[b.state][0])))));
-      if (j.culture && !j.buildings.some((b) => b.state === "pinned" || b.state === "found"))
-        root.appendChild(h("p", { class: "hint" }, "Your city matched the " + j.culture.charAt(0).toUpperCase() + j.culture.slice(1) + " map. Its buildings are not pinned yet, so each one is pinned the first time a task opens it."));
-      root.appendChild(h("p", { class: "hint" }, found === total && total ? "Every building the duties need is on the map." :
-        "Found = reached on this city. Pinned = known from the culture map, checked on the first visit. To pin = pinned the first time a task opens it."));
-    }
-    const run = async (again) => {
-      if (again && !(await confirmBox("Map again", "Map the city again? The bot first matches it to a culture map (a few seconds); only a city that matches none is walked (about 20 minutes). Found places are replaced."))) return;
-      if (await act(api("run_now_add", { serial, id: "duty:map_city" }))) toast("Map my city runs next on this instance.", "ok");
-    };
-    root.appendChild(h("div", { class: "row", style: { justifyContent: "flex-end", gap: "8px", marginTop: "10px" } },
-      S.dev ? btn("Pin buildings", () => pinBuildingsDialog(j.culture || "europe"), "sm") : null,
-      mapping !== null ? null : btn(j.built ? "Map again" : "Map my city", () => run(j.built), j.built ? "sm" : "pri")));
+    const order = { missing: 0, placed: 1, found: 2 };
+    body.appendChild(h("div", { class: "cmlist2" },
+      h("div", { class: "hint cmlisthint" }, miss.length ? "Tap a missing building to place it yourself" : "Every movable building is mapped"),
+      [...mv].sort((a, b) => order[a.state] - order[b.state] || a.name.localeCompare(b.name)).map((b) =>
+        h("button", { class: "cmrow2 " + b.state, type: "button", onclick: () => fixPinsDialog(serial, j, b.name, refresh) },
+          h("span", {}, b.name), h("span", { class: "cmst " + b.state }, b.state === "missing" ? "Missing · Place" : MV_STATE[b.state][0])))));
+    root.appendChild(body);
+    root.appendChild(h("p", { class: "hint" }, "When a task needs a missing building, the bot looks for that one by itself first."));
   };
-  const load = async () => {
-    const j = await api("city_map_info", { serial }).catch(() => null);
-    if (!j || !root.isConnected) return;
-    last = JSON.stringify(j) + "|" + nowText();
-    paint(j);
+  const outside = (e) => {                               // a click anywhere else closes the ⋯ menu
+    if (!root.isConnected) { document.removeEventListener("click", outside); return; }
+    if (menuOpen && !root.querySelector(".cmmorewrap")?.contains(e.target)) { menuOpen = false; const m = root.querySelector(".cmmenu"); if (m) m.hidden = true; }
   };
+  document.addEventListener("click", outside);
+  const load = async () => refresh(await api("city_map_info", { serial }).catch(() => null));
   load();
   const tick = setInterval(async () => {                 // refresh while mapping or when the map changed
     if (!root.isConnected) { clearInterval(tick); return; }
     const j = await api("city_map_info", { serial }).catch(() => null);
-    if (j && JSON.stringify(j) + "|" + nowText() !== last) { last = JSON.stringify(j) + "|" + nowText(); paint(j); }
+    if (j && JSON.stringify(j) + "|" + nowText() !== last && !root.querySelector(".cmmenu:not([hidden])")) refresh(j);
   }, 15000);
   return root;
+}
+function findOneDialog(serial, miss, done) {
+  let pick = miss[0] ? miss[0].name : null;
+  const body = h("div", { class: "cmpick" });
+  const draw = () => {
+    body.innerHTML = "";
+    body.appendChild(h("p", { class: "hint" }, "The bot looks only for this building and keeps everything else."));
+    body.appendChild(h("div", { class: "seg wrap", role: "radiogroup" }, miss.map((b) =>
+      h("button", { type: "button", role: "radio", "aria-checked": String(pick === b.name), class: "segb" + (pick === b.name ? " on" : ""), onclick: () => { pick = b.name; draw(); } }, b.name))));
+  };
+  draw();
+  modal({ title: "Find one building", body, buttons: [{ label: "Cancel" }, { label: "Find it", cls: "pri", onclick: async () => {
+    const r = await act(api("city_map_find", { serial, name: pick }));
+    if (!r) return false;
+    toast("The bot looks for the " + pick + " next on this instance.", "ok"); done(r);
+  } }] });
+}
+function startOverDialog(serial, done) {
+  const keep = h("input", { type: "checkbox", id: "cmKeep", checked: true });
+  const body = h("div", { style: { maxWidth: "440px" } },
+    h("p", {}, "The bot forgets the places it found and maps the city again (culture match, then the movable buildings). Pictures and settings are kept."),
+    h("label", { class: "chk", for: "cmKeep" }, keep, " Keep pins I placed"));
+  modal({ title: "Start over?", body, buttons: [{ label: "Cancel" }, { label: "Start over", cls: "bad", onclick: async () => {
+    const r = await act(api("city_map_reset", { serial, keep_user: keep.checked }));
+    if (!r) return false;
+    toast("Map my city runs next on this instance.", "ok"); done(r);
+  } }] });
+}
+// ---- Fix pins (direct manipulation): pick a building, tap the map = placed by you; drag a coloured pin to move it,
+//      × removes it (back to Missing). Fixed pins are locked; "Adjust" moves one for THIS instance only.
+function fixPinsDialog(serial, j0, pickName, done) {
+  const st = { j: j0, sel: pickName, adj: null, z: 1, px: 0, py: 0 };
+  const body = h("div", { class: "pinbox fixpins" });
+  const save = async (name, xy) => { const r = await act(api("city_pin_place", { serial, name, map: xy })); if (r) { st.j = r; done(r); draw(); } };
+  const adjust = async (name, xy) => { const r = await act(api("city_pin_adjust", { serial, name, map: xy })); if (r) { st.j = r; done(r); draw(); } };
+  const draw = () => {
+    body.innerHTML = "";
+    const j = st.j, mv = j.movable || [], fx = j.fixed || [], size = j.size;
+    body.appendChild(h("p", { class: "hint", "aria-live": "polite" }, st.sel ? "Tap the map where the " + st.sel + " is." : st.adj ? "Drag the " + st.adj + " pin to its place (this instance only)." :
+      "Pick a building on the left, then tap the map. Drag a coloured pin to move it. Scroll or +/- to zoom, drag the map to move it."));
+    const row = (b) => h("div", { class: "pinrow" + (st.sel === b.name ? " on" : ""), role: "button", tabindex: "0",
+      onclick: () => { st.sel = st.sel === b.name ? null : b.name; st.adj = null; draw(); }, onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
+      h("span", {}, b.name),
+      h("span", { class: "row", style: { gap: "6px" } },
+        st.sel === b.name ? h("span", { class: "cmst pick" }, "Tap the map to place") : h("span", { class: "cmst " + b.state }, MV_STATE[b.state][0]),
+        b.pic ? h("button", { class: "pinx", type: "button", title: "Remove pin (back to Missing)", "aria-label": "Remove " + b.name + " pin", onclick: (e) => { e.stopPropagation(); save(b.name, null); } }, "×") : null));
+    const fxrow = (b) => h("div", { class: "pinrow fixed" + (st.adj === b.name ? " on" : "") },
+      h("span", {}, ico("key", "lock"), b.name),
+      st.adj === b.name ? h("button", { class: "lnkb", type: "button", onclick: () => { st.adj = null; draw(); } }, "Done")
+        : h("span", { class: "row", style: { gap: "8px" } }, b.moved ? h("button", { class: "lnkb", type: "button", title: "Back to the culture pin", onclick: () => adjust(b.name, null) }, "Reset") : null,
+          h("button", { class: "lnkb", type: "button", onclick: () => { st.adj = b.name; st.sel = null; draw(); } }, "Adjust")));
+    const list = h("div", { class: "pinlist" }, h("div", { class: "pinsec" }, "Movable · " + mv.filter((b) => b.pic).length + " of " + mv.length),
+      mv.map(row), fx.length ? h("div", { class: "pinsec" }, "Fixed · locked") : null, fx.map(fxrow));
+    const img = h("img", { class: "pinimg", src: "/api/city_map_img?serial=" + encodeURIComponent(serial) + "&k=" + encodeURIComponent(window.KEY) + "&t=" + (j.at || ""), alt: "City map", draggable: false });
+    const stage = h("div", { class: "pinstage" }, img);
+    const wrap = h("div", { class: "pinwrap" + (st.sel ? " picking" : "") }, stage);
+    const view = () => { stage.style.transform = "translate(" + st.px + "px," + st.py + "px) scale(" + st.z + ")"; stage.style.setProperty("--iz", 1 / st.z); };
+    const clampPan = () => { const w = wrap.clientWidth, hh = wrap.clientHeight; st.px = Math.min(0, Math.max(w - w * st.z, st.px)); st.py = Math.min(0, Math.max(hh - hh * st.z, st.py)); };
+    const zoomAt = (f, cx, cy) => { const z = Math.max(1, Math.min(6, st.z * f)); if (z === st.z) return;
+      st.px = cx - (cx - st.px) * z / st.z; st.py = cy - (cy - st.py) * z / st.z; st.z = z; clampPan(); view(); };
+    wrap.addEventListener("wheel", (e) => { e.preventDefault(); const r = wrap.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.25 : 0.8, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+    const toMap = (e) => { const r = img.getBoundingClientRect();
+      return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * size[0], Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * size[1]]; };
+    img.onpointerdown = (e) => {                         // drag = move the map; a tap without moving = place the picked building
+      if (e.button !== 0) return;
+      e.preventDefault(); img.setPointerCapture(e.pointerId);
+      const sx = e.clientX, sy = e.clientY, ox = st.px, oy = st.py; let moved = false;
+      const move = (ev) => { if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return; moved = true; wrap.classList.add("panning");
+        st.px = ox + ev.clientX - sx; st.py = oy + ev.clientY - sy; clampPan(); view(); };
+      const up = (ev) => { img.removeEventListener("pointermove", move); img.removeEventListener("pointerup", up); wrap.classList.remove("panning");
+        if (moved || !st.sel || !size) return; const b = st.sel; st.sel = null; save(b, toMap(ev)); };
+      img.addEventListener("pointermove", move); img.addEventListener("pointerup", up);
+    };
+    const addDot = (b, cls, movable) => {
+      const dot = h("span", { class: "pindot " + cls, title: b.name, style: { left: (b.pic[0] * 100 / size[0]) + "%", top: (b.pic[1] * 100 / size[1]) + "%" } }, h("em", {}, b.name));
+      if (movable) dot.onpointerdown = (e) => {
+        e.preventDefault(); e.stopPropagation(); dot.setPointerCapture(e.pointerId);
+        let dragged = false;
+        const move = (ev) => { dragged = true; const m = toMap(ev); dot.style.left = (m[0] * 100 / size[0]) + "%"; dot.style.top = (m[1] * 100 / size[1]) + "%"; };
+        const up = (ev) => { dot.removeEventListener("pointermove", move); dot.removeEventListener("pointerup", up);
+          if (dragged) (cls.includes("fixed") ? adjust : save)(b.name, toMap(ev)); };
+        dot.addEventListener("pointermove", move); dot.addEventListener("pointerup", up);
+      };
+      dot.onclick = (e) => e.stopPropagation();
+      stage.appendChild(dot);
+    };
+    if (size) {
+      for (const b of fx) if (b.pic) addDot(b, "fixed" + (st.adj === b.name ? " adj" : ""), st.adj === b.name);
+      for (const b of mv) if (b.pic) addDot(b, b.state === "placed" ? "user" : "bot", true);
+    }
+    const zbar = h("div", { class: "pinzoom" },
+      h("button", { class: "btn small", type: "button", "aria-label": "Zoom in", onclick: () => zoomAt(1.5, wrap.clientWidth / 2, wrap.clientHeight / 2) }, "+"),
+      h("button", { class: "btn small", type: "button", "aria-label": "Zoom out", onclick: () => zoomAt(1 / 1.5, wrap.clientWidth / 2, wrap.clientHeight / 2) }, "−"),
+      h("button", { class: "btn small", type: "button", onclick: () => { st.z = 1; st.px = st.py = 0; view(); } }, "Fit"));
+    view();
+    body.appendChild(h("div", { class: "pingrid" }, list, h("div", { class: "pinmapcol" }, zbar, wrap)));
+    body.appendChild(h("p", { class: "hint" }, "Pins are saved at once. The bot never moves a pin you placed; fixed buildings come from the culture map and change only here, for this instance."));
+  };
+  modal({ title: "Fix pins", wide: true, body, buttons: [{ label: "Done", cls: "pri" }] });
+  draw();
 }
 
 // ---- Pin buildings (owner tool, 25 Oct; every city building offered since 25 Oct 12:45): click each building once on every culture map; pins ship to every user

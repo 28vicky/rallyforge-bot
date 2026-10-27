@@ -226,6 +226,7 @@ function layout() {
       h("div", { class: "top" }, sideBtn(), h("img", { src: "/assets/logo.png", alt: "" }),
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
         saveStEl(),
+        h("div", { class: "livebar", id: "liveBar", role: "group", "aria-label": "Live - what each instance is doing" }),
         h("button", { class: "btn sm newbtn", id: "newBtn", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "What\u2019s new"),
         h("span", { class: "sum", id: "sum" })),
       h("div", { class: "ribbon", id: "ribbon" }),
@@ -445,6 +446,7 @@ function renderSide() {
       h("button", { class: "lnkb bad", type: "button", onclick: async () => { if (await confirmStopAll()) { S.startingAt = 0; act(api("stop", { serial: "all" })); } } }, "Stop all"));
   }
   tickPauseTimers();
+  paintLive();
 }
 // one instance row: dot, full name, full status line (task / timer / joins), play-pause on the row
 function sideStatus(d) {
@@ -755,7 +757,7 @@ function logBox(serial, tall) {
   return el;
 }
 // ---- Activity screen: what the bot is doing, and how each rally went
-S.acts = []; S.now = {};
+S.acts = []; S.now = {}; S.steps = {}; S.mapAct = {}; S.mapFoundAt = {};
 const esc = (t) => String(t == null ? "" : t);
 // what an instance is doing right now (from its latest step), in a few words for the instance list; "" = nothing (idle)
 function busyTask(serial, long) {
@@ -879,7 +881,18 @@ function activityBox(serial, title) {
 }
 function pushActs(list) {
   for (const l of list || []) {
-    if (l.a.k === "step") { S.now[l.s] = { text: l.a.text, t: l.a.t, n: l.n }; continue; }
+    if (l.a.k === "step") {
+      S.now[l.s] = { text: l.a.text, t: l.a.t, n: l.n };
+      const st = (S.steps[l.s] = S.steps[l.s] || []);          // short step log for the live panel
+      if (!st.length || st[st.length - 1].text !== l.a.text) { st.push({ t: l.a.t, text: l.a.text }); if (st.length > 30) st.shift(); }
+      continue;
+    }
+    if (l.a.k === "map") {                                      // structured map progress (run_map_movable) for the live panel
+      const at = (S.mapFoundAt[l.s] = S.mapFoundAt[l.s] || {});
+      for (const b of l.a.found || []) if (!at[b]) at[b] = (l.a.t || "").slice(0, 5);
+      S.mapAct[l.s] = { ...l.a, seen_at: Date.now() };
+      continue;
+    }
     S.acts.push(l);
     for (const v of actViews) if (v.serial === null || v.serial === l.s) {
       placeActRow(v.body, actRow(v, l));
@@ -888,6 +901,7 @@ function pushActs(list) {
   }
   if (S.acts.length > 6000) S.acts.splice(0, S.acts.length - 6000);     // a whole game day of joins (the server keeps the day across restarts)
   for (const v of actViews) { v.now.textContent = actNow(v.serial); paintStats(v.stats, v.serial); }
+  paintLive();
 }
 function pushLogs(list) {
   for (const l of list) {
@@ -1277,3 +1291,92 @@ function undoLast() {
   window.addEventListener("resize", () => close(false));
   document.addEventListener("scroll", (e) => { if (open && !open.panel.contains(e.target)) close(false); }, true);
 })();
+
+// ---- Live activity (owner 27 Oct, approved mockup): one chip per active instance in the top bar - dot (green ok / amber
+//      busy / red needs help), name, current task in a few words. A click opens the slide-in panel with what the bot is
+//      doing this second, the run's progress and its steps, and Pause / Stop.
+function liveMap(serial) {                                       // the map run's progress while its step text says Mapping
+  const m = S.mapAct[serial], t = ((S.now && S.now[serial]) || {}).text || "";
+  return m && /^Mapping/.test(t) ? m : null;
+}
+function liveInfo(d) {
+  const m = liveMap(d.id), bad = d.state === "error" || (d.state === "run" && (d.kicked_at || d.no_stamina));
+  const [txt] = sideStatus(d);
+  const task = busyTask(d.id, true);
+  const text = m ? "Mapping " + m.stop + "/" + m.stops + " · " + ((m.kept || 0) + (m.found || []).length) + " found" : (task || txt);
+  return { tone: bad ? "bad" : d.state === "pause" ? "busy" : (m || (task && !/^(joining|Auto-Join)/.test(task))) ? "busy" : "ok", text: bad && !/help|problem/.test(txt) ? txt + " · needs help" : text };
+}
+function paintLive() {
+  const bar = $("#liveBar");
+  if (!bar) return;
+  const devs = (S.devStatus || []).filter((d) => d.state === "run" || d.state === "pause" || d.state === "error");
+  bar.innerHTML = "";
+  if (!devs.length) { paintLivePanel(); return; }
+  const rank = { bad: 0, busy: 1, ok: 2 };
+  const rows = devs.map((d) => ({ d, ...liveInfo(d) })).sort((a, b) => rank[a.tone] - rank[b.tone]);
+  const max = S.liveAll ? rows.length : 4;
+  bar.appendChild(h("span", { class: "livelab" }, "Live"));
+  for (const r of rows.slice(0, max)) {
+    const name = r.d.name || short(r.d.id);
+    bar.appendChild(h("button", { type: "button", class: "livechip" + (S.livePanel === r.d.id ? " on" : ""), title: name + " - " + r.text, "aria-pressed": String(S.livePanel === r.d.id),
+      onclick: () => openLivePanel(r.d.id) }, h("span", { class: "ldot " + r.tone, "aria-hidden": "true" }), h("b", {}, name), h("span", { class: "ltxt" }, r.text)));
+  }
+  if (rows.length > 4) bar.appendChild(h("button", { type: "button", class: "livechip more", onclick: () => { S.liveAll = !S.liveAll; paintLive(); } },
+    S.liveAll ? "Show less" : "+" + (rows.length - 4) + " more"));
+  paintLivePanel();
+}
+function openLivePanel(serial) {
+  S.livePanel = S.livePanel === serial ? null : serial;
+  paintLive();
+  const p = $("#livePanel .lpclose"); if (p) p.focus();
+}
+function paintLivePanel() {
+  let el = $("#livePanel");
+  const d = S.livePanel && (S.devStatus || []).find((x) => x.id === S.livePanel);
+  if (!d) { if (el) el.remove(); S.livePanel = null; return; }
+  if (!el) {
+    el = h("aside", { id: "livePanel", class: "livepanel", role: "complementary" });
+    el.addEventListener("keydown", (e) => { if (e.key === "Escape") { S.livePanel = null; paintLive(); } });
+    document.body.appendChild(el);
+  }
+  const name = d.name || short(d.id), now = ((S.now && S.now[d.id]) || {}), m = liveMap(d.id);
+  const t = now.text || "";
+  const title = m ? (m.kept ? "Finding missing buildings" : "Mapping movable buildings")
+    : (/^(?:Duty|City task): (.+)$/.exec(t) || [])[1] || busyTask(d.id, true) || sideStatus(d)[0];
+  el.setAttribute("aria-label", name + " activity");
+  el.innerHTML = "";
+  el.appendChild(h("div", { class: "lphead" },
+    h("div", {}, h("small", {}, name + " · now"), h("h3", {}, cap1(title))),
+    h("button", { type: "button", class: "btn iconbtn lpclose", "aria-label": "Close panel", onclick: () => { S.livePanel = null; paintLive(); } }, "✕")));
+  const card = h("div", { class: "lpcard" });
+  if (m) {
+    const el2 = Math.max(0, Date.now() / 1000 - (m.t0 || 0)), done = Math.max(0, (m.stop || 1) - 1);
+    const left = done ? Math.max(1, Math.round(el2 / done * ((m.stops || 0) - done) / 60)) : null;
+    const pct = m.stops ? Math.round(done * 100 / m.stops) : 0;
+    card.append(h("div", { class: "lprow" }, h("span", {}, "Stop " + m.stop + " of " + m.stops), h("span", { class: "mute" }, left ? "about " + left + " min left" : "")),
+      h("div", { class: "cmbar", role: "progressbar", "aria-valuenow": String(pct), "aria-valuemin": "0", "aria-valuemax": "100" }, h("div", { class: "cmfill", style: { width: pct + "%" } })));
+  }
+  card.appendChild(h("div", { class: "lpnow", "aria-live": "polite" }, t || "Waiting for the bot…"));
+  el.appendChild(card);
+  if (m) {
+    const at = S.mapFoundAt[d.id] || {}, seen = (m.seen || []).filter((b) => b !== m.checking);
+    const notSeen = (m.missing || []).filter((b) => b !== m.checking && !seen.includes(b));
+    const few = (a) => a.slice(0, 3).join(", ") + (a.length > 3 ? " +" + (a.length - 3) : "");
+    el.appendChild(h("h4", {}, "This run"));
+    el.appendChild(h("div", { class: "lplist" },
+      (m.found || []).map((b) => h("div", { class: "lprow" }, h("span", {}, b), h("span", { class: "good" }, "✓ found " + (at[b] || "")))),
+      m.checking ? h("div", { class: "lprow" }, h("span", {}, m.checking), h("span", { class: "acc" }, "name seen · checking")) : null,
+      seen.length ? h("div", { class: "lprow" }, h("span", {}, few(seen)), h("span", { class: "acc" }, "name seen")) : null,
+      notSeen.length ? h("div", { class: "lprow mute" }, h("span", {}, few(notSeen)), h("span", {}, "not seen yet")) : null,
+      m.kept ? h("div", { class: "lprow mute" }, h("span", {}, "Kept from before"), h("span", {}, m.kept + " ✓")) : null));
+  }
+  const steps = (S.steps[d.id] || []).slice(-6);
+  if (steps.length) {
+    el.appendChild(h("h4", {}, "Steps"));
+    el.appendChild(h("ol", { class: "lpsteps" }, steps.map((s, i) => h("li", { class: i === steps.length - 1 ? "cur" : "" }, (s.t || "").slice(0, 5) + " " + s.text))));
+  }
+  const paused = d.state === "pause";
+  el.appendChild(h("div", { class: "lpfoot" },
+    h("button", { type: "button", class: "btn", onclick: () => act(api("pause", { serial: d.id })) }, paused ? "Resume" : "Pause"),
+    h("button", { type: "button", class: "btn stopb", onclick: () => act(api("stop", { serial: d.id })) }, "Stop")));
+}

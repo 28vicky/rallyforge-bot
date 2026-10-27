@@ -2388,10 +2388,121 @@ class Api:
                 if cp:
                     state, place = "pinned", cp
             buildings.append({"name": name, "state": state, "map": place, "on": info["on"], "duties": info["duties"]})
+        # Owner 27 Oct (movable pins UI): every movable building's state - found by the bot / placed by the user / missing -
+        # and the culture's fixed pins (read-only, a per-instance Adjust overrides one). Places in map PICTURE pixels: the
+        # bot's places are in the navigation frame (picture + CITY_VIEW corner, see rb.culture_pin).
+        ox, oy = rb.CITY_VIEW[0], rb.CITY_VIEW[1]
+        movable = []
+        for name in rb.MOVABLE_BUILDINGS:
+            st, pic = "missing", None
+            try:
+                bm = json.loads(rb._learn_path(dev, name).with_suffix(".json").read_text(encoding="utf-8"))
+                if bm.get("map"):
+                    st = "placed" if bm.get("by") == "user" else "found"
+                    pic = [bm["map"][0] - ox, bm["map"][1] - oy]
+            except Exception:
+                pass
+            movable.append({"name": name, "state": st, "pic": pic})
+        over = rb.pins_override(dev)
+        fixed = [{"name": k, "pic": over.get(k, v), "moved": k in over} for k, v in cpins.items()]
         return {"built": built, "at": meta.get("at", ""), "views": len(meta.get("keyframes") or []), "size": meta.get("size"),
-                "buildings": buildings, "culture": cult["culture"] if cult else None,
+                "buildings": buildings, "culture": cult["culture"] if cult else None, "movable": movable, "fixed": fixed,
                 "img": bool(rb.culture_dir(cult["culture"]) and (rb.culture_dir(cult["culture"]) / "map.jpg").exists()) if cult
                 else bool((d / "map.png").exists())}
+
+    def _movable_name(self, p):
+        name = str(p.get("name") or "").strip()
+        if name not in rb.MOVABLE_BUILDINGS:
+            raise ApiError("That building can't be placed here.")
+        return name
+
+    def city_pin_place(self, p):
+        """Fix pins: the user places / moves (map = [x, y] in map picture pixels) or removes (map null) a movable
+        building's pin on this instance. Saved with "by": "user" so the bot never moves it; the picture is kept."""
+        serial = p["serial"]
+        dev = types.SimpleNamespace(serial=serial)
+        name = self._movable_name(p)
+        f = rb._learn_path(dev, name).with_suffix(".json")
+        try:
+            meta = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            meta = {}
+        xy = p.get("map")
+        if xy:
+            meta["map"] = [round(float(xy[0])) + rb.CITY_VIEW[0], round(float(xy[1])) + rb.CITY_VIEW[1]]
+            meta["by"] = "user"
+            meta["at"] = time.strftime("%Y-%m-%d %H:%M")
+        else:
+            meta.pop("map", None)
+            meta.pop("by", None)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(meta), encoding="utf-8")
+        return self.city_map_info({"serial": serial})
+
+    def city_pin_adjust(self, p):
+        """Fix pins > Adjust: move one FIXED building's pin for this instance only (map null = back to the culture pin).
+        The shipped culture pins never change."""
+        serial = p["serial"]
+        dev = types.SimpleNamespace(serial=serial)
+        name = str(p.get("name") or "").strip()
+        cult = rb.city_culture(dev)
+        if not cult or name not in rb.culture_pins(cult["culture"]):
+            raise ApiError("That is not a fixed building of this city.")
+        over = rb.pins_override(dev)
+        xy = p.get("map")
+        if xy:
+            over[name] = [round(float(xy[0])), round(float(xy[1]))]
+        else:
+            over.pop(name, None)
+        d = rb._map_dir(dev)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "pins_override.json").write_text(json.dumps(over, indent=1), encoding="utf-8")
+        return self.city_map_info({"serial": serial})
+
+    def city_map_find(self, p):
+        """Find missing (no name) or Find one building (name): keeps everything mapped, the bot looks only for what is
+        missing. Runs next on the instance."""
+        serial = p["serial"]
+        dev = types.SimpleNamespace(serial=serial)
+        d = rb._map_dir(dev)
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / "map_only.json"
+        if p.get("name"):
+            f.write_text(json.dumps([self._movable_name(p)]), encoding="utf-8")
+        elif f.exists():
+            f.unlink()
+        rb.run_now_set(serial, [t for t in rb.run_now_list(serial) if t != "duty:map_movable"] + ["duty:map_movable"])
+        return self.city_map_info({"serial": serial})
+
+    def city_map_reset(self, p):
+        """Start over: forget the places the bot found (and the user's pins unless keep_user), then Map my city runs next.
+        Pictures and settings are kept."""
+        serial = p["serial"]
+        dev = types.SimpleNamespace(serial=serial)
+        keep = p.get("keep_user", True)
+        d = rb._map_dir(dev)
+        for f in d.glob("*.json"):
+            if f.stem in ("map", "culture", "map_only", "pins_override") or f.stem.endswith("_prev"):
+                continue
+            try:
+                m = json.loads(f.read_text(encoding="utf-8"))
+                if isinstance(m, dict) and "map" in m and not (keep and m.get("by") == "user"):
+                    m.pop("map", None)
+                    m.pop("by", None)
+                    f.write_text(json.dumps(m), encoding="utf-8")
+            except Exception:
+                pass
+        try:
+            (d / "map_only.json").unlink()                 # a pending "Find one building" would narrow the fresh map
+        except Exception:
+            pass
+        if not keep:
+            try:
+                (d / "pins_override.json").unlink()
+            except Exception:
+                pass
+        rb.run_now_set(serial, [t for t in rb.run_now_list(serial) if t != "duty:map_city"] + ["duty:map_city"])
+        return self.city_map_info({"serial": serial})
 
     def dev_find(self, p):
         """Owner tool: run the bot's own building finder on a PAUSED instance and leave the building's ring menu open
