@@ -8896,6 +8896,9 @@ def run_step(dev, cfg, log, stop, step):
         zoom_out_full(dev, cfg, stop, log)
         run_map_movable(dev, cfg, log, stop)
         return
+    if cmd == "test_adb_zoom":
+        run_test_adb_zoom(dev, cfg, log, stop)
+        return
     if cmd == "test_pins":
         run_test_pins(dev, cfg, log, stop)
         return
@@ -12197,6 +12200,38 @@ def run_map_movable(dev, cfg, log, stop):
     return list(found)
 
 
+def run_test_adb_zoom(dev, cfg, log, stop):
+    """Developer test (owner 27 Oct): can the city be zoomed with ADB alone (no window message, no real mouse)? Tries a
+    few Android scroll / key ways, each OUT then back IN, and logs how much the view changed (scale < 1 = zoomed out)."""
+    leave_to_city(dev, cfg, stop, log)
+    cx, cy = int(270 * dev.sx), int(440 * dev.sy)
+    ways = [
+        ("mouse scroll", ["input", "mouse", "scroll", str(cx), str(cy), "--axis", "VSCROLL,-3"], ["input", "mouse", "scroll", str(cx), str(cy), "--axis", "VSCROLL,3"]),
+        ("scroll", ["input", "scroll", str(cx), str(cy), "--axis", "VSCROLL,-3"], ["input", "scroll", str(cx), str(cy), "--axis", "VSCROLL,3"]),
+        ("trackball roll", ["input", "trackball", "roll", "0", "3"], ["input", "trackball", "roll", "0", "-3"]),
+        ("ctrl+minus keys", ["input", "keycombination", "113", "69"], ["input", "keycombination", "113", "70"]),
+        ("zoom keys", ["input", "keyevent", "169"], ["input", "keyevent", "168"]),
+    ]
+    for name, out_cmd, in_cmd in ways:
+        if stop.is_set():
+            return
+        before = dev.screenshot()
+        r = dev._run("shell", *out_cmd)
+        err = (r.stderr or b"").decode("utf-8", "ignore").strip().splitlines()[-1:] if r.returncode else []
+        _nap(stop, 1.2, 1.5)
+        sc = _view_scale(before, dev.screenshot())
+        log(f"[i] ADB zoom test - {name}: view scale {sc if sc is None else round(sc, 3)}" + (f" (adb: {err[0]})" if err else ""))
+        if sc and sc < 0.97:
+            log(f"[+] ADB zoom test - {name} ZOOMED OUT")
+        b2 = dev.screenshot()
+        dev._run("shell", *in_cmd)                         # put the zoom back as it was
+        _nap(stop, 1.2, 1.5)
+        s2 = _view_scale(b2, dev.screenshot())
+        if s2 and abs(s2 - 1) > 0.03:
+            log(f"[i] ADB zoom test - {name} back: view scale {round(s2, 3)}")
+    log("[*] ADB zoom test done")
+
+
 def run_test_pins(dev, cfg, log, stop):
     """Developer test (owner 27 Oct): on an instance that uses its culture's map, go to EVERY fixed building by its culture
     pin and open its menu (the menu name is checked; nothing is pressed). Ends with a summary of what opened and what not,
@@ -14076,6 +14111,9 @@ DUTY_LIBRARY = [
     {"id": "map_movable", "group": "Common tasks", "title": "Test: map movable buildings", "every_min": 0, "verified": False,
      "note": "Walks the whole city with a finger held so the names show, finds the movable buildings (Market, Prison, Barracks...), opens each to check and saves its place. Map my city does this too.",
      "target": "self:", "steps": ["map_movable"]},
+    {"id": "test_adb_zoom", "group": "Common tasks", "title": "Test: zoom with ADB only", "every_min": 0, "verified": False,
+     "note": "Tries to zoom the city with Android commands only (no mouse, no window message) and logs which way works.",
+     "target": "self:", "steps": ["test_adb_zoom"]},
     {"id": "test_pins", "group": "Common tasks", "title": "Test: every culture pin", "every_min": 0, "verified": False,
      "note": "Goes to every fixed building by its culture pin and opens its menu (nothing is pressed), then says which did not open. Only on an instance that uses its culture's map.",
      "target": "self:", "steps": ["test_pins"]},

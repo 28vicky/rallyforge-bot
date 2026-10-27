@@ -1607,7 +1607,7 @@ const DUTY_UI = {
   activity_chests: ["Reward claims", "Activity chests", 0],
 };
 const DUTY_COMING = ["Construction", "Research", "Material composing", "General enhancing", "Patrol", "Relic exploration", "Resource gathering"];
-const DUTY_TEST = new Set(["map_movable", "test_pins", "reach_keep_tavern", "market_capture", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy", "test_learned_keep", "test_activity_go"]);   // developer builds only (C12)
+const DUTY_TEST = new Set(["test_adb_zoom", "map_movable", "test_pins", "reach_keep_tavern", "market_capture", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy", "test_learned_keep", "test_activity_go"]);   // developer builds only (C12)
 const ACT_MAX = 145;                                                     // the game's last Activity chest
 const DUTY_ORDER = (id) => { const i = Object.keys(DUTY_UI).indexOf(id); return i < 0 ? 999 : i; };   // the game's Activity order
 const dutyName = (id, t) => (DUTY_UI[id] ? DUTY_UI[id][1] : t);
