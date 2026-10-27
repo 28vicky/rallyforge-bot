@@ -10271,7 +10271,14 @@ def run_wheel(dev, cfg, log, stop):
         if not wheel_on_page(shot):
             raise RuntimeError(f"left the Wheel of Fortune page (after {done} spin(s))")   # failed = tried again later, not 'done'
         coins = wheel_coins(shot)
+        for _ in range(3):                                 # Skip 27 Oct 20:01: one bad read ended the run after 200 spins
+            if coins is not None or stop.is_set():
+                break
+            _nap(stop, 0.8, 1.1)
+            shot = dev.screenshot()
+            coins = wheel_coins(shot) if wheel_on_page(shot) and not wheel_reward_panel(shot) else None
         if coins is None:
+            rd_snap(shot, "wheel_coins_unread")
             raise RuntimeError(f"could not read the Wheel coins (after {done} spin(s))")
         left = (target - done) if target else None
         if left is not None and left <= 0:
@@ -11302,6 +11309,10 @@ def _activity_go(dev, cfg, log, stop, tile, probe=False, route=False):
 
 
 
+RING_OWN_ITEMS = {"tavern": ("recruit", "wheel", "fortune")}        # words only this building's ring menu carries
+RING_OWN_ITEMS_TEXT = {"tavern": ["Wheel of Fortune", "Wheel of"]}
+
+
 def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity route"):
     """The building is on screen (after Go: in the middle): tap it and check its ring menu carries the right name.
     A building reached this way is remembered by its picture (learn_building) for the days its tile is gone.
@@ -11330,7 +11341,10 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
             if not find_detail_icon(shot):
                 continue
         nm = (ring_building_name(shot) or ("",))[0].lower()
-        if want in nm or any(difflib.SequenceMatcher(None, want, w).ratio() >= 0.8 for w in re.findall(r"[a-z ]+", nm)):
+        own = RING_OWN_ITEMS.get(want)                     # Rob 27 Oct 19:57: the Tavern ring was open but its name read
+        by_item = own and (any(k in nm for k in own) or    # as a ring item ('recruit', 'great') -> rejected 7 times
+                           rd_seen(shot, RING_OWN_ITEMS_TEXT.get(want, []), region=(0, 100, 540, 760)))
+        if by_item or want in nm or any(difflib.SequenceMatcher(None, want, w).ratio() >= 0.8 for w in re.findall(r"[a-z ]+", nm)):
             log(f"[i]   {bname} reached by {how} ({x},{y})")
             learn_building(dev, before, bname, x, y)
             return True
