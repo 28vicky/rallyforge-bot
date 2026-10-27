@@ -9417,10 +9417,18 @@ def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
     toggled = 0
     unknown = 0
     quit_seen = False                                        # Back already opened 'exit the game?': we are on a main view - never Back again
+    blind_backs = 0                                          # Backs in a row that did not change the screen
+    last_back_shot = None
     for i in range(tries):
         if stop.is_set():
             return False
         shot = dev.screenshot()
+        if last_back_shot is not None:                       # K 27 Oct 19:53: 10+ Backs on the emulator home screen
+            blind_backs = blind_backs + 1 if _same_screen(shot, last_back_shot) else 0
+            last_back_shot = None
+            if blind_backs >= 4:
+                say("[!] Recovery: Back changed nothing 4 times - stopped pressing Back (a game restart is next)")
+                return False
         if cancel_quit_dialog(dev, shot, lambda *_: None):
             say("[*] Recovery: the game asked to exit - tapped Cancel")
             quit_seen = True
@@ -9487,9 +9495,39 @@ def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             say("[!] Recovery: on a main view the bot does not recognise - not pressing Back (it only asks to quit)")
             return False
         else:
+            if _game_not_in_front(dev, cfg, say):           # emulator home / Evony closed: Back would do nothing - start the game
+                return False
             dev.back()
+            last_back_shot = shot
             say("[*] Recovery: unexpected window - pressed Back")
         _nap(stop, 0.8, 1.2)
+    return False
+
+
+def _same_screen(a, b, limit=4.0):
+    """True when two screenshots look the same (mean grey difference on a small copy)."""
+    try:
+        ga = cv2.resize(cv2.cvtColor(a, cv2.COLOR_BGR2GRAY), (90, 160))
+        gb = cv2.resize(cv2.cvtColor(b, cv2.COLOR_BGR2GRAY), (90, 160))
+        return float(cv2.absdiff(ga, gb).mean()) < limit
+    except Exception:
+        return False
+
+
+def _game_not_in_front(dev, cfg, say):
+    """Evony is not the app on the screen (closed, crashed, emulator home): start it, never press Back there.
+    -> True when the game was not in front (the caller stops; the game-load wait / restart rule take over)."""
+    adb, serial = getattr(dev, "adb", None), getattr(dev, "serial", None)
+    if not adb or not serial:
+        return False
+    try:
+        pkg = evony_package(adb, serial, cfg)
+        if app_foreground(adb, serial, pkg) is False:
+            say("[!] Recovery: Evony is not on the screen (closed or the emulator home) - starting the game, no Back")
+            start_app(adb, serial, pkg)
+            return True
+    except Exception as _e:
+        quiet_err("game_not_in_front", _e)
     return False
 
 
@@ -10194,10 +10232,19 @@ def run_wheel(dev, cfg, log, stop):
     shot = dev.screenshot()
     if not wheel_on_page(shot):
         p = find_text(shot, ["Wheel of Fortune", "Wheel of", "Fortune"], region=(0, 250, 300, 300), cutoff=0.7)
-        dev.tap(p[0], p[1] - 40) if p else dev.tap(*WHEEL_ICON)
+        tap_at = (p[0], p[1] - 40) if p else WHEEL_ICON
+        dev.tap(*tap_at)
         _nap(stop, 2.2, 2.8)
         shot = dev.screenshot()
         if not wheel_on_page(shot):
+            try:                                           # K 27 Oct 19:53: the ring's Wheel item opened a page the bot did not know
+                d = USER / "debug"
+                d.mkdir(exist_ok=True)
+                cv2.imwrite(str(d / "wheel_after_ring_tap.png"), shot)
+            except Exception as _e:
+                quiet_err("wheel_after_ring_tap", _e)
+            log(f"[!]  Wheel: tapped the ring's Wheel item at {tap_at} ({'by its name' if p else 'fixed spot'}) - "
+                "the Wheel page did not show (picture: debug/wheel_after_ring_tap.png)")
             raise RuntimeError("the Wheel of Fortune page did not open")
     if conf.get("chips", "off") != "off":
         c0 = wheel_coins(shot)
