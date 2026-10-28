@@ -13136,53 +13136,70 @@ def run_map_movable(dev, cfg, log, stop, only=None):
             _city_seen(dev, rest, loc)                     # pasted into the picture here (fix A)
         return nav, rest
 
-    # The sweep: EVERY stop (the picture needs the whole city). Pictures at every stop; the finger hold only while a
-    # missing building has no saved picture at all.
+    # Owner 28 Oct 13:17 (said many times): PICTURES ONLY in the sweep - at every stop the saved pictures are matched and
+    # each building's best match is pinned at once (shown live). No taps, no name reading. After the sweep the bot goes
+    # to each pin, opens the building and checks its name. Missing ones -> Find missing / Fix pins.
+    best = {}                                              # building -> (score, map x, map y) of its best match so far
     for i in range(len(stops)):
         if stop.is_set():
             break
         progress(i + 1)
         nav, rest = visit(i)
-        if nav is None:
+        if nav is None or not pics:
             continue
-        if not missing():
-            continue                                       # everything pinned: the rest of the sweep is the picture only
-        labels = pictures_at(i, nav, rest)
-        blind = [b for b in missing() if b not in pics]
-        if names_ok and blind:
-            names_at(i, nav, labels)
-        else:
-            if labels:
-                tap_labels(i, nav, labels)
-            skipped.append(i)
-    # Pass 2: still missing buildings that HAVE a picture but did not match (another level / skin): names on the stops
-    # skipped above.
-    if missing() and names_ok and skipped and not stop.is_set():
-        log(f"[*]   still missing {', '.join(missing())} - reading names on {len(skipped)} stop(s)")
-        for i in reversed(skipped):
-            if stop.is_set() or not missing() or not names_ok:
-                break
-            progress(i + 1)
-            nav, _rest = visit(i)
-            if nav is not None:
-                names_at(i, nav, [])
-    # Last look: buildings still missing, straight to where their name / picture was seen (centred this time).
-    for nb in [b for b in want if b not in found and later.get(b)]:
-        for mx, my in later[nb][:2]:
-            if stop.is_set() or nb in found:
-                break
-            duty_progress()
-            log(f"[*]   second look: {nb} (seen at map {mx},{my})")
+        for n, px, py, sc in match_building_pictures(rest, pics):
+            if n not in want or sc < PIN_FIRST_SCORE or (n in best and sc <= best[n][0]):
+                continue
+            mx, my = round(nav.cx + px), round(nav.cy + py)
+            if n in found and _pin_of(dev, n) and json.loads(_learn_path(dev, n).with_suffix(".json").read_text(encoding="utf-8")).get("by") != "picture":
+                continue                                   # a pin set another way (hand / checked) is never moved
+            try:                                           # a better match of the same building: its picture pin follows it
+                js = _learn_path(dev, n).with_suffix(".json")
+                meta = json.loads(js.read_text(encoding="utf-8")) if js.exists() else {"dx": 0, "dy": 0}
+                if meta.get("by") == "picture":
+                    meta.pop("map", None)
+                    js.write_text(json.dumps(meta), encoding="utf-8")
+            except Exception as _e:
+                quiet_err("picture_pin_move", _e)
+            if pin_from_picture(dev, n, mx, my, sc):
+                best[n] = (sc, mx, my)
+                was = n in found
+                found[n] = [mx, my]
+                last[0] = n
+                log(f"[+]   stop {i + 1}: {n} {'pin moved to a better' if was else 'pinned from its'} picture match ({sc:.2f})"
+                    f" - {base + len(found)} / {base + len(want)}")
+                progress(i + 1)
+    # Check: go to each picture pin, open the building, read its name. Confirmed -> an ordinary checked pin; not
+    # confirmed -> the pin stays (the owner tells which are wrong) and is listed.
+    unconfirmed = []
+    for k, nb in enumerate([b for b in want if b in found]):
+        if stop.is_set():
+            break
+        duty_progress()
+        log("@act " + json.dumps({"k": "step", "text": f"Checking the pins: {k + 1} of {len(found)} - {nb}"}))
+        try:
+            ok = find_on_map(dev, cfg, log, stop, nb, None, {"map": found[nb], "dx": 0, "dy": 0}, _learn_path(dev, nb))
+        except InstanceStopped:
+            raise
+        except Exception as e:
+            log(f"[i]   {nb}: {e}")
+            ok = None
+        if ok:
             try:
-                ok = find_on_map(dev, cfg, log, stop, nb, None, {"map": [mx, my - 30], "dx": 0, "dy": 0}, _learn_path(dev, nb))
-            except InstanceStopped:
-                raise
-            except Exception as e:
-                log(f"[i]   {nb}: {e}")
-                ok = None
-            if ok:
-                pinned(nb, [mx, my - 30])
-            leave_to_city(dev, cfg, stop, log)
+                js = _learn_path(dev, nb).with_suffix(".json")
+                m2 = json.loads(js.read_text(encoding="utf-8"))
+                m2["by"] = "bot"
+                m2["named"] = time.strftime("%Y-%m-%d %H:%M")
+                js.write_text(json.dumps(m2), encoding="utf-8")
+            except Exception as _e:
+                quiet_err("pin_confirm", _e)
+            log(f"[+]   {nb}: name confirmed at its pin")
+        else:
+            unconfirmed.append(nb)
+            log(f"[i]   {nb}: name not confirmed at its pin - the pin stays (tell me if it is wrong)")
+        leave_to_city(dev, cfg, stop, log)
+    if unconfirmed:
+        log(f"[i]   pins not confirmed by name: {', '.join(unconfirmed)}")
     # Fix A (owner 28 Oct): the picture's dark parts (failed stops, gaps) - drive there for a photo only (no taps), at most
     # 6 extra moves, each place once.
     if photo is not None and not stop.is_set():
