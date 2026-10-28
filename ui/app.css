@@ -1783,3 +1783,30 @@ select.pick-open{border-color:var(--accent1)}
 .livepanel .lpfoot .btn{flex:1;min-height:44px}
 .livepanel .lpfoot .stopb{color:var(--bad);border-color:var(--bad)}
 
+
+/* Monster rallies (owner 28 Oct): fits the window, each column scrolls on its own; preset boxes hold ordered rows */
+.mr{display:flex;flex-direction:column;min-height:0}
+.mr .mrhead{flex:none}
+.mrgrid{flex:1;min-height:0;grid-template-columns:minmax(220px,.9fr) minmax(0,1.3fr) minmax(280px,1fr);align-items:stretch}
+.mrcol{min-height:0}
+.mrcard{display:flex;flex-direction:column;min-height:0;margin:0!important}
+.mrcol>.mrcard{flex:1}
+.mrcol>.panel:not(.mrcard){flex:none}
+.mrscroll{flex:1;min-height:0;overflow-y:auto;margin-right:-6px;padding-right:6px}
+.mrpool{max-height:none;overflow:visible;align-content:flex-start}
+.mrlanes{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));align-content:start}
+.mrlane{min-height:0}
+.mrlane.empty{padding:8px 10px}
+.mrlempty{font-size:12px;color:var(--mute)}
+.mrrows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.mrrow{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:4px 4px 4px 2px;border-radius:8px;background:color-mix(in srgb,var(--accent1) 10%,transparent);border:1px solid color-mix(in srgb,var(--accent1) 28%,transparent)}
+.mrrow.dragging{opacity:.4}
+.mrrow .mrcl{flex:1;min-width:0;padding:2px 0;justify-content:flex-start}
+.mrgrip{cursor:grab;color:var(--mute);font-size:15px;line-height:1;padding:2px 2px 2px 4px;user-select:none}
+.mrgrip:active{cursor:grabbing}
+.mrnum{flex:none;min-width:20px;height:20px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--accent1);color:#fff}
+.mrrow .mrx{width:24px;height:24px;min-height:0;padding:0;border:0;border-radius:6px;background:transparent;box-shadow:none;color:var(--mute);font-size:15px;line-height:1;cursor:pointer}
+.mrrow .mrx:hover{color:var(--bad);background:rgba(127,127,127,.12)}
+.mrrow .mrlvl{order:5;width:100%;padding:2px 6px 4px 30px}
+.mrfields{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:1150px){.mrgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.mrgrid>.mrcol{grid-column:1/-1}}

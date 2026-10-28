@@ -2196,7 +2196,7 @@ function runNowCard(serial) {
 
 
 // ====================================================================== monster rallies (instance tab): start Alliance War rallies on Telegram coordinates
-// The game has 8 fixed presets and many monsters, so the page is built around the presets: one lane per preset (I-VIII)
+// The game has 8 fixed presets and many monsters, so the page is built around the presets: one box per preset (Preset 1-8)
 // with its rally time, holding the monsters that preset attacks. Monsters come from the library on the right: drag one
 // onto a lane, or pick a lane and click the monster. A monster can sit in two lanes with different levels (Ymir 1-4 -> II, 5-6 -> III).
 // Below: the rules (waiting, free marches, stamina) and the coordinates Telegram has right now, with what the bot would do.
@@ -2222,12 +2222,26 @@ function monsterRallyTab(serial) {
     if (redraw) draw(); else paintHead();
   };
   const laneTime = (p) => String((rules.find((r) => r.preset === p) || {}).time || "5");
-  const add = (name, p, lv) => {
+  // saved settings keep the old preset keys (I-VIII); the page only ever shows the game's numbers (owner 28 Oct: no Roman numbers)
+  const pName = (p) => "Preset " + (MR_PRESETS.indexOf(p) + 1);
+  const pTag = (p) => "P" + (MR_PRESETS.indexOf(p) + 1);
+  const add = (name, p, lv, before = -1) => {
     p = p || lane;
     if (isBoss(name)) { toast(name + " is a world boss - nobody can join it, so it cannot be rallied here.", "error"); return; }
     const mn = lv || 1, mx = lv || 99;
-    if (rules.some((r) => r.preset === p && r.name.toLowerCase() === name.toLowerCase() && (r.min || 1) === mn && (r.max || 99) === mx)) { toast(name + (lv ? " Lv" + lv : "") + " is already on preset " + p + ".", "ok"); return; }
-    rules.push({ name, min: mn, max: mx, preset: p, time: laneTime(p), on: true });
+    if (rules.some((r) => r.preset === p && r.name.toLowerCase() === name.toLowerCase() && (r.min || 1) === mn && (r.max || 99) === mx)) { toast(name + (lv ? " Lv" + lv : "") + " is already on " + pName(p) + ".", "ok"); return; }
+    const r = { name, min: mn, max: mx, preset: p, time: laneTime(p), on: true };
+    if (before >= 0) rules.splice(before, 0, r); else rules.push(r);
+    changed();
+  };
+  // move rule i into preset p, just above rule `before` (-1 = last in that box)
+  const place = (i, p, before) => {
+    if (i === before) return;
+    const r = rules[i];
+    if (r.preset !== p) { r.preset = p; r.time = laneTime(p); }
+    rules.splice(i, 1);
+    if (before >= 0) rules.splice(before > i ? before - 1 : before, 0, r); else rules.push(r);
+    editing = -1;
     changed();
   };
   // Owner 25 Oct: every level is its own choice (Pumpkin Lv1 ... Lv8). Levels from the monster catalogue + levels Telegram sent.
@@ -2238,7 +2252,6 @@ function monsterRallyTab(serial) {
     for (const c of coords.items || []) if (c.level && String(c.name || "").toLowerCase() === low) lv.add(+c.level);
     return [...lv].sort((a, b) => a - b);
   };
-  const move = (i, p) => { if (rules[i].preset === p) return; rules[i].preset = p; rules[i].time = laneTime(p); changed(); };
   // world bosses nobody can join (rally_bot NEVER_JOIN) are left out of this page altogether (owner 23 Oct 08:24)
   const isBoss = (n) => (S.neverJoin || []).includes(String(n || "").toLowerCase().trim());
   const lvTxt = (r) => (r.min || 1) <= 1 && (r.max || 99) >= 99 ? "all levels" : (r.min === r.max ? "Lv" + r.min : "Lv" + (r.min || 1) + "–" + (r.max || 99));
@@ -2254,36 +2267,43 @@ function monsterRallyTab(serial) {
       duty.on ? dutyBadge(duty.status, duty.status_text) : h("span", { class: "mute" }, "Off"),
       h("a", { href: "#", class: "lnk", onclick: toRoutines }, duty.on ? "Switch in Routines \u2192" : "Switch it on in Routines \u2192"));
   };
-  // ---- preset lanes
+  // ---- preset boxes: one per game preset (Preset 1-8). Rows inside a box are in priority order - top first (owner 28 Oct).
+  // Drag a row by its handle up/down to change priority, or onto another box to move it there.
   const lanes = h("div", { class: "mrlanes" });
   const dropOn = (el, p) => {
     el.addEventListener("dragover", (e) => { if (!drag) return; e.preventDefault(); el.classList.add("over"); });
-    el.addEventListener("dragleave", () => el.classList.remove("over"));
+    el.addEventListener("dragleave", (e) => { if (!el.contains(e.relatedTarget)) el.classList.remove("over"); });
     el.addEventListener("drop", (e) => { e.preventDefault(); el.classList.remove("over"); if (!drag) return;
-      if (drag.i !== undefined) move(drag.i, p); else add(drag.name, p, drag.lv); drag = null; });
+      const row = e.target.closest(".mrrow");
+      const before = row && row.dataset.i !== undefined ? +row.dataset.i : -1;
+      if (drag.i !== undefined) place(drag.i, p, before); else add(drag.name, p, drag.lv, before);
+      drag = null; });
   };
   const paintLanes = () => {
     lanes.innerHTML = "";
     for (const p of MR_PRESETS) {
       const mine = rules.map((r, i) => [r, i]).filter(([r]) => r.preset === p);
-      const box = h("div", { class: "mrlane" + (p === lane ? " sel" : "") + (mine.length ? "" : " empty"), onclick: (e) => { if (e.target.closest("button,input,select,.mrchip")) return; lane = p; paintLanes(); paintPool(); } },
-        h("div", { class: "mrlhead" }, h("b", {}, "Preset " + p),
-          mine.length ? h("button", { class: "btn sm mrtime", type: "button", "aria-label": "Rally time for preset " + p, title: "Rally time for preset " + p,
-            onclick: (e) => menu(e.currentTarget, MR_TIMES.map((v) => ({ label: v + " min" + (String(v) === laneTime(p) ? "  \u2713" : ""),
-              run: () => { mine.forEach(([r]) => (r.time = String(v))); saveRules(); paintLanes(); paintCoords(); } }))) }, laneTime(p) + " min \u25BE") : null),
-        h("div", { class: "mrchips" },
-          mine.length ? mine.map(([r, i]) => {
-            const chip = h("span", { class: "mrchip" + (editing === i ? " edit" : ""), draggable: "true", title: "Drag to another preset \u00b7 click to set levels" },
-              h("button", { class: "mrcl", onclick: () => { editing = editing === i ? -1 : i; paintLanes(); } }, r.name, h("small", {}, lvTxt(r))),
-              editing === i ? h("span", { class: "mrlvl" }, "Lv",
-                h("input", { type: "number", min: 1, max: 99, value: r.min || 1, "aria-label": r.name + " lowest level", onchange: (e) => { r.min = Math.max(1, Math.min(99, +e.target.value || 1)); if (r.min > (r.max || 99)) r.max = r.min; saveRules(); paintCoords(); } }), "–",
-                h("input", { type: "number", min: 1, max: 99, value: r.max || 99, "aria-label": r.name + " highest level", onchange: (e) => { r.max = Math.max(1, Math.min(99, +e.target.value || 99)); if (r.max < (r.min || 1)) r.min = r.max; saveRules(); paintCoords(); } }),
-                h("button", { class: "mrok", onclick: () => { editing = -1; paintLanes(); } }, "Done")) : null,
-              h("button", { class: "mrx", "aria-label": "Remove " + r.name + " from preset " + p, title: "Remove", onclick: () => { rules.splice(i, 1); editing = -1; changed(); } }, "×"));
-            chip.addEventListener("dragstart", (e) => { drag = { i }; try { e.dataTransfer.setData("text/plain", r.name); } catch (x) {} });
-            chip.addEventListener("dragend", () => { drag = null; });
-            return chip;
-          }) : h("span", { class: "mrdrop" }, "Click or drag monsters here")));
+      const box = h("div", { class: "mrlane" + (p === lane ? " sel" : "") + (mine.length ? "" : " empty"), onclick: (e) => { if (e.target.closest("button,input,select,.mrrow")) return; lane = p; paintLanes(); paintPool(); } },
+        h("div", { class: "mrlhead" }, h("b", {}, pName(p)),
+          mine.length ? h("button", { class: "btn sm mrtime", type: "button", "aria-label": "Rally time for " + pName(p), title: "Rally time for " + pName(p),
+            onclick: (e) => menu(e.currentTarget, MR_TIMES.map((v) => ({ label: v + " min" + (String(v) === laneTime(p) ? "  ✓" : ""),
+              run: () => { mine.forEach(([r]) => (r.time = String(v))); saveRules(); paintLanes(); paintCoords(); } }))) }, laneTime(p) + " min ▾")
+            : h("span", { class: "mrlempty" }, p === lane ? "Click a monster to add" : "Empty")),
+        mine.length ? h("ol", { class: "mrrows" }, mine.map(([r, i], n) => {
+          const row = h("li", { class: "mrrow" + (editing === i ? " edit" : ""), "data-i": i },
+            h("span", { class: "mrgrip", draggable: "true", title: "Drag to change priority or move to another preset", "aria-hidden": "true" }, "⠿"),
+            h("span", { class: "mrnum" }, n + 1),
+            h("button", { class: "mrcl", title: "Set levels", onclick: () => { editing = editing === i ? -1 : i; paintLanes(); } }, r.name, h("small", {}, lvTxt(r))),
+            h("button", { class: "mrx", "aria-label": "Remove " + r.name + " from " + pName(p), title: "Remove", onclick: () => { rules.splice(i, 1); editing = -1; changed(); } }, "×"),
+            editing === i ? h("span", { class: "mrlvl" }, "Levels",
+              h("input", { type: "number", min: 1, max: 99, value: r.min || 1, "aria-label": r.name + " lowest level", onchange: (e) => { r.min = Math.max(1, Math.min(99, +e.target.value || 1)); if (r.min > (r.max || 99)) r.max = r.min; saveRules(); paintCoords(); } }), "to",
+              h("input", { type: "number", min: 1, max: 99, value: r.max || 99, "aria-label": r.name + " highest level", onchange: (e) => { r.max = Math.max(1, Math.min(99, +e.target.value || 99)); if (r.max < (r.min || 1)) r.min = r.max; saveRules(); paintCoords(); } }),
+              h("button", { class: "mrok", onclick: () => { editing = -1; paintLanes(); } }, "Done")) : null);
+          const grip = row.querySelector(".mrgrip");
+          grip.addEventListener("dragstart", (e) => { drag = { i }; row.classList.add("dragging"); try { e.dataTransfer.setData("text/plain", r.name); e.dataTransfer.setDragImage(row, 12, 12); } catch (x) {} });
+          grip.addEventListener("dragend", () => { drag = null; row.classList.remove("dragging"); });
+          return row;
+        })) : null);
       dropOn(box, p);
       lanes.appendChild(box);
     }
@@ -2299,8 +2319,7 @@ function monsterRallyTab(serial) {
     const inp = h("input", { type: "text", class: "mrsearch", placeholder: "Search monsters", "aria-label": "Search monsters", value: q,
       oninput: (e) => { q = e.target.value; clr.hidden = !q; paintChips(); },
       onkeydown: (e) => { if (e.key === "Escape" && q) { e.preventDefault(); clr.click(); } } });
-    poolHead.append(h("div", { class: "mrsbox" }, inp, clr),
-      h("small", { class: "hint" }, "Click adds to ", h("b", {}, "Preset " + lane), " · or drag onto any preset"));
+    poolHead.append(h("div", { class: "mrsbox" }, inp, clr), h("small", { class: "hint" }, "Adding to ", h("b", {}, pName(lane))));
     paintChips();
   };
   const paintChips = () => {
@@ -2309,8 +2328,8 @@ function monsterRallyTab(serial) {
       const lvs = levelsOf(pickMon);
       const lvChip = (lv) => {
         const on = rules.filter((r) => r.name.toLowerCase() === pickMon.toLowerCase() && (lv ? r.min === lv && r.max === lv : (r.min || 1) <= 1 && (r.max || 99) >= 99)).map((r) => r.preset);
-        const b = h("button", { class: "mrpchip" + (on.length ? " used" : ""), draggable: "true", title: on.length ? "On preset " + on.join(", ") : "Add to Preset " + lane, onclick: () => add(pickMon, lane, lv) },
-          lv ? "Lv" + lv : "All levels", on.length ? h("span", { class: "mrtag" }, on.join(" ")) : null);
+        const b = h("button", { class: "mrpchip" + (on.length ? " used" : ""), draggable: "true", title: on.length ? "On " + on.map(pName).join(", ") : "Add to " + pName(lane), onclick: () => add(pickMon, lane, lv) },
+          lv ? "Lv" + lv : "All levels", on.length ? h("span", { class: "mrtag" }, on.map(pTag).join(" ")) : null);
         b.addEventListener("dragstart", (e) => { drag = { name: pickMon, lv }; try { e.dataTransfer.setData("text/plain", pickMon); } catch (x) {} });
         b.addEventListener("dragend", () => { drag = null; });
         return b;
@@ -2319,14 +2338,14 @@ function monsterRallyTab(serial) {
         h("button", { class: "mrx", "aria-label": "Close the levels", title: "Close", onclick: () => { pickMon = ""; paintChips(); } }, "\u00d7")));
     }
     const list = names().filter((n) => !q || n.toLowerCase().includes(q.toLowerCase()));
-    if (!list.length) { pool.appendChild(h("div", { class: "mrempty" }, h("b", {}, q ? "No monster matches" : "No monsters known yet"), q ? h("button", { class: "btn sm", onclick: () => add(q.trim()) }, "Add “" + q.trim() + "” to Preset " + lane) : null)); return; }
+    if (!list.length) { pool.appendChild(h("div", { class: "mrempty" }, h("b", {}, q ? "No monster matches" : "No monsters known yet"), q ? h("button", { class: "btn sm", onclick: () => add(q.trim()) }, "Add “" + q.trim() + "” to " + pName(lane)) : null)); return; }
     for (const n of list) {
       const on = rules.filter((r) => r.name.toLowerCase() === n.toLowerCase()).map((r) => r.preset);
       const many = levelsOf(n).length > 1;
       const chip = h("button", { class: "mrpchip" + (on.length ? " used" : "") + (pickMon === n ? " open" : ""), draggable: "true",
-        title: many ? "Pick its levels" : on.length ? "On preset " + on.join(", ") + " \u00b7 click to add to Preset " + lane : "Add to Preset " + lane,
+        title: many ? "Pick its levels" : on.length ? "On " + on.map(pName).join(", ") + " \u00b7 click to add to " + pName(lane) : "Add to " + pName(lane),
         onclick: () => { if (many) { pickMon = pickMon === n ? "" : n; paintChips(); } else add(n); } },
-        n, on.length ? h("span", { class: "mrtag" }, on.join(" ")) : null);
+        n, on.length ? h("span", { class: "mrtag" }, on.map(pTag).join(" ")) : null);
       chip.addEventListener("dragstart", (e) => { drag = { name: n }; try { e.dataTransfer.setData("text/plain", n); } catch (x) {} });
       chip.addEventListener("dragend", () => { drag = null; });
       pool.appendChild(chip);
@@ -2350,12 +2369,14 @@ function monsterRallyTab(serial) {
       h("div", { class: "mrage" }, h("div", { class: "seg small" }, ...btns), box),
       h("small", { class: "hint" }, "minutes old · pick one or type your own"));
   };
-  const rulesCard = () => panel(null, h("div", { class: "cardhead" }, h("h3", {}, "Rules")),
+  const rulesCard = () => panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "Rules"),
+      h("small", { class: "sub" }, "Order: the top monster of each preset first, then the closest one"))),
     h("div", { class: "mrfields" },
+      num("max_km", "Only monsters within", "km \u00b7 0 = any distance", 0, 99999),
+      ageField(),
       num("max_wait", "Give up on a monster after", "minutes without a free march \u00b7 0 = stay until it is rallied", 0, 120),
       num("keep_free", "Marches kept free", "for joining other rallies", 0, 5),
-      num("keep_stamina", "Keep stamina", "never start a rally under this", 100, 9999),
-      ageField()),
+      num("keep_stamina", "Keep stamina", "never start a rally under this", 100, 9999)),
     h("label", { class: "tgl", style: { marginTop: "12px" } }, h("input", { type: "checkbox", checked: optVal("skip_busy", true) !== false, onchange: (e) => setOpt({ skip_busy: e.target.checked }) }), h("span", { class: "sw" }),
       h("span", {}, "Skip a monster that a march is already going to")));
   // ---- coordinates Telegram has now
@@ -2376,28 +2397,31 @@ function monsterRallyTab(serial) {
       cbox.appendChild(h("div", { class: "mrc" + (i < 0 || old ? " dim" : "") },
         h("b", {}, (c.level ? "Lv" + c.level + " " : "") + (c.name || "?")),
         h("span", { class: "mrxy" }, "X " + c.x + "  Y " + c.y + " \u00b7 " + ago(c.t) + " ago" + (c.km != null ? " \u00b7 " + c.km + " km" : "")),
-        i >= 0 && !old ? h("span", { class: "rtnst ok" }, "Preset " + r.preset + " · " + r.time + " min")
+        i >= 0 && !old ? h("span", { class: "rtnst ok" }, pName(r.preset) + " \u00b7 #" + (rules.slice(0, i).filter((x) => x.preset === r.preset).length + 1) + " \u00b7 " + r.time + " min")
           : old ? h("span", { class: "rtnst" }, "too old")
           : rules.some((x) => x.on === false && x.name && String(c.name || "").toLowerCase().includes(x.name.toLowerCase())) ? h("span", { class: "rtnst" }, "off in your list")
-          : h("button", { class: "btn sm", title: "Add this monster to Preset " + lane, onclick: () => add(c.name) }, "+ Preset " + lane)));
+          : h("button", { class: "btn sm", title: "Add this monster to " + pName(lane), onclick: () => add(c.name) }, "+ " + pName(lane))));
     }
   };
   const loadCoords = async () => { const j = await api("coords", {}, { quiet: true }).catch(() => null); if (j) { coords = j; paintCoords(); } };
+  // Owner 28 Oct: the page fits the window; each column scrolls on its own (no page scroll + section scroll)
+  const fit = () => { if (!root.isConnected) return; const top = root.getBoundingClientRect().top; root.style.height = Math.max(420, window.innerHeight - top - 20) + "px"; };
   const draw = () => {
     root.innerHTML = "";
     paintHead(); paintLanes(); paintPool(); paintCoords();
+    const card = (title, sub, ...body) => h("div", { class: "panel mrcard" }, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, title), sub ? h("small", { class: "sub" }, sub) : null)), ...body);
     root.append(head, h("div", { class: "mrgrid" },
-      h("div", { class: "mrcol" },
-        panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "Presets"), h("small", { class: "sub" }, "Each preset attacks the monsters on it. A monster can be on two presets with different levels."))), lanes),
-        rulesCard()),
-      h("div", { class: "mrcol" },
-        panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "Monsters"), h("small", { class: "sub" }, "Your monster library and the names Telegram sends"))), poolHead, pool),
-        panel(null, h("div", { class: "cardhead" }, h("div", {}, h("h3", {}, "From Telegram now"), h("small", { class: "sub" }, "What the bot would do with each coordinate"))), cbox))));
+      card("Monsters", "Click adds to the picked preset \u00b7 drag onto any preset", poolHead, h("div", { class: "mrscroll" }, pool)),
+      card("Presets", "Top monster = attacked first \u00b7 drag \u283f to reorder or move", h("div", { class: "mrscroll" }, lanes)),
+      h("div", { class: "mrcol" }, rulesCard(),
+        card("From Telegram now", "What the bot would do with each coordinate", h("div", { class: "mrscroll" }, cbox)))));
+    requestAnimationFrame(fit);
   };
+  window.addEventListener("resize", fit);
   act(api("duties", { serial })).then((j) => { if (j) take(j); });
   loadCoords();
   const tick = setInterval(async () => {
-    if (!root.isConnected) { clearInterval(tick); return; }
+    if (!root.isConnected) { clearInterval(tick); window.removeEventListener("resize", fit); return; }
     loadCoords();
     const j = await api("duties", { serial }, { quiet: true }).catch(() => null);
     if (j) take(j, false);

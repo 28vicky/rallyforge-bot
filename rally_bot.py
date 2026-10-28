@@ -14920,6 +14920,7 @@ def mr_targets(cfg, tried, serial=None):
     except Exception:
         upd = 0
     pool = list(feed) + [dict(b, t=upd) for b in get_bosses()]
+    max_km = float(rd_opt(cfg, "monster_rally", "max_km", 0) or 0)
     out, seen = [], set()
     for it in pool:
         key = f"{it.get('x')},{it.get('y')}"
@@ -14930,12 +14931,15 @@ def mr_targets(cfg, tried, serial=None):
             continue
         if str(it.get("name") or "").lower().strip() in NEVER_JOIN:      # world bosses: nobody can rally them
             continue
+        if max_km and it.get("km") is not None and float(it["km"]) > max_km:    # owner 28 Oct: e.g. only 700 km or closer
+            continue
         i, r = mr_rule_for(rules, it.get("name"), it.get("level") or 0)
         if r is None:
             continue
-        out.append(dict(it, rule=r, rank=i))
+        rank = sum(1 for x in rules[:i] if x["preset"] == r["preset"])     # place inside its preset box = priority
+        out.append(dict(it, rule=r, rank=rank))
     km = lambda it: it.get("km") if it.get("km") is not None else 1e9
-    out.sort(key=lambda it: (-round(float(it.get("t") or 0) / 60), km(it)))     # newest minute first, then nearest
+    out.sort(key=lambda it: (it["rank"], km(it)))     # owner 28 Oct: priority first (top of each preset box), then the closest
     return out
 
 
@@ -15983,6 +15987,7 @@ DUTY_LIBRARY = [
               {"k": "keep_free", "label": "Marches to keep free for joining", "type": "number", "min": 0, "max": 5, "def": 0},
               {"k": "keep_stamina", "label": "Keep at least this much stamina", "type": "number", "min": 0, "max": 9999, "def": 100},
               {"k": "max_age", "label": "Ignore coordinates older than (min)", "type": "number", "min": 1, "max": 600, "def": 10},
+              {"k": "max_km", "label": "Only monsters within (km, 0 = any distance)", "type": "number", "min": 0, "max": 99999, "def": 0},
               {"k": "skip_busy", "label": "Skip a monster a march is already going to", "type": "bool", "def": True}]},
     {"id": "ev_legion", "group": "Events", "title": "Legion Hunting", "every_min": 180, "verified": False,
      "note": "Event Center > Limited > Legion Hunting: claims every finished quest. Skipped while the event is not on.",
