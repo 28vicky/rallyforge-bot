@@ -12657,6 +12657,11 @@ class RealCityPhoto:
             return False
         if find_detail_icon(shot):                          # a building ring is open: not a clean city view
             return False
+        try:
+            if lag_icon(shot):                             # owner 28 Oct: red lag wifi icons were pasted into Rob's picture
+                return False
+        except Exception:
+            pass
         loc = loc or self.cmap.locate(shot)
         if not loc:
             return False
@@ -13034,7 +13039,16 @@ def run_map_movable(dev, cfg, log, stop, only=None):
     want = list(only) if only else list(MOVABLE_BUILDINGS)
     base = len(MOVABLE_BUILDINGS) - len(want)              # Find missing: the buildings pinned before count as found
     found, tried, seen_all, later = {}, set(), set(), {}
-    photo = RealCityPhoto(dev, cmap) if city_culture(dev) and not only else None   # Find missing keeps the picture as it is
+    photo = RealCityPhoto(dev, cmap) if city_culture(dev) else None
+    if photo is not None and photo.img is not None and only:   # owner 28 Oct 14:05: Find missing also fills the black parts -
+        try:                                                   # it builds on the existing picture instead of starting dark
+            old = cv2.imread(str(real_city_paths(dev)[0]))
+            if old is not None and old.shape == photo.img.shape:
+                photo.img = old
+                photo.filled = ~_canvas_mask(old)
+                photo.done = 1
+        except Exception as _e:
+            quiet_err("photo_reuse", _e)
     if photo is not None and photo.img is None:
         photo = None
     dev._photo = photo                                     # fix A: every located settled screenshot on the way is pasted too
@@ -17398,7 +17412,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     pop_pending = [None]                      # (fingerprint, how, xy) of the last close try: learned when the screen changes
 
-    def dismiss_popup(screen, x_ok=False):
+    def dismiss_popup(screen, x_ok=False, st_now=None):
         _poplib_learn(pop_pending[0], screen, log)        # owner 28 Oct 12:57: learn each ad once, close it at once next time
         pop_pending[0] = None
         if purchase_guard(dev, screen, log) or claim_popup(dev, screen, log):
@@ -17434,8 +17448,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     return True
             except Exception as _e:
                 quiet_err("dismiss_popup", _e)
-        if x_ok:                                          # no saved picture: look for the round X button of any pop-up
-            cx = find_close_x(screen)
+        if x_ok and st_now != "city":                     # no saved picture: the round X button of a pop-up - never on a clean
+            cx = find_close_x(screen)                     # city view (K 28 Oct 14:00: a phantom X at 486,18 -> Evony restarted)
             if cx:
                 dev.tap(cx[0][0], cx[0][1])
                 ph = _pop_hash(screen)
@@ -17483,7 +17497,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 return True
             if reclaim_if_kicked(dev, cfg, log, stop, screen):
                 return False
-            if dismiss_popup(screen, st in ("unknown", "city")):
+            if dismiss_popup(screen, st in ("unknown", "city"), st):
                 nap(1.0, 1.5)
                 continue
             if st == "unknown" and 0 < view_toggles[0] < 4 and time.time() - last_toggle[0] < 25:
@@ -17776,7 +17790,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     still["since"] = None
                     lost_since[0] = None
                     continue
-            if st != "rally_list" and dismiss_popup(screen, st in ("unknown", "city")):
+            if st != "rally_list" and dismiss_popup(screen, st in ("unknown", "city"), st):
                 # The game does not react: the same close/tap on a picture that does not change, again and again (Rory
                 # 24 Oct 05:05-05:44: 'Alliance War' row tapped 229 times, the game frozen after a kick/kick-back clash).
                 # 20 such rounds (~3 min) = restart Evony; a second freeze within 15 min = leave it 10 min, then the emulator.
@@ -17797,6 +17811,13 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         log("[*] That did not close it - tapping outside it (8,480)")
                         dev.tap(8, 480)
                         pop_pending[0] = (ph, "outside", (8, 480))
+                    nap(0.6, 0.9)
+                    continue
+                if frozen["n"] >= 4 and game_responds(serial, dev.adb) is not False:
+                    log("[i] The same screen after X, Back and an outside tap - but the game reacts: no restart, carrying on")
+                    frozen["n"] = 0                       # owner 28 Oct: restart only a game that is really stuck
+                    frozen["shot"] = None
+                    save_debug(serial, screen)
                     nap(0.6, 0.9)
                     continue
                 if frozen["n"] >= 4:
