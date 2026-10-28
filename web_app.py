@@ -720,7 +720,7 @@ class Controller:
                 self.start_eta.pop(s, None)
                 threading.Thread(target=self._safe, args=(self.start_instance, s, cfg), daemon=True).start()
                 if i < len(todo) - 1:
-                    wait_s = 2 if warm else gap
+                    wait_s = 0.3 if warm else gap          # owner 28 Oct: running games start together
                     t1 = time.time()
                     for j, s2 in enumerate(todo[i + 1:]):
                         if s2 in self.start_eta:

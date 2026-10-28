@@ -64,7 +64,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.5.18"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.5.19"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -1578,8 +1578,21 @@ def auto_join_renew(dev, cfg, log, stop, act):
             break
         time.sleep(1.0)
     if left is None:
-        log("[!] Auto-Join: could not read the time left - closing it and trying again in 2 minutes")
-        dev.back()
+        sh = dev.screenshot()
+        setup = bool(find_text(sh, ["Select Type", "Create Preset", "Create presets", "Preset"], region=(0, 60, 540, 400), cutoff=0.8))
+        for _ in range(3):                                 # Rory 28 Oct: stuck 11 min on the Auto-Join setup page - leave it fully
+            dev.tap(35, 35)                                # the page's back arrow (Back alone did not leave the sub-page)
+            time.sleep(0.8)
+            sh = dev.screenshot()
+            if _quit_box(sh):
+                cancel_quit_dialog(dev, sh, log)
+                break
+            if not find_text(sh, ["Select Type", "Create Preset", "Auto-Join", "Auto Join"], region=(0, 0, 540, 400), cutoff=0.8):
+                break
+        if setup:
+            log("[!] Auto-Join: the game opened the Auto-Join setup page (no presets set in the game?) - left it, next look in 30 min")
+            return 1800
+        log("[!] Auto-Join: could not read the time left - closed it, trying again in 2 minutes")
         return 120
     AJ_LEFT[dev.serial] = (left, time.time())
     log(f"[*] Auto-Join: {fmt_hms(left)} left (renew under {limit // 60} min)")
@@ -6140,7 +6153,7 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
             continue
         if ready_screen(screen, cfg):
             good += 1
-            if good >= cfg["stable_checks"]:
+            if good >= (cfg["stable_checks"] if dev.serial in _FRESH_START else 1):   # game was already open: one look is enough
                 log("[+] The game is loaded and stable")
                 settle_game(dev, cfg, log, stop)
                 if dev.serial in _FRESH_START and not stop.is_set():
@@ -11101,11 +11114,23 @@ def run_alliance_science(dev, cfg, log, stop):
         as_snap(dev.screenshot(), "2_failed")
         raise RuntimeError("the Alliance Science row was not found on the Alliance page")
     dev.tap(*row)
-    _nap(stop, 1.8, 2.4)
-    shot = dev.screenshot()
+    t0 = time.time()                                       # Kiravik 28 Oct 'page did not open': wait for the page (slow load),
+    rem = btn = None                                       # tap the row once more if it still has not opened
+    retapped = False
+    while not stop.is_set():
+        _nap(stop, 0.7, 0.9)
+        shot = dev.screenshot()
+        rem = as_remaining(shot)
+        btn = as_donate_button(shot)
+        if rem is not None or (btn and find_text(shot, ["Alliance Science", "Science"], region=(0, 0, 540, 340), cutoff=0.7)):
+            break
+        if time.time() - t0 > 7:
+            break
+        if not retapped and time.time() - t0 > 3.5 and (find_text(shot, words, region=(40, 200, 460, 740), cutoff=0.72) or rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.72)):
+            r2 = find_text(shot, words, region=(40, 200, 460, 740), cutoff=0.72) or rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.72)
+            dev.tap(r2[0], r2[1])
+            retapped = True
     as_snap(shot, "3_science")
-    rem = as_remaining(shot)
-    btn = as_donate_button(shot)
     if rem is None and not (btn and find_text(shot, ["Alliance Science", "Science"], region=(0, 0, 540, 340), cutoff=0.7)):
         raise RuntimeError("the Alliance Science page did not open")
     if rem is None:                                        # counter not readable: tap one at a time while the green button stays
@@ -18358,10 +18383,15 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     continue
                 if pcfg.get("max_troops"):
                     tr = troops_in_march(dev.screenshot())
-                    for _again in range(2):                    # the number can still be the old one while the preset loads: look again before judging
-                        if tr is None or tr <= pcfg["max_troops"]:
+                    t_read = time.time()                       # 28 Oct (Rory): the old number shows while the preset loads - keep
+                    retapped = False                           # reading ~4 s, re-tap the preset once, judge only then
+                    while tr is None or tr > pcfg["max_troops"]:
+                        if time.time() - t_read > 4.5 or stop.is_set():
                             break
-                        nap(0.8, 1.1)
+                        if not retapped and time.time() - t_read > 2.0:
+                            dev.tap(*preset_xy(cfg, cand))
+                            retapped = True
+                        nap(0.5, 0.7)
                         tr = troops_in_march(dev.screenshot())
                     if tr is not None and tr > pcfg["max_troops"]:
                         log(f"[!] Preset {cand} already has {tr:,} troops (limit {pcfg['max_troops']}) - skipped")

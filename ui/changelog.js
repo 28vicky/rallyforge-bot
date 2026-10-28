@@ -1,5 +1,13 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.19", date: "2026-10-28",
+    new: [],
+    fixed: ["Map my city: pop-ups and ads that appear while mapping are closed and mapping carries on from where it was. It no longer says done when nothing was mapped.",
+      "Daily Rewards is claimed and closed straight away.",
+      "Auto-Join no longer gets stuck on the game's Auto-Join setup page.",
+      "Presets with a troop limit are read correctly before joining.",
+      "Alliance Science opens reliably.",
+      "Faster start when the game is already open."] },
   { v: "2.5.18", date: "2026-10-28",
     new: ["City map: one button, Map my city. The bot goes round your whole city, builds your city's own picture as it moves and pins the buildings it finds. The main buildings are pinned for you straight away.",
       "After mapping you choose: Find missing (looks again only for the buildings still missing, nothing is deleted), Fix pins (place or move a building yourself on your city's picture) or Map city again (starts over).",
