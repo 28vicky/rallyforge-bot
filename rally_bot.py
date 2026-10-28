@@ -35,6 +35,27 @@ import cv2
 import numpy as np
 import pytesseract
 
+# QA 28 Oct (owner: "many terminal windows open and disappear when the app opens"): every child program this app
+# starts runs WITHOUT a console window (libraries such as pytesseract's version check forget it), and the ones started
+# in the first 2 minutes are written to startup.log so the next restart shows what was started.
+if os.name == "nt":
+    _APP_T0 = time.time()
+    _Popen_init = subprocess.Popen.__init__
+
+    def _popen_hidden(self, args, *a, **kw):
+        try:
+            if not kw.get("creationflags") and not kw.get("startupinfo"):
+                kw["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            if time.time() - _APP_T0 < 120:
+                _a = args if isinstance(args, (list, tuple)) else [args]
+                _n = os.path.basename(str(_a[0])) if _a else "?"
+                with open(os.path.join(os.environ.get("APPDATA", "."), "RallyForgeBot", "startup.log"), "a", encoding="utf-8") as _f:
+                    _f.write(f"{time.strftime('%H:%M:%S')} child: {_n} {' '.join(str(x) for x in _a[1:3])}\n")
+        except Exception:
+            pass
+        _Popen_init(self, args, *a, **kw)
+    subprocess.Popen.__init__ = _popen_hidden
+
 # Windows: never pop up "application error" boxes for child processes (tesseract can fail to start, 0xc000142, when
 # many emulators start at once) - the failure then comes back as an exception we retry instead of a dialog nobody sees.
 try:
@@ -3937,6 +3958,9 @@ def _quit_box(shot):
         return False
 
 
+_POP_TRIED = {}                                            # library key -> time its saved way was last used (rally loop)
+
+
 def _poplib_learn(pending, shot, log):
     """After a tap on an unknown pop-up: if the screen changed, remember that tap as the fix for that pop-up."""
     if not pending:
@@ -4069,6 +4093,7 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
     back_arrow_taps = 0
     pending = None                                         # (fingerprint, how, xy) of the last tap on an unknown pop-up
     known_done = set()
+    known_back = set()                                     # QA 28 Oct: known pop-ups whose saved way failed and got one Back
     for _ in range(rounds):
         if stop.is_set():
             break
@@ -4172,6 +4197,17 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
                 dev.tap(*_pe["xy"])
             pending = (_ph, _pe["fix"], _pe["xy"])
             log(f"[*] Known pop-up - closing it the way that worked before ({_pe['fix']} at {tuple(_pe['xy'])})")
+            closed += 1
+            _nap(stop, 1.0, 1.5)
+            continue
+        if (_pe and _pe.get("fix") and _pe["fix"] != "back" and _ph in known_done and _ph not in known_back
+                and not full_page and not _quit_box(shot)):
+            # QA 28 Oct (Kiravik "Post-War Revival"): the way that worked before did not close it this time -
+            # try Back next (owner 28 Oct: ads close with Back); if Back works it is learned and used first next time
+            known_back.add(_ph)
+            dev.back()
+            pending = (_ph, "back", (0, 0))
+            log(f"[*] Known pop-up - the way that worked before ({_pe['fix']}) did not close it, trying Back")
             closed += 1
             _nap(stop, 1.0, 1.5)
             continue
@@ -18032,6 +18068,16 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             ph = _pop_hash(screen)
             _k, pe = _poplib_find(ph)
             if pe and pe.get("fix") and pe.get("xy"):
+                _last = _POP_TRIED.get(_k)
+                if pe["fix"] != "back" and _last and time.time() - _last < 60:
+                    # QA 28 Oct: the saved way was used under a minute ago and the same pop-up is still here - try Back
+                    # (learned if it works, so next time Back is used first)
+                    _POP_TRIED.pop(_k, None)
+                    dev.back()
+                    pop_pending[0] = (ph, "back", (0, 0))
+                    log(f"[*] Known pop-up - the way that worked before ({pe['fix']}) did not close it, trying Back")
+                    return True
+                _POP_TRIED[_k] = time.time()
                 if pe["fix"] == "back":
                     dev.back()
                 else:
