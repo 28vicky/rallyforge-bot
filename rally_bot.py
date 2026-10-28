@@ -10856,14 +10856,12 @@ def ch_open_page(dev, stop, log):
     for _ in range(2):
         shot = dev.screenshot()
         ch_snap(shot, "0_ring")
-        if ch_on_page(shot) and ch_name(shot):
-            return True
-        p = find_text(shot, ["Champions", "Champion"], region=(0, 150, 540, 450), cutoff=0.7)
+        d_ = find_detail_icon(shot)                          # owner 28 Oct: picture first - the Champion icon sits up-right of
+        p = (d_[0] + 25, d_[1] - 88 + 42) if d_ else None     # the ring's Detail (i) icon; text only when that is not seen
         if not p:
-            d_ = find_detail_icon(shot)                      # the caption is hard to read on a busy picture: the Champion icon sits up-right of the Detail (i) icon
-            if d_:
-                log("[i]   Champions: caption not readable - using the place above the Detail icon")
-                p = (d_[0] + 25, d_[1] - 88 + 42)
+            if ch_on_page(shot) and ch_name(shot):
+                return True
+            p = find_text(shot, ["Champions", "Champion"], region=(0, 150, 540, 450), cutoff=0.7)
         if not p and _ == 0:                                 # K 28 Oct 15:17: the ring was still opening - look once more
             _nap(stop, 1.0, 1.3)
             continue
@@ -11859,7 +11857,7 @@ RING_OWN_ITEMS = {"tavern": ("recruit", "wheel", "fortune")}        # words only
 RING_OWN_ITEMS_TEXT = {"tavern": ["Wheel of Fortune", "Wheel of"]}
 
 
-def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity route"):
+def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity route", trust=False):
     """The building is on screen (after Go: in the middle): tap it and check its ring menu carries the right name.
     A building reached this way is remembered by its picture (learn_building) for the days its tile is gone.
     -> True when that building's ring menu is open."""
@@ -11872,9 +11870,14 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
         dev.tap(x, y)
         _nap(stop, 1.2, 1.5)
         shot = dev.screenshot()
-        if want == "keep" and ch_on_page(shot):            # the champion's heart can open the Champion page itself
+        ring = find_detail_icon(shot)                      # picture check first (fast); text reads only when it is not there
+        if not ring and want == "keep" and ch_on_page(shot):   # the champion's heart can open the Champion page itself
             return True
-        if not find_detail_icon(shot):
+        if trust and ring and spots and (x, y) == tuple(spots[0]):   # owner 28 Oct: the building's own picture matched (>= 0.85) and its ring
+            log(f"[i]   {bname} reached by {how} ({x},{y}) - ring open, picture trusted")   # opened at that spot: no name read
+            _RING_OK[getattr(dev, "serial", "")] = (bname, time.time())
+            return True
+        if not ring:
             # Kiravik 27 Oct 19:02: a 'Congratulations! 25 Stamina' reward window sat over the Tavern and took all 7
             # taps. A window in the way -> close it, then tap this spot once more.
             if view_of(shot, cfg) != "city" or rd_seen(shot, ["Congratulations", "Claim", "Confirm", "OK"], region=(60, 300, 420, 400)):
@@ -11942,7 +11945,7 @@ def learn_building(dev, shot, bname, x, y):
         meta.update({"dx": x - x0, "dy": y - y0, "at": time.strftime("%Y-%m-%d %H:%M"),
                      "named": time.strftime("%Y-%m-%d %H:%M")})   # owner 28 Oct: only saved after its menu NAME was checked
         try:                                               # PIN the building on the keyframe map: every successful open on the city
-            cmap = city_map(dev)                           # (Activity route, learned picture, map) teaches its map place, so the
+            cmap = city_map(dev) if not meta.get("map") else None   # pinned already (a pin never moves): skip the slow locate
             if cmap is not None:                           # next visit is locate -> a few measured drags -> tap (owner 24 Oct: the
                 loc = cmap.locate(shot)                    # Activity tile is a teacher, the map is the way)
                 if loc and not meta.get("map"):            # owner spec 28 Oct: a pin, once set, never moves (only Map city again)
@@ -14168,7 +14171,7 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
     near = [(x, y) for x, y in near if 70 <= x <= 420 and 160 <= y <= 800]   # never the HUD columns / bars
     rd_snap(shot, "nav_arrived")
     log(f"[i]   nav: arrived - tapping {bname} at {spot} shot=debug/duty_nav_arrived.png")
-    if open_building_here(dev, cfg, log, stop, bname, spots=near, how=f"the city map (match {mv:.2f})"):
+    if open_building_here(dev, cfg, log, stop, bname, spots=near, how=f"the city map (match {mv:.2f})", trust=mv >= 0.85):
         try:                                               # refresh the place and the picture (open_building_here learned it)
             m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8")) if p.with_suffix(".json").exists() else {"dx": 0, "dy": 0}
             if not m2.get("map"):                          # owner spec 28 Oct: an existing pin never moves
