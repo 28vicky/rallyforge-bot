@@ -5985,9 +5985,25 @@ def reclaim_if_kicked(dev, cfg, log, stop, screen):
                      region=(60, 250, 360, 300), cutoff=0.8):
         return False
     mins = float(cfg.get("reclaim_grace_min", 10) or 0)
-    log(f"[!] Logged in on another device - leaving the game alone for {mins:g} min")
-    notify(cfg, dev.serial, f"Game opened on another device - waiting {mins:g} min before reclaiming it.")
-    t_end = time.time() + mins * 60
+    # Owner 28 Oct 13:35: an app restart must not start the wait again - the kick time is kept in kicked.json.
+    kf = USER / "kicked.json"
+    try:
+        kd = json.loads(kf.read_text(encoding="utf-8"))
+    except Exception:
+        kd = {}
+    at = float(kd.get(dev.serial, 0) or 0)
+    if not at or time.time() - at > mins * 60 + 600:       # a new kick (an old entry is from an earlier one)
+        at = time.time()
+        kd[dev.serial] = at
+        try:
+            kf.write_text(json.dumps(kd), encoding="utf-8")
+        except Exception as _e:
+            quiet_err("kicked_save", _e)
+    t_end = at + mins * 60
+    left0 = max(0, t_end - time.time())
+    log(f"[!] Logged in on another device - leaving the game alone for {left0 / 60:.0f} min"
+        + (f" (kicked at {time.strftime('%H:%M', time.localtime(at))})" if left0 < mins * 60 - 30 else ""))
+    notify(cfg, dev.serial, f"Game opened on another device - waiting {left0 / 60:.0f} min before reclaiming it.")
     ev = TAKEBACK.setdefault(dev.serial, threading.Event())
     ev.clear()
     KICKED[dev.serial] = t_end
@@ -6008,6 +6024,21 @@ def reclaim_if_kicked(dev, cfg, log, stop, screen):
         log("@act " + json.dumps({"k": "step", "text": "Taking the game back..."}))
     except Exception as _e:
         quiet_err("reclaim_if_kicked", _e)
+    try:                                                   # the kick is handled: the next one starts a new wait
+        kd = json.loads(kf.read_text(encoding="utf-8"))
+        kd.pop(dev.serial, None)
+        kf.write_text(json.dumps(kd), encoding="utf-8")
+    except Exception:
+        pass
+    try:                                                   # owner 28 Oct: Evony closed (emulator home) -> start the game
+        pkg = evony_package(dev.adb, dev.serial, cfg)
+        if app_foreground(dev.adb, dev.serial, pkg) is False:
+            log("[*] Wait is over - Evony is not open, starting it to take the game back")
+            start_app(dev.adb, dev.serial, pkg)
+            _nap(stop, 8, 10)
+            return True
+    except Exception as _e:
+        quiet_err("reclaim_start", _e)
     hit = find_text(dev.screenshot(), ["Restart"], cutoff=0.8)
     if hit:
         dev.tap(hit[0], hit[1])
