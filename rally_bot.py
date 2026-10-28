@@ -3915,11 +3915,27 @@ def _poplib_seen(h, shot, log):
         return v
 
 
+def _quit_box(shot):
+    """The game's 'exit the game?' box is on the screen (Back on a bare city/map opens it)."""
+    try:
+        return find_text(shot, ["exit the game?", "exit the game", "sure you want to exit"], region=(0, 380, 540, 260), cutoff=0.72) is not None
+    except Exception:
+        return False
+
+
 def _poplib_learn(pending, shot, log):
     """After a tap on an unknown pop-up: if the screen changed, remember that tap as the fix for that pop-up."""
     if not pending:
         return
     h0, how, xy = pending
+    if how == "back" and _quit_box(shot):                  # owner 28 Oct 14:06 (Kiravik loop 8 min): Back opened the quit box -
+        with _poplib_lock:                                  # there was NO pop-up (a bare city) - never learn it, forget it if known
+            k, v = _poplib_find(h0)
+            if v is not None and v.get("fix") == "back":
+                v["fix"], v["xy"] = None, None
+                _poplib_save()
+                log(f"[i] Pop-up {k}: Back only opened the quit box - not a pop-up, forgotten")
+        return
     h1 = _pop_hash(shot)
     if h1 is None or bin(h0 ^ h1).count("1") <= 8:
         return                                              # still the same window: that tap did not close it
@@ -12780,11 +12796,13 @@ def relocate_view(dev, cfg, log, stop, cmap, nav):
             dev.tap(8, 480)
         _nap(stop, 0.8, 1.0)
         nxt = nav._settled()
-        if cancel_quit_dialog(dev, nxt, log):              # Back on the bare city asks to quit: Cancel, the city is there
+        quit_seen = cancel_quit_dialog(dev, nxt, log)      # Back on the bare city asks to quit: Cancel, the city is there
+        if quit_seen:
             nxt = nav._settled()
         r = cmap.locate(nxt)
         if r:
-            _poplib_learn((ph, how, (0, 0) if how == "back" else (8, 480)), nxt, log)
+            if not quit_seen:                              # only a real pop-up is learned (never the bare city)
+                _poplib_learn((ph, how, (0, 0) if how == "back" else (8, 480)), nxt, log)
             _city_seen(dev, nxt, r)
             log(f"[i]   nav: relocate=hit after {'Back' if how == 'back' else 'a tap outside'} (a pop-up was in the way)")
             return r
