@@ -8808,7 +8808,7 @@ def _bm_item_names():
     x("Chips 100", [1, 2, 5]); x("Medal", [100, 200]); x("Refining Stone", [10, 50]); x("Research Stone", [5, 10, 25, 50])
     x("Runestone Chest", [10]); x("Dragon Crystal", [10])
     out += ["Stamina 50", "Stamina 50 x10", "Royal Waybill x1"]; x("Tribute", [1, 2, 5, 10])
-    x("Monarch EXP 1000", [1, 2, 5]); x("Monarch EXP 2000", [1, 2, 5]); x("Monarch EXP 5000", [1, 5]); x("Monarch EXP 10000", [1, 5])
+    x("Monarch EXP 500", [1]); x("Monarch EXP 1000", [1, 2, 5]); x("Monarch EXP 2000", [1, 2, 5]); x("Monarch EXP 5000", [1, 5]); x("Monarch EXP 10000", [1, 5])
     x("General EXP 500", [1, 2, 5, 10]); x("General EXP 1000", [1, 2, 5]); x("General EXP 2000", [1, 2, 5])
     x("General EXP 5000", [1, 2, 5]); x("General EXP 10000", [5]); x("General EXP 20000", [5]); x("Spiritual Beast EXP 1000", [5, 10])
     out += ["Generals Scroll Chest x1", "Kings Scroll Chest x1", "Dragon Scroll Chest x1"]
