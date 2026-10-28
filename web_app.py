@@ -3138,11 +3138,57 @@ def open_window(url, ctl):
         win = webview.create_window("RallyForge Bot", url, width=ww, height=wh, x=wx, y=wy, min_size=(920, 560),    # owner 28 Oct: the app is built for 900 px and up; window frame included
                                     background_color="#12141f", text_select=True)
         ctl_events = {"win": win}
+        min_state = {"native": False}
+
+        def min_px():                                       # the 900 px minimum in screen pixels (Windows scaling 125% / 150%)
+            sc = 1.0
+            try:
+                import ctypes
+                sc = ctypes.windll.user32.GetDpiForSystem() / 96.0
+            except Exception:
+                pass
+            return int(920 * sc), int(560 * sc)
+
+        def set_min_size():                                 # owner 28 Oct: min_size alone let the window shrink on a scaled display
+            try:
+                f = getattr(win, "native", None)
+                if f is None:
+                    return
+                from System import Action
+                from System.Drawing import Size
+                mw, mh = min_px()
+                f.Invoke(Action(lambda: setattr(f, "MinimumSize", Size(mw, mh))))
+                min_state["native"] = True
+            except Exception as _e:
+                rb.quiet_err("open_window.min_size", _e)
+        try:
+            win.events.shown += set_min_size
+        except Exception as _e:
+            rb.quiet_err("open_window.min_size_event", _e)
+
+        def keep_min():                                     # fallback when the window object can't be reached: snap back
+            try:
+                import ctypes
+                from ctypes import wintypes
+                u = ctypes.windll.user32
+                hwnd = u.FindWindowW(None, "RallyForge Bot")
+                if not hwnd or u.IsIconic(hwnd) or u.IsZoomed(hwnd):
+                    return
+                r = wintypes.RECT()
+                u.GetWindowRect(hwnd, ctypes.byref(r))
+                mw, mh = min_px()
+                w, h = r.right - r.left, r.bottom - r.top
+                if w < mw or h < mh:
+                    u.SetWindowPos(hwnd, 0, 0, 0, max(w, mw), max(h, mh), 0x0002 | 0x0004 | 0x0010)   # NOMOVE | NOZORDER | NOACTIVATE
+            except Exception as _e:
+                rb.quiet_err("open_window.keep_min", _e)
 
         def watch():                                        # the page asks to be closed (hide-window button)
             seen = ctl.seq
             while not closed.is_set():
                 time.sleep(0.5)
+                if not min_state["native"]:
+                    keep_min()
                 with ctl.lock:
                     hit = any(k == "close_window" and i > seen for (i, k, d) in ctl.events)
                 if hit:
