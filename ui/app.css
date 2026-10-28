@@ -1900,3 +1900,9 @@ select.pick-open{border-color:var(--accent1)}
 :root .stickyhead.stuck{box-shadow:0 8px 18px -12px rgba(20,22,29,.28)}
 :root .app:not(.nosb) .status{left:256px}   /* status bar starts where the 256 px sidebar ends (was 240: "141 MB" sat on the sidebar) */
 .huwhyb.off{background:var(--hu-soft)}   /* A1: "Monster hunts is off" is grey, not the green Ready colour */
+/* owner 29 Oct 03:21: header (menu icon, name, buttons) and the tab row line up with the text inside the cards below
+   (cards have 20 px inside padding); the menu icon's glyph, not its button box, sits on that line */
+.stickybox{padding:0 20px}
+.stickybox .sidebtn{margin-left:-8px}
+.stickyhead .stickybox .insthead{margin-left:-44px!important;margin-right:-44px!important;padding-left:44px;padding-right:44px}   /* its divider line still runs edge to edge */
+.top .sidebtn{margin-left:-7px}   /* All instances: menu glyph on the same line as the buttons and tabs under it */
