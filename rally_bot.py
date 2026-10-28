@@ -2631,16 +2631,20 @@ def set_pacing(cfg):
 
 
 def pace(seconds):
-    return seconds * getattr(_TL, "scale", 1.0) * getattr(_TL, "boost", 1.0)
+    b = getattr(_TL, "boost", 1.0)
+    if b > 1.0 and time.time() - getattr(_TL, "boost_at", 0) > 120:   # owner 28 Oct: back to full speed after 2 min
+        _TL.boost = b = 1.0
+    return seconds * getattr(_TL, "scale", 1.0) * b
 
 
 def slow_down():
     """Something failed: wait longer after clicks for a while. -> new factor or None."""
     if not getattr(_TL, "adaptive", False):
         return None
-    new = min(_TL.boost * 1.25, _TL.boost_max)
+    new = min(_TL.boost * 1.25, _TL.boost_max, 1.25)        # owner 28 Oct 13:34: fast - at most 1.25x (1.8 s -> 2.25 s)
     changed = new > _TL.boost + 0.01
     _TL.boost = new
+    _TL.boost_at = time.time()
     return new if changed else None
 
 
