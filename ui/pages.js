@@ -2321,7 +2321,7 @@ function monsterRallyTab(serial) {
   const soloOnly = (n) => (live.solo_only || []).includes(String(n || "").toLowerCase().trim());
   const wrongMode = (n, m) => (m === "solo" && rallyOnly(n)) || (m === "rally" && soloOnly(n));
   const optVal = (k, d) => { const o = duty && (duty.opts || []).find((x) => x.k === k); return o && o.val !== undefined && o.val !== null ? o.val : d; };
-  const used = (p) => model && model[p].length > 0;
+  const used = (p) => !!(model && model[p] && model[p].length);   // sel can be "" before a preset is picked
   const usedList = () => MR_PRESETS.filter(used);
   const mode = (p) => modes[p] || "rally";
   const huntsOf = (p) => +(((optVal("presets", {}) || {})[p] || {}).hunts || 0);
