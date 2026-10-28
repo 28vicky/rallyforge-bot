@@ -13199,11 +13199,15 @@ def run_map_movable(dev, cfg, log, stop, only=None):
                 later.setdefault(nb, []).append((mx, my))
             leave_to_city(dev, cfg, stop, log)
 
+    last_edge = [False]
+
     def visit(i):
         duty_progress()
         sx, sy = stops[i]
         nav = CityNav(dev, stop, log)
+        last_edge[0] = False
         if goto_on_map(dev, cfg, log, stop, nav, cmap, sx + x + w / 2, sy + y + h / 2, tol=120) is None:
+            last_edge[0] = bool(getattr(nav, "_edge", False))
             log(f"[i]   stop {i + 1}: could not get there - next")
             leave_to_city(dev, cfg, stop, log)
             return None, None
@@ -13218,14 +13222,36 @@ def run_map_movable(dev, cfg, log, stop, only=None):
     # each building's best match is pinned at once (shown live). No taps, no name reading. After the sweep the bot goes
     # to each pin, opens the building and checks its name. Missing ones -> Find missing / Fix pins.
     best = {}                                              # building -> (score, map x, map y) of its best match so far
+    # Owner 28 Oct 13:45 (Rob lost 7 min at the top edge): a stop the map cannot scroll to is remembered for this city
+    # (edge_stops.json) and skipped next time; after one such stop, the rest of that row is skipped at once.
+    edge_f = _map_dir(dev) / "edge_stops.json"
+    try:
+        edge_known = [tuple(p) for p in json.loads(edge_f.read_text(encoding="utf-8"))]
+    except Exception:
+        edge_known = []
+    edge_rows = set()
     for i in range(len(stops)):
         if stop.is_set():
             break
+        sxy = stops[i]
+        if any(abs(sxy[0] - ex) < 80 and abs(sxy[1] - ey) < 80 for ex, ey in edge_known):
+            log(f"[i]   stop {i + 1}: skipped - the map could not scroll there before (city edge)")
+            continue
+        if round(sxy[1] / 300) in edge_rows:
+            log(f"[i]   stop {i + 1}: skipped - same edge row as a stop the map could not reach")
+            continue
         if time.time() - t0 > 11 * 60:                     # owner 28 Oct: 55 min was far too long - the sweep ends at ~11 min
             log(f"[i]   sweep time limit - {len(stops) - i} stop(s) left; checking the pins now (missing -> Find missing)")
             break
         progress(i + 1)
         nav, rest = visit(i)
+        if nav is None and last_edge[0]:
+            edge_rows.add(round(sxy[1] / 300))
+            edge_known.append(tuple(sxy))
+            try:
+                edge_f.write_text(json.dumps([list(p) for p in edge_known]), encoding="utf-8")
+            except Exception as _e:
+                quiet_err("edge_save", _e)
         if nav is None or not pics:
             continue
         for n, px, py, sc in match_building_pictures(rest, pics):
@@ -13928,6 +13954,7 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
             nav._still_n = still_n
             if still_n >= 2:                               # owner 28 Oct (Rob, 55 min): the city edge - don't fight it
                 log("[i]   nav: goto_on_map=failure reason=edge (the map does not move this way) - skipping")
+                nav._edge = True
                 return None
         prev_cam = (nav.cx, nav.cy)
         log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} ({r[2]} points) - target {round(sx - mid_x)},{round(sy - mid_y)} px from the middle, moving (round {i + 1})")
