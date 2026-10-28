@@ -10471,10 +10471,25 @@ def ch_taps_used(img):
 CH_GREET_SEARCH = (0, 640, 300, 300)                # where the Greet button can be (the game shifts it when it adds a button)
 
 
+def ch_greet_word(img):
+    """'Greet' under the button -> (x, y) or None. The game prints 'Greet0/10' as ONE word (Rob 28 Oct 15:18: scored 0.71
+    against 'Greet' and the bot said there was no Greet button), so only the letters of each word are compared."""
+    x0, y0, w0, h0 = CH_GREET_SEARCH
+    try:
+        for _t, ws in ocr_lines(img[y0:y0 + h0, x0:x0 + w0]):
+            for w in ws:
+                letters = re.sub(r"[^a-z]", "", str(w[0]).lower())
+                if letters.startswith("greet") or letters in ("gree", "greel", "greer"):
+                    return (int(w[1]) + x0, int(w[2]) + y0)
+    except Exception as _e:
+        quiet_err("ch_greet_word", _e)
+    return None
+
+
 def ch_find_greet(img):
     """The Greet button by its word (24 Oct: a new event button pushed Greet up and a 'buy packs' button took its old
     place - a fixed spot would have tapped that). -> (tap (x, y), label box (x, y, w, h)) or (None, None)."""
-    t = find_text(img, ["Greet"], region=CH_GREET_SEARCH, cutoff=0.75)
+    t = ch_greet_word(img)
     pic = find(img, "ch_greet", 0.82, CH_GREET_SEARCH) if has_template("ch_greet") else None   # the button's own picture (icon + word), learned at the first find
     if t and pic and (abs(pic[0] - t[0]) > 60 or abs(pic[1] - t[1]) > 60):
         t = None                                           # word and picture disagree: trust neither
@@ -10849,8 +10864,12 @@ def ch_open_page(dev, stop, log):
             if d_:
                 log("[i]   Champions: caption not readable - using the place above the Detail icon")
                 p = (d_[0] + 25, d_[1] - 88 + 42)
+        if not p and _ == 0:                                 # K 28 Oct 15:17: the ring was still opening - look once more
+            _nap(stop, 1.0, 1.3)
+            continue
         if not p:
-            log("[i]   Champions: the Champions icon is not in the Keep's menu")
+            ch_snap(shot, "1_noicon")
+            log("[i]   Champions: the Champions icon is not in the Keep's menu - see debug/champions_1_noicon.png")
             return False
         dev.tap(p[0], p[1] - 42)                             # the icon sits just above its caption
         _nap(stop, 2.0, 2.8)
@@ -10923,7 +10942,7 @@ def ch_dialogue(dev, stop):
             return
         dev.tap(*CH_DIALOG_TAP)
         _nap(stop, 1.6, 2.2)
-        if find_text(dev.screenshot(), ["Greet"], region=CH_GREET_SEARCH, cutoff=0.7):
+        if ch_greet_word(dev.screenshot()):
             return
 
 
