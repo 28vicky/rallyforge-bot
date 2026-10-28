@@ -1125,10 +1125,10 @@ const bmGuess = (n) => /stam|vit/i.test(n) ? "stamina" : /speed/i.test(n) ? "spe
   : /gear|crown|staff|grail|horn|crystal|decoration|armor|ring|bow|spear|axe|sword|boots|helmet|hood|refining|research stone|runestone/i.test(n) ? "gear"
   : /chest|box/i.test(n) ? "chest" : /food|lumber|wood|stone|ore|iron|gold|silver|res/i.test(n) ? "res" : "other";
 const bmInfo = (n) => BM_INFO[n] ? { label: BM_INFO[n][0], cat: BM_INFO[n][1] } : { label: n, cat: bmGuess(n) };
-PAGES.market = function (fixed) {
+PAGES.market = function (fixed, redraw) {
   // owner 28 Oct 21:01: Black Market settings per instance - "Using universal defaults · Make own" like the other settings
   const MK = ["market_items", "market_pay", "market_refresh_mode", "market_refresh_n", "market_paid_refresh", "market_max_gems", "market_min_gems", "market_min_gold", "market_rebuy"];
-  const sc = scopeBar("market", MK, "Black Market settings", fixed);
+  const sc = scopeBar("market", MK, "Black Market settings", fixed, redraw);   // redraw: the Duties side panel redraws itself (Make own unlocks at once)
   // Layout (24 Oct): summary line, Spending card, Your picks (pay per item + "Set all to"), Add items (folded).
   // The old global "Pay with" is gone; market_pay stays in the settings as the default for newly added items
   // and as the bot's fallback for items saved without their own pay.
@@ -1775,7 +1775,7 @@ PAGES.duties = function (fixed) {
   const setBody = (r) => [
     (r.opts && r.opts.length) ? dutyOpts(r) : null,
     r.id === "crazy_eggs" ? ce : null, r.id === "champions" ? ch : null, r.id === "wheel" ? wh : null,
-    r.id === "black_market" ? PAGES.market(serial || undefined) : null,
+    r.id === "black_market" ? PAGES.market(serial || undefined, () => drawSide()) : null,
     r.id === "@tasks" ? PAGES.tasks(serial || undefined, true, () => drawSide()) : null,
     r.id === "collect_resources" && serial ? h("div", { class: "subset" }, h("div", { class: "subtitle" }, "City map"),
       note("Resource collecting taps the farms the city map knows. Scan city reads the building names; Map by hand is the manual way."),
@@ -2480,7 +2480,10 @@ function monsterRallyTab(serial) {
     const sec = h("section", { class: "panel hudec" }, h("div", { class: "hudhead" }, h("h3", {}, "Decisions"), h("small", { class: "sub" }, "every monster from Telegram today, and why")));
     if (!rows.length) {
       const linked = coords.ready || (coords.items || []).length;
-      sec.appendChild(h("div", { class: "huempty in" }, linked ? h("b", {}, (coords.items || []).length ? "No decisions yet today." : "Telegram is linked. Waiting for the first coordinate list.")
+      const huOn = !!(duty && duty.on), ran = !!((live.status || {}).t);
+      // QA 28 Oct: say why the list is empty - switched off, or switched on but not run yet (was "No decisions yet today" in both cases)
+      sec.appendChild(h("div", { class: "huempty in" }, !huOn ? [h("b", {}, "Monster hunts is off."), h("span", { class: "mute" }, " Switch it on at the top to see what the bot decides for each monster.")]
+        : linked ? h("b", {}, !ran ? "Starts on the next run - decisions show here after its first look at Telegram." : (coords.items || []).length ? "No decisions yet today." : "Telegram is linked. Waiting for the first coordinate list.")
         : [h("b", {}, "No coordinates yet. Link Telegram to start."), h("button", { type: "button", class: "btn sm", onclick: () => { S.sel = "control"; S.tab = "telegram"; renderSide(); renderTabs(); renderPage(); } }, "Open Telegram settings")]));
       liveBox.appendChild(sec);
       return;

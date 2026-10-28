@@ -14966,7 +14966,7 @@ MR_CENTER = (272, 480)                   # the searched tile sits in the middle 
 MR_ALLIANCE_WAR = (384, 768)              # Alliance War button on a monster page (Attack sits at 170)
 MR_MARCH = (404, 910)                    # March button on the Alliance War troop page
 MR_EMPTY = (330, 250)                     # a map spot with no button: closes a ring (40,640 was the Quests button)
-MR_NEAR = [(0, 0), (0, -30), (-30, 10), (30, 10), (0, 35)]   # the monster's picture can sit a little off the tile centre
+MR_NEAR = [(0, 0), (0, -30)]             # owner 28 Oct 21:29: at most 2 taps - centre, then a little above (monster drawn off the tile centre)
 MR_TIMES = {"5": (190, 512), "10": (395, 512), "30": (190, 590), "60": (395, 590)}   # Alliance War Rally! buttons (fallback spots)
 
 
@@ -15453,19 +15453,17 @@ def mr_open_monster(dev, stop, want, level=None):
         rd_snap(shot, f"mrally_ring{MR_NEAR.index((dx, dy))}")   # what the tap opened (test pictures)
         p = mr_attack_spot(shot)
         if not p:
-            dev.tap(*MR_EMPTY)                              # empty map: close whatever ring opened
+            dev.tap(*MR_EMPTY)                              # no Attack button: close whatever ring opened, try the second spot
             _nap(stop, 0.8, 1.0)
-            if MR_EMPTY_RING[0]:                            # Occupy / Teleport = empty land: gone, no more taps
-                return "gone", None
             continue
         dev.tap(p[0], max(100, p[1] - 30))
         _nap(stop, 1.8, 2.3)
         page = dev.screenshot()
         rd_snap(page, "mrally_page")
         if not rd_seen(page, ["Alliance War", "Winning Odds"], region=(0, 650, 540, 220)):
-            dev.back()
+            dev.back()                                      # something with Attack but no monster page: not ours - skip at once (no more taps)
             _nap(stop, 0.8, 1.1)
-            continue
+            return "other", "not a monster page"
         head = " ".join(t for t, _ in ocr_lines(page[120:300, 0:540], 2.5, bright=True))   # plain OCR garbled the name
         import difflib
         toks = re.findall(r"[a-z]+", head.lower())
