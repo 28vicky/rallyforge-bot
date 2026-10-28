@@ -1,12 +1,12 @@
 {
-  "version": "2.5.18",
-  "notes": "City map: Map my city builds your city's picture and pins buildings; Find missing, Fix pins, Map city again. New event tasks (off until switched on). Stop/Pause at once, daily tasks no longer run twice, faster Wheel.",
+  "version": "2.5.19",
+  "notes": "Map my city handles pop-ups and carries on; Daily Rewards closes at once; Auto-Join setup page fix; troop-limit read fix; Alliance Science opens reliably; faster start.",
   "files": {
     "rally_bot.py": {
-      "sha256": "745a85007b09aebebf3f417d362ad8ef15eba16fb4163c614ee283434927b474"
+      "sha256": "0f9a9f3fd5690809476ab0cd2e5f0e77f16af43bdfbee19a09a34cf4073f9017"
     },
     "web_app.py": {
-      "sha256": "1b7c52494f456b358ef07f34290e0b99ad95e44dd923ad5bd3bdeb4ad3a4c6e3"
+      "sha256": "9f738e28c997d2c730c9683a7084f1b6718689c91bdadc6ab07aa88ebf318ee2"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "6a8128006fecb66334f7ea7d427c41ed9dc367c5fe3fb51bcce22dcb8d1a2489"
     },
     "ui/changelog.js": {
-      "sha256": "1f8350e4b5c88aae1a516c2acf51209ef81245210d5765acb99338a6de14ce6f"
+      "sha256": "b626f0a74ad7e3900aec4e87a69ef597306945818706ac7afcbd5be91bfee173"
     },
     "ui/dialogs.js": {
       "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
@@ -3305,5 +3305,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "68fd671bbaf93f7a2d0f2295bf2dcec9026a32ea39054b1bb36f7fc22b65a6bb"
+  "sig": "ae1d90ca6621aa4c4b07fe1e6066f59d59da1f43c3f48b2f96e6aada94b4c25a"
 }
