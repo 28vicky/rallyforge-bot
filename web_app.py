@@ -2855,7 +2855,7 @@ class Api:
         on = bool(((cfg.get("duties") or {}).get("monster_rally") or {}).get("on"))
         return {"on": on, "running": self.c.running(serial), "status": row.get("status") or {}, "busy": busy,
                 "solo_done": rb.mr_solo_done(serial), "decisions": rb.hunt_decisions(serial)[:300],
-                "rally_only": sorted(rb.RALLY_ONLY), "now": now}
+                "rally_only": sorted(rb.RALLY_ONLY), "solo_only": sorted(rb.SOLO_ONLY), "now": now}
 
     def coords_watch(self, p):
         """Save the chats to watch and start watching them (the Telegram login must be done)."""

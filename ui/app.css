@@ -1823,7 +1823,6 @@ select.pick-open{border-color:var(--accent1)}
 .huseg{display:flex;gap:3px;background:var(--field);padding:3px;border-radius:9px;box-shadow:var(--inset)}
 .huseg button{height:30px;padding:0 14px;border:0;border-radius:7px;background:transparent;color:var(--mute);font:inherit;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
 .huseg button.on{background:var(--card);color:var(--fg);box-shadow:var(--sh2)}
-.huseg button.soon{opacity:.45;cursor:not-allowed}
 .hueopts{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .hupb{height:28px;padding:0 11px;border-radius:99px;border:var(--bd);background:var(--card);color:var(--fg);font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
 .hupb.on{background:var(--accent1);border-color:var(--accent1);color:var(--accfg)}

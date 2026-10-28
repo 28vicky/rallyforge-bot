@@ -14821,7 +14821,8 @@ def mr_rules(cfg):
 # Solo (attack alone). Rally and Solo are equals. Smart mode is shown as "soon" in the app only.
 MR_MODES = ("rally", "solo")
 MR_ATTACK = (170, 768)                    # Attack button on a monster page (solo; Alliance War sits at 384)
-RALLY_ONLY = set()                        # lower-case monster names that can only be rallied (owner to confirm the list)
+RALLY_ONLY = {"aglaope"}                  # lower-case names that can only be rallied (owner 28 Oct; more to come)
+SOLO_ONLY = {"goblin"}                     # lower-case names that can only be attacked solo (owner 28 Oct)
 
 
 def mr_pnum(p):
@@ -15119,6 +15120,9 @@ def mr_targets(cfg, tried, serial=None):
             if m == "solo" and low in RALLY_ONLY:
                 why_not = why_not or f"Rally only · Preset {mr_pnum(p)} is Solo"
                 continue
+            if m == "rally" and low in SOLO_ONLY:
+                why_not = why_not or f"Solo only · Preset {mr_pnum(p)} is Rally"
+                continue
             lim = modes[p]["hunts"]
             if m == "solo" and lim and int(done.get(p, 0)) >= lim:
                 why_not = why_not or f"Preset {mr_pnum(p)} did its {lim} hunts today"
@@ -15126,7 +15130,7 @@ def mr_targets(cfg, tried, serial=None):
             pick = (i, r, m)
             break
         if not pick:
-            skip(it, why_not, "rally only" if why_not.startswith("Rally only") else "at the hunt limit")
+            skip(it, why_not, "wrong mode" if why_not.startswith(("Rally only", "Solo only")) else "at the hunt limit")
             continue
         i, r, m = pick
         rank = sum(1 for x in rules[:i] if x["preset"] == r["preset"])     # place inside its preset box = priority

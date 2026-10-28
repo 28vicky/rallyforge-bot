@@ -2284,6 +2284,8 @@ function monsterRallyTab(serial) {
   const pN = (p) => MR_PRESETS.indexOf(p) + 1;
   const isBoss = (n) => (S.neverJoin || []).includes(String(n || "").toLowerCase().trim());
   const rallyOnly = (n) => (live.rally_only || []).includes(String(n || "").toLowerCase().trim());
+  const soloOnly = (n) => (live.solo_only || []).includes(String(n || "").toLowerCase().trim());
+  const wrongMode = (n, m) => (m === "solo" && rallyOnly(n)) || (m === "rally" && soloOnly(n));
   const optVal = (k, d) => { const o = duty && (duty.opts || []).find((x) => x.k === k); return o && o.val !== undefined && o.val !== null ? o.val : d; };
   const used = (p) => model && model[p].length > 0;
   const usedList = () => MR_PRESETS.filter(used);
@@ -2587,12 +2589,12 @@ function monsterRallyTab(serial) {
     listBox.innerHTML = "";
     const rows = model[sel];
     rows.forEach((row, i) => {
-      const ov = overlap(row), solo = mode(sel) === "solo" && rallyOnly(row.name), n = countToday(sel, row.name);
+      const ov = overlap(row), solo = wrongMode(row.name, mode(sel)), n = countToday(sel, row.name);
       const el = h("div", { class: "huitem", "data-i": String(i) },
         h("span", { class: "hugrip", draggable: "true", title: "Drag to change the order", "aria-hidden": "true" }, "⠿"),
         h("span", { class: "hurank" + (i === 0 ? " first" : "") }, String(i + 1)),
         h("div", { class: "huname" }, h("b", { title: row.name }, row.name),
-          solo ? h("small", { class: "huwarn" }, "Rally only · skipped in Solo") : ov.length ? h("small", { class: "huwarn" }, "Also in " + ov.join(", ") + " · the first free preset takes it, never both") : null),
+          solo ? h("small", { class: "huwarn" }, rallyOnly(row.name) ? "Rally only · skipped in Solo" : "Solo only · skipped in Rally") : ov.length ? h("small", { class: "huwarn" }, "Also in " + ov.join(", ") + " · the first free preset takes it, never both") : null),
         h("button", { type: "button", class: "hulv", title: "Change levels", onclick: () => { q = row.name; pf = "all"; openDrawer(); } }, lvText(row)),
         h("span", { class: "hustat" }, n ? n + (mode(sel) === "solo" ? (n === 1 ? " hunt" : " hunts") : (n === 1 ? " rally" : " rallies")) + " today" : "none today"),
         h("button", { type: "button", class: "hux", "aria-label": "Remove " + row.name + " from Preset " + pN(sel), title: "Remove", onclick: () => { model[sel].splice(i, 1); saveRules(); paintEditor(); paintRail(); } }, "✕"));
@@ -2615,7 +2617,7 @@ function monsterRallyTab(serial) {
     const seg = h("div", { class: "huseg", role: "group", "aria-label": "Mode" },
       ...[["rally", "Rally"], ["solo", "Solo"]].map(([v, l]) => h("button", { type: "button", class: m === v ? "on" : "", "aria-pressed": m === v ? "true" : "false",
         onclick: () => { if (m === v) return; modes[sel] = v; savePresets(); paintEditor(); paintRail(); } }, l)),
-      h("button", { type: "button", class: "soon", disabled: true, title: "Smart mode comes in a later update" }, "Smart · soon"));
+      );
     const opts = m === "solo"
       ? HU_HUNTS.map((v) => h("button", { type: "button", class: "hupb" + (huntsFor(sel) === v ? " on" : ""), "aria-pressed": huntsFor(sel) === v ? "true" : "false",
           onclick: () => { huntsLocal[sel] = v; savePresets(); paintEditor(); paintRail(); } }, v ? v + " hunts" : "No limit"))
@@ -2678,7 +2680,7 @@ function monsterRallyTab(serial) {
       return;
     }
     list.forEach((r, i) => {
-      const u = usedIn(r.name), mine = model[sel].find((x) => x.name.toLowerCase() === r.name.toLowerCase()), ro = rallyOnly(r.name), dis = ro && m === "solo";
+      const u = usedIn(r.name), mine = model[sel].find((x) => x.name.toLowerCase() === r.name.toLowerCase()), ro = rallyOnly(r.name), so = soloOnly(r.name), dis = wrongMode(r.name, m);
       const isRec = ri(r.name) < 99, prevRec = i > 0 && ri(list[i - 1].name) < 99;
       const head = !q && (i === 0 ? (isRec ? "Recently used" : "") : (!isRec && prevRec ? "Other monsters" : ""));
       const lvs = r.levels.length ? r.levels : levelsOf(r.name);
@@ -2686,7 +2688,7 @@ function monsterRallyTab(serial) {
         head ? h("span", { class: "hugl" }, head) : null,
         h("div", { class: "huprh" }, h("b", { title: r.name }, r.name),
           u.length ? h("button", { type: "button", class: "hucnt", "aria-expanded": openUsed === r.name ? "true" : "false", onclick: () => { openUsed = openUsed === r.name ? "" : r.name; paintPick(); } }, u.length + (u.length === 1 ? " preset" : " presets")) : null,
-          ro ? h("span", { class: "huro" }, "Rally only") : null,
+          ro ? h("span", { class: "huro" }, "Rally only") : so ? h("span", { class: "huro" }, "Solo only") : null,
           mine ? h("span", { class: "hupicked" }, lvText(mine) + " in Preset " + pN(sel)) : null),
         openUsed === r.name ? h("small", { class: "hurh" }, "Used by " + u.map((p) => "Preset " + pN(p)).join(u.length > 2 ? ", " : " and ")) : null);
       if (lvs.length > 12) {                                    // Vikings Lv 1-50: a range, not 50 chips
@@ -2703,7 +2705,7 @@ function monsterRallyTab(serial) {
         for (const l of chips) {
           const on = mine && (l === 0 ? mine.all : hasLv(mine, l));
           grid.appendChild(h("button", { type: "button", class: "hulc" + (on ? " on" : ""), disabled: dis, "aria-pressed": on ? "true" : "false", "aria-label": r.name + (l ? " level " + l : " all levels"),
-            title: dis ? "Rally only - this preset is Solo" : "", onclick: () => { toggleLv(r.name, l); paintDrawer(); } }, l ? "Lv" + l : "All"));
+            title: dis ? (ro ? "Rally only - this preset is Solo" : "Solo only - this preset is Rally") : "", onclick: () => { toggleLv(r.name, l); paintDrawer(); } }, l ? "Lv" + l : "All"));
         }
         box.appendChild(grid);
       }
