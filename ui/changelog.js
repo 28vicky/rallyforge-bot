@@ -1,5 +1,17 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.20", date: "2026-10-29",
+    new: ["Monster hunts: each preset is one list of monster + level chips, e.g. Pumpkin 8, Turtle 7, Cerberus 5. The bot hunts the first one it finds in Telegram, left to right. Drag a chip to change the order, x removes it.",
+      "Monster hunts: Rally or Solo per preset, a live status with the reason when it waits, and a Decisions list that shows why each monster was hunted or skipped.",
+      "Black Market: settings per instance, a Gold & resources group for goods bought with gold, the option to use Rebuy chances, and many more shop items recognised.",
+      "Monster list grouped like the game: Normal Boss, Event Boss, Viking, Alliance Challenge and more (Royal Thief and Desert Bandit added).",
+      "Instance log: technical lines are hidden unless you switch on Show details."],
+    fixed: ["The bot no longer joins a monster you switched off when the rally list moves at the moment of the tap.",
+      "Monster hunts: higher levels go first, monster pages with an ad row are no longer skipped, and Telegram lists refresh the way you set the cache time.",
+      "Black Market buys and refreshes faster.",
+      "Champions greets reliably again.",
+      "Crazy Eggs uses the free Lucky Hammer every day.",
+      "Cleaner wording and layout across the app: Join rallies, Black Market, Fix pins, times in hours, tidy header and sidebar."] },
   { v: "2.5.19", date: "2026-10-28",
     new: [],
     fixed: ["Map my city: pop-ups and ads that appear while mapping are closed and mapping carries on from where it was. It no longer says done when nothing was mapped.",

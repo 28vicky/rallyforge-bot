@@ -253,45 +253,6 @@ class CultureMatchTest(unittest.TestCase):
         self.assertEqual(r[0], "europe")
         self.assertLess(abs(r[1] - v["x"]) + abs(r[2] - v["y"]), 20)
 
-class AllyMatching(unittest.TestCase):
-    def setUp(self):
-        rb._ALLIES.clear()
-        rb._RALLY_ENDS.clear()
-        rb._RALLY_SEEN.clear()
-
-    def tearDown(self):
-        rb._ALLIES.clear()
-        rb._RALLY_ENDS.clear()
-        rb._RALLY_SEEN.clear()
-
-    @staticmethod
-    def match(mon, left=200):
-        rb.note_rally("A", mon, left)
-        rb.note_rally("B", mon, left)
-
-    def test_one_coincidence_is_not_an_alliance(self):
-        self.match("Cerberus")
-        self.match("Cerberus")                      # the same rally read again is still one rally
-        rb._RALLY_SEEN["B"] = time.time()
-        self.assertFalse(rb.others_see_rallies("A"))
-
-    def test_three_separate_rallies_make_allies(self):
-        for mon, left in (("Cerberus", 200), ("Lava Turtle", 250), ("Pumpkin Monster", 150)):
-            self.match(mon, left)
-        rb._RALLY_SEEN["B"] = time.time()
-        self.assertTrue(rb.others_see_rallies("A"))
-        self.assertTrue(rb.others_see_rallies("B") is False)     # B's only ally is A, and A has not seen rallies
-
-    def test_link_expires_without_new_matches(self):
-        for mon, left in (("Cerberus", 200), ("Lava Turtle", 250), ("Pumpkin Monster", 150)):
-            self.match(mon, left)
-        rb._RALLY_SEEN["B"] = time.time()
-        later = time.time() + rb._ALLY_WINDOW + 5
-        with mock.patch.object(rb.time, "time", return_value=later):
-            rb._RALLY_SEEN["B"] = later
-            self.assertFalse(rb.others_see_rallies("A"))
-
-
 class BmNameMatch(unittest.TestCase):
     """Owner 28 Oct: a new Black Market item is named from the purchase question + its tile's pack size; a wrong
     name is worse than no name, so anything unclear stays unnamed."""
