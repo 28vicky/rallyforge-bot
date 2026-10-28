@@ -17426,6 +17426,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             return False
         at_bottom[0] = False                  # the list reopens at the top: the next sweep jumps to the bottom first
         outside_taps = [0]
+        city_back = [0]                       # owner 28 Oct: Back once when the rally button is hidden on the city (an ad)
         back_taps = [0]
         mail_backs = [0]
         hidden_taps = [0]
@@ -17562,6 +17563,13 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             elif st == "city" and cfg.get("rally_nav_tap"):
                 dev.tap(*cfg["rally_nav_tap"])
                 log("[*] Tapped the saved spot to reach the rally list")
+            elif st == "city" and city_back[0] < 1:            # owner 28 Oct 13:40 (Kiravik / Rob: 'Comeback Celebration', no X,
+                city_back[0] += 1                              # over the city - the rally button is hidden under it): Back closes
+                ph = _pop_hash(screen)                         # ads; without an ad Back only asks to quit -> Cancel next round.
+                _poplib_seen(ph, screen, log)
+                pop_pending[0] = (ph, "back", (0, 0))          # learned: next time this ad closes at once
+                dev.back()
+                log("[*] Rally button not recognised - pressing Back first (an ad over the city closes with it)")
             elif st == "city" and not getattr(dev, "nav_zoom_tried", False):
                 dev.nav_zoom_tried = True                      # owner 27 Oct (Rory zoomed in): zoom the city out once and log
                 b0 = dev.screenshot()                          # how much it changed - tells whether zoom works on this emulator
