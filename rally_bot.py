@@ -8814,7 +8814,8 @@ def bm_game_name(text):
         return f"{m.group(3)} {int(n)}"
     m = re.match(r"^24\s*Hours?\s+(.+?)\s+Speed\s*-?\s*up$", t, re.I)
     if m:
-        return f"24h {m.group(1)} Speed-up"
+        b = m.group(1)
+        return f"24h {'Iron Mine' if b.lower() == 'mine' else b} Speed-up"   # the game says "24 Hour Mine Speedup"
     return t
 
 
