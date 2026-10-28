@@ -1093,29 +1093,35 @@ const BM_INFO = {
 };
 // Owner 28 Oct: names offered when the owner names a new shop item (typed text is fine too) - item names only.
 const BM_SUGGEST = (() => {
-  const out = [], x = (base, qs) => qs.forEach((q) => out.push(base + (q ? " x" + q : "")));
+  // the game's Black Market items (owner 28 Oct, full list). No apostrophes / commas: item names become picture file names.
+  const out = [], x = (base, qs) => qs.forEach((q) => out.push(base + " x" + q));
   x("Treasure Box", [1, 5, 10, 20]); x("Tactic Scroll", [1, 5, 10, 20]);
-  const gear = ["Intellect Crown", "Strength Crown", "Agile Crown", "Martial Crown", "Medical Crown", "Durable Crown",
+  const gear = ["Intellect Crown", "Strength Crown", "Agile Crown", "Martial Crown", "Medicine Crown", "Durable Crown",
     "Mountain Staff", "Thunder Staff", "Wind Staff", "Fire Staff", "Mountain Decoration", "Thunder Decoration", "Wind Decoration", "Fire Decoration",
     "Mountain Grail", "Thunder Grail", "Wind Grail", "Fire Grail", "War Horn", "Courage Horn", "Loyalty Horn", "Justice Horn",
     "Earth Crystal", "Water Crystal", "Wind Crystal", "Fire Crystal", "Light Crystal", "Wood Crystal", "Thunder Crystal", "Golden Crystal"];
-  for (const lv of [4, 3]) gear.forEach((g) => out.push("Gear Lv" + lv + ": " + g));
+  for (const lv of [4, 3]) gear.forEach((g) => out.push("Gear Lv" + lv + " " + g));
   for (const r of ["Food", "Lumber", "Stone", "Ore"]) for (const a of ["500K", "1M", "2M", "5M", "20M", "50M", "200M", "500M"]) out.push(r + " " + a);
   x("Production Speed-up 24h", [1, 2, 5, 20]);
-  ["VIP 30 min", "VIP 60 min", "VIP 1 day", "VIP 7 days", "VIP 30 days"].forEach((v) => out.push(v));
-  out.push("Gold 50K", "Gold 100K"); x("Chips 100", [1, 2, 5]); x("Medals", [100, 200]);
-  x("Refining Stone", [10, 50]); x("Research Stone", [5, 10, 25, 50]); x("Runestone Chest", [10]); x("Dragon Crystal", [10]);
-  out.push("Stamina 50", "Stamina 50 x10", "Royal Waybill"); x("Tribute", [1, 2, 5, 10]);
-  for (const e of ["1,000", "2,000", "5,000", "50,000"]) x("Monarch EXP " + e, [1, 2, 5]);
-  for (const e of ["500", "1,000", "2,000", "5,000", "10,000", "20,000"]) x("General EXP " + e, [1, 2, 5, 10]);
-  out.push("Spiritual Beast EXP 5,000 x5", "Spiritual Beast EXP 1,000 x10", "Scroll Chest");
-  ["I", "II", "III", "IV", "V", "VI"].forEach((n) => out.push("Artwork Fragment Chest " + n));
-  for (const g of ["Bow", "Spear", "Axe", "Sword", "Helmet", "Armor", "Leg Armor", "Boots", "Ring"]) out.push("Gold gear: " + g, "Orange gear: " + g);
+  out.push("VIP 30 Minutes x1", "VIP 60 Minutes x1", "VIP 1 Day x1", "VIP 1 Day x4", "VIP 7 Days x1", "VIP 30 Days x1", "Gold 50K", "Gold 100K");
+  x("Chips 100", [1, 2, 5]); x("Medal", [100, 200]); x("Refining Stone", [10, 50]); x("Research Stone", [5, 10, 25, 50]);
+  x("Runestone Chest", [10]); x("Dragon Crystal", [10]);
+  out.push("Stamina 50", "Stamina 50 x10", "Royal Waybill x1"); x("Tribute", [1, 2, 5, 10]);
+  x("Monarch EXP 1000", [1, 2, 5]); x("Monarch EXP 2000", [1, 2, 5]); x("Monarch EXP 5000", [1, 5]); x("Monarch EXP 10000", [1, 5]);
+  x("General EXP 500", [1, 2, 5, 10]); x("General EXP 1000", [1, 2, 5]); x("General EXP 2000", [1, 2, 5]); x("General EXP 5000", [1, 2, 5]);
+  x("General EXP 10000", [5]); x("General EXP 20000", [5]); x("Spiritual Beast EXP 1000", [5, 10]);
+  out.push("Generals Scroll Chest x1", "Kings Scroll Chest x1", "Dragon Scroll Chest x1");
+  ["I", "II", "III", "IV", "V", "VI"].forEach((n) => out.push("Artwork Fragment Chest " + n + " x5"));
+  ["Bow", "Spear", "Axe", "Sword", "Leg Armor", "Boots", "Ring"].forEach((g) => out.push("Generals " + g));
+  ["Bow", "Spear", "Axe", "Sword", "Ring"].forEach((g) => out.push("Fighters " + g));
+  ["Helmet", "Armor", "Leg Armor", "Boots"].forEach((g) => out.push("Champions " + g));
+  ["Bow", "Spear", "Axe", "Sword", "Helmet", "Armor", "Ring"].forEach((g) => out.push("Elites " + g));
+  out.push("Standard Leg Armor", "Leather Boots", "Transcendence Bow", "Transcendence Leg Armor", "Transcendence Boots", "Transcendence Ring", "Cloth Hood", "Cloth Armor");
   return [...new Set(out)];
 })();
 // captured items: category from the name (the owner can rename an item by capturing it again)
 const bmGuess = (n) => /stam|vit/i.test(n) ? "stamina" : /speed/i.test(n) ? "speed"
-  : /gear|crown|staff|grail|horn|crystal|decoration|armor|ring|bow|spear|axe|sword|boots|helmet|refining/i.test(n) ? "gear"
+  : /gear|crown|staff|grail|horn|crystal|decoration|armor|ring|bow|spear|axe|sword|boots|helmet|hood|refining|research stone|runestone/i.test(n) ? "gear"
   : /chest|box/i.test(n) ? "chest" : /food|lumber|wood|stone|ore|iron|gold|silver|res/i.test(n) ? "res" : "other";
 const bmInfo = (n) => BM_INFO[n] ? { label: BM_INFO[n][0], cat: BM_INFO[n][1] } : { label: n, cat: bmGuess(n) };
 PAGES.market = function () {
