@@ -10155,14 +10155,41 @@ def ce_lucky_dialog(img):
     return bool(find_text(img, ["Confirm use?", "cooldown, but it can only"], cutoff=0.6))
 
 
-def ce_lucky_confirm(dev, stop, force=False):
-    """Tap Confirm on the Lucky Hammer dialog if it is open. True when it was tapped."""
+def ce_confirm_button(img):
+    """The green Confirm BUTTON of the Lucky Hammer dialog: a line that is only the word 'Confirm' (the question
+    '... Confirm use?' has the same word - 28 Oct all 8 instances tapped the question text and the hammer stayed 1).
+    The lowest such line wins. -> (x, y) or None."""
+    import difflib
+    x0, y0 = 150, 520
+    best = None
+    try:
+        for text, ws in ocr_lines(img[y0:900, x0:540]):
+            t = text.lower().strip(" .,:;!?")
+            if len(ws) <= 2 and difflib.SequenceMatcher(None, t, "confirm").ratio() >= 0.75:
+                cx = int(sum(w[1] for w in ws) / len(ws)) + x0
+                cy = int(sum(w[2] for w in ws) / len(ws)) + y0
+                if best is None or cy > best[1]:
+                    best = (cx, cy)
+    except Exception as _e:
+        quiet_err("ce_confirm_button", _e)
+    return best
+
+
+def ce_lucky_confirm(dev, stop, force=False, fallback=False):
+    """Tap Confirm on the Lucky Hammer dialog if it is open. True when it was tapped.
+    fallback=True (a try that did not use the hammer) taps the fixed button point instead of the read one."""
     img = dev.screenshot()
     if not (force or ce_lucky_dialog(img)):
         return False
-    p = find_text(img, ["Confirm"], region=(200, 600, 340, 200), cutoff=0.6) or CE_CONFIRM
+    ce_snap(img, "5_lucky_dialog")
+    p = CE_CONFIRM if fallback else (ce_confirm_button(img) or CE_CONFIRM)
     dev.tap(*p)
     _nap(stop, 1.8, 2.4)
+    img2 = dev.screenshot()
+    ce_snap(img2, "6_after_confirm")
+    if ce_lucky_dialog(img2) and p != CE_CONFIRM:          # still open: the read point missed - the fixed button point
+        dev.tap(*CE_CONFIRM)
+        _nap(stop, 1.8, 2.4)
     return True
 
 
@@ -10308,7 +10335,7 @@ def run_crazy_eggs(dev, cfg, log, stop):
                 act(f"Crazy Eggs: Lucky Hammer on the {want}-hammer egg")
                 dev.tap(*CE_EGG[slot])
                 _nap(stop, 1.2, 1.7)
-                if ce_lucky_confirm(dev, stop):
+                if ce_lucky_confirm(dev, stop, fallback=lucky_tries >= 2):
                     ce_close_panel(dev, stop)
                     _nap(stop, 0.8, 1.2)
                     left_n = ce_read_count(dev.screenshot(), CE_LUCKY)
