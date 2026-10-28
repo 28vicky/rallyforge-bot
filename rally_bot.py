@@ -11096,25 +11096,36 @@ def rd_alliance_page(dev, cfg, stop):
         dev.tap(*pos)
         _nap(stop, 1.8, 2.4)
         shot = dev.screenshot()
-        if rd_seen(shot, ["Alliance"], region=(0, 0, 540, 140)) or rd_seen(shot, ["Alliance Gift", "Alliance Help", "Alliance Science", "Alliance War", "Alliance Treasure", "Alliance Shop", "Members"], region=(40, 200, 460, 760)):
+        # Owner 28 Oct 13:03 (Kiravik/Stalds Alliance Science failed): the Alliance button reopens the LAST Alliance
+        # sub-page - for the bot that is Alliance War (the rally list). Back up to the main Alliance page (its rows).
+        for _ in range(3):
+            if not rd_seen(shot, ["PvP War", "Event War", "Battle Logs", "Auto-Join"], region=(0, 40, 540, 920)):
+                break
+            dev.back()                                     # a sub-page: Back goes up one page (never on the city here)
+            _nap(stop, 1.2, 1.6)
+            shot = dev.screenshot()
+        if rd_seen(shot, ["Alliance Gift", "Alliance Help", "Alliance Science", "Alliance Treasure", "Alliance Shop", "Members"], region=(40, 200, 460, 760)) or \
+                (rd_seen(shot, ["Alliance"], region=(0, 0, 540, 140)) and not rd_seen(shot, ["PvP War", "Battle Logs"], region=(0, 40, 540, 920))):
             return shot
     rd_snap(shot, "alliance_page_failed")
     raise RuntimeError("the Alliance page did not open (screen not found)")
 
 
 def rd_alliance_row(dev, stop, words):
-    """On the Alliance page: tap the row with this name, scrolling the list up when it is below the fold."""
-    for i in range(4):
+    """On the Alliance page: tap the row with this name - owner 28 Oct: read every screen while scrolling all the way
+    down, then all the way back up."""
+    moves = [(316, 778, 303, 548)] * 5 + [(303, 400, 316, 760)] * 7
+    for i in range(len(moves) + 1):
         shot = dev.screenshot()
-        row = rd_find(shot, words, region=(40, 300, 400, 640), cutoff=0.75)
+        row = rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.75)
         if row:
             dev.tap(row[0], row[1])
             _nap(stop, 1.8, 2.4)
             return True
-        if stop.is_set():
+        if stop.is_set() or i == len(moves):
             break
-        dev.swipe(316, 778, 303, 548, 450)
-        _nap(stop, 1.0, 1.4)
+        dev.swipe(*moves[i], 450)
+        _nap(stop, 0.8, 1.1)
     rd_snap(dev.screenshot(), "alliance_row_" + words[0].replace(" ", "_"))
     return False
 
