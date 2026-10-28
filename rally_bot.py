@@ -918,7 +918,7 @@ class Device:
             dl = getattr(_TL, "duty_deadline", None)         # a duty over its time budget: its next action aborts it (the runner
             if dl and time.time() > dl:                       # then closes pop-ups, leaves to the city and tries once more)
                 _TL.duty_deadline = None
-                raise RuntimeError(f"no progress for {DUTY_BUDGET_MIN} min - stopped (stuck on a window or page it does not know?)")
+                raise RuntimeError(f"time limit: no progress for {DUTY_BUDGET_MIN} min - stopped")
         return subprocess.run([self.adb, "-s", self.serial, *a], capture_output=True,
                               timeout=timeout, creationflags=NOWIN)
 
@@ -11241,6 +11241,7 @@ def ch_do_taps(dev, stop, log, name, want, serial, day):
             used = {**(ch_row(serial).get("taps") or {})} if ch_row(serial).get("taps_day") == day else {}
             used[name] = used.get(name, 0) + 1
             ch_save(serial, taps_day=day, taps=used)
+            duty_progress()                                # a counted tap = progress: the time limit starts again
             before = after
             if after >= CH_TAPS:
                 log("[i]   Champions: the 15 daily taps are used up")
@@ -11272,6 +11273,7 @@ def ch_do_greets(dev, stop, log, name, want, serial, day):
         if spot is None:                                   # no Greet word on the page: never tap blind (a pack / buy button may sit there)
             log("[!]   Champions: no Greet button found on the page - not tapping anything")
             rd_snap(shot, "champ_nogreet")
+            _TL.ch_blocked = f"no Greet button on {name}'s page"
             break
         lab = ch_greet_label(shot, box)
         if lab["n"] is not None and lab["n"] >= CH_GREETS:
@@ -11279,6 +11281,7 @@ def ch_do_greets(dev, stop, log, name, want, serial, day):
             break
         if lab["wait"] > 0:
             log(f"[i]   Champions: greet timer, waiting {lab['wait']} s")
+            duty_progress()                                # Manhattan 28 Oct: 10 greets x ~55 s timers ran past the 8-min limit
             if stop.wait(min(lab["wait"], 75) + 3):
                 break
             spot, box = ch_find_greet(dev.screenshot())
@@ -11291,6 +11294,7 @@ def ch_do_greets(dev, stop, log, name, want, serial, day):
         used = {**(ch_row(serial).get("greets") or {})} if ch_row(serial).get("greets_day") == day else {}
         used[name] = used.get(name, 0) + (CH_GREETS if lab["pack"] else 1)
         ch_save(serial, greets_day=day, greets=used)
+        duty_progress()
         if lab["pack"]:
             log("[i]   Champions: 'Greet x10' (champion pack) - one press used all 10 greetings")
             return CH_GREETS
@@ -11342,6 +11346,8 @@ def run_champions(dev, cfg, log, stop):
     if len(order) > 1 and ch_name(dev.screenshot()) in order and CHAMPIONS.index(ch_name(dev.screenshot())) > (CHAMPIONS.index(order[0]) + CHAMPIONS.index(order[-1])) / 2:
         order.reverse()                                    # start from the end that is nearer
     total_taps = total_greets = 0
+    _TL.ch_blocked = None
+    needed = False                                         # did any champion still have taps / greets to do?
     for name in order:
         if stop.is_set():
             break
@@ -11350,8 +11356,10 @@ def run_champions(dev, cfg, log, stop):
         if not (need_t or need_g):
             log(f"[i]   Champions: {name} - today's taps and greets already done")
             continue
+        needed = True
         if not ch_goto(dev, stop, log, name):
             log(f"[!]  Champions: could not reach {name}")
+            _TL.ch_blocked = _TL.ch_blocked or f"could not reach {name}"
             continue
         shot = dev.screenshot()
         ch_snap(shot, "2_" + _ch_norm(name))
@@ -11372,6 +11380,9 @@ def run_champions(dev, cfg, log, stop):
     shot = dev.screenshot()
     used = ch_taps_used(shot)
     log(f"[+]  Champions done: {total_taps} tap(s), {total_greets} greet(s) this run" + (f"; taps today {used}/{CH_TAPS}" if used is not None else ""))
+    if needed and not (total_taps or total_greets) and _TL.ch_blocked and not stop.is_set():
+        # Manhattan 28 Oct 21:15: 0 taps + 0 greets was saved as "Done". Nothing done = not done (owner: say why).
+        raise RuntimeError(f"nothing was done - {_TL.ch_blocked}")
 
 
 # ------------------------------------------------------------ test: does world map -> city reset the camera?
@@ -11475,28 +11486,61 @@ def as_snap(img, tag):
         quiet_err("as_snap", _e)
 
 
+AS_BAR_TOP = 870            # the Alliance page's bottom bar (Mail / Invite / Members / Manage) starts here: rows below it are covered
+
+
+def as_find_row(img):
+    """The 'Alliance Science' row on the Alliance page -> ((x, y), lines read).
+    Owner review 28 Oct: the old word list ('Alliance Tech', 'Science', 'Technology', 'Research', cutoff 0.72) matched
+    'Alliance War' (0.72) and tapped it on Stalds every time. Now: only 'Alliance Science' (0.85), the line must hold
+    'scien', and the row must sit above the bottom bar (a covered row is never tapped)."""
+    import difflib
+    x0, y0 = 40, 200
+    read = []
+    for text, ws in ocr_lines(img[y0:AS_BAR_TOP, x0:500]):
+        low = text.lower().strip(" .,:;!>")
+        read.append(text.strip())
+        if "scien" not in low or not ws:
+            continue
+        if difflib.SequenceMatcher(None, low, "alliance science").ratio() < 0.85:
+            continue
+        cx = int(sum(w[1] for w in ws) / len(ws)) + x0
+        cy = int(sum(w[2] for w in ws) / len(ws)) + y0
+        if cy < AS_BAR_TOP - 15:
+            return (cx, cy), read
+    return None, read
+
+
+def as_page_title(img):
+    try:
+        return " ".join(t for t, _ in ocr_lines(img[0:70, 100:440])).strip() or "?"
+    except Exception:
+        return "?"
+
+
 def run_alliance_science(dev, cfg, log, stop):
     """From the city: Alliance button -> Alliance Science row -> tap Donate on the recommended science until the day's
     donations are used up. Only the free daily donations; nothing that costs gems is pressed."""
-    rd_alliance_page(dev, cfg, stop)
-    row = None
-    words = ["Alliance Science", "Science", "Alliance Tech", "Technology", "Research"]
-    moves = [(316, 778, 303, 548)] * 5 + [(303, 400, 316, 760)] * 7      # up past the fold first, then back down
-    for i in range(len(moves) + 1):
-        shot = dev.screenshot()
-        if i == 0:
-            as_snap(shot, "1_alliance")
-        row = find_text(shot, words, region=(40, 200, 460, 740), cutoff=0.72)
-        if not row:
-            r = rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.72)
-            row = (r[0], r[1]) if r else None
-        if row or stop.is_set() or i == len(moves):
+    rd_alliance_page(dev, cfg, stop, log)
+    shot = dev.screenshot()
+    as_snap(shot, "1_alliance")
+    row, read = as_find_row(shot)
+    for i in range(3):                                     # the Science row is the last one, under the bottom bar: lift the
+        if row or stop.is_set():                           # list with the inertia-free drag (a quick swipe can spring back)
             break
-        dev.swipe(*moves[i], 450)
-        _nap(stop, 1.0, 1.4)
+        if hasattr(dev, "slow_drag"):                      # the owner's own recorded drag (flow 21 Oct): 316,778 -> 303,548,
+            dev.slow_drag(316, 778, 303, 548, 1000)        # held ~1.2 s; the Science row then sat at y ~690
+        else:
+            dev.swipe(316, 778, 303, 548, 1200)
+        _nap(stop, 0.8, 1.0)
+        shot = dev.screenshot()
+        row, read = as_find_row(shot)
+        log(f"[i]   Alliance Science: lifting the Alliance list (drag {i + 1}/3) - {'row found' if row else 'not seen yet'}")
     if not row:
-        as_snap(dev.screenshot(), "2_failed")
+        as_snap(shot, "2_failed")
+        log(f"[!]   Alliance Science: rows read: {' | '.join(r for r in read if r)[:300] or 'nothing'}")
         raise RuntimeError("the Alliance Science row was not found on the Alliance page")
+    log(f"[i]   Alliance Science: tapping the row read as '{next((r for r in read if 'scien' in r.lower()), '?')}' at {row}")
     dev.tap(*row)
     t0 = time.time()                                       # Kiravik 28 Oct 'page did not open': wait for the page (slow load),
     rem = btn = None                                       # tap the row once more if it still has not opened
@@ -11510,13 +11554,18 @@ def run_alliance_science(dev, cfg, log, stop):
             break
         if time.time() - t0 > 7:
             break
-        if not retapped and time.time() - t0 > 3.5 and (find_text(shot, words, region=(40, 200, 460, 740), cutoff=0.72) or rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.72)):
-            r2 = find_text(shot, words, region=(40, 200, 460, 740), cutoff=0.72) or rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.72)
-            dev.tap(r2[0], r2[1])
-            retapped = True
+        if not retapped and time.time() - t0 > 3.5:
+            r2, _ = as_find_row(shot)                      # still on the Alliance page: the same strict row only
+            if r2:
+                dev.tap(*r2)
+                retapped = True
     as_snap(shot, "3_science")
     if rem is None and not (btn and find_text(shot, ["Alliance Science", "Science"], region=(0, 0, 540, 340), cutoff=0.7)):
-        raise RuntimeError("the Alliance Science page did not open")
+        title = as_page_title(shot)
+        log(f"[!]   Alliance Science: after the tap the page is '{title}', not Alliance Science - pressing Back once")
+        dev.back()
+        _nap(stop, 1.0, 1.3)
+        raise RuntimeError(f"the Alliance Science page did not open (opened '{title[:40]}')")
     if rem is None:                                        # counter not readable: tap one at a time while the green button stays
         log("[i]   Alliance Science: the donation counter is not readable - donating one at a time")
         n = 0
@@ -11722,16 +11771,35 @@ def rd_keyboard_ok(dev, stop):
     _nap(stop, 1.0, 1.4)
 
 
-def rd_alliance_page(dev, cfg, stop):
+def _alliance_button(shot, cfg):
+    """Where to tap the city's Alliance button -> ((x, y), how found)."""
+    ab = find_text(shot, ["Alliance"], region=(400, 200, 140, 740), cutoff=0.7)   # the word under the button: its place moves with the icons above
+    if ab:
+        return (int(ab[0]), max(int(ab[1]) - 38, 0)), "word"
+    h = find(shot, "rally_icon", 0.8) if has_template("rally_icon") else None
+    if h:
+        return (h[0], h[1]), "picture"
+    return tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance")), "fixed spot"
+
+
+def rd_alliance_page(dev, cfg, stop, log=None):
     """From the city: open the Alliance page (same way as Alliance Science)."""
     shot = dev.screenshot()
-    ab = find_text(shot, ["Alliance"], region=(400, 200, 140, 740), cutoff=0.7)   # the word under the button: its place moves with the icons above
-    h = find(shot, "rally_icon", 0.8) if not ab and has_template("rally_icon") else None
-    pos = (int(ab[0]), max(int(ab[1]) - 38, 0)) if ab else (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
+    pos, how = _alliance_button(shot, cfg)
     for attempt in range(2):
-        if attempt and rd_seen(shot, ["Mail"], region=(0, 0, 540, 140)):    # the fixed spot hit Mail (owner 23 Oct): back out first
-            dev.back()
-            _nap(stop, 1.0, 1.3)
+        if attempt:
+            if rd_seen(shot, ["Mail"], region=(0, 0, 540, 140)):    # the tap hit Mail (owner 23 Oct; Stalds 28 Oct 21:21): back out
+                dev.back()
+                _nap(stop, 1.0, 1.3)
+                shot = dev.screenshot()
+            # Stalds 28 Oct 21:21: the 2nd try tapped the SAME spot that had opened Mail - find the button again
+            npos, nhow = _alliance_button(shot, cfg)
+            if npos == pos and nhow != "word":             # only the same blind spot again: never repeat a tap that failed
+                rd_snap(shot, "alliance_page_failed")
+                raise RuntimeError(f"the Alliance page did not open (the {how} at {pos} did not open it; the Alliance word was not read)")
+            if log:
+                log(f"[i]   Alliance page: 2nd try - button by {nhow} at {npos} (1st try {pos} did not open it)")
+            pos, how = npos, nhow
         dev.tap(*pos)
         _nap(stop, 1.8, 2.4)
         shot = dev.screenshot()
