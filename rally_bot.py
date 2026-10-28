@@ -18855,6 +18855,23 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     why=why + " - the other rallies first, this one is tried again on the next pass")
                 remember_rally(base_name, t_join + left, "failed")      # never given up: retried every pass while it shows "Join"
             act("step", text=f"Joining {mon_name} rally ({left}s left)")
+            # owner 29 Oct 03:07: Manhattan joined an Aglaope (switched off) logged as "Kraken" - the list moved between
+            # reading it and the tap, so the tap hit the next row. Look again right before tapping: the Join button must
+            # still be there AND show the same monster, else read the list again (no tap, nothing counted as failed).
+            if mon and mon != "hidden":
+                try:
+                    sh_now = dev.screenshot()
+                    near = [h2 for h2 in find_all(sh_now, "join_button", cfg["threshold"], cfg["search_region"])
+                            if abs(h2[1] - hit[1]) <= 40 and not joined_button(sh_now, h2)]
+                    same = [h2 for h2 in near if identify_monster(sh_now, h2, cfg)[0] == mon]
+                except Exception:
+                    near, same = [hit], [hit]
+                if not same:
+                    now_m = identify_monster(sh_now, min(near, key=lambda h2: abs(h2[1] - hit[1])), cfg)[0] if near else None
+                    log(f"[i] The rally list moved - that row now shows {now_m or 'another rally'}, not {mon}; reading the list again")
+                    nap(0.4, 0.7)
+                    continue
+                hit = min(same, key=lambda h2: abs(h2[1] - hit[1]))
             tap_hit(dev, hit)
             nap(1.0, 1.5)
 
