@@ -3967,6 +3967,29 @@ def wait_not_black(dev, log, stop, secs=20, limit=120):
     return False
 
 
+def purchase_guard(dev, shot, log=None):
+    """Owner 28 Oct 12:49 (K ended on Google Play 'Super Value Privilege Rs 2,300' after the zoom's pinch touched the
+    Store): a payment sheet or the game's Store is NEVER tapped inside - leave it with Back at once. -> True when it
+    backed out."""
+    try:
+        if shot is None:
+            return False
+        hit = find_text(shot, ["Google Play"], region=(0, 0, 540, 260), cutoff=0.85) or \
+            find_text(shot, ["Store"], region=(150, 0, 240, 75), cutoff=0.9) or \
+            find_text(shot, ["Purchase Packages", "Purchase Package"], region=(0, 300, 540, 200), cutoff=0.8)
+        if not hit:
+            return False
+        if log:
+            log("[!] A payment / Store page is open - leaving it with Back (nothing is tapped inside it)")
+        rd_snap(shot, "purchase_page")
+        dev.back()
+        time.sleep(0.9)
+        return True
+    except Exception as _e:
+        quiet_err("purchase_guard", _e)
+        return False
+
+
 def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
     """Close whatever covers the game (offers, event pop-ups, full-screen sales, dialogs) so the bot can carry on with
     what it was doing. Uses your popup_* pictures first; on a screen it does not know it presses Back, but only when it
@@ -3987,6 +4010,9 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
             return closed
         _poplib_learn(pending, shot, log)
         pending = None
+        if purchase_guard(dev, shot, log):
+            closed += 1
+            continue
         if screen_state(shot, cfg) == "unknown" and safety_stop(dev, shot, cfg, log, stop):
             return closed
         if cancel_quit_dialog(dev, shot, log):
@@ -4072,7 +4098,10 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
         _pe = None if full_page else _poplib_seen(_ph, shot, log)        # every unknown pop-up goes into the library
         if _pe and _pe.get("fix") and _pe.get("xy") and _ph not in known_done:
             known_done.add(_ph)                            # met before: use the tap that closed it last time
-            dev.tap(*_pe["xy"])
+            if _pe["fix"] == "back":                       # owner 28 Oct: ads close with Back
+                dev.back()
+            else:
+                dev.tap(*_pe["xy"])
             pending = (_ph, _pe["fix"], _pe["xy"])
             log(f"[*] Known pop-up - closing it the way that worked before ({_pe['fix']} at {tuple(_pe['xy'])})")
             closed += 1
@@ -12115,6 +12144,20 @@ def _at_map_zoom(dev, shot):
 def zoom_out_full(dev, cfg, stop, log):
     """All the way out: Ctrl+wheel until the picture stops getting smaller (Kiravik 23 Oct: the two-notch zoom of the duties
     left the city 1.8x bigger than the game's own widest view, so the map needed 56 views instead of ~8)."""
+    shot0 = dev.screenshot()                               # owner 28 Oct 12:49: zoom (wheel, pinch) ONLY on the city view - on
+    if purchase_guard(dev, shot0, log):                    # K it scrolled the Store and the pinch opened Google Play
+        shot0 = dev.screenshot()
+    def on_city(sh):
+        if screen_state(sh, cfg) == "city":
+            return True
+        cm = city_map(dev)
+        return bool(cm is not None and cm.locate(sh))
+    if not on_city(shot0):
+        leave_to_city(dev, cfg, stop, log)
+        shot0 = dev.screenshot()
+        if not on_city(shot0):
+            log("[i]   zoom: the city view is not on screen - no zoom (nothing is scrolled or pinched elsewhere)")
+            return
     if cfg.get("zoom_out", False):
         zoom_out_city(dev, stop, log)
     name = (load_config().get("device_names") or {}).get(dev.serial)
@@ -13080,10 +13123,41 @@ def run_test_pins(dev, cfg, log, stop):
     log(f"[*] Pin test {name.title()}: {len(ok)} of {len(ok) + len(bad)} opened" + (f"; NOT opened: {', '.join(bad)}" if bad else " - all good"))
 
 
+MAP_REQUEST = "map_request.json"                          # written by the Map my city / Map city again button (web_app)
+
+
+def map_request_set(dev):
+    try:
+        f = _map_dir(dev) / MAP_REQUEST
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps({"t": time.time()}), encoding="utf-8")
+    except Exception as _e:
+        quiet_err("map_request_set", _e)
+
+
+def map_request_fresh(dev, take=True):
+    """Owner 28 Oct 12:53: K's map was wiped by a Map my city nobody pressed. A run that wipes needs a button press
+    from the last 15 min; the request is used up when the run starts."""
+    f = _map_dir(dev) / MAP_REQUEST
+    try:
+        ok = time.time() - float(json.loads(f.read_text(encoding="utf-8")).get("t", 0)) < 900
+    except Exception:
+        ok = False
+    if take:
+        try:
+            f.unlink()
+        except Exception:
+            pass
+    return ok
+
+
 def run_map_city(dev, cfg, log, stop):
     """Duty 'Map my city': at the widest zoom, explore the city from the current view (each direction once from every
     view, one measured drag per step), keep every view that shows buildings and is new ground, then solve all the
     views' places from their picture links at once and save them as keyframes. The finger only chooses the next drag."""
+    if not map_request_fresh(dev):
+        log("[!] Map my city was not asked for on this instance (no button press in the last 15 min) - skipped, the map stays")
+        return
     # Owner spec 28 Oct: Map my city (and Map city again) starts from 0 - this instance's picture and all its pins go.
     log("[*] Map my city: " + (wipe_city_map(dev, "Map my city") or "starting from 0"))
     dev._mapping = True                                    # the city map + culture pins are usable while mapping
@@ -17004,9 +17078,26 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         log(msg)
         city_block[0] = time.time() + 600
 
+    pop_pending = [None]                      # (fingerprint, how, xy) of the last close try: learned when the screen changes
+
     def dismiss_popup(screen, x_ok=False):
+        _poplib_learn(pop_pending[0], screen, log)        # owner 28 Oct 12:57: learn each ad once, close it at once next time
+        pop_pending[0] = None
+        if purchase_guard(dev, screen, log):
+            return True
         if cancel_quit_dialog(dev, screen, log):
             return True
+        if x_ok:                                          # a pop-up met before: the way that closed it last time, first
+            ph = _pop_hash(screen)
+            _k, pe = _poplib_find(ph)
+            if pe and pe.get("fix") and pe.get("xy"):
+                if pe["fix"] == "back":
+                    dev.back()
+                else:
+                    dev.tap(*pe["xy"])
+                pop_pending[0] = (ph, pe["fix"], pe["xy"])
+                log(f"[*] Known pop-up - closing it the way that worked before ({pe['fix']})")
+                return True
         for name in list_templates("popup_"):
             h = find(screen, name, 0.85)
             if h:
@@ -17029,6 +17120,9 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             cx = find_close_x(screen)
             if cx:
                 dev.tap(cx[0][0], cx[0][1])
+                ph = _pop_hash(screen)
+                _poplib_seen(ph, screen, log)
+                pop_pending[0] = (ph, "x", (cx[0][0], cx[0][1]))
                 log(f"[*] Closed a pop-up with its X button ({cx[0][0]},{cx[0][1]})")
                 return True
         return False
@@ -17344,6 +17438,9 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 force_restart_game(dev, cfg, log, stop, must=True, reason="restart asked from the interface")
                 continue
             st = screen_state(screen, cfg)
+            if pop_pending[0] and st != "unknown":         # the last close try worked (we are off the pop-up): learn it
+                _poplib_learn(pop_pending[0], screen, log)
+                pop_pending[0] = None
             if st == "rally_list":
                 _ON_LIST[serial] = time.time()
             if st != "rally_list" and time.time() - kick_check[0] > 4:
@@ -17360,7 +17457,23 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 same = frozen["shot"] is not None and float(cv2.absdiff(frozen["shot"], screen).mean()) < 2.0
                 frozen["shot"] = screen
                 frozen["n"] = frozen["n"] + 1 if same else 0
-                if frozen["n"] >= 20:
+                # Owner 28 Oct 12:53-12:56: ads were tapped on the same wrong 'X' for ~3 min (K 135x, Skip 22x) - ads close
+                # with Back, and the bot must be fast: one try that changes nothing -> Back (outside the city) / tap
+                # outside (on the city: Back there asks to quit); still the same after 4 rounds -> restart Evony.
+                if frozen["n"] in (1, 2):
+                    ph = _pop_hash(screen)
+                    _poplib_seen(ph, screen, log)
+                    if st == "unknown" and frozen["n"] == 1:
+                        log("[*] That did not close it - pressing Back")
+                        dev.back()
+                        pop_pending[0] = (ph, "back", (0, 0))
+                    else:
+                        log("[*] That did not close it - tapping outside it (8,480)")
+                        dev.tap(8, 480)
+                        pop_pending[0] = (ph, "outside", (8, 480))
+                    nap(0.6, 0.9)
+                    continue
+                if frozen["n"] >= 4:
                     frozen["n"] = 0
                     frozen["shot"] = None
                     save_debug(serial, screen)
@@ -17371,11 +17484,11 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             break
                         restart_emulator(dev, cfg, log, stop, "the game froze twice (does not react to taps)")
                     else:
-                        log("[!] The game does not react (same screen after 20 taps, ~3 min) - restarting Evony")
+                        log("[!] The game does not react (same screen after X, Back and an outside tap) - restarting Evony")
                         force_restart_game(dev, cfg, log, stop, must=True, reason="game does not react to taps")
                     frozen["last"] = time.time()
                     continue
-                nap(1.0, 1.5)
+                nap(0.6, 0.9)
                 continue
             frozen["n"] = 0
 

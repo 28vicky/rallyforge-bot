@@ -1934,6 +1934,8 @@ class Api:
         if tid not in {c["id"] for c in self._rn_catalog()}:
             raise ApiError("Unknown task.")
         for s in self._rn_targets(p):
+            if tid in ("duty:map_city", "duty:map_movable"):
+                rb.map_request_set(types.SimpleNamespace(serial=s))   # Run now > Map my city is a press too
             rb.run_now_set(s, rb.run_now_list(s) + [tid])
         return self.run_now(p)
 
@@ -2426,6 +2428,7 @@ class Api:
         if rb.mymap_running(dev):
             raise ApiError("This city is being mapped right now.")
         rb.wipe_city_map(dev, "Map city again")
+        rb.map_request_set(dev)                            # the run checks this press (never maps by itself)
         rb.run_now_set(serial, [t for t in rb.run_now_list(serial) if t not in ("duty:map_city", "duty:map_movable")] + ["duty:map_city"])
         return self.city_map_info({"serial": serial})
 
