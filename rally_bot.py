@@ -6724,6 +6724,7 @@ def lib_clear():
         LIB_FILE.unlink(missing_ok=True)
 
 
+_feed_cache_min = [10]               # Monster hunts "Refresh cache every" (min) - set by mr_targets; see feed_add
 _feed_keep = [None]                  # how long (min) the live list keeps a coordinate; set from the settings, 0 = until cleared
 
 
@@ -6759,7 +6760,10 @@ def feed_add(items, chat="", keep_min=60):
         for it in items:
             for f in _feed:
                 if f["x"] == it["x"] and f["y"] == it["y"] and f.get("chat") == chat and f.get("name") == it.get("name"):
-                    f["t"] = now
+                    # owner 29 Oct 04:02: a duplicate is IGNORED while it is in the cache (its age keeps counting from
+                    # when it was added); once older than the cache time it counts as new again (still alive = re-added)
+                    if now - float(f.get("t") or 0) > _feed_cache_min[0] * 60:
+                        f["t"] = now
                     break
             else:
                 _feed.insert(0, {**it, "chat": chat, "t": now})
@@ -15401,6 +15405,7 @@ def mr_targets(cfg, tried, serial=None):
     modes = mr_presets(cfg)
     done = mr_solo_done(serial)
     age_min = float(rd_opt(cfg, "monster_rally", "max_age", 10) or 10)
+    _feed_cache_min[0] = age_min
     age = age_min * 60
     now = time.time()
     feed, _ = feed_get(_feed_keep[0] if _feed_keep[0] is not None else int(cfg.get("tg_keep_min", 60) or 0))
