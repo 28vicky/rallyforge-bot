@@ -8832,7 +8832,7 @@ def market_name_new(dev, log, stop, img, saved):
         if not slot["afford"]:
             continue                                         # a red price may open a different box - not worth the risk
         count = market_tile_count(img, slot)
-        g0, m0 = market_totals(img)
+        g0, m0 = market_totals(dev.screenshot())             # QA 28 Oct: a fresh read - the shop shot can still show the totals from before a paid refresh (false "dropped")
         bx, by, bw, bh = slot["btn"]
         dev.tap(bx + bw / 2, by + bh / 2)
         shot, kind = None, None
