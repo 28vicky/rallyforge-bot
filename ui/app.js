@@ -422,7 +422,7 @@ function renderSide() {
   const nRun = devs.filter((d) => d.state === "run").length, nPause = devs.filter((d) => d.state === "pause").length;
   const ic = $("#instCnt"); if (ic) ic.textContent = runText();
   // (ui-simple) All / Running / Problems filter once the list gets long
-  const isProb = (d) => d.state === "error" || (d.state === "run" && (d.kicked_at || d.no_stamina));
+  const isProb = (d) => d.state === "error" || (d.state === "run" && (d.kicked_at || d.no_stamina || (d.hunt && d.hunt.state === "blocked")));
   const nProb = devs.filter(isProb).length;
   const F = $("#instFilter");
   if (F) {
@@ -455,6 +455,8 @@ function sideStatus(d) {
   if (d.state === "run" && d.kicked_at) return ["kicked · back in", "warn", T("data-at", d.kicked_at)];
   if (d.state === "run" && d.loading) return [d.loading, "warn", T("data-since", d.loading_since)];
   if (d.state === "run" && d.no_stamina) return ["no stamina", "warn"];
+  if (d.state === "run" && d.hunt && d.hunt.state === "blocked") return ["Hunts · " + d.hunt.text, "warn"];
+  if (d.state === "run" && d.hunt && Date.now() / 1000 - d.hunt.t < 120) return ["Hunts · " + d.hunt.text, d.hunt.state === "waiting" ? "" : "ok"];
   if (d.state === "run") return [busyTask(d.id, true) || "running", "ok"];        // C7: same word as the header when nothing is busy
   if (d.start_at) return ["starts in", "", T("data-at", d.start_at)];
   if (d.queued) return ["queued", ""];
@@ -480,7 +482,8 @@ function sideRow(d) {
       oncontextmenu: (e) => { e.preventDefault(); openSideMenu(e, d); } },
     h("span", { class: "grip", "aria-hidden": "true" }, "⋮⋮"),
     h("span", { class: "dot " + dot }),
-    h("div", { class: "itx" }, h("span", { class: "nm" }, d.name || short(d.id)),
+    h("div", { class: "itx" }, h("span", { class: "nm" }, d.name || short(d.id),
+        d.state === "run" && d.hunt && d.hunt.state === "blocked" ? h("span", { class: "needs" }, "Needs attention") : null),
       h("span", { class: "ist " + tone }, txt, tm ? h("span", Object.assign({ class: "ctimer" }, tm)) : null, joins)),
     h("button", { class: "irun" + (fn ? "" : " wait"), type: "button", title: lab, "aria-label": lab, disabled: !fn, onclick: (e) => { e.stopPropagation(); if (fn) fn(); } },
       icon === "spin" ? h("span", { class: "ispin" }) : ico(icon)));

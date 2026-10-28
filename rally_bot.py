@@ -14817,6 +14817,99 @@ def mr_rules(cfg):
     return out
 
 
+# --- Hunts (owner 28 Oct 17:07): every preset hunts its own monster list in its own mode - Rally (Alliance War) or
+# Solo (attack alone). Rally and Solo are equals. Smart mode is shown as "soon" in the app only.
+MR_MODES = ("rally", "solo")
+MR_ATTACK = (170, 768)                    # Attack button on a monster page (solo; Alliance War sits at 384)
+RALLY_ONLY = set()                        # lower-case monster names that can only be rallied (owner to confirm the list)
+
+
+def mr_pnum(p):
+    return RT_PRESETS.index(p) + 1 if p in RT_PRESETS else 1
+
+
+def mr_presets(cfg):
+    """Each preset's mode and solo hunt limit a day: {"I": {"mode": "rally", "hunts": 0}, ...}. Old settings = all Rally."""
+    raw = rd_opt(cfg, "monster_rally", "presets", None)
+    raw = raw if isinstance(raw, dict) else {}
+    out = {}
+    for p in RT_PRESETS:
+        r = raw.get(p) if isinstance(raw.get(p), dict) else {}
+        out[p] = {"mode": r.get("mode") if r.get("mode") in MR_MODES else "rally",
+                  "hunts": max(0, int(float(r.get("hunts") or 0)))}
+    return out
+
+
+def mr_solo_done(serial):
+    """-> {preset: solo hunts done today}."""
+    row = mr_row(serial)
+    return dict(row.get("solo_n") or {}) if row.get("solo_day") == _game_day() else {}
+
+
+def mr_why_rank(rank):
+    return "top of its list" if rank == 0 else f"#{rank + 1} on its list"
+
+
+HUNT_DEC_FILE = USER / "hunt_decisions.json"
+HUNT_DEC_MAX = 400                        # rows kept per instance (today only - owner 28 Oct)
+_hunt_dec, _hunt_dec_lock = {}, threading.Lock()
+
+
+def _hunt_dec_load():
+    if not _hunt_dec and HUNT_DEC_FILE.exists():
+        try:
+            d = json.loads(HUNT_DEC_FILE.read_text(encoding="utf-8"))
+            _hunt_dec.update(d if isinstance(d, dict) else {})
+        except Exception as _e:
+            quiet_err("hunt_dec_load", _e)
+    if _hunt_dec.get("day") != _game_day():                # a new game day starts an empty list
+        _hunt_dec.clear()
+        _hunt_dec.update(day=_game_day(), rows={})
+
+
+def hunt_note(serial, it, decision, kind, why, save=True, keep_done=False):
+    """Decisions list (Hunts > Live): one row per coordinate - what the bot decided and why. kind: go | solo | wait | skip.
+    keep_done: never write over a row where this instance already rallied / attacked the monster."""
+    key = f"{it.get('x')},{it.get('y')}"
+    with _hunt_dec_lock:
+        _hunt_dec_load()
+        rows = _hunt_dec["rows"].setdefault(serial or "default", {})
+        old = rows.get(key)
+        if old and old.get("decision") == decision and old.get("why") == why:
+            return
+        if old and keep_done and old.get("kind") in ("go", "solo"):
+            return
+        rows[key] = {"t": time.time(), "name": it.get("name") or "", "level": it.get("level") or 0, "km": it.get("km"),
+                     "seen": float(it.get("t") or 0), "decision": decision, "kind": kind, "why": why}
+        if len(rows) > HUNT_DEC_MAX:
+            for k in sorted(rows, key=lambda k: rows[k]["t"])[:len(rows) - HUNT_DEC_MAX]:
+                rows.pop(k, None)
+        if save:
+            hunt_dec_save()
+
+
+def hunt_dec_save():
+    try:
+        save_json(HUNT_DEC_FILE, _hunt_dec)
+    except Exception as _e:
+        quiet_err("hunt_dec_save", _e)
+
+
+def hunt_decisions(serial):
+    with _hunt_dec_lock:
+        _hunt_dec_load()
+        rows = list((_hunt_dec["rows"].get(serial or "default") or {}).items())
+    return sorted([dict(r, key=k) for k, r in rows], key=lambda r: -r["t"])
+
+
+def hunt_status(serial, state, title, sub=""):
+    """Hunts status bar: state running | waiting | blocked, a title and one line of why."""
+    mr_save(serial, status={"state": state, "title": title, "sub": sub, "t": time.time()})
+
+
+MR_LAST_SKIPS = {}                         # serial -> {reason: count} of the last target look-up (status bar "top reason")
+
+
 MR_BLOCK_FILE = USER / "monster_blocks.json"
 MR_BLOCK_H = 2                            # safety cap; normally a block ends when Telegram stops listing the monster
 _mr_block, _mr_block_lock = {}, threading.Lock()
@@ -14973,10 +15066,13 @@ def mr_rule_for(rules, name, level):
 
 
 def mr_targets(cfg, tried, serial=None):
-    """Telegram coordinates of monsters that sit on a preset (Monster rallies tab), best first (newest, then nearest).
-    -> [{name, level, x, y, km, t, rule, rank}]"""
+    """Telegram coordinates of monsters that sit on a preset (Hunts tab), best first (top of a preset, then nearest).
+    Every coordinate gets a line in the Decisions list (why it is hunted or skipped). -> [{name, level, x, y, km, t, rule, rank, mode}]"""
     rules = mr_rules(cfg)
-    age = float(rd_opt(cfg, "monster_rally", "max_age", 10) or 10) * 60
+    modes = mr_presets(cfg)
+    done = mr_solo_done(serial)
+    age_min = float(rd_opt(cfg, "monster_rally", "max_age", 10) or 10)
+    age = age_min * 60
     now = time.time()
     feed, _ = feed_get(_feed_keep[0] if _feed_keep[0] is not None else int(cfg.get("tg_keep_min", 60) or 0))
     try:
@@ -14985,23 +15081,60 @@ def mr_targets(cfg, tried, serial=None):
         upd = 0
     pool = list(feed) + [dict(b, t=upd) for b in get_bosses()]
     max_km = float(rd_opt(cfg, "monster_rally", "max_km", 0) or 0)
-    out, seen = [], set()
+    out, seen, skips = [], set(), {}
+
+    def skip(it, why, short, keep=False):
+        skips[short] = skips.get(short, 0) + 1
+        if serial is not None:
+            hunt_note(serial, it, "Skipped", "skip", why, save=False, keep_done=keep)
+
     for it in pool:
         key = f"{it.get('x')},{it.get('y')}"
-        if key in seen or now - float(tried.get(key, 0)) < MR_FORGET_MIN * 60 or mr_blocked(key, serial):
+        if key in seen:
             continue
         seen.add(key)
-        if now - float(it.get("t") or 0) > age:
+        if str(it.get("name") or "").lower().strip() in NEVER_JOIN:      # world bosses: nobody can hunt them (not listed)
             continue
-        if str(it.get("name") or "").lower().strip() in NEVER_JOIN:      # world bosses: nobody can rally them
+        if now - float(tried.get(key, 0)) < MR_FORGET_MIN * 60:          # this instance just had it: its row stays as it is
+            continue
+        if mr_blocked(key, serial):
+            w = mr_block_why(key)
+            skip(it, {"rallied": "Taken by another rally", "dead": "Gone (not on the map any more)"}.get(w, "Picked by another instance"),
+                 "taken", keep=True)
+            continue
+        if now - float(it.get("t") or 0) > age:
+            skip(it, f"Too old · coordinates refresh every {age_min:g} min", "too old")
             continue
         if max_km and it.get("km") is not None and float(it["km"]) > max_km:    # owner 28 Oct: e.g. only 700 km or closer
+            skip(it, f"Too far · max distance is {max_km:g} km", "too far")
             continue
-        i, r = mr_rule_for(rules, it.get("name"), it.get("level") or 0)
-        if r is None:
+        low = str(it.get("name") or "").lower().strip()
+        fits = [(i, r) for i, r in enumerate(rules) if mr_rule_for([r], it.get("name"), it.get("level") or 0)[1]]
+        if not fits:
+            skip(it, "Not in any preset", "not in a preset")
             continue
+        pick, why_not = None, ""
+        for i, r in fits:
+            m, p = modes[r["preset"]]["mode"], r["preset"]
+            if m == "solo" and low in RALLY_ONLY:
+                why_not = why_not or f"Rally only · Preset {mr_pnum(p)} is Solo"
+                continue
+            lim = modes[p]["hunts"]
+            if m == "solo" and lim and int(done.get(p, 0)) >= lim:
+                why_not = why_not or f"Preset {mr_pnum(p)} did its {lim} hunts today"
+                continue
+            pick = (i, r, m)
+            break
+        if not pick:
+            skip(it, why_not, "rally only" if why_not.startswith("Rally only") else "at the hunt limit")
+            continue
+        i, r, m = pick
         rank = sum(1 for x in rules[:i] if x["preset"] == r["preset"])     # place inside its preset box = priority
-        out.append(dict(it, rule=r, rank=rank))
+        out.append(dict(it, rule=r, rank=rank, mode=m))
+    if serial is not None:
+        MR_LAST_SKIPS[serial] = skips
+        with _hunt_dec_lock:
+            hunt_dec_save()
     km = lambda it: it.get("km") if it.get("km") is not None else 1e9
     out.sort(key=lambda it: (it["rank"], km(it)))     # owner 28 Oct: priority first (top of each preset box), then the closest
     return out
@@ -15181,6 +15314,7 @@ def run_monster_rally(dev, cfg, log, stop):
                 return
             if getattr(dev, "aj_next", 0) and time.time() >= dev.aj_next:
                 log("[*]  Monster rally: Auto-Join needs renewing - doing that, the rallies go on after it")
+                hunt_status(serial, "running", "Renewing Auto-Join", "Back to Hunts after")
                 return
             try:
                 other = [t for t in city_tasks_due(cfg, getattr(_TL, "city_last", None) or {}, serial)
@@ -15190,6 +15324,9 @@ def run_monster_rally(dev, cfg, log, stop):
                 other = []
             if other:
                 log(f"[*]  Monster rally: {len(other)} other task(s) due - doing them, the rallies go on after")
+                nm = str(other[0].get("name") or "").split(":", 1)[-1]
+                nm = (DUTY_BY_ID.get(nm) or {}).get("title") or nm
+                hunt_status(serial, "running", f"Doing {nm}", "Back to Hunts after")
                 return
             if _TL.mr_idle:                                  # nothing to rally right now: wait on the map for new coordinates
                 _nap(stop, 20, 25)
@@ -15208,6 +15345,17 @@ def _run_monster_rally(dev, cfg, log, stop):
         mr_save(serial, tried=tried, next_at=time.time() + minutes * 60)
         log(f"[*]  Monster rally: {why} - again at {time.strftime('%H:%M', time.localtime(time.time() + minutes * 60))}")
 
+    heal_min = float(rd_opt(cfg, "monster_rally", "heal_min", 0) or 0)
+    if heal_min:                                             # Auto heal every N min: the heal duty runs in between, then Hunts go on
+        if not row.get("heal_at"):
+            mr_save(serial, heal_at=now)
+        elif now - float(row["heal_at"]) >= heal_min * 60 and "duty:troop_healing" not in run_now_list(serial):
+            run_now_set(serial, run_now_list(serial) + ["duty:troop_healing"])
+            mr_save(serial, heal_at=now)
+            log("[*]  Hunts: time to heal the troops - healing first, the hunts go on after")
+            hunt_status(serial, "running", "Healing troops", "Auto heal · back to Hunts after")
+            _TL.mr_go_on = True
+            return
     targets = mr_targets(cfg, tried, serial)
     hold = row.get("hold")                                  # a monster reached but not started (preset out / window): first
     if hold:
@@ -15216,11 +15364,16 @@ def _run_monster_rally(dev, cfg, log, stop):
             mr_save(serial, hold=None)                       # gone from the list (dead / too old)
     if not targets:
         _TL.mr_go_on = _TL.mr_idle = True
+        sk = MR_LAST_SKIPS.get(serial) or {}
+        top = max(sk, key=sk.get) if sk else ""
+        hunt_status(serial, "waiting", "Waiting for monsters",
+                    "No matching monster in Telegram" + (f" · top reason: {sk[top]} {top}" if top else "") + " · checks again in 1 min")
         return later(MR_POLL_MIN, "no Telegram coordinate matches the monster list")
-    keep_free = int(float(rd_opt(cfg, "monster_rally", "keep_free", 0) or 0))
-    max_wait = float(rd_opt(cfg, "monster_rally", "max_wait", 0) or 0) * 60          # 0 = stay until it is rallied
-    keep_sta = int(float(rd_opt(cfg, "monster_rally", "keep_stamina", 100) or 0))
-    skip_lines = rd_opt(cfg, "monster_rally", "skip_busy", True) in (True, "true", "1", 1)
+    keep_free = 0                                            # owner 28 Oct: "Marches kept free" is not needed
+    max_wait = float(rd_opt(cfg, "monster_rally", "max_wait", 0) or 0) * 60          # 0 = stay until it is hunted
+    refill = rd_opt(cfg, "monster_rally", "refill", True) in (True, "true", "1", 1)
+    skip_lines = rd_opt(cfg, "monster_rally", "skip_busy", False) in (True, "true", "1", 1)
+    modes = mr_presets(cfg)
     if not ensure_view(dev, cfg, stop, log, "world"):       # the world map ("landscape" here = the rally list view)
         return later(MR_POLL_MIN, "the map did not open")
     shot = _wait_view(dev, cfg, stop, "landscape", 30)
@@ -15231,7 +15384,11 @@ def _run_monster_rally(dev, cfg, log, stop):
         if stop.is_set():
             return
         mode, preset = tgt["rule"]["time"], tgt["rule"]["preset"]   # this monster's own preset and rally time
+        solo = tgt.get("mode") == "solo"
         key, label = f"{tgt['x']},{tgt['y']}", f"{('Lv' + str(tgt['level']) + ' ') if tgt.get('level') else ''}{tgt.get('name') or 'monster'} ({tgt['x']},{tgt['y']})"
+        short = f"{('Lv' + str(tgt['level']) + ' ') if tgt.get('level') else ''}{tgt.get('name') or 'monster'}"
+        far = f" · {tgt['km']} km" if tgt.get("km") is not None else ""
+        hunt_status(serial, "running", f"{'Attacking' if solo else 'Going to rally'} {short} with Preset {mr_pnum(preset)}", f"Flying to X {tgt['x']} Y {tgt['y']}{far}")
         if mr_blocked(key, serial):                          # another instance picked it / a rally started on it meanwhile
             continue
         mr_block(key, serial, "picked")
@@ -15245,13 +15402,15 @@ def _run_monster_rally(dev, cfg, log, stop):
         gone, checked, said = False, time.time(), False
         # Owner 25 Oct 21:26: every preset for monsters is out -> stay on this monster and try when the first
         # rally's time is up (no return-time maths; the troop page / March panel decide after that).
-        rules_ = mr_rules(cfg)
+        rules_ = [r for r in mr_rules(cfg) if modes[r["preset"]]["mode"] == modes[preset]["mode"]]
         in_use = {r["preset"] for r in rules_}
         rtime = {r["preset"]: int(r["time"]) for r in rules_}
         busy = {p: float(t) for p, t in (mr_row(serial).get("busy") or {}).items() if p in in_use and time.time() - float(t) < 1800}
         until = min(t + rtime.get(p, 5) * 60 for p, t in busy.items()) if in_use and set(busy) >= in_use else 0
         if until > time.time():
             log(f"[*]  Monster rally: {label} - every preset is out, waiting on this monster until {time.strftime('%H:%M:%S', time.localtime(until))}")
+            hunt_note(serial, tgt, "Waiting", "wait", f"Every preset for it is out · tries at {time.strftime('%H:%M', time.localtime(until))}")
+            hunt_status(serial, "waiting", f"Waiting on {short}", f"Every {'solo' if solo else 'rally'} preset is out · tries at {time.strftime('%H:%M', time.localtime(until))}")
             while time.time() < until and not stop.is_set():
                 _nap(stop, min(30, max(1, until - time.time())), min(31, max(1.5, until - time.time() + 1)))
                 if time.time() - checked > 60 and time.time() < until - 10:
@@ -15309,6 +15468,28 @@ def _run_monster_rally(dev, cfg, log, stop):
                 got, page = mr_open_monster(dev, stop, tgt.get("name") or "", tgt.get("level"))
                 if got != "ok":
                     break
+                if solo:                                         # Solo: Attack opens the troop page straight away (no rally time)
+                    dev.tap(*MR_ATTACK)
+                    _nap(stop, 1.0, 1.2)
+                    for _ in range(12):
+                        shot = dev.screenshot()
+                        if rd_seen(shot, ["Select a Preset"], region=(0, 0, 540, 180)):
+                            break
+                        _nap(stop, 0.6, 0.8)
+                    else:
+                        rd_snap(shot, "hunt_solo_nopage")
+                        if view_of(shot, cfg) not in ("landscape", "world"):
+                            dev.back()
+                            _nap(stop, 1.0, 1.3)
+                        if not max_wait or time.time() - t0 < max_wait:
+                            log(f"[*]  Hunts: {label} - no troop page after Attack (no free march?), trying again in 30 s")
+                            hunt_status(serial, "waiting", f"Waiting on {short}", "No free march for a solo attack · tries again in 30 s")
+                            _nap(stop, 30, 32)
+                            continue
+                        tried.pop(key, None)
+                        return later(2, "no troop page after Attack (all marches busy?)")
+                    rd_snap(shot, "hunt_solo_troops")
+                    break
                 dev.tap(*MR_ALLIANCE_WAR)                        # fixed spot (the white-on-brown label is rarely read); window checked below
                 _nap(stop, 1.0, 1.2)
                 shot = None
@@ -15352,7 +15533,8 @@ def _run_monster_rally(dev, cfg, log, stop):
             # Owner 25 Oct: never March on an empty preset (its general is still out on another rally) - try the other
             # presets that have this monster; none loaded = keep this monster first in line and come back soon.
             lvl = tgt.get("level") or 0
-            cands = [preset] + [r["preset"] for r in mr_rules(cfg) if r["preset"] != preset and mr_rule_for([r], tgt.get("name"), lvl)[1]]
+            cands = [preset] + [r["preset"] for r in mr_rules(cfg) if r["preset"] != preset and modes[r["preset"]]["mode"] == modes[preset]["mode"]
+                                and mr_rule_for([r], tgt.get("name"), lvl)[1]]
             cands = list(dict.fromkeys(cands))
             used = None
             for p_ in cands:
@@ -15374,6 +15556,8 @@ def _run_monster_rally(dev, cfg, log, stop):
                     tried.pop(key, None)
                     mr_save(serial, hold=key)
                     return later(1, f"{label} - the presets stayed out, trying this monster again first")
+                hunt_note(serial, tgt, "Waiting", "wait", f"Preset {mr_pnum(preset)} is out · tries again when it returns")
+                hunt_status(serial, "waiting", f"Waiting on {short}", f"Preset {mr_pnum(preset)} is still out · tries when troops are back")
                 if empties == 1:
                     log(f"[*]  Monster rally: {label} - every preset is still out, trying again in 30 s")
                     _nap(stop, 30, 32)
@@ -15387,27 +15571,31 @@ def _run_monster_rally(dev, cfg, log, stop):
                 continue
             break
         if got == "gone":
+            hunt_note(serial, tgt, "Skipped", "skip", "Gone before arrival")
             mr_block(key, serial, "dead")
             log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
             continue
         if got == "other":
+            hunt_note(serial, tgt, "Skipped", "skip", "Another monster stands there")
             mr_block(key, serial, "dead")
             log(f"[*]  Monster rally: {label} - another monster stands there ({page}), skipped")
             continue
-        preset = used
-        sta = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (280, 820, 260, 55))))
-        if keep_sta and len(sta) >= 2 and sta[-2] - sta[-1] < keep_sta:
-            dev.back()
-            _nap(stop, 1.0, 1.3)
-            return later(60, f"stamina {sta[-2]} would drop under {keep_sta}")
+        first, preset = preset, used
         if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)):
             dev.back()
             raise RuntimeError("no March button (the troop page is gone)")
-        st_ = read_stamina(shot) if cfg.get("stamina_auto", True) else None
-        if st_ and st_[0] < st_[1]:                          # not enough stamina for the rally: use stamina items like the joiner (owner 23 Oct)
-            log(f"[!]  Monster rally: not enough stamina ({st_[0]:,} of {st_[1]:,}) - using stamina items")
+        st_ = read_stamina(shot)
+        if st_ and st_[0] < st_[1]:                          # not enough stamina: use stamina items like the joiner (owner 23 / 28 Oct)
+            if not refill:
+                dev.back()
+                hunt_status(serial, "blocked", "Out of stamina", "Turn on Refill stamina, or wait for stamina to come back")
+                hunt_note(serial, tgt, "Waiting", "wait", "Out of stamina · Refill stamina is off")
+                return later(30, "not enough stamina (Refill stamina is off)")
+            log(f"[!]  Hunts: not enough stamina ({st_[0]:,} of {st_[1]:,}) - using stamina items")
             if not refill_stamina(dev, cfg, log, stop, st_[1]):
                 dev.back()
+                hunt_status(serial, "blocked", "No stamina items left", "Hunts go on when stamina comes back")
+                hunt_note(serial, tgt, "Waiting", "wait", "Out of stamina · no stamina items left")
                 return later(30, "not enough stamina (and no stamina items)")
             shot = dev.screenshot()
         dev.tap(*MR_MARCH)                                   # fixed spot (the gold label is rarely read, PC 23 Oct); checked below
@@ -15439,6 +15627,19 @@ def _run_monster_rally(dev, cfg, log, stop):
         busy[preset] = time.time()
         mr_save(serial, hold=None, busy=busy)
         mr_block(key, serial, "rallied")
+        why = (f"Preset {mr_pnum(preset)} · Preset {mr_pnum(first)} also has it but was busy" if preset != first
+               else f"Preset {mr_pnum(preset)} · {mr_why_rank(tgt.get('rank') or 0)}")
+        if solo:
+            n_ = mr_solo_done(serial)
+            n_[preset] = int(n_.get(preset, 0)) + 1
+            mr_save(serial, solo_day=_game_day(), solo_n=n_)
+            hunt_note(serial, tgt, "Solo attack", "solo", why)
+            hunt_status(serial, "running", f"Attacked {short} with Preset {mr_pnum(preset)}", f"Solo attack sent{far} · looking for the next monster")
+            log(f"[+]  Hunts: solo attack on {label} - preset {mr_pnum(preset)}")
+            started += 1
+            continue
+        hunt_note(serial, tgt, "Rallied", "go", why)
+        hunt_status(serial, "running", f"Rallying {short} with Preset {mr_pnum(preset)}", f"{mode} min rally started{far} · looking for the next monster")
         log(f"[+]  Monster rally: started on {label} - {mode} min, preset {preset}")
         started += 1
         continue                                             # owner 25 Oct: straight to the next monster
@@ -15446,6 +15647,7 @@ def _run_monster_rally(dev, cfg, log, stop):
         _TL.mr_go_on = True
         return later(1, f"{started} rally(s) started, looking for the next one")
     _TL.mr_go_on = _TL.mr_idle = True
+    hunt_status(serial, "waiting", "Waiting for monsters", "Every coordinate tried was gone or taken · checks again in 1 min")
     later(MR_POLL_MIN, "every coordinate tried was gone or taken")
 
 # --- Event duties (tester recordings 22-26 Oct: Legion Hunting, Garuda, Windmill, Eagle, Star Trail, Duel, Taotie,
@@ -16042,17 +16244,18 @@ DUTY_LIBRARY = [
      "target": "self:", "steps": ["royal_thief"],
      "opts": [{"k": "troops", "label": "Troops", "type": "select", "def": "Power First",
                "choices": ["Power First"] + ["Preset " + n for n in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")]}]},
-    {"id": "monster_rally", "group": "Daily activities", "title": "Start monster rallies", "every_min": 5, "verified": False,
-     "note": "Takes monster coordinates from the Telegram section, flies there with the map search and starts an Alliance War rally with the preset set for that monster. "
-             "No free march: waits on the monster. Skips a monster that is gone or that a march is already going to.",
+    {"id": "monster_rally", "group": "Daily activities", "title": "Hunts", "every_min": 5, "verified": False,
+     "note": "Takes monster coordinates from the Telegram section, flies there with the map search and hunts each monster with the preset it sits on: "
+             "Rally presets start an Alliance War rally, Solo presets attack alone. No free march: waits on the monster.",
      "target": "self:", "steps": ["monster_rally"],
      "opts": [{"k": "rules", "label": "Monsters", "type": "rules", "def": None},
-              {"k": "max_wait", "label": "Give up on a monster after (min, 0 = wait until it is rallied)", "type": "number", "min": 0, "max": 120, "def": 0},
-              {"k": "keep_free", "label": "Marches to keep free for joining", "type": "number", "min": 0, "max": 5, "def": 0},
-              {"k": "keep_stamina", "label": "Keep at least this much stamina", "type": "number", "min": 0, "max": 9999, "def": 100},
-              {"k": "max_age", "label": "Ignore coordinates older than (min)", "type": "number", "min": 1, "max": 600, "def": 10},
+              {"k": "presets", "label": "Preset modes", "type": "presets", "def": None},
+              {"k": "max_wait", "label": "Give up on a monster after (min, 0 = wait until it is hunted)", "type": "number", "min": 0, "max": 120, "def": 0},
+              {"k": "max_age", "label": "Refresh coordinates every (min)", "type": "number", "min": 1, "max": 600, "def": 10},
               {"k": "max_km", "label": "Only monsters within (km, 0 = any distance)", "type": "number", "min": 0, "max": 99999, "def": 0},
-              {"k": "skip_busy", "label": "Skip a monster a march is already going to", "type": "bool", "def": True}]},
+              {"k": "refill", "label": "Refill stamina with items", "type": "bool", "def": True},
+              {"k": "heal_min", "label": "Auto heal every (min, 0 = off)", "type": "number", "min": 0, "max": 1440, "def": 0},
+              {"k": "skip_busy", "label": "Skip a monster a march is already going to", "type": "bool", "def": False}]},
     {"id": "ev_legion", "group": "Events", "title": "Legion Hunting", "every_min": 180, "verified": False,
      "note": "Event Center > Limited > Legion Hunting: claims every finished quest. Skipped while the event is not on.",
      "target": "self:", "steps": ["ev_legion"]},

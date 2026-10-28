@@ -403,6 +403,18 @@ class Controller:
     def n_running(self):
         return sum(self.running(s) for s in self.dev)
 
+    def _hunt_brief(self, s, d):
+        """Sidebar line for Hunts: only while Hunts is on and the instance runs; blocked = needs attention."""
+        try:
+            if d["state"] != "run" or not ((rb.merge_device_cfg(self.cfg, s).get("duties") or {}).get("monster_rally") or {}).get("on"):
+                return None
+            st = rb.mr_row(s).get("status") or {}
+            if not st or time.time() - float(st.get("t", 0)) > 600:
+                return None
+            return {"state": st.get("state", ""), "text": st.get("title", ""), "t": int(st.get("t", 0))}
+        except Exception:
+            return None
+
     def status_list(self):
         out = []
         for dv in self.devices:
@@ -417,7 +429,8 @@ class Controller:
                         "loading_since": (int(rb.LOADING[s][1]) if d["state"] == "run" and s in rb.LOADING else 0),
                         "start_at": (int(self.start_eta[s]) if d["state"] != "run" and self.start_eta.get(s, 0) > time.time() - 5 else 0),
                         "resume_in": (max(1, int((d["resume_at"] - time.time()) / 60) + 1) if d.get("resume_at") and d["ctl"].paused else 0),
-                        "resume_at": (int(d["resume_at"]) if d.get("resume_at") and d["ctl"].paused else 0)})
+                        "resume_at": (int(d["resume_at"]) if d.get("resume_at") and d["ctl"].paused else 0),
+                        "hunt": self._hunt_brief(s, d)})
         return out
 
     # ------------------------------------------------------------------ config
@@ -1838,7 +1851,7 @@ class Api:
                 if not isinstance(v, list):
                     raise ApiError("Monster list: wrong format.")
                 clean = []
-                for r in v[:40]:
+                for r in v[:300]:
                     if not isinstance(r, dict):
                         continue
                     try:
@@ -1849,6 +1862,19 @@ class Api:
                                   "preset": r.get("preset") if r.get("preset") in rb.RT_PRESETS else "I",
                                   "time": str(r.get("time")) if str(r.get("time")) in rb.MR_TIMES else "5",
                                   "on": r.get("on") is not False})
+                v = clean
+            elif o["type"] == "presets":                   # Hunts: each preset's mode (Rally / Solo) and solo hunts a day
+                if not isinstance(v, dict):
+                    raise ApiError("Preset modes: wrong format.")
+                old = row.get(o["k"]) if isinstance(row.get(o["k"]), dict) else {}
+                clean = {}
+                for k in rb.RT_PRESETS:
+                    r = v.get(k) if isinstance(v.get(k), dict) else (old.get(k) or {})
+                    try:
+                        hunts = max(0, min(int(float(r.get("hunts") or 0)), 999))
+                    except (TypeError, ValueError):
+                        raise ApiError("Hunts a day: enter a number.")
+                    clean[k] = {"mode": r.get("mode") if r.get("mode") in rb.MR_MODES else "rally", "hunts": hunts}
                 v = clean
             row[o["k"]] = v
         self._save_scoped(scope, "duties", duties)
@@ -2812,6 +2838,24 @@ class Api:
         items, stats = rb.feed_get(int(self.c.cfg.get("tg_keep_min", 60) or 0))
         return {"items": items, "stats": stats, "now": time.time(), "chats": str(self.c.cfg.get("tg_feed_chats") or ""),
                 "status": self.c.tg_status, "ready": bool(self.c.tg_ready)}
+
+    def hunts(self, p):
+        """Hunts > Live: status bar, each preset's state and today's decisions for one instance."""
+        serial = self._scope(p) or (self.c.devices[0]["id"] if self.c.devices else "default")
+        cfg = self._eff(serial)
+        row = rb.mr_row(serial)
+        now = time.time()
+        rules = rb.mr_rules(cfg)
+        rtime = {r["preset"]: int(r["time"]) for r in rules}
+        busy = {}
+        for k, t in (row.get("busy") or {}).items():
+            back = float(t) + rtime.get(k, 5) * 60
+            if back > now:
+                busy[k] = int(back)
+        on = bool(((cfg.get("duties") or {}).get("monster_rally") or {}).get("on"))
+        return {"on": on, "running": self.c.running(serial), "status": row.get("status") or {}, "busy": busy,
+                "solo_done": rb.mr_solo_done(serial), "decisions": rb.hunt_decisions(serial)[:300],
+                "rally_only": sorted(rb.RALLY_ONLY), "now": now}
 
     def coords_watch(self, p):
         """Save the chats to watch and start watching them (the Telegram login must be done)."""
