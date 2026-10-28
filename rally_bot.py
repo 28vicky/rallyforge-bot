@@ -9556,13 +9556,90 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
     # Owner 28 Oct 13:02: a task that fails / a screen the bot does not know is a BOT problem, not a stuck game - the
     # game is not restarted for it (Kiravik 12:59 was restarted after Alliance Science failed). A game that really does
     # not react is caught by the frozen-screen check, which still restarts it.
-    (log or (lambda m: None))(f"[!] Recovery could not reach the {want} view 3 times in 5 min - the task stops, back to "
-                              "rallies (no game restart: the game reacts, the bot did not know this screen)")
+    lg = log or (lambda m: None)
     try:
         save_debug(serial, dev.screenshot())               # the screen it did not know: for a new picture / fix
     except Exception:
         pass
+    alive = game_responds(serial, getattr(dev, "adb", None)) if getattr(dev, "adb", None) else True
+    if alive is False:                                     # really stuck: only then the game is restarted
+        _VIEW_RESTARTING.add(serial)
+        try:
+            lg("[!] Recovery could not reach the view 3 times in 5 min and the game does not react - restarting Evony")
+            force_restart_game(dev, cfg, lg, stop, reason="game does not react")
+            return _ensure_view(dev, cfg, stop, log, want, tries)
+        finally:
+            _VIEW_RESTARTING.discard(serial)
+    lg(f"[!] Recovery could not reach the {want} view 3 times in 5 min - the game reacts, so no restart: what worked "
+       "is learned, the screen it could not leave is saved to debug")
     return ok
+
+
+NAV_LIB = USER / "nav_library.json"       # owner 28 Oct 13:08: the bot LEARNS how to get from a screen to the city / landscape
+_navlib_lock = threading.Lock()
+_navlib = {}
+NAV_ARROW = (35, 35)                       # the gold Back arrow of a full game page (top left)
+
+
+def _navlib_load():
+    if not _navlib:
+        try:
+            _navlib.update(json.loads(NAV_LIB.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    return _navlib
+
+
+def _navlib_save():
+    try:
+        NAV_LIB.write_text(json.dumps(_navlib, indent=1), encoding="utf-8")
+    except Exception as _e:
+        quiet_err("navlib_save", _e)
+
+
+def _navlib_get(h, want):
+    """The action that took this screen (fingerprint within 8 bits) to the wanted view before, or None."""
+    if h is None:
+        return None
+    for k, v in _navlib_load().items():
+        if bin(int(k, 16) ^ h).count("1") <= 8 and v.get(want):
+            return v[want]
+    return None
+
+
+def _navlib_note(h, want, how, xy, ok, say=None):
+    """ok=True: this action led to the wanted view (learned / confirmed). ok=False: it did not (forgotten after 2 misses
+    more than its successes)."""
+    if h is None:
+        return
+    with _navlib_lock:
+        lib = _navlib_load()
+        key = next((k for k in lib if bin(int(k, 16) ^ h).count("1") <= 8), None) or f"{h:016x}"
+        ent = lib.setdefault(key, {})
+        e = ent.get(want)
+        if ok:
+            if e and e.get("how") == how:
+                e["ok"] = e.get("ok", 0) + 1
+            else:
+                ent[want] = {"how": how, "xy": [int(xy[0]), int(xy[1])], "ok": 1, "bad": 0,
+                             "at": time.strftime("%Y-%m-%d %H:%M")}
+                if say:
+                    say(f"[i] Recovery: learned - this screen goes to the {want} with {how}")
+        elif e and e.get("how") == how:
+            e["bad"] = e.get("bad", 0) + 1
+            if e["bad"] >= 2 and e["bad"] > e.get("ok", 0):
+                ent.pop(want, None)
+        if len(lib) < 1000:
+            _navlib_save()
+
+
+def _nav_do(dev, how, xy):
+    if how == "back":
+        dev.back()
+    elif how == "toggle":
+        dev.tap(*VIEW_TOGGLE)
+    else:                                                    # x / arrow / outside / ground / popup: a tap
+        dev.tap(int(xy[0]), int(xy[1]))
 
 
 def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
@@ -9578,28 +9655,64 @@ def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
     quit_seen = False                                        # Back already opened 'exit the game?': we are on a main view - never Back again
     blind_backs = 0                                          # Backs in a row that did not change the screen
     last_back_shot = None
-    for i in range(tries):
+    pending = None                                           # (fingerprint, how, xy, screen) of the last action on an unknown screen
+    tried = set()                                            # (fingerprint >> 8, how) already tried in this recovery
+
+    def explore(sh):
+        """Owner 28 Oct 13:08: never give up while there is something not tried yet on this screen - try it (and learn
+        what works). -> True when an action was done."""
+        nonlocal pending
+        h = _pop_hash(sh)
+        hk = (h or 0) >> 8
+        cx = find_close_x(sh)
+        cands = ([("x", cx[0])] if cx else []) + [("arrow", NAV_ARROW), ("outside", GROUND_TAP), ("toggle", VIEW_TOGGLE)]
+        if not quit_seen:
+            cands.append(("back", (0, 0)))
+        for how, xy in cands:
+            if (hk, how) in tried:
+                continue
+            tried.add((hk, how))
+            say(f"[*] Recovery: trying {how} on a screen it does not know yet")
+            _nav_do(dev, how, xy)
+            pending = (h, how, xy, sh)
+            _nap(stop, 1.0, 1.4)
+            return True
+        return False
+
+    for i in range(tries + 8):
         if stop.is_set():
             return False
         shot = dev.screenshot()
+        if pending is not None and _same_screen(shot, pending[3]):
+            _navlib_note(pending[0], want, pending[1], pending[2], False)   # that action changed nothing here
+            pending = None
         if last_back_shot is not None:                       # K 27 Oct 19:53: 10+ Backs on the emulator home screen
             blind_backs = blind_backs + 1 if _same_screen(shot, last_back_shot) else 0
             last_back_shot = None
             if blind_backs >= 4:
-                say("[!] Recovery: Back changed nothing 4 times - stopped pressing Back (a game restart is next)")
+                say("[!] Recovery: Back changed nothing 4 times - stopped pressing Back")
+                quit_seen = True                             # no more Back: try the other actions
+                if explore(shot):
+                    continue
                 return False
         if cancel_quit_dialog(dev, shot, lambda *_: None):
             say("[*] Recovery: the game asked to exit - tapped Cancel")
             quit_seen = True
             _nap(stop, 0.8, 1.2)
             continue
+        if purchase_guard(dev, shot, say):                  # never anything inside a payment / Store page
+            continue
         v = view_of(shot, cfg)
         ring = v == "city" and find_detail_icon(shot)
         if v == want and not ring:
+            if pending is not None:
+                _navlib_note(pending[0], want, pending[1], pending[2], True, say)
             return True
         if want == "city" and v not in ("city", "landscape", "world") and not find_detail_icon(shot):
             cm = city_map(dev)                               # Kiravik 28 Oct 12:55: its city was not recognised -> Back ->
             if cm is not None and cm.locate(shot):           # landscape -> city -> Back ... The own city map knows the city.
+                if pending is not None:
+                    _navlib_note(pending[0], want, pending[1], pending[2], True, say)
                 return True
         if ring:
             close_ring(dev, stop, (270, 430))
@@ -9615,6 +9728,8 @@ def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             continue
         if v in ("city", "landscape"):                      # the other main view: switch (twice at most)
             if toggled >= 2:
+                if explore(shot):
+                    continue
                 return False
             toggled += 1
             say(f"[*] Recovery: showing the {v} view - switching to the {want} view")
@@ -9637,6 +9752,15 @@ def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             say(f"[*] Recovery: closed a pop-up ({hit[0]})")
             _nap(stop, 0.8, 1.2)
             continue
+        ph = _pop_hash(shot)
+        le = _navlib_get(ph, want)
+        if le and ((ph or 0) >> 8, le["how"]) not in tried:
+            tried.add(((ph or 0) >> 8, le["how"]))
+            say(f"[*] Recovery: a screen it learned - {le['how']} (worked {le.get('ok', 1)}x)")
+            _nav_do(dev, le["how"], le["xy"])
+            pending = (ph, le["how"], le["xy"], shot)
+            _nap(stop, 1.0, 1.4)
+            continue
         unknown += 1
         if want == "world" and toggled and unknown <= 3:   # just switched: the world map may still be loading - Back there asks to quit
             _nap(stop, 2.0, 2.5)
@@ -9644,24 +9768,34 @@ def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
         cx = find_close_x(shot) if unknown % 2 == 1 else []
         if cx:
             dev.tap(cx[0][0], cx[0][1])
+            pending = (ph, "x", cx[0], shot)
+            tried.add(((ph or 0) >> 8, "x"))
             say(f"[*] Recovery: closed a window with its X button ({cx[0][0]},{cx[0][1]})")
         elif unknown <= 2 and buttons_hidden(shot):        # the city/map with all game buttons hidden (a tap on empty ground hides them)
             dev.tap(*GROUND_TAP)
+            pending = (ph, "outside", GROUND_TAP, shot)
             say("[*] Recovery: the game's buttons were hidden - tapped the ground to show them")
             _nap(stop, 1.0, 1.4)
             continue
         elif (unknown >= 5 or quit_seen) and toggled < 2:   # backing out leads nowhere known / Back asked to quit: a main view not recognised
             toggled += 1
             dev.tap(*VIEW_TOGGLE)
+            pending = (ph, "toggle", VIEW_TOGGLE, shot)
+            tried.add(((ph or 0) >> 8, "toggle"))
             say("[*] Recovery: screen not recognised - tapped the city / landscape button")
-        elif quit_seen:                                     # owner 25 Oct: Back on the city / map only asks to quit - stop here
-            say("[!] Recovery: on a main view the bot does not recognise - not pressing Back (it only asks to quit)")
+        elif quit_seen:                                     # owner 25 Oct: Back on the city / map only asks to quit
+            if explore(shot):                               # owner 28 Oct: try what was not tried yet instead of stopping
+                continue
+            say("[!] Recovery: tried everything on this screen - saved it so the bot can be taught (no Back: it only asks to quit)")
+            save_debug(getattr(dev, "serial", "dev"), shot)
             return False
         else:
             if _game_not_in_front(dev, cfg, say):           # emulator home / Evony closed: Back would do nothing - start the game
                 return False
             dev.back()
             last_back_shot = shot
+            pending = (ph, "back", (0, 0), shot)
+            tried.add(((ph or 0) >> 8, "back"))
             say("[*] Recovery: unexpected window - pressed Back")
         _nap(stop, 0.8, 1.2)
     return False
@@ -17111,12 +17245,11 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         city_fails[0] += 1
         task_event(serial, "Tasks", False, "could not reach the city screen")
         if city_fails[0] >= 2:                            # owner 28 Oct 13:02: no game restart for a bot problem
-            log(f"[!] Could not reach the city screen {city_fails[0]} times in a row - city tasks wait 10 min (no game restart)")
+            log(f"[!] Could not reach the city screen {city_fails[0]} times in a row - tried again on the next round (no game restart)")
             city_fails[0] = 0
-            city_block[0] = time.time() + 600
             return
         log(msg)
-        city_block[0] = time.time() + 600
+        city_block[0] = time.time() + 180                  # owner 28 Oct: short - the bot learns the way, rallies go on meanwhile
 
     pop_pending = [None]                      # (fingerprint, how, xy) of the last close try: learned when the screen changes
 
