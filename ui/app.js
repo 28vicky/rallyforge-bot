@@ -121,7 +121,7 @@ const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", mon
   telegram: "send", reliability: "shield", schedule: "bell", updates: "down", themes: "palette", license: "key", more: "more" };
 
 const TABS = [
-  ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Monsters"],
+  ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Join rallies"],
   ["tasks", "My tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram coordinates"], ["reliability", "Reliability"],
   ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Appearance"], ["license", "Account"],
 ];
@@ -647,7 +647,7 @@ function ribbonLabels() {
 const TAB_GROUPS = [
   ["dashboard", "Dashboard", null],
   ["presets", "Presets & generals", null],
-  ["monsters", "Monsters", null],
+  ["monsters", "Join rallies", null],   // owner 28 Oct 21:01: the monsters the bot JOINS (not Monster hunts)
   ["duties", "Duties", null],
   ["tasks", "My tasks", null],
   ["market", "Market", null],

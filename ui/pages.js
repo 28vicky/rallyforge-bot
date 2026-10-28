@@ -605,7 +605,7 @@ function instancePage(serial) {
       return [lead, renderTodayCard(serial), h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, cityMapCard(serial), runNowCard(serial)))];
     }],
     ["routines", "Duties", () => [PAGES.duties(serial)]],   // A9: one word - "Duties" everywhere
-    ["rally", "Rally setup", () => sections("rally", [
+    ["rally", "Join rallies", () => sections("rally", [
       ["mon", "Monsters", () => [PAGES.monsters(serial)]],
       ["gen", "March presets & generals", () => ownP],
       ["sta", "Stamina", () => { const sc = scopeBar("stamina", STAMINA_KEYS, "stamina settings", serial);
@@ -931,7 +931,7 @@ PAGES.monsters = function (fixed) {
   if (sc.own) return monstersPanel(sc.c, sc.bar);
   const cat = (S.catalog || []).flatMap((x) => x[1]), skip = S.cfg.monster_skip || {};
   const joins = cat.filter(([n, lv]) => (skip[n] || []).length < lv.length).length;
-  return panel("Monsters", sc.bar, h("p", { class: "sumline" }, h("b", {}, "Joins " + joins + " of " + cat.length + " monsters"), " with the universal list (All instances \u203a Monsters)."),
+  return panel("Monsters", sc.bar, h("p", { class: "sumline" }, h("b", {}, "Joins " + joins + " of " + cat.length + " monsters"), " with the universal list (All instances \u203a Join rallies)."),
     note("Make own to pick different monsters or levels for this instance."));
 };
 function monstersPanel(c, top) {
@@ -1125,11 +1125,14 @@ const bmGuess = (n) => /stam|vit/i.test(n) ? "stamina" : /speed/i.test(n) ? "spe
   : /gear|crown|staff|grail|horn|crystal|decoration|armor|ring|bow|spear|axe|sword|boots|helmet|hood|refining|research stone|runestone/i.test(n) ? "gear"
   : /chest|box/i.test(n) ? "chest" : /food|lumber|wood|stone|ore|iron|gold|silver|res/i.test(n) ? "res" : "other";
 const bmInfo = (n) => BM_INFO[n] ? { label: BM_INFO[n][0], cat: BM_INFO[n][1] } : { label: n, cat: bmGuess(n) };
-PAGES.market = function () {
+PAGES.market = function (fixed) {
+  // owner 28 Oct 21:01: Black Market settings per instance - "Using universal defaults · Make own" like the other settings
+  const MK = ["market_items", "market_pay", "market_refresh_mode", "market_refresh_n", "market_paid_refresh", "market_max_gems", "market_min_gems", "market_min_gold", "market_rebuy"];
+  const sc = scopeBar("market", MK, "Black Market settings", fixed);
   // Layout (24 Oct): summary line, Spending card, Your picks (pay per item + "Set all to"), Add items (folded).
   // The old global "Pay with" is gone; market_pay stays in the settings as the default for newly added items
   // and as the bot's fallback for items saved without their own pay.
-  const c = S.cfg;
+  const c = sc.c;
   c.market_items = c.market_items || [];
   let cat = "all", q = "", names = [];
   // owner 28 Oct: shop prices are gems, gold or other resources. Resources = any non-gem price (gold, food, lumber, stone, ore)
@@ -1295,7 +1298,8 @@ PAGES.market = function () {
   api("market_pictures", {}, { quiet: true }).then((j) => { names = (j && j.names) || []; draw(); }).catch(() => draw());
   api("market_new_list", {}, { quiet: true }).then((j) => { newItems = (j && j.items) || []; if (newItems.length) add.open = true; drawNew(); }).catch(() => {});
   draw();
-  return h("div", { class: "bmpage" }, sum, spend, picks, panel(null, add));
+  const body = h("div", {}, sum, spend, picks, panel(null, add));
+  return h("div", { class: "bmpage" }, panel(null, sc.bar), lockedWrap(body, sc.locked));
 };
 
 // ====================================================================== telegram
@@ -1771,7 +1775,7 @@ PAGES.duties = function (fixed) {
   const setBody = (r) => [
     (r.opts && r.opts.length) ? dutyOpts(r) : null,
     r.id === "crazy_eggs" ? ce : null, r.id === "champions" ? ch : null, r.id === "wheel" ? wh : null,
-    r.id === "black_market" ? PAGES.market() : null,
+    r.id === "black_market" ? PAGES.market(serial || undefined) : null,
     r.id === "@tasks" ? PAGES.tasks(serial || undefined, true, () => drawSide()) : null,
     r.id === "collect_resources" && serial ? h("div", { class: "subset" }, h("div", { class: "subtitle" }, "City map"),
       note("Resource collecting taps the farms the city map knows. Scan city reads the building names; Map by hand is the manual way."),
@@ -1867,7 +1871,7 @@ PAGES.duties = function (fixed) {
       body.push(h("div", { class: "dgrid" }, rs.map((r) => h("div", { class: "dcell" + (r.on ? " on" : "") }, item(r)))));
     }
     const foot = [];
-    if (v.show === "all" && (!v.group || v.group === "Army") && serial) foot.push("Monster killing and stamina points come from the rallies the bot joins (Rally setup).");
+    if (v.show === "all" && (!v.group || v.group === "Army") && serial) foot.push("Monster killing and stamina points come from the rallies the bot joins (Join rallies).");
     if (v.show === "all" && !v.group) foot.push(DUTY_COMING.length + " more activities coming: " + DUTY_COMING.join(", ") + ".");
     root.appendChild(panel(null, head(), filters,
       body.length ? body : h("div", { class: "empty" }, q.trim() ? h("span", {}, "No duties match \u201c" + q.trim() + "\u201d. ", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); q = ""; draw(); } }, "Clear the search"))
