@@ -12789,11 +12789,16 @@ def relocate_view(dev, cfg, log, stop, cmap, nav):
         return None
     mx = sum(c[0] for c in cams) / len(cams)               # middle of the city (camera places)
     my = sum(c[1] for c in cams) / len(cams)
+    sp = culture_pin(dev, "Shrine")                        # owner 28 Oct 13:55: the Shrine is the city's centre - home base
+    if sp:
+        x_, y_, w_, h_ = CITY_VIEW
+        mx, my = sp[0] - (x_ + w_ / 2), sp[1] - (y_ + h_ / 2)   # the camera place that shows the Shrine in the middle
     last = getattr(dev, "_last_cam", None)
     if last and time.time() - last[2] < 900:
         vx, vy = mx - last[0], my - last[1]
         ln = (vx * vx + vy * vy) ** 0.5 or 1.0
-        log(f"[i]   nav: relocate - screen not on the map, last seen at {round(last[0])},{round(last[1])}; dragging toward the city middle")
+        log(f"[i]   nav: relocate - screen not on the map, last seen at {round(last[0])},{round(last[1])}; dragging toward "
+            + ("the Shrine (city centre)" if sp else "the city middle"))
         for k in range(3):
             if nav.halted():
                 return None
