@@ -1080,7 +1080,7 @@ const REFRESH = [["none", "Never"], ["count", "A set number of times"], ["all", 
 // The item keeps its "BM NN" name in the settings (that is the picture the bot looks for); only the label shown changes.
 const BM_CATS = [["all", "All"], ["stamina", "Stamina"], ["res", "Resources"], ["speed", "Speed-ups"], ["chest", "Chests"], ["gear", "Gear & materials"], ["other", "Other"]];
 const BM_INFO = {
-  "BM 44": ["Stamina 50 x10", "stamina"],
+  "BM 44": ["Stamina 50 x10", "stamina"], "VIT 50": ["Stamina 50", "stamina"],   // VIT 50 = the owner's own capture (single item)
   "BM 04": ["Gold 100K", "res"], "BM 08": ["Food 200M", "res"], "BM 21": ["Food 500M", "res"], "BM 19": ["Lumber 200M", "res"], "BM 17": ["Resource 50M", "res"],
   "BM 13": ["Stone 200M", "res"], "BM 42": ["Stone 200M (2)", "res"], "BM 22": ["Ore 500M", "res"],
   "BM 01": ["Chest VI x5", "chest"], "BM 25": ["Chest V x5", "chest"], "BM 03": ["Chest IV x5", "chest"], "BM 07": ["Red chest x20", "chest"], "BM 10": ["Red chest x1", "chest"],
