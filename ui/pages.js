@@ -1091,8 +1091,32 @@ const BM_INFO = {
   "BM 05": ["EXP 5000 x10", "other"], "BM 09": ["EXP 20000", "other"], "BM 16": ["EXP 10000", "other"], "BM 02": ["Medals x500", "other"],
   "BM 31": ["Scroll x10", "other"], "BM 51": ["Scroll x20", "other"],
 };
+// Owner 28 Oct: names offered when the owner names a new shop item (typed text is fine too) - item names only.
+const BM_SUGGEST = (() => {
+  const out = [], x = (base, qs) => qs.forEach((q) => out.push(base + (q ? " x" + q : "")));
+  x("Treasure Box", [1, 5, 10, 20]); x("Tactic Scroll", [1, 5, 10, 20]);
+  const gear = ["Intellect Crown", "Strength Crown", "Agile Crown", "Martial Crown", "Medical Crown", "Durable Crown",
+    "Mountain Staff", "Thunder Staff", "Wind Staff", "Fire Staff", "Mountain Decoration", "Thunder Decoration", "Wind Decoration", "Fire Decoration",
+    "Mountain Grail", "Thunder Grail", "Wind Grail", "Fire Grail", "War Horn", "Courage Horn", "Loyalty Horn", "Justice Horn",
+    "Earth Crystal", "Water Crystal", "Wind Crystal", "Fire Crystal", "Light Crystal", "Wood Crystal", "Thunder Crystal", "Golden Crystal"];
+  for (const lv of [4, 3]) gear.forEach((g) => out.push("Gear Lv" + lv + ": " + g));
+  for (const r of ["Food", "Lumber", "Stone", "Ore"]) for (const a of ["500K", "1M", "2M", "5M", "20M", "50M", "200M", "500M"]) out.push(r + " " + a);
+  x("Production Speed-up 24h", [1, 2, 5, 20]);
+  ["VIP 30 min", "VIP 60 min", "VIP 1 day", "VIP 7 days", "VIP 30 days"].forEach((v) => out.push(v));
+  out.push("Gold 50K", "Gold 100K"); x("Chips 100", [1, 2, 5]); x("Medals", [100, 200]);
+  x("Refining Stone", [10, 50]); x("Research Stone", [5, 10, 25, 50]); x("Runestone Chest", [10]); x("Dragon Crystal", [10]);
+  out.push("Stamina 50", "Stamina 50 x10", "Royal Waybill"); x("Tribute", [1, 2, 5, 10]);
+  for (const e of ["1,000", "2,000", "5,000", "50,000"]) x("Monarch EXP " + e, [1, 2, 5]);
+  for (const e of ["500", "1,000", "2,000", "5,000", "10,000", "20,000"]) x("General EXP " + e, [1, 2, 5, 10]);
+  out.push("Spiritual Beast EXP 5,000 x5", "Spiritual Beast EXP 1,000 x10", "Scroll Chest");
+  ["I", "II", "III", "IV", "V", "VI"].forEach((n) => out.push("Artwork Fragment Chest " + n));
+  for (const g of ["Bow", "Spear", "Axe", "Sword", "Helmet", "Armor", "Leg Armor", "Boots", "Ring"]) out.push("Gold gear: " + g, "Orange gear: " + g);
+  return [...new Set(out)];
+})();
 // captured items: category from the name (the owner can rename an item by capturing it again)
-const bmGuess = (n) => /stam|vit/i.test(n) ? "stamina" : /speed/i.test(n) ? "speed" : /chest|box/i.test(n) ? "chest" : /food|lumber|wood|stone|ore|iron|gold|silver|res/i.test(n) ? "res" : "other";
+const bmGuess = (n) => /stam|vit/i.test(n) ? "stamina" : /speed/i.test(n) ? "speed"
+  : /gear|crown|staff|grail|horn|crystal|decoration|armor|ring|bow|spear|axe|sword|boots|helmet|refining/i.test(n) ? "gear"
+  : /chest|box/i.test(n) ? "chest" : /food|lumber|wood|stone|ore|iron|gold|silver|res/i.test(n) ? "res" : "other";
 const bmInfo = (n) => BM_INFO[n] ? { label: BM_INFO[n][0], cat: BM_INFO[n][1] } : { label: n, cat: bmGuess(n) };
 PAGES.market = function () {
   // Layout (24 Oct): summary line, Spending card, Your picks (pay per item + "Set all to"), Add items (folded).
@@ -1178,19 +1202,25 @@ PAGES.market = function () {
   const drawNew = () => {
     newBox.innerHTML = "";
     if (!newItems.length) return;
-    newBox.append(h("div", { class: "bmnewhead" }, h("b", {}, "New items seen in the shop (" + newItems.length + ")"),
+    newBox.append(h("datalist", { id: "bmsuggest" }, ...BM_SUGGEST.map((n) => h("option", { value: n }))),
+      h("div", { class: "bmnewhead" }, h("b", {}, "New items seen in the shop (" + newItems.length + ")"),
       h("span", { class: "hint" }, "Give each a name once (e.g. Speed-up 8h) - then it can be picked. \u00d7 = not an item")),
       h("div", { class: "bmgrid" }, ...newItems.map((f) => h("div", { class: "bmcard bmnew" },
         h("img", { src: `/api/market_new_img?file=${encodeURIComponent(f)}&k=${window.KEY}`, alt: "" }),
-        h("button", { type: "button", class: "btn sm", onclick: async () => {
-          const name = await promptBox("Name this item", "What is it? (e.g. Stamina 100, Speed-up 8h)", "");
-          if (!name) return;
-          const j = await act(api("market_new_name", { file: f, name }));
-          if (!j) return;
-          newItems = newItems.filter((x) => x !== f);
-          if (!names.includes(j.name)) names.push(j.name);
-          draw();
-        } }, "Name it"),
+        (() => {                                             // inline name field: type, or pick one of the suggestions
+          const inp = h("input", { type: "text", list: "bmsuggest", class: "bmnamein", placeholder: "Name, e.g. Stamina 50", "aria-label": "Name of this item",
+            onkeydown: (e) => { if (e.key === "Enter") save(); } });
+          const save = async () => {
+            const name = inp.value.trim();
+            if (!name) { inp.focus(); return; }
+            const j = await act(api("market_new_name", { file: f, name }));
+            if (!j) return;
+            newItems = newItems.filter((x) => x !== f);
+            if (!names.includes(j.name)) names.push(j.name);
+            draw();
+          };
+          return h("div", { class: "bmnamerow" }, inp, h("button", { type: "button", class: "btn sm", onclick: save }, "Save"));
+        })(),
         h("button", { type: "button", class: "bmx", title: "Not an item - remove", "aria-label": "Remove this picture", onclick: async () => {
           if (!(await act(api("market_new_drop", { file: f })))) return;
           newItems = newItems.filter((x) => x !== f); drawNew();

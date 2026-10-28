@@ -1815,3 +1815,5 @@ select.pick-open{border-color:var(--accent1)}
 .bmnew{cursor:default}
 .bmnew .bmx{position:absolute;top:4px;right:4px}
 .bmnew img{max-width:100%}
+.bmnamerow{display:flex;gap:6px;width:100%}
+.bmnamerow .bmnamein{flex:1;min-width:0;margin:0!important;font-size:12.5px;padding:5px 8px}
