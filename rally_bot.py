@@ -15606,7 +15606,15 @@ def mr_open_monster(dev, stop, want, level=None):
         _nap(stop, 1.8, 2.3)
         page = dev.screenshot()
         rd_snap(page, "mrally_page")
-        if not rd_seen(page, ["Alliance War", "Winning Odds"], region=(0, 650, 540, 220)):
+        def _is_mon_page(img):                               # owner 29 Oct 03:35: a Lv6 Pumpkin page was called "not a monster
+            if rd_seen(img, ["Alliance War", "Winning Odds"], region=(0, 650, 540, 220)):    # page" - plain reading missed the gold
+                return True                                  # buttons; read them enlarged as light text too
+            try:
+                txt = " ".join(t for t, _ in ocr_lines(img[650:870, 0:540], 2.5, bright=True)).lower()
+            except Exception:
+                return False
+            return "alliance war" in txt or "winning" in txt or ("attack" in txt and "alliance" in txt)
+        if not _is_mon_page(page):
             dev.back()                                      # something with Attack but no monster page: not ours - skip at once (no more taps)
             _nap(stop, 0.8, 1.1)
             return "other", "not a monster page"
