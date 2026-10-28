@@ -847,12 +847,25 @@ function placeActRow(body, row) {
   }
   body.insertBefore(row, body.firstChild);
 }
+// PCR2 A7: skips of monsters the user switched off are noise (95% of the list on 28 Oct) - not counted as Skipped,
+// and the table shows one such row per instance + monster per hour
+const isOffSkip = (a) => a && a.k === "skip" && /is switched off in the monster list$/.test(a.why || "");
+function offSkipHidden(v, l) {
+  if (!isOffSkip(l.a)) return false;
+  const [hh, mm, ss] = String(l.a.t || "").split(":").map(Number), t = hh * 3600 + mm * 60 + (ss || 0);
+  const key = l.s + "|" + String(l.a.mon || "").replace(/\s+\d+$/, "");
+  v.offSeen = v.offSeen || {};
+  const prev = v.offSeen[key];
+  if (prev != null && t >= prev && t - prev < 3600) return true;
+  v.offSeen[key] = t;
+  return false;
+}
 function actStats(serial) {
   const list = S.acts.filter((l) => serial === null || l.s === serial);
   const n = (k) => list.filter((l) => l.a.k === k).length;
   const joins = list.filter((l) => l.a.k === "join" && l.a.took != null);
   const avg = joins.length ? (joins.reduce((t, l) => t + l.a.took, 0) / joins.length).toFixed(1) + "s" : "-";
-  return `Joined ${n("join")}  ·  Skipped ${n("skip")}  ·  Failed ${n("fail")}  ·  Average join time ${avg}`;
+  return `Joined ${n("join")}  ·  Skipped ${list.filter((l) => l.a.k === "skip" && !isOffSkip(l.a)).length}  ·  Failed ${n("fail")}  ·  Average join time ${avg}`;
 }
 function paintStats(el, serial) {
   const list = S.acts.filter((l) => serial === null || l.s === serial);
@@ -861,9 +874,11 @@ function paintStats(el, serial) {
   const avg = joins.length ? (joins.reduce((t, l) => t + l.a.took, 0) / joins.length).toFixed(1) + " s" : "-";
   el.innerHTML = "";
   // A4 (28 Oct): these count since the app started and every skip reason - the Today card counts the game day and late skips only
-  [["Joined", n("join")], ["Skipped", n("skip")], ["Failed", n("fail")], ["Average join", avg]].forEach(([l, v]) =>
+  [["Joined", n("join")], ["Skipped", list.filter((l) => l.a.k === "skip" && !isOffSkip(l.a)).length], ["Failed", n("fail")], ["Average join", avg]].forEach(([l, v]) =>
     el.appendChild(h("div", { class: "stile", title: "Since the app started" }, h("b", {}, String(v)), h("span", {}, l))));
-  el.appendChild(h("small", { class: "hint", style: { gridColumn: "1 / -1" } }, "Since the app started · every skip reason (Today counts late skips only)"));
+  const aj = serial !== null && typeof ajIsOn === "function" && ajIsOn(serial);   // PCR2 A4: the game joins rallies itself
+  if (aj && !n("join")) el.firstChild.firstChild.textContent = "By the game";
+  el.appendChild(h("small", { class: "hint", style: { gridColumn: "1 / -1" } }, aj ? "Auto-Join is on - the game joins rallies itself; these count only what the bot did" : "Since the app started · switched-off monsters not counted (Today counts late skips only)"));
 }
 function actNow(serial) {
   if (serial !== null) { const x = S.now[serial]; return x ? `${x.t}  ${x.text}` : "Waiting for the bot to start\u2026"; }
@@ -877,7 +892,8 @@ function activityBox(serial, title) {
   const wrap = h("div", { class: "actwrap" }, h("table", { class: "acttable" }, h("thead", {}, h("tr", {}, ...head.map((t) => h("th", {}, t)))), body));
   const view = { now, stats, body, wrap, serial };
   actViews.push(view);
-  for (const l of S.acts.slice(-200)) if (l.a.k !== "step" && (serial === null || l.s === serial)) placeActRow(body, actRow(view, l));
+  const shown = S.acts.filter((l) => l.a.k !== "step" && (serial === null || l.s === serial) && !offSkipHidden(view, l));
+  for (const l of shown.slice(-200)) placeActRow(body, actRow(view, l));
   now.textContent = actNow(serial); paintStats(stats, serial);
   return h("div", { class: "actsplit" },
     h("div", { class: "actleft" }, h("h3", {}, title || "Activity"), h("div", { class: "actbar" }, h("span", { class: "actlab" }, "Now"), now), stats),
@@ -900,6 +916,7 @@ function pushActs(list) {
     }
     S.acts.push(l);
     for (const v of actViews) if (v.serial === null || v.serial === l.s) {
+      if (offSkipHidden(v, l)) continue;
       placeActRow(v.body, actRow(v, l));
       while (v.body.childNodes.length > 200) v.body.removeChild(v.body.lastChild);
     }
@@ -963,8 +980,8 @@ function updateSummary() {
   const who = $("#whoami");
   if (who) {
     const L = S.license || {};
-    const nm = L.required ? (L.valid ? (L.user || L.buyer || "Logged in") : "Not logged in") : "Free edition";
-    const sub = L.required && L.valid && L.days_left != null ? (L.days_left > 0 ? L.days_left + (L.days_left === 1 ? " day" : " days") + " left" : "expires today") : (L.required ? "" : "no login needed");
+    const nm = L.required ? (L.valid ? (L.user || L.buyer || "Logged in") : "Not logged in") : "RallyForge beta";
+    const sub = L.required && L.valid && L.days_left != null ? (L.days_left > 0 ? L.days_left + (L.days_left === 1 ? " day" : " days") + " left" : "expires today") : (L.required ? "" : "early access");
     who.innerHTML = ""; who.title = L.required && L.valid ? "Logged in as " + nm : "";
     who.append(h("span", { class: "wav" }, (nm[0] || "?").toUpperCase()), h("span", { class: "wtx" }, h("b", {}, nm), sub ? h("small", {}, sub) : null));
   }
@@ -1012,7 +1029,7 @@ function updateSummary() {
 async function handleEvent(ev) {
   const d = ev.d || {};
   if (ev.k === "toast") toast(d.msg, d.kind);
-  else if (ev.k === "acts_reset") { S.acts = []; for (const v of actViews) { v.body.innerHTML = ""; paintStats(v.stats, v.serial); } }   // the game's daily reset
+  else if (ev.k === "acts_reset") { S.acts = []; for (const v of actViews) { v.body.innerHTML = ""; v.offSeen = {}; paintStats(v.stats, v.serial); } }   // the game's daily reset
   else if (ev.k === "devices") { const j = await act(api("state")); if (j) { S.devices = j.devices; if (S.sel === "control" && S.tab === "dashboard") rerender(); } }
   else if (ev.k === "bosses") { const j = await act(api("state", {}, { quiet: true })); if (j) { S.bosses = j.bosses; if (window.refreshBosses) refreshBosses(); } }
   else if (ev.k === "city_done") { const sr = ev.d && ev.d.serial; if (sr) { S.cityDone = { ...(S.cityDone || {}), [sr]: true }; if (S.cityJobs) delete S.cityJobs[sr]; if (window.drawCityProgress) drawCityProgress(); } else { closeScanBox(); if (window.showCityResult) showCityResult(); } const j = await act(api("state")); if (j) { S.cityInfo = j.city_info; if (window.refreshCityInfo) refreshCityInfo(); } toast("City mapper finished.", "ok"); }

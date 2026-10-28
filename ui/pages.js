@@ -579,7 +579,7 @@ function instancePage(serial) {
   // Settings tab: sections as pills on top (C5), same as Rally setup; saving + Undo are in the header
   const settingsTab = () => [...sections("settings", [
     ["phone", "Phone & Auto-Join", () => [phone, autoJoin, autoStart]],
-    ["inst", "Instance settings", () => [panelEl, mapPanel()]],
+    ["inst", "Instance settings", () => [panelEl, S.dev ? mapPanel() : null]],   // PCR2 A1: old Scan city = owner tool; users map on Overview > City map
     ["adv", "Advanced", () => [panel("Advanced (rarely needed)", moreFields,
       h("div", { class: "field", style: { marginTop: "14px" } }, h("label", {}, "Any other setting as JSON"), adv,
         h("div", { class: "hint" }, "Only for settings that have no field above, e.g. {\"threshold\": 0.8}. Leave empty if unsure.")))]],
@@ -658,7 +658,7 @@ function instItinerary(serial) {
     const mk = (f) => d.filter(f).map((x) => ({ when: x.text, st: x.status, name: dutyName(x.id, x.title) }));
     const mine = (j.events || []).filter((e) => row && e.emu === row.emu).slice(0, 12).map((e) => ({ when: fmtT(e.t), name: e.task + (e.ok ? "" : " - failed" + (e.msg ? ": " + e.msg : "")) }));
     root.innerHTML = "";
-    const parts = [grp("Due now", mk((x) => x.status === "due" || x.status === "retry"), true), grp("Gave up today - still tried every hour", mk((x) => x.status === "gaveup"), true),
+    const parts = [grp("Due now", mk((x) => x.status === "due" || x.status === "retry"), true), grp("Retrying - failed today, tried again every hour", mk((x) => x.status === "gaveup")),
       grp("Coming up", mk((x) => x.status === "waiting")), grp("Done today", mk((x) => x.status === "done")), grp("Latest things the bot did here", mine)].filter(Boolean);
     root.appendChild(panel("Itinerary",
       h("small", { class: "sub" }, "What this instance has to do today" + (row && row.count && row.count.on ? " \u00b7 " + row.count.done + " / " + row.count.on + " done" : "") + ". Changes in Duties are picked up without stopping it."),
@@ -928,6 +928,7 @@ function lockedWrap(el, locked) { if (locked) { el.style.opacity = "0.55"; el.st
 PAGES.monsters = function (fixed) {
   const sc = scopeBar("monsters", ["monster_skip", "monster_presets", "monster_unknown"], "monster list", fixed);
   if (fixed === undefined) return monstersPanel(S.cfg, sc.bar);
+  if (ajIsOn(fixed)) sc.bar = h("div", {}, sc.bar, note("Auto-Join is on for this instance - the game joins rallies itself. This list is used only when Auto-Join is off."));   // PCR2 A4
   if (sc.own) return monstersPanel(sc.c, sc.bar);
   const cat = (S.catalog || []).flatMap((x) => x[1]), skip = S.cfg.monster_skip || {};
   const joins = cat.filter(([n, lv]) => (skip[n] || []).length < lv.length).length;
@@ -1158,8 +1159,10 @@ PAGES.market = function (fixed, redraw) {
   // ---- 1. Spending
   const nInp = inp(c, "market_refresh_n", { type: "int", cls: "short" });
   const paidTog = tog(c, "market_paid_refresh", "Paid refresh with gems after the free ones", { after: () => draw() });
+  const nBox = fld("How many times", nInp);
   const lockSpend = () => {
     const m = c.market_refresh_mode || "none";
+    nBox.hidden = m !== "count";                          // PCR2 A6: only shown for 'A set number of times'
     const nIn = nInp.tagName === "INPUT" ? nInp : nInp.querySelector("input");
     if (nIn) { nIn.disabled = m !== "count"; nIn.title = m === "count" ? "" : "Only used with 'A set number of times'";
       nIn.value = m === "count" ? String(c.market_refresh_n ?? "") : ""; }                 // A6: no stray 500000000 in the unused box
@@ -1168,7 +1171,7 @@ PAGES.market = function (fixed, redraw) {
   };
   const spend = panel("Spending",
     grid2(fld("Refresh the shop", sel(c, "market_refresh_mode", REFRESH, { dropdown: true, after: () => draw() })),
-      fld("How many times", nInp)),
+      nBox),
     h("div", { class: "bmtog" }, paidTog),
     h("div", { class: "bmtog" }, tog(c, "market_rebuy", "Use Rebuy Chances to buy a picked item again", { after: () => drawSum() })),
     grid2(fld("Gem floor", inp(c, "market_min_gems", { type: "int", cls: "short" }), "Never go below this. 0 = no floor"),
@@ -1223,7 +1226,7 @@ PAGES.market = function (fixed, redraw) {
   let newItems = [];
   const drawNew = () => {
     newBox.innerHTML = "";
-    if (!newItems.length) return;
+    if (!S.dev || !newItems.length) return;                    // PCR2 A1: naming new shop items is an owner tool
     newBox.append(h("datalist", { id: "bmsuggest" }, ...BM_SUGGEST.map((n) => h("option", { value: n }))),
       h("div", { class: "bmnewhead" }, h("b", {}, "New items seen in the shop (" + newItems.length + ")"),
       h("span", { class: "hint" }, "Give each a name once (e.g. Speed-up 8h) - then it can be picked. \u00d7 = not an item")),
@@ -1257,7 +1260,7 @@ PAGES.market = function (fixed, redraw) {
       h("div", { class: "row", style: { margin: "4px 0 12px" } },
         btn("Stamina only", () => { c.market_items = c.market_items.filter((i) => bmInfo(i.name).cat === "stamina").map((i) => ({ ...i, pay: "gems" }));
           for (const n of names) if (bmInfo(n).cat === "stamina" && !chosen(n)) c.market_items.push({ name: n, pay: "gems" }); cat = "stamina"; draw(); }, "sm"),
-        btn("Add item from screenshot…", async () => {
+        !S.dev ? null : btn("Add item from screenshot…", async () => {
           const shot = await pickScreenshot("Screenshot of the Black Market");
           if (!shot) return;
           const rect = await pickOnShot(shot, "Drag a box around just the item's PICTURE (the icon in the middle, without the number in the corner), then release.", "region");
@@ -1296,7 +1299,7 @@ PAGES.market = function (fixed, redraw) {
     drawNew(); drawPicks(); drawSum(); lockSpend();
   };
   api("market_pictures", {}, { quiet: true }).then((j) => { names = (j && j.names) || []; draw(); }).catch(() => draw());
-  api("market_new_list", {}, { quiet: true }).then((j) => { newItems = (j && j.items) || []; if (newItems.length) add.open = true; drawNew(); }).catch(() => {});
+  if (S.dev) api("market_new_list", {}, { quiet: true }).then((j) => { newItems = (j && j.items) || []; if (newItems.length) add.open = true; drawNew(); }).catch(() => {});
   draw();
   const body = h("div", {}, sum, spend, picks, panel(null, add));
   return h("div", { class: "bmpage" }, panel(null, sc.bar), lockedWrap(body, sc.locked));
@@ -1555,7 +1558,7 @@ function renderTodayCard(serial) {
     const gameJoins = ajEff("game_auto_join", false);
     m.results.forEach(([l, v, tip]) => { if (gameJoins && l === "Rallies joined") { l = "Rallies joined"; v = "By the game"; tip = "The game's Auto-Join is on, so the game joins rallies itself"; }
       res.appendChild(h("div", { class: "stile" + (v === "By the game" ? " txt" : ""), title: tip || "" }, h("b", {}, String(v)), h("span", {}, l))); });
-    week.textContent = m.week;
+    week.textContent = gameJoins ? m.week.replace(/^(Last [^:]+: )0 joins/, "$1joins by the game") : m.week;   // PCR2 A4
   };
   const load = async () => {
     if (!card.isConnected) return;
@@ -1655,7 +1658,7 @@ function renderTodayAll() {
         sb ? h("td", {}, tx(r.shield)) : null, sb ? h("td", {}, tx(r.buff)) : null,
         h("td", {}, ajSwitch(r.serial, { label: "", small: true, after: () => { last = ""; paint(); } })),
         h("td", { class: all ? "ok" : "" }, r.duties_total ? `${r.duties_done}/${r.duties_total}` + (all ? " \u2713" : "") : "-"),
-        h("td", {}, String(r.joins)), h("td", {}, String(r.late))));
+        h("td", ajIsOn(r.serial) ? { class: "mute", title: "The game's Auto-Join is on, so the game joins rallies itself" } : {}, ajIsOn(r.serial) && !r.joins ? "By the game" : String(r.joins)), h("td", {}, String(r.late))));   // PCR2 A4
     });
   };
   const load = async () => {
@@ -1703,11 +1706,13 @@ const dutyName = (id, t) => (DUTY_UI[id] ? DUTY_UI[id][1] : t);
 const dutyGroup = (id, g) => (DUTY_UI[id] ? DUTY_UI[id][0] : g === "Reward claims" ? g : "City");
 const dutyShown = (id) => S.dev || !DUTY_TEST.has(id);
 const RUN_SETUP = new Set(["map_city"]);              // one-time jobs: Run now lists them under Setup, on top
-// C7: one status badge, one vocabulary (Done 07:23 · Done for today · Due · Next 08:01 · Retrying 08:30 · Gave up · Running now)
-const BADGE_CLS = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "bad", run: "run" };
+// C7: one status badge, one vocabulary (Done 07:23 · Done for today · Due · Next 08:01 · Retrying 08:30 · Running now)
+// PCR2 A2: a duty that failed 3+ times today is still tried every hour - never call it "Gave up"
+function retryWord(text) { const m = /next try (\d{1,2}:\d{2})/.exec(text || ""); return m ? "Retrying \u00b7 next " + m[1] : "Retrying every hour"; }
+const BADGE_CLS = { done: "ok", due: "due", waiting: "next", retry: "next", gaveup: "due", run: "run" };   // PCR2 A2: amber, not red
 function dutyBadge(status, text, tip) {
   if (!status || status === "off") return null;
-  const t = status === "gaveup" ? "Gave up" : status === "run" ? "Running now" : (text || status);
+  const t = status === "gaveup" ? retryWord(text) : status === "run" ? "Running now" : (text || status);
   return h("span", { class: "dbadge " + (BADGE_CLS[status] || ""), title: tip || text || "" }, t);
 }
 // C4: the one own / default line at the top of an instance card that has a universal default
@@ -1778,8 +1783,8 @@ PAGES.duties = function (fixed) {
     r.id === "black_market" ? PAGES.market(serial || undefined, () => drawSide()) : null,
     r.id === "@tasks" ? PAGES.tasks(serial || undefined, true, () => drawSide()) : null,
     r.id === "collect_resources" && serial ? h("div", { class: "subset" }, h("div", { class: "subtitle" }, "City map"),
-      note("Resource collecting taps the farms the city map knows. Scan city reads the building names; Map by hand is the manual way."),
-      h("div", { class: "row" }, btn("Scan city", () => scanCityFlow(serial), "sm"), btn("Map by hand", () => manualMapFlow(serial), "sm"))) : null,
+      note("Resource collecting taps the farms on this instance's city map (Overview \u203a City map). Missing a farm? Place it with Map by hand."),
+      h("div", { class: "row" }, S.dev ? btn("Scan city", () => scanCityFlow(serial), "sm") : null, btn("Map by hand", () => manualMapFlow(serial), "sm"))) : null,
   ].filter(Boolean);
   // ---- side panel (C2): Settings on the row opens it; Esc, Done or a click outside closes; changes save as they are made
   let sideId = null;
@@ -2010,9 +2015,11 @@ function cityMapCard(serial) {
     toast("Looking for the " + n + " missing building" + (n === 1 ? "" : "s") + " next. Pins already found stay.", "ok");
     refresh(r);
   };
-  const againDialog = () => modal({ title: "Map city again?", body: h("p", { style: { maxWidth: "440px" } },
-      "This deletes this city's picture and all its pins, also the ones you placed, and maps the city fresh (about 5-6 min). This instance doesn't join rallies while it maps."),
-    buttons: [{ label: "Cancel" }, { label: "Map city again", cls: "bad", onclick: () => start(true) }] });
+  const againDialog = (j) => { const mv = (j && j.movable) || [], nAll = mv.filter((b) => b.state !== "missing").length, nYou = mv.filter((b) => b.state === "placed").length;
+    return modal({ title: "Map city again?", body: h("p", { style: { maxWidth: "440px" } },
+      h("b", {}, "Deletes " + nAll + " pin" + (nAll === 1 ? "" : "s") + (nYou ? ", including " + nYou + " you placed by hand" : "") + "."), " ",
+      "The city's picture is deleted too and the city is mapped fresh (about 5-6 min). This instance doesn't join rallies while it maps. To fix one building, use Fix pins instead."),
+    buttons: [{ label: "Cancel", cls: "pri" }, { label: "Delete pins and map again", cls: "bad", onclick: () => start(true) }] }); };
   const paint = (j) => {
     root.innerHTML = "";
     const mv = j.movable || [], fx = j.fixed || [], pr = j.progress || {};
@@ -2024,7 +2031,7 @@ function cityMapCard(serial) {
     const acts = j.mapped && !j.running ? [
         miss.length ? h("button", { class: "btn pri", type: "button", disabled: queued, onclick: () => findMissing(miss.length) }, "Find missing (" + miss.length + ")") : null,
         h("button", { class: "btn", type: "button", onclick: () => fixPinsDialog(serial, j, null, refresh) }, "Fix pins"),
-        h("button", { class: "btn", type: "button", onclick: againDialog }, "Map city again")]
+        h("button", { class: "btn", type: "button", onclick: () => againDialog(j) }, "Map city again")]
       : !j.running && !j.mapped ? [h("button", { class: "btn pri", type: "button", disabled: queued, onclick: () => start(false) }, "Map my city")] : [];
     root.appendChild(h("div", { class: "cardhead cmhead" }, h("div", {}, h("h3", {}, "City map"), h("small", { class: "sub" }, sub)), h("div", { class: "cmacts" }, acts)));
     if (!j.running && !j.mapped) {                     // empty state: one clear action, nothing else
@@ -2256,6 +2263,7 @@ function runNowCard(serial) {
     for (const t of j.tasks || []) {
       const id = t.id.startsWith("duty:") ? t.id.slice(5) : "";
       if (id && !dutyShown(id)) continue;
+      if (RUN_SETUP.has(id) && !S.dev) continue;          // PCR2 A5: Map my city lives on Overview > City map only (it can wipe pins)
       // one-time jobs on top (Setup), developer test duties in their own group at the bottom - never mixed into City
       const g = !id ? "My tasks" : RUN_SETUP.has(id) ? "Setup" : DUTY_TEST.has(id) ? "Testing (developer)" : dutyGroup(id, t.group);
       (groups[g] = groups[g] || []).push([t.id, id ? dutyName(id, t.title) : t.title]);
@@ -2413,11 +2421,13 @@ function monsterRallyTab(serial) {
     if (!(duty && duty.on)) return ["Off", "off"];                           // A1 (28 Oct): Monster hunts switched off - never show green Ready
     const back = (live.busy || {})[p];
     if (back && back > Date.now() / 1000) return [(mode(p) === "solo" ? "Attacking · back " : "Busy · back ") + left(back), "busy", back];
+    if (!huntsLive()) return [live.running ? "Waiting" : "Instance stopped", "wait"];   // PCR2 A3: green Ready only while hunts really run
     const lim = huntsFor(p);
     if (mode(p) === "solo" && lim && +((live.solo_done || {})[p] || 0) >= lim) return ["Done for today · " + lim + " hunts", "done"];
     return ["Ready", "ok"];
   };
   const kindLabel = (k) => ({ go: "Rallied", solo: "Solo attack", wait: "Waiting", skip: "Skipped" }[k] || k);
+  function huntsLive() { const st = live.status || {}; return !!(live.running && st.t && Date.now() / 1000 - st.t < 600); }   // same test as the status bar
 
   // ---- status bar
   const status = h("div", { class: "hustatus" });
@@ -2428,7 +2438,13 @@ function monsterRallyTab(serial) {
     if (on && !usedList().length) { tone = "wait"; title = "Waiting · no monsters picked"; sub = "Add monsters to a preset in Setup"; }
     else if (on && !live.running) { tone = "off"; title = "Instance stopped"; sub = "Start the instance to hunt"; }
     else if (on && fresh) { tone = st.state === "blocked" ? "bad" : st.state === "waiting" ? "wait" : "ok"; title = (st.state === "blocked" ? "Blocked · " : st.state === "waiting" ? "" : "Running · ") + st.title; sub = st.sub || ""; }
-    else if (on) { tone = "wait"; title = "Starting…"; sub = "Monster hunts begin when the bot reaches them"; }
+    else if (on) {                                     // PCR2 A3: the hunts loop is not running right now - say why, never a stale "Starting..."
+      tone = "wait";
+      const nd = /^Duty: (.+)$/.exec(((S.now || {})[serial] || {}).text || "");
+      if (nd && !/^monster hunts$/i.test(nd[1])) { title = "Waiting \u00b7 after " + nd[1]; sub = "Monster hunts carry on when this duty is done"; }
+      else if (st.t) { title = "Waiting \u00b7 back to hunting soon"; sub = "Last update " + hm(st.t); }
+      else { title = "Starting\u2026"; sub = "Monster hunts begin when the bot reaches them"; }
+    }
     const sw = h("button", { type: "button", class: "husw" + (on ? " on" : ""), "aria-pressed": on ? "true" : "false", "aria-label": on ? "Turn Monster hunts off" : "Turn Monster hunts on", onclick: () => setOn(!on) },
       h("span", { class: "hutrack" }, h("span", { class: "huknob" })), on ? "On" : "Off");
     status.append(...[h("span", { class: "hudot " + tone }),
@@ -2598,9 +2614,10 @@ function monsterRallyTab(serial) {
     if (k === "busy") { t = mode(sel) === "solo" ? "Troops are attacking" : "Troops are out"; x = "Back about " + hm(back) + ". Then it takes the next monster on its list."; }
     else if (k === "off") { t = "Monster hunts is off"; x = "Switch it on at the top to hunt with this preset."; }
     else if (k === "done") { t = "Done for today"; x = "Did its " + huntsFor(sel) + " solo hunts. Raise the limit to hunt more."; }
+    else if (k === "wait") { t = txt; x = live.running ? "Monster hunts carry on when the bot is back on them - see the status at the top." : "Start the instance to hunt."; }
     else { t = "Ready to hunt"; x = "Goes as soon as a monster on its list shows up in Telegram" + (tw ? " · most skipped today: " + tw + " (" + top[tw] + ")" : "") + "."; }
     why.className = "huwhyb " + k;
-    why.append(h("span", { class: "hudot " + (k === "busy" ? "wait" : k === "done" || k === "off" ? "off" : "ok") }), h("div", {}, h("b", {}, t), h("span", {}, x)));
+    why.append(h("span", { class: "hudot " + (k === "busy" || k === "wait" ? "wait" : k === "done" || k === "off" ? "off" : "ok") }), h("div", {}, h("b", {}, t), h("span", {}, x)));
   };
   const listBox = h("div", { class: "hulst" });
   let drag = -1;

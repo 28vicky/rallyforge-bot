@@ -1957,6 +1957,8 @@ class Api:
 
     def run_now_add(self, p):
         tid = str(p.get("id", ""))
+        if tid == "duty:map_city" and not p.get("serial"):           # PCR2 A5: never wipe every city in one click
+            raise ApiError("Map my city runs on one instance at a time - open the instance and use Overview > City map.")
         if tid not in {c["id"] for c in self._rn_catalog()}:
             raise ApiError("Unknown task.")
         for s in self._rn_targets(p):
