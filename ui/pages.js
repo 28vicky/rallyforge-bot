@@ -1611,7 +1611,7 @@ const DUTY_UI = {
   activity_chests: ["Reward claims", "Activity chests", 0],
 };
 const DUTY_COMING = ["Construction", "Research", "Material composing", "General enhancing", "Patrol", "Relic exploration", "Resource gathering"];
-const DUTY_TEST = new Set(["test_adb_zoom", "map_movable", "test_pins", "reach_keep_tavern", "market_capture", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy", "test_learned_keep", "test_activity_go"]);   // developer builds only (C12)
+const DUTY_TEST = new Set(["map_missing", "test_adb_zoom", "map_movable", "test_pins", "reach_keep_tavern", "market_capture", "reach_tavern", "reach_market", "view_reset_test", "reach_embassy", "test_learned_keep", "test_activity_go"]);   // developer builds only (C12)
 const ACT_MAX = 145;                                                     // the game's last Activity chest
 const DUTY_ORDER = (id) => { const i = Object.keys(DUTY_UI).indexOf(id); return i < 0 ? 999 : i; };   // the game's Activity order
 const dutyName = (id, t) => (DUTY_UI[id] ? DUTY_UI[id][1] : t);
@@ -1901,117 +1901,91 @@ PAGES.duties = function (fixed) {
 
 // ====================================================================== Run a task now (C10): one component - instance Overview (this
 // instance) and Control > Dashboard (every instance). The bot does the picked task next, once, before everything else.
-// ---- City map card (instance Overview, owner 27 Oct, approved mockup): movable buildings found by the bot / placed by
-//      the user / missing, the culture's fixed buildings (locked), and the everyday action "Find missing" (keeps
-//      everything). "Map my city" only while nothing is mapped; wiping is an explicit "Start over" in the ⋯ menu.
 const cap1 = (c) => c ? c.charAt(0).toUpperCase() + c.slice(1) : "";
+const cmImgKey = (j) => String(j.pic_t || 0);           // the picture file's time: refreshes while it is being built
 const MV_STATE = { found: ["Found by bot", "ok"], placed: ["Placed by you", "next"], missing: ["Missing", "todo"] };
+// ---- City map card (owner spec 28 Oct, claude/city_mapper_spec_28oct.md): 0 map -> ONE button "Map my city" -> the
+//      city's own picture builds live with "N / 13 found - Market" -> missing = place by hand -> "Map city again".
 function cityMapCard(serial) {
   const root = h("div", { class: "panel citymap" });
-  let last = null, menuOpen = false;
-  const nowText = () => (((S.now && S.now[serial]) || {}).text || "");
-  const refresh = (j) => { if (j && root.isConnected) { last = JSON.stringify(j) + "|" + nowText(); paint(j); } };
+  let last = null, queued = false;
+  const refresh = (j) => { if (j && root.isConnected) { last = JSON.stringify(j); if (j.running || j.mapped) queued = false; paint(j); } };
+  const start = async (again) => {
+    const r = await act(api("city_map_start", { serial }));
+    if (!r) return false;
+    queued = true;
+    toast(again ? "Old map deleted. Map my city runs next on this instance." : "Map my city runs next on this instance.", "ok");
+    refresh(r);
+  };
+  const findMissing = async (n) => {                  // owner 28 Oct: after mapping only - nothing is wiped
+    const r = await act(api("city_map_missing", { serial }));
+    if (!r) return;
+    queued = true;
+    toast("Looking for the " + n + " missing building" + (n === 1 ? "" : "s") + " next. Pins already found stay.", "ok");
+    refresh(r);
+  };
+  const againDialog = () => modal({ title: "Map city again?", body: h("p", { style: { maxWidth: "440px" } },
+      "This deletes this city's picture and all its pins, also the ones you placed, and maps the city fresh (about 5-6 min). This instance doesn't join rallies while it maps."),
+    buttons: [{ label: "Cancel" }, { label: "Map city again", cls: "bad", onclick: () => start(true) }] });
   const paint = (j) => {
     root.innerHTML = "";
-    const mv = j.movable || [], fx = j.fixed || [];
+    const mv = j.movable || [], fx = j.fixed || [], pr = j.progress || {};
     const nFound = mv.filter((b) => b.state === "found").length, nPlaced = mv.filter((b) => b.state === "placed").length;
-    const miss = mv.filter((b) => b.state === "missing"), mapped = nFound + nPlaced;
-    const anyMapped = mapped > 0 || j.built;
-    const mapping = /^Mapping/.test(nowText());
-    const findMissing = async () => { const r = await act(api("city_map_find", { serial })); if (r) { toast("The bot looks for the missing buildings next on this instance. Everything mapped stays.", "ok"); refresh(r); } };
-    const mapCity = async () => { if (await act(api("run_now_add", { serial, id: "duty:map_city" }))) toast("Map my city runs next on this instance.", "ok"); };
-    // ⋯ menu: Find one building… / Start over…
-    const menu = h("div", { class: "cmmenu", role: "menu", hidden: !menuOpen },
-      h("button", { type: "button", role: "menuitem", disabled: !miss.length || !anyMapped, onclick: () => { closeMenu(); findOneDialog(serial, miss, refresh); } }, "Find one building…"),
-      h("button", { type: "button", role: "menuitem", class: "bad", disabled: !anyMapped, onclick: () => { closeMenu(); startOverDialog(serial, refresh); } },
-        "Start over…", h("small", {}, "Clears what the bot found. Your pins are kept.")));
-    const moreBtn = h("button", { class: "btn iconbtn cmmore", type: "button", "aria-label": "More map options", "aria-haspopup": "menu", "aria-expanded": String(menuOpen),
-      onclick: (e) => { e.stopPropagation(); menuOpen = !menuOpen; menu.hidden = !menuOpen; moreBtn.setAttribute("aria-expanded", String(menuOpen)); } }, ico("more"));
-    const closeMenu = () => { menuOpen = false; menu.hidden = true; moreBtn.setAttribute("aria-expanded", "false"); };
-    const main = !anyMapped ? h("button", { class: "btn pri", type: "button", disabled: mapping, onclick: mapCity }, "Map my city")
-      : miss.length ? h("button", { class: "btn pri", type: "button", disabled: mapping, onclick: findMissing }, "Find missing (" + miss.length + ")")
-      : null;
-    root.appendChild(h("div", { class: "cardhead cmhead" },
-      h("div", {}, h("h3", {}, "City map"), h("small", { class: "sub" },
-        mapping ? "Mapping now - see the live panel at the top" : j.culture ? cap1(j.culture) + " culture · fixed buildings from culture pins"
-          : j.built ? "Own map · " + j.views + " views" : "Not mapped yet")),
-      h("div", { class: "cmacts" },
-        anyMapped ? h("button", { class: "btn", type: "button", onclick: () => fixPinsDialog(serial, j, null, refresh) }, "Fix pins") : null,
-        main, anyMapped ? h("div", { class: "cmmorewrap" }, moreBtn, menu) : null)));
-    if (!anyMapped && !mapping) {                      // empty state: one clear action, nothing else
+    const miss = mv.filter((b) => b.state === "missing"), have = nFound + nPlaced, total = mv.length;
+    const sub = j.running ? "Mapping now · stop " + (pr.stop || 0) + " of " + (pr.stops || "?")
+      : j.mapped ? "Mapped " + (j.at || "") + (j.culture ? " · " + cap1(j.culture) + " culture" : "")
+      : queued ? "Map my city runs next on this instance" : "Not mapped yet";
+    const acts = j.mapped && !j.running ? [
+        miss.length ? h("button", { class: "btn pri", type: "button", disabled: queued, onclick: () => findMissing(miss.length) }, "Find missing (" + miss.length + ")") : null,
+        h("button", { class: "btn", type: "button", onclick: () => fixPinsDialog(serial, j, null, refresh) }, "Fix pins"),
+        h("button", { class: "btn", type: "button", onclick: againDialog }, "Map city again")]
+      : !j.running && !j.mapped ? [h("button", { class: "btn pri", type: "button", disabled: queued, onclick: () => start(false) }, "Map my city")] : [];
+    root.appendChild(h("div", { class: "cardhead cmhead" }, h("div", {}, h("h3", {}, "City map"), h("small", { class: "sub" }, sub)), h("div", { class: "cmacts" }, acts)));
+    if (!j.running && !j.mapped) {                     // empty state: one clear action, nothing else
       root.appendChild(h("div", { class: "cmempty" }, h("b", {}, "This city is not mapped yet"),
-        h("p", { class: "hint" }, "Map my city matches your city to its culture map (fixed buildings are known at once) and then looks for the buildings you move yourself, such as the Market and Barracks.")));
+        h("p", { class: "hint" }, "Map my city moves round your whole city once (about 5-6 min), builds its picture and pins the buildings. This instance doesn't join rallies while it maps.")));
       return;
     }
-    // status: movable X of 13, legend, fixed N of N
-    const pct = mv.length ? Math.round(mapped * 100 / mv.length) : 0;
+    const n = j.running ? (pr.found || 0) : have, tot = j.running ? (pr.total || total) : total;
+    const pct = tot ? Math.round(n * 100 / tot) : 0;
     root.appendChild(h("section", { class: "cmstat", "aria-label": "Map status" },
-      h("div", { class: "cmstatt" }, h("b", {}, "Movable buildings"), h("span", {}, mapped + " of " + mv.length + " mapped")),
+      h("div", { class: "cmstatt" }, h("b", {}, "Movable buildings"),
+        h("span", {}, n + " / " + tot + " found" + (j.running && pr.last ? " - " + pr.last : ""))),
       h("div", { class: "cmbar", role: "progressbar", "aria-valuenow": String(pct), "aria-valuemin": "0", "aria-valuemax": "100" }, h("div", { class: "cmfill", style: { width: pct + "%" } })),
-      h("div", { class: "cmlegend" },
+      j.mapped ? h("div", { class: "cmlegend" },
         h("span", {}, h("i", { class: "lg bot" }), "Found by bot " + nFound),
         h("span", {}, h("i", { class: "lg user" }), "Placed by you " + nPlaced),
         h("span", {}, h("i", { class: "lg miss" }), "Missing " + miss.length),
-        fx.length ? h("span", { class: "cmfixed" }, "Fixed buildings " + fx.length + " of " + fx.length + " ✓") : null)));
-    // map (read-only here: a click opens Fix pins) + list on the right
+        fx.length ? h("span", { class: "cmfixed" }, "Fixed buildings " + fx.length + " ✓") : null) : null));
     const body = h("div", { class: "cmbody" });
     if (j.img && j.size) {
-      const wrap = h("button", { class: "cmwrap", type: "button", title: "Open Fix pins", "aria-label": "City map - open Fix pins", onclick: () => fixPinsDialog(serial, j, null, refresh) },
-        h("img", { class: "cmimg", src: "/api/city_map_img?serial=" + encodeURIComponent(serial) + "&k=" + encodeURIComponent(window.KEY) + "&t=" + (j.at || ""), alt: "" }));
+      const img = h("img", { class: "cmimg", src: "/api/city_map_img?serial=" + encodeURIComponent(serial) + "&k=" + encodeURIComponent(window.KEY) + "&t=" + encodeURIComponent(cmImgKey(j)), alt: "" });
+      const wrap = j.mapped ? h("button", { class: "cmwrap", type: "button", title: "Open Fix pins", "aria-label": "City map - open Fix pins", onclick: () => fixPinsDialog(serial, j, null, refresh) }, img)
+        : h("div", { class: "cmwrap" }, img);
       const at = (p) => ({ left: (p[0] * 100 / j.size[0]) + "%", top: (p[1] * 100 / j.size[1]) + "%" });
       for (const b of fx) if (b.pic) wrap.appendChild(h("span", { class: "cmdot fixed", title: b.name + " (fixed)", style: at(b.pic) }));
       for (const b of mv) if (b.pic) wrap.appendChild(h("span", { class: "cmdot " + (b.state === "placed" ? "user" : "bot"), style: at(b.pic) }, h("em", {}, b.name)));
-      body.appendChild(h("div", { class: "cmmapcol" }, wrap, h("small", { class: "hint" }, "Grey dots = fixed (locked) · open Fix pins to move a coloured pin")));
+      body.appendChild(h("div", { class: "cmmapcol" }, wrap, h("small", { class: "hint" }, j.running ? "Your city's picture fills in as the bot moves" : "Grey dots = fixed buildings · open Fix pins to move a coloured pin")));
     }
     const order = { missing: 0, placed: 1, found: 2 };
     body.appendChild(h("div", { class: "cmlist2" },
-      h("div", { class: "hint cmlisthint" }, miss.length ? "Tap a missing building to place it yourself" : "Every movable building is mapped"),
+      h("div", { class: "hint cmlisthint" }, j.running ? "Found so far" : miss.length ? miss.length + " missing - tap one, then tap the map to place it" : "Every movable building is pinned"),
       [...mv].sort((a, b) => order[a.state] - order[b.state] || a.name.localeCompare(b.name)).map((b) =>
-        h("button", { class: "cmrow2 " + b.state, type: "button", onclick: () => fixPinsDialog(serial, j, b.name, refresh) },
-          h("span", {}, b.name), h("span", { class: "cmst " + b.state }, b.state === "missing" ? "Missing · Place" : MV_STATE[b.state][0])))));
+        h("button", { class: "cmrow2 " + b.state, type: "button", disabled: !j.mapped || j.running, onclick: () => fixPinsDialog(serial, j, b.state === "missing" ? b.name : null, refresh) },
+          h("span", {}, b.name), h("span", { class: "cmst " + b.state }, b.state === "missing" ? (j.mapped ? "Missing · Place" : "Not found yet") : MV_STATE[b.state][0])))));
     root.appendChild(body);
-    root.appendChild(h("p", { class: "hint" }, "When a task needs a missing building, the bot looks for that one by itself first."));
   };
-  const outside = (e) => {                               // a click anywhere else closes the ⋯ menu
-    if (!root.isConnected) { document.removeEventListener("click", outside); return; }
-    if (menuOpen && !root.querySelector(".cmmorewrap")?.contains(e.target)) { menuOpen = false; const m = root.querySelector(".cmmenu"); if (m) m.hidden = true; }
-  };
-  document.addEventListener("click", outside);
   const load = async () => refresh(await api("city_map_info", { serial }).catch(() => null));
   load();
-  const tick = setInterval(async () => {                 // refresh while mapping or when the map changed
+  let wait = 0;
+  const tick = setInterval(async () => {                 // every 3 s while mapping (live picture), every 15 s otherwise
     if (!root.isConnected) { clearInterval(tick); return; }
+    const busy = last && (JSON.parse(last).running || queued);
+    if (!busy && (wait = (wait + 1) % 5)) return;
     const j = await api("city_map_info", { serial }).catch(() => null);
-    if (j && JSON.stringify(j) + "|" + nowText() !== last && !root.querySelector(".cmmenu:not([hidden])")) refresh(j);
-  }, 15000);
+    if (j && JSON.stringify(j) !== last) refresh(j);
+  }, 3000);
   return root;
-}
-function findOneDialog(serial, miss, done) {
-  let pick = miss[0] ? miss[0].name : null;
-  const body = h("div", { class: "cmpick" });
-  const draw = () => {
-    body.innerHTML = "";
-    body.appendChild(h("p", { class: "hint" }, "The bot looks only for this building and keeps everything else."));
-    body.appendChild(h("div", { class: "seg wrap", role: "radiogroup" }, miss.map((b) =>
-      h("button", { type: "button", role: "radio", "aria-checked": String(pick === b.name), class: "segb" + (pick === b.name ? " on" : ""), onclick: () => { pick = b.name; draw(); } }, b.name))));
-  };
-  draw();
-  modal({ title: "Find one building", body, buttons: [{ label: "Cancel" }, { label: "Find it", cls: "pri", onclick: async () => {
-    const r = await act(api("city_map_find", { serial, name: pick }));
-    if (!r) return false;
-    toast("The bot looks for the " + pick + " next on this instance.", "ok"); done(r);
-  } }] });
-}
-function startOverDialog(serial, done) {
-  const keep = h("input", { type: "checkbox", id: "cmKeep", checked: true });
-  const body = h("div", { style: { maxWidth: "440px" } },
-    h("p", {}, "The bot forgets the places it found and maps the city again (culture match, then the movable buildings). Pictures and settings are kept."),
-    h("label", { class: "chk", for: "cmKeep" }, keep, " Keep pins I placed"));
-  modal({ title: "Start over?", body, buttons: [{ label: "Cancel" }, { label: "Start over", cls: "bad", onclick: async () => {
-    const r = await act(api("city_map_reset", { serial, keep_user: keep.checked }));
-    if (!r) return false;
-    toast("Map my city runs next on this instance.", "ok"); done(r);
-  } }] });
 }
 // ---- Fix pins (direct manipulation): pick a building, tap the map = placed by you; drag a coloured pin to move it,
 //      × removes it (back to Missing). Fixed pins are locked; "Adjust" moves one for THIS instance only.
@@ -2038,7 +2012,7 @@ function fixPinsDialog(serial, j0, pickName, done) {
           h("button", { class: "lnkb", type: "button", onclick: () => { st.adj = b.name; st.sel = null; draw(); } }, "Adjust")));
     const list = h("div", { class: "pinlist" }, h("div", { class: "pinsec" }, "Movable · " + mv.filter((b) => b.pic).length + " of " + mv.length),
       mv.map(row), fx.length ? h("div", { class: "pinsec" }, "Fixed · locked") : null, fx.map(fxrow));
-    const img = h("img", { class: "pinimg", src: "/api/city_map_img?serial=" + encodeURIComponent(serial) + "&k=" + encodeURIComponent(window.KEY) + "&t=" + (j.at || ""), alt: "City map", draggable: false });
+    const img = h("img", { class: "pinimg", src: "/api/city_map_img?serial=" + encodeURIComponent(serial) + "&k=" + encodeURIComponent(window.KEY) + "&big=1&t=" + encodeURIComponent(cmImgKey(j)), alt: "City map", draggable: false });
     const stage = h("div", { class: "pinstage" }, img);
     const wrap = h("div", { class: "pinwrap" + (st.sel ? " picking" : "") }, stage);
     const view = () => { stage.style.transform = "translate(" + st.px + "px," + st.py + "px) scale(" + st.z + ")"; stage.style.setProperty("--iz", 1 / st.z); };

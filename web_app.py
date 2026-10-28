@@ -76,6 +76,7 @@ class Controller:
             rb.backup_before_new_version()                     # a copy of your settings before this version changes anything
         except Exception as _e:
             rb.quiet_err("Controller.__init__", _e)
+        rb.migrate_city_maps_v2()                              # owner spec 28 Oct: every instance starts clean with 0 map (once)
         self.cfg = rb.load_config()
         self.lic = rf_license.AccountLicense(rb.USER, rb.RES)
         self.lic.set_source(self.cfg.get("update_url"))
@@ -2359,7 +2360,6 @@ class Api:
                 meta["at"] = cult.get("at", "")
             except Exception:
                 meta = {}
-        built = bool(meta.get("keyframes"))
         rows = self._duty_rows(serial)                      # (the live "Mapping N views" progress is read by the page from the chip text)
         on_ids = {r["id"] for r in rows if r["on"]}
         need = {}                                          # building -> [duty titles]
@@ -2405,10 +2405,41 @@ class Api:
             movable.append({"name": name, "state": st, "pic": pic})
         over = rb.pins_override(dev)
         fixed = [{"name": k, "pic": over.get(k, v), "moved": k in over} for k, v in cpins.items()]
-        return {"built": built, "at": meta.get("at", ""), "views": len(meta.get("keyframes") or []), "size": meta.get("size"),
-                "buildings": buildings, "culture": cult["culture"] if cult else None, "movable": movable, "fixed": fixed,
-                "img": bool(rb.culture_dir(cult["culture"]) and (rb.culture_dir(cult["culture"]) / "map.jpg").exists()) if cult
-                else bool((d / "map.png").exists())}
+        # Owner spec 28 Oct: 0 map until Map my city ran; the picture is THIS city's own (never the culture picture).
+        mm = rb.mymap_info(dev)
+        mapped, running = bool(mm.get("complete")), rb.mymap_running(dev)
+        if mapped and not running and cult:               # owner 28 Oct: hand pins -> checked pictures; all pinned -> gaps filled
+            rb.city_picture_upkeep(dev)
+        pic_file = rb.real_city_paths(dev)[0] if cult else d / "map.png"
+        show = (mapped or running) and pic_file.exists()
+        return {"built": mapped, "mapped": mapped, "running": running, "at": mm.get("at", ""), "size": meta.get("size"),
+                "buildings": buildings, "culture": cult["culture"] if cult else None, "movable": movable,
+                "fixed": fixed if (mapped or running) else [],
+                "progress": {k: mm.get(k) for k in ("stop", "stops", "found", "total", "last")} if running else None,
+                "pic_t": int(pic_file.stat().st_mtime) if show else 0, "img": show}
+
+    def city_map_start(self, p):
+        """Map my city / Map city again (owner spec 28 Oct): the moment it is pressed this instance's picture and ALL its
+        pins are deleted (backed up), then Map my city runs next on the instance."""
+        serial = p["serial"]
+        dev = types.SimpleNamespace(serial=serial)
+        if rb.mymap_running(dev):
+            raise ApiError("This city is being mapped right now.")
+        rb.wipe_city_map(dev, "Map city again")
+        rb.run_now_set(serial, [t for t in rb.run_now_list(serial) if t not in ("duty:map_city", "duty:map_movable")] + ["duty:map_city"])
+        return self.city_map_info({"serial": serial})
+
+    def city_map_missing(self, p):
+        """Find missing (owner 28 Oct 10:47): only after the city is mapped - look again for the missing movable buildings.
+        Nothing is wiped."""
+        serial = p["serial"]
+        dev = types.SimpleNamespace(serial=serial)
+        if rb.mymap_running(dev):
+            raise ApiError("This city is being mapped right now.")
+        if not rb.city_mapped(dev):
+            raise ApiError("Map my city first.")
+        rb.run_now_set(serial, [t for t in rb.run_now_list(serial) if t != "duty:map_missing"] + ["duty:map_missing"])
+        return self.city_map_info({"serial": serial})
 
     def _movable_name(self, p):
         name = str(p.get("name") or "").strip()
@@ -2457,51 +2488,6 @@ class Api:
         d = rb._map_dir(dev)
         d.mkdir(parents=True, exist_ok=True)
         (d / "pins_override.json").write_text(json.dumps(over, indent=1), encoding="utf-8")
-        return self.city_map_info({"serial": serial})
-
-    def city_map_find(self, p):
-        """Find missing (no name) or Find one building (name): keeps everything mapped, the bot looks only for what is
-        missing. Runs next on the instance."""
-        serial = p["serial"]
-        dev = types.SimpleNamespace(serial=serial)
-        d = rb._map_dir(dev)
-        d.mkdir(parents=True, exist_ok=True)
-        f = d / "map_only.json"
-        if p.get("name"):
-            f.write_text(json.dumps([self._movable_name(p)]), encoding="utf-8")
-        elif f.exists():
-            f.unlink()
-        rb.run_now_set(serial, [t for t in rb.run_now_list(serial) if t != "duty:map_movable"] + ["duty:map_movable"])
-        return self.city_map_info({"serial": serial})
-
-    def city_map_reset(self, p):
-        """Start over: forget the places the bot found (and the user's pins unless keep_user), then Map my city runs next.
-        Pictures and settings are kept."""
-        serial = p["serial"]
-        dev = types.SimpleNamespace(serial=serial)
-        keep = p.get("keep_user", True)
-        d = rb._map_dir(dev)
-        for f in d.glob("*.json"):
-            if f.stem in ("map", "culture", "map_only", "pins_override") or f.stem.endswith("_prev"):
-                continue
-            try:
-                m = json.loads(f.read_text(encoding="utf-8"))
-                if isinstance(m, dict) and "map" in m and not (keep and m.get("by") == "user"):
-                    m.pop("map", None)
-                    m.pop("by", None)
-                    f.write_text(json.dumps(m), encoding="utf-8")
-            except Exception:
-                pass
-        try:
-            (d / "map_only.json").unlink()                 # a pending "Find one building" would narrow the fresh map
-        except Exception:
-            pass
-        if not keep:
-            try:
-                (d / "pins_override.json").unlink()
-            except Exception:
-                pass
-        rb.run_now_set(serial, [t for t in rb.run_now_list(serial) if t != "duty:map_city"] + ["duty:map_city"])
         return self.city_map_info({"serial": serial})
 
     def dev_find(self, p):
@@ -2964,16 +2950,17 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, jpg_bytes(img, 85), "image/jpeg", {"Cache-Control": "max-age=60"})
         if path == "/api/city_map_img":                 # the instance's stitched city map (for the City map card)
             dv = types.SimpleNamespace(serial=q["serial"][0])
-            cult = rb.city_culture(dv)
-            d = (rb.culture_dir(cult["culture"]) / "map.jpg") if cult and rb.culture_dir(cult["culture"]) else rb._map_dir(dv) / "map.png"
+            cult = rb.city_culture(dv)                 # owner spec 28 Oct: only THIS city's own picture, never the culture one
+            d = rb.real_city_paths(dv)[0] if cult else rb._map_dir(dv) / "map.png"
             if not d.exists():
                 return self._send(404, "no map", "text/plain")
             img = cv2.imread(str(d))
             if img is None:
                 return self._send(404, "no map", "text/plain")
             h0, w0 = img.shape[:2]
-            if w0 > 900:
-                img = cv2.resize(img, (900, int(h0 * 900 / w0)), interpolation=cv2.INTER_AREA)
+            mw = 2000 if q.get("big") else 900             # Fix pins zooms in up to 6x: the bigger picture keeps buildings sharp
+            if w0 > mw:
+                img = cv2.resize(img, (mw, int(h0 * mw / w0)), interpolation=cv2.INTER_AREA)
             return self._send(200, jpg_bytes(img, 80), "image/jpeg", {"Cache-Control": "max-age=60"})
         if path == "/api/general_img":
             img = rb.general_image(q["name"][0])

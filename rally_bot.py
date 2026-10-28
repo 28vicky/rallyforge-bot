@@ -2588,8 +2588,9 @@ def duty_progress(minutes=None):
         _TL.duty_deadline = time.time() + (minutes or DUTY_BUDGET_MIN) * 60
 
 
-class InstanceStopped(RuntimeError):
-    """Stop was pressed: the next screenshot / tap / text read ends whatever task is running (owner 27 Oct)."""
+class InstanceStopped(BaseException):
+    """Stop was pressed: the next screenshot / tap / text read ends whatever task is running (owner 27 Oct).
+    BaseException (28 Oct): the many `except Exception` blocks must not swallow it and carry on - that made Stop slow."""
 
 
 def halt_check():
@@ -6345,7 +6346,29 @@ def others_see_rallies(serial, within=150, allies_only=True):
 # <Monster>(K:.. X:..,Y:..) Join Now / N secs ago" in the Alliance chat tab (unless an alliance hides war messages),
 # so the chat tells whether rallies are really happening - for any user, any server, with or without other instances.
 CHAT_BAR = (200, 910)          # the chat line at the bottom of the city / map view (same place on both)
-CHAT_ALLIANCE_TAB = (338, 94)  # chat tabs: 4 equal tabs, Alliance = 2nd from the right (3rd only during Battlefield)
+CHAT_ALLIANCE_TAB = (320, 94)  # chat tabs: 3 or 4 equal tabs, Alliance = always 2nd from the right (owner 27 Oct).
+#                                x 320 is inside that tab both ways (3 tabs: 180-360, 4 tabs: 270-405)
+CHAT_TITLE_REGION = (150, 0, 240, 70)   # "Chat" title in the red banner at the top (picture: chat_title.png)
+CHAT_TABS_REGION = (0, 62, 540, 64)     # the tab row; the selected Alliance tab shows the word (chat_alliance_tab.png)
+
+
+def _chat_pic(shot, name, region, words, ocr_region):
+    """Chat screen check by picture (owner: not by reading words). Falls back to the old text read only if the
+    picture file is missing."""
+    if has_template(name):
+        x, y, w, h = region
+        area, t = shot[y:y + h, x:x + w], tpl(name)
+        if area.shape[0] < t.shape[0] or area.shape[1] < t.shape[1]:
+            return False
+        return float(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED).max()) >= 0.75
+    return bool(find_text(shot, words, region=ocr_region, cutoff=0.7))
+
+
+def _chat_fail_shot(dev, shot):
+    try:
+        cv2.imwrite(str(USER / "debug" / f"chat_check_fail_{re.sub(r'[^0-9A-Za-z]', '_', dev.serial)}.png"), shot)
+    except Exception as _e:
+        quiet_err("read_alliance_chat", _e)
 CHAT_STATE = {}                # serial -> {"last", "nowar", "off", "broken", "noally"}
 _AGO = re.compile(r"(\d{1,3})?\s*(sec|secs|second|seconds|min|mins|minute|minutes|hour|hours|day|days)\s*ago", re.I)
 
@@ -6371,17 +6394,18 @@ def read_alliance_chat(dev, cfg, log, stop):
     _nap(stop, 1.5, 2.0)
     try:
         shot = dev.screenshot()
-        if not find_text(shot, ["Chat"], region=(150, 5, 240, 60), cutoff=0.7):
-            return "fail", "the chat did not open"
-        if not find_text(shot, ["Alliance"], region=(180, 65, 360, 60), cutoff=0.7):
+        if not _chat_pic(shot, "chat_title", CHAT_TITLE_REGION, ["Chat"], (150, 5, 240, 60)):
+            _nap(stop, 1.0, 1.5)                              # the chat window slides in - one more look
+            shot = dev.screenshot()
+            if not _chat_pic(shot, "chat_title", CHAT_TITLE_REGION, ["Chat"], (150, 5, 240, 60)):
+                _chat_fail_shot(dev, shot)
+                return "fail", "the chat did not open"
+        if not _chat_pic(shot, "chat_alliance_tab", CHAT_TABS_REGION, ["Alliance"], (180, 65, 360, 60)):
             dev.tap(*CHAT_ALLIANCE_TAB)
             _nap(stop, 1.2, 1.6)
             shot = dev.screenshot()
-            if not find_text(shot, ["Alliance"], region=(180, 65, 360, 60), cutoff=0.7):
-                try:
-                    cv2.imwrite(str(USER / "debug" / f"chat_check_fail_{re.sub(r'[^0-9A-Za-z]', '_', dev.serial)}.png"), shot)
-                except Exception as _e:
-                    quiet_err("read_alliance_chat", _e)
+            if not _chat_pic(shot, "chat_alliance_tab", CHAT_TABS_REGION, ["Alliance"], (180, 65, 360, 60)):
+                _chat_fail_shot(dev, shot)
                 return "fail", "the Alliance chat tab was not found"
         if find_text(shot, ["join an alliance", "join alliance", "not in an alliance"], region=(0, 100, 540, 800), cutoff=0.75):
             return "noally", None
@@ -6886,7 +6910,7 @@ BUILDING_NAMES = [
     "Workshop", "Smithy", "Siege Workshop", "Beacon Tower", "Treasury", "Marketplace",
 ]
 BUILDING_NAMES += ["Stable", "Forge", "War Hall", "Portal", "Black Market", "Dragon Cliff", "Archer Tower"]   # last two read from the PC client / emulator labels
-BUILDING_ALIASES = {"Stables": "Stable", "Smithy": "Forge", "Black Market": "Market"}          # the game's wording -> our name
+BUILDING_ALIASES = {"Stables": "Stable", "Smithy": "Forge", "Black Market": "Market", "Range": "Archer Camp", "Marketplace": "Market"}          # the game's wording -> our name
 EXPECTED_BUILDINGS = [                                                # what a finished city map must contain
     "Keep", "Rally Spot", "Holy Palace", "Workshop", "Military Academy", "Council of State", "Research Factory",
     "Stable", "Hospital", "Trap Factory", "Walls", "Shrine", "Art Hall", "Arsenal", "Victory Column", "Wisdom Dome",
@@ -6898,6 +6922,8 @@ RESOURCE_BUILDINGS = ("Quarry", "Sawmill", "Mine", "Farm")
 LABEL_VIEW = (10, 95, 435, 705)                                        # where building names are read (x, y, w, h)
 ALLIANCE_TAP = (493, 705)                 # the Alliance button, right column above Mail (540x960) - the way to Alliance War
 CITY_VIEW = (80, 100, 360, 690)         # x, y, w, h of the map area that is not covered by buttons (540x960)
+PHOTO_VIEW = (80, 190, 360, 590)        # part of CITY_VIEW pasted into the city picture: below the top strip (buff icons,
+                                        # visitor bubble, news marquee, 'troops have returned' toasts), above the bottom icons
 DEFAULT_CITY_ICONS = {                   # the buttons on the right of the city screen (540x960)
     "Daily event": [491, 105], "Login Gifts": [491, 190], "Follow Us": [491, 260],
     "Event Center": [491, 345], "Event 2": [491, 410],
@@ -8951,10 +8977,11 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "map_city":
         run_map_city(dev, cfg, log, stop)
         return
-    if cmd == "map_movable":
-        leave_to_city(dev, cfg, stop, log)
-        zoom_out_full(dev, cfg, stop, log)
-        run_map_movable(dev, cfg, log, stop)
+    if cmd == "map_missing":
+        run_map_missing(dev, cfg, log, stop)
+        return
+    if cmd == "map_movable":                               # old test duty: same as Map my city now (owner spec 28 Oct)
+        run_map_city(dev, cfg, log, stop)
         return
     if cmd == "test_adb_zoom":
         run_test_adb_zoom(dev, cfg, log, stop)
@@ -9039,19 +9066,9 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 return False
             log(f"[!]   {bname.strip()}: not reached by the map (Prison anchor) - no Activity route for pinned buildings, trying later")
             return False                                   # owner 25 Oct 16:28: tasks work with the map, not the Activity window
-        elif (bname and bname.strip() in MOVABLE_BUILDINGS and city_map(dev) is not None
-              and time.time() - _AUTO_FIND.get((dev.serial, bname.strip()), 0) > 6 * 3600):
-            _AUTO_FIND[(dev.serial, bname.strip())] = time.time()   # owner 27 Oct: users rarely press anything - a missing
-            log(f"[*]   {bname.strip()}: not mapped on this city yet - looking for this one building first")   # movable
-            leave_to_city(dev, cfg, stop, log)             # building is searched by itself the first time a task needs it
-            zoom_out_full(dev, cfg, stop, log)
-            if bname.strip() in run_map_movable(dev, cfg, log, stop, only=[bname.strip()]) and not stop.is_set():
-                leave_to_city(dev, cfg, stop, log)
-                if find_learned_building(dev, cfg, log, stop, bname.strip()):
-                    return True
-            if stop.is_set():
-                return False
-            leave_to_city(dev, cfg, stop, log)
+        elif bname and bname.strip() in MOVABLE_BUILDINGS and city_mapped(dev):
+            log(f"[!]   {bname.strip()}: not pinned on this city - place it in Fix pins (City map card)")   # owner spec 28 Oct:
+            return False                                   # the bot never maps by itself
         if bname and task.get("no_tile") and not _pinned(dev, bname.strip()):   # Black Market keep-going: the learned picture first
             leave_to_city(dev, cfg, stop, log)
             if find_learned_building(dev, cfg, log, stop, bname.strip()):
@@ -11525,7 +11542,6 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
 LEARN_DIR = USER / "city_learn"
 
 
-_AUTO_FIND = {}                                            # (serial, building) -> when the bot last searched it by itself
 
 
 def _pinned(dev, bname):
@@ -11559,19 +11575,45 @@ def learn_building(dev, shot, bname, x, y):
         except Exception:
             meta = {}
         cv2.imwrite(str(p), crop)
-        meta.update({"dx": x - x0, "dy": y - y0, "at": time.strftime("%Y-%m-%d %H:%M")})
+        meta.update({"dx": x - x0, "dy": y - y0, "at": time.strftime("%Y-%m-%d %H:%M"),
+                     "named": time.strftime("%Y-%m-%d %H:%M")})   # owner 28 Oct: only saved after its menu NAME was checked
         try:                                               # PIN the building on the keyframe map: every successful open on the city
             cmap = city_map(dev)                           # (Activity route, learned picture, map) teaches its map place, so the
             if cmap is not None:                           # next visit is locate -> a few measured drags -> tap (owner 24 Oct: the
                 loc = cmap.locate(shot)                    # Activity tile is a teacher, the map is the way)
-                if loc and meta.get("by") != "user":       # (a zoomed-in screen does not locate: the pixel check fails)
-                    meta["map"] = [round(loc[0] + x), round(loc[1] + y)]   # a pin the user placed (Fix pins) is never moved
+                if loc and not meta.get("map"):            # owner spec 28 Oct: a pin, once set, never moves (only Map city again)
+                    meta["map"] = [round(loc[0] + x), round(loc[1] + y)]
                     meta["by"] = "bot"
         except Exception:
             pass
         (p.with_suffix(".json")).write_text(json.dumps(meta), encoding="utf-8")
     except Exception:
         pass
+
+
+PIN_FIRST_SCORE = 0.80     # owner 28 Oct: a picture match this strong is PINNED at once, the tap only confirms it
+
+
+def pin_from_picture(dev, bname, mapx, mapy, score):
+    """Owner 28 Oct 09:36: 'bot should pin first and then tap' - pin a movable building straight from a strong picture
+    match. by='picture' (shown as found; the owner reports wrong ones and fixes them in Fix pins). An existing pin never
+    moves. Not 'named': an unconfirmed pin never adds its picture to the database. -> True when pinned now."""
+    try:
+        p = _learn_path(dev, bname)
+        js = p.with_suffix(".json")
+        meta = json.loads(js.read_text(encoding="utf-8")) if js.exists() else {"dx": 0, "dy": 0}
+        if meta.get("map"):
+            return False
+        meta["map"] = [round(mapx), round(mapy)]
+        meta["by"] = "picture"
+        meta["pic_score"] = round(float(score), 2)
+        meta["pinned"] = time.strftime("%Y-%m-%d %H:%M")
+        js.parent.mkdir(parents=True, exist_ok=True)
+        js.write_text(json.dumps(meta), encoding="utf-8")
+        return True
+    except Exception as _e:
+        quiet_err("pin_from_picture", _e)
+        return False
 
 
 def _learn_match(shot, tpl):
@@ -11591,112 +11633,25 @@ def _learn_match(shot, tpl):
 
 
 def find_learned_building(dev, cfg, log, stop, bname):
-    """No Go route today: find the building's learned picture on the city.
-    The city reopens wherever the camera was left (often far from the building; Kiravik 23 Oct 17:50: 17 spiral views
-    all 0.3), so: look here -> top-left corner -> the spot where it was found before -> sweep the whole city row by row
-    (each move measured from the pictures). The spot found is saved for next time. -> True when its ring menu is open."""
+    """Go to the building's PIN on this city's map and open it there (owner spec 28 Oct: positions never change - upgrades
+    and skins only change the look - so the pin is the way; no searching the city). -> True when its ring menu is open."""
     p = _learn_path(dev, bname)
     pin = culture_pin(dev, bname)
-    if not p.exists():
-        if pin is None:
-            return False
-        log(f"[i]   {bname}: culture pin ({city_culture(dev)['culture'].title()}) at {round(pin[0])},{round(pin[1])}")
-        return bool(find_on_map(dev, cfg, log, stop, bname, None, {"map": pin, "dx": 0, "dy": 0}, p))
+    meta, tpl = {}, None
     try:
-        tpl = cv2.imread(str(p))
         meta = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
     except Exception:
-        return False
-    if not meta.get("map") and pin is not None:
-        meta["map"] = pin
-    tag = "learn_" + re.sub(r"[^a-z]+", "_", bname.lower())
-    r = find_on_map(dev, cfg, log, stop, bname, tpl, meta, p)   # the own city map: a few measured drags (owner 23 Oct)
-    if r:
-        return True
-    cmap = city_map(dev)
-    scores = []
-    nav = None
-
-    def look(where):
-        shot = dev.screenshot()
-        if view_of(shot, cfg) != "city":
-            leave_to_city(dev, cfg, stop, log)
-            shot = dev.screenshot()
-        if find_detail_icon(shot):                         # a drag read as a tap opened some building's ring: close it first
-            close_ring(dev, stop, (270, 490))
-            shot = dev.screenshot()
-        mv, ml, f = _learn_match(shot, tpl)
-        cam = f"@{round(nav.cx)},{round(nav.cy)}" if nav is not None else ""
-        scores.append(f"{where}{cam}:{mv:.2f}")
-        rd_snap(shot, f"{tag}_v{len(scores):02d}")         # every view (debug for the sweep, 23 Oct)
-        if mv < 0.78:
+        meta = {}
+    if p.exists():
+        tpl = cv2.imread(str(p))
+    if not meta.get("map"):
+        if pin is None:
+            log(f"[i]   {bname}: not pinned on this city")
             return False
-        x, y = ml[0] + int(meta["dx"] * f), ml[1] + int(meta["dy"] * f)
-        if not (60 <= x <= 470 and 150 <= y <= 820):
-            return False
-        loc = cmap.locate(shot) if cmap is not None else None
-        if loc:                                            # remember the spot on the own map (reused by find_on_map)
-            meta["map"] = [round(loc[0] + x), round(loc[1] + y)]
-        else:
-            meta.pop("map", None)
-        if open_building_here(dev, cfg, log, stop, bname, spots=[(x, y)], how=f"its learned picture (match {mv:.2f}, {where})"):
-            try:                                           # open_building_here saved the fresh picture; add the map place
-                m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
-                if meta.get("map"):
-                    m2["map"] = meta["map"]
-                p.with_suffix(".json").write_text(json.dumps(m2), encoding="utf-8")
-            except Exception:
-                pass
-            return True
-        return False
-
-    if look("here"):
-        return True
-    rd_snap(dev.screenshot(), tag + "_0")
-    nav = CityNav(dev, stop, log)
-    moved = []
-    for _ in range(30):                                    # to the top-left corner (like to_origin, but each move is logged)
-        if stop.is_set():
-            return False
-        dx, dy, _ = nav._drag(210, 300, 330, 540)
-        moved.append(f"{round(dx)},{round(dy)}")
-        if abs(dx) < 4 and abs(dy) < 4:
-            break
-    nav.cx = nav.cy = 0.0
-    log(f"[i]   {bname}: to the corner, map moved per drag: {' '.join(moved)}")
-    # (A saved spot from an earlier run is not used yet: "to the corner" does not end at the same place every time on a
-    #  diamond-shaped city, so corner-relative coordinates differ between runs. Needs the instance's own stitched map.)
-    # The city is a diamond, not a rectangle: a row sweep stops at its slanted edges (Kiravik 18:32 saw a third of it).
-    # Explore it cell by cell instead (flood fill): try every neighbouring cell, keep those the camera really reaches.
-    SX, SY = 300, 420                                      # one cell = a bit less than one view (CITY_VIEW 360 x 690)
-    seen, todo, dead = {(0, 0)}, [(1, 0), (0, 1), (0, -1), (-1, 0)], set()
-    if look("c0,0"):
-        return True
-    while todo and len(seen) < 40:
-        if stop.is_set():
-            return False
-        cur = (round(nav.cx / SX), round(nav.cy / SY))
-        todo.sort(key=lambda c: abs(c[0] - cur[0]) + abs(c[1] - cur[1]))   # nearest cell first: fewer drags
-        c = todo.pop(0)
-        if c in seen or c in dead:
-            continue
-        nav.pan(c[0] * SX - nav.cx, c[1] * SY - nav.cy)
-        got = (round(nav.cx / SX), round(nav.cy / SY))
-        if got != c:                                       # the camera could not get there: outside the city
-            dead.add(c)
-            if got not in seen:                            # it ended in another new cell: look there instead
-                c = got
-            else:
-                continue
-        seen.add(c)
-        if look(f"c{c[0]},{c[1]}"):
-            return True
-        for n in ((c[0] + 1, c[1]), (c[0], c[1] + 1), (c[0] - 1, c[1]), (c[0], c[1] - 1)):
-            if n not in seen and n not in dead and n not in todo:
-                todo.append(n)
-    rd_snap(dev.screenshot(), tag + "_last")
-    log(f"[i]   {bname}: its learned picture was not found on the city ({' '.join(scores)})")
-    return False
+        meta = dict(meta, map=pin)
+    meta.setdefault("dx", 0)
+    meta.setdefault("dy", 0)
+    return bool(find_on_map(dev, cfg, log, stop, bname, tpl, meta, p))
 
 
 # --- the instance's own city map (owner 23 Oct): a KEYFRAME map - every kept view is stored with its map place; after that
@@ -11948,10 +11903,12 @@ class CityMap:
             if float(g.std()) < 12:
                 return None
             k, d = _kf_feats(g)
+            halt_check()                                   # a locate takes seconds on a busy PC: Stop between its steps
             if d is None or len(k) < 30:
                 return None
             pts = np.float32([q.pt for q in k])
             ms = self.index.knnMatch(d, k=3)
+            halt_check()
             qi = np.array([m.queryIdx for mm in ms for m in mm], dtype=np.int64)
             ti = np.array([m.trainIdx for mm in ms for m in mm], dtype=np.int64)
             if len(qi) < min_pts:
@@ -11980,6 +11937,8 @@ class CityMap:
 def city_map(dev):
     """The instance's own map, or None when 'Map my city' has not been run yet (or the old stitched-only map is there)."""
     key = str(getattr(dev, "serial", "default"))
+    if not getattr(dev, "_mapping", False) and not city_mapped(dev):
+        return None                                        # owner spec 28 Oct: 0 map until Map my city has run
     cult = city_culture(dev)
     if cult:                                               # matched to a shipped culture map (owner 25 Oct: no 20-min walk)
         cm = culture_map(cult["culture"])
@@ -12065,8 +12024,8 @@ def culture_pins(name):
 def culture_pin(dev, bname):
     """The shipped pin of a building for this instance's matched culture, or None."""
     cult = city_culture(dev)
-    if not cult:
-        return None
+    if not cult or (not getattr(dev, "_mapping", False) and not city_mapped(dev)):
+        return None                                        # owner spec 28 Oct: fixed pins arrive with Map my city
     pins = {**culture_pins(cult["culture"]), **pins_override(dev)}   # Fix pins > Adjust: this instance only (owner 27 Oct)
     want = re.sub(r"[^a-z]+", "", str(bname).lower())
     v = next((v for k, v in reversed(list(pins.items())) if re.sub(r"[^a-z]+", "", k.lower()) == want), None)
@@ -12249,6 +12208,11 @@ def building_pictures(dev, names, own=False):
                 m = json.loads(js.read_text(encoding="utf-8"))
             except Exception:
                 m = {}
+            # Owner 28 Oct 02:04: Kiravik's pins were mapped wrong from pictures alone, and those wrong pictures then
+            # 'confirmed' themselves and spread to the other instances. A picture counts only when its pin exists and the
+            # building's menu NAME was checked there (named) or a task opened it there (worked).
+            if not (m.get("named") or m.get("worked")):    # only pictures whose menu name was checked (pins not needed:
+                continue                                   # Map city again wipes pins, the pictures stay - owner spec 28 Oct)
             out.setdefault(n, []).append((img, int(m.get("dx", img.shape[1] // 2)), int(m.get("dy", img.shape[0] // 2))))
     return out
 
@@ -12275,83 +12239,509 @@ def match_building_pictures(shot, pics, skip=()):
     return hits
 
 
+# --- City mapper (owner spec 28 Oct 02:52-03:06, claude/city_mapper_spec_28oct.md) -------------------------------------
+#     Every instance starts with 0 map. ONE button: Map my city -> the bot moves round the whole city, builds THIS city's
+#     own picture (live), the fixed buildings come from the culture pins (not visited, not counted), the movable ones are
+#     pinned while moving (picture match -> tap -> menu name checked). Missing = hand pin or Map city again. Once mapped it
+#     stays: the bot never re-maps or moves a pin by itself (looks change with upgrades / skins, positions do not).
+#     Map city again deletes this instance's picture and ALL its pins. The building picture database is never deleted.
+MYMAP_FILE = "mymap.json"                                  # city_learn/<serial>/mymap.json: the instance's mapping state
+
+
+def real_city_paths(dev):
+    d = _map_dir(dev)
+    return d / "real_city.jpg", d / "real_city.json"
+
+
+def mymap_info(dev):
+    """{running, t, stop, stops, found, total, last, missing, complete, at} or {} (never mapped)."""
+    try:
+        return json.loads((_map_dir(dev) / MYMAP_FILE).read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def mymap_save(dev, **kw):
+    try:
+        f = _map_dir(dev) / MYMAP_FILE
+        f.parent.mkdir(parents=True, exist_ok=True)
+        m = mymap_info(dev)
+        m.update(kw, t=time.time())
+        tmp = f.with_name("mymap.tmp")
+        tmp.write_text(json.dumps(m), encoding="utf-8")
+        os.replace(tmp, f)
+    except Exception as _e:
+        quiet_err("mymap_save", _e)
+
+
+def city_mapped(dev):
+    """True once Map my city finished on this instance (owner: before that the instance has 0 map)."""
+    return bool(mymap_info(dev).get("complete"))
+
+
+def mymap_running(dev):
+    m = mymap_info(dev)
+    return bool(m.get("running")) and time.time() - float(m.get("t", 0)) < 300   # a crashed run is not 'running' for ever
+
+
+def wipe_city_map(dev, why=""):
+    """Map city again / clean start: this instance's city picture and ALL its pins (hand pins too) are deleted. Copied to
+    backups/city_maps/<serial>_<time>/ first. Kept: building pictures + their name checks (the database), culture.json
+    (groups the database by culture), hold.json (which finger hold shows names)."""
+    d = _map_dir(dev)
+    if not d.exists():
+        return
+    bk = USER / "backups" / "city_maps" / (re.sub(r"[^\w.-]+", "_", str(dev.serial)) + "_" + time.strftime("%Y%m%d_%H%M%S"))
+    try:
+        files = [f for f in d.iterdir() if f.is_file()]
+        if files:
+            bk.mkdir(parents=True, exist_ok=True)
+            for f in files:
+                if f.suffix in (".json", ".jpg") or f.name == "map.png":
+                    shutil.copy2(f, bk / f.name)
+    except Exception as _e:
+        quiet_err("wipe_city_map backup", _e)
+    for f in list(d.glob("*.json")):
+        stem = f.stem
+        if stem in ("culture", "hold"):
+            continue
+        if stem in ("real_city", "mymap", "pins_override", "map_only", "retake_photo", "map", "map_prev") or stem.startswith("kf"):
+            try:
+                f.unlink()
+            except Exception:
+                pass
+            continue
+        try:                                               # a building: its pin goes, its picture + name check stay
+            m = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(m, dict) and ("map" in m or "by" in m):
+                m.pop("map", None)
+                m.pop("by", None)
+                f.write_text(json.dumps(m), encoding="utf-8")
+        except Exception:
+            pass
+    for name in ("real_city.jpg", "real_city.tmp.jpg", "map.png", "mymap.tmp"):
+        try:
+            (d / name).unlink()
+        except Exception:
+            pass
+    for f in d.glob("kf_*.png"):                           # an own walked map (no culture matched) belongs to the old map
+        try:
+            f.unlink()
+        except Exception:
+            pass
+    _CITY_MAPS.pop(str(getattr(dev, "serial", "default")), None)
+    return f"city map wiped{(' (' + why + ')') if why else ''} - backup {bk.name}"
+
+
+class _SerialOnly:
+    def __init__(self, serial):
+        self.serial = serial
+
+
+def migrate_city_maps_v2():
+    """One time (owner 28 Oct 03:03): every instance starts clean with 0 map - all old pictures/pins of the instances go
+    (backed up). The building picture database and the culture pins/maps stay."""
+    try:
+        mark = LEARN_DIR / ".mapper_v2_clean_start"
+        if mark.exists() or not LEARN_DIR.exists():
+            return
+        for d in LEARN_DIR.iterdir():
+            if d.is_dir():
+                wipe_city_map(_SerialOnly(d.name), "clean start")
+        mark.write_text(time.strftime("%Y-%m-%d %H:%M"), encoding="utf-8")
+    except Exception as _e:
+        quiet_err("migrate_city_maps_v2", _e)
+
+
+class RealCityPhoto:
+    """This city's own picture: every at-rest screenshot of the sweep is pasted at its measured camera place (same pixel
+    frame as the culture map and its pins: picture = map place - CITY_VIEW corner). Not visited yet = dark."""
+    def __init__(self, dev, cmap):
+        self.dev, self.cmap, self.done, self.img = dev, cmap, 0, None
+        cult = city_culture(dev)
+        cd = culture_dir(cult["culture"]) if cult else None
+        if not cd:
+            return
+        try:
+            W, H = json.loads((cd / "map.json").read_text(encoding="utf-8"))["size"]
+        except Exception:
+            return
+        self.culture, self.W, self.H = cult["culture"], int(W), int(H)
+        self.img = np.full((self.H, self.W, 3), 24, np.uint8)
+        self.filled = np.zeros((self.H, self.W), bool)     # fix A 28 Oct: which pixels have a real screenshot (dark = not yet)
+        self._saved = 0.0
+
+    def paste(self, shot, loc=None):
+        """Owner 28 Oct (fix A): every located, settled city screenshot is pasted (stops AND the drags on the way), only the
+        PHOTO_VIEW part (no HUD strip). loc = the camera place when the caller already located the shot."""
+        if self.img is None or shot is None:
+            return False
+        if find_detail_icon(shot):                          # a building ring is open: not a clean city view
+            return False
+        loc = loc or self.cmap.locate(shot)
+        if not loc:
+            return False
+        x, y, _w, _h = CITY_VIEW
+        px, py, w, h = PHOTO_VIEW
+        X, Y = int(round(loc[0])) + (px - x), int(round(loc[1])) + (py - y)   # picture place of the crop's top-left
+        crop = shot[py:py + h, px:px + w]
+        x0, y0, x1, y1 = max(0, X), max(0, Y), min(self.W, X + w), min(self.H, Y + h)
+        if x1 <= x0 or y1 <= y0:
+            return False
+        self.img[y0:y1, x0:x1] = crop[y0 - Y:y1 - Y, x0 - X:x1 - X]
+        self.filled[y0:y1, x0:x1] = True
+        self.done += 1
+        if time.time() - self._saved >= 2.0:               # many pastes now: write the live picture at most every 2 s
+            self.save()
+        return True
+
+    def view_rect(self, cx, cy):
+        """Picture rectangle a camera at (cx, cy) photographs (clipped) -> (x0, y0, x1, y1) or None."""
+        x, y, _w, _h = CITY_VIEW
+        px, py, w, h = PHOTO_VIEW
+        X, Y = int(round(cx)) + (px - x), int(round(cy)) + (py - y)
+        x0, y0, x1, y1 = max(0, X), max(0, Y), min(self.W, X + w), min(self.H, Y + h)
+        if (x1 - x0) * (y1 - y0) < 0.3 * w * h:            # mostly outside the picture
+            return None
+        return x0, y0, x1, y1
+
+    def darkest(self, cams):
+        """Of the camera places (keyframes = places the camera can really be), the one whose view is darkest.
+        -> (dark share, map x, map y of the dark part's middle, cam) or None."""
+        best = None
+        x, y, _w, _h = CITY_VIEW
+        for c in cams:
+            r = self.view_rect(c[0], c[1])
+            if not r:
+                continue
+            x0, y0, x1, y1 = r
+            dark = ~self.filled[y0:y1, x0:x1]
+            share = float(dark.mean())
+            if best is None or share > best[0]:
+                ys, xs = np.nonzero(dark)
+                mx, my = (x0 + float(xs.mean()), y0 + float(ys.mean())) if len(xs) else ((x0 + x1) / 2, (y0 + y1) / 2)
+                best = (share, mx + x, my + y, c)          # picture -> map place: + the CITY_VIEW corner
+        return best
+
+    def coverage(self, cams):
+        """Share of the city (all keyframe views together) that has a real screenshot."""
+        m = np.zeros_like(self.filled)
+        for c in cams:
+            r = self.view_rect(c[0], c[1])
+            if r:
+                m[r[1]:r[3], r[0]:r[2]] = True
+        tot = int(m.sum())
+        return float((self.filled & m).sum()) / tot if tot else 0.0
+
+    def save(self):
+        if self.img is None or not self.done:
+            return
+        self._saved = time.time()
+        jp, mp = real_city_paths(self.dev)
+        try:
+            jp.parent.mkdir(parents=True, exist_ok=True)
+            tmp = jp.with_name("real_city.tmp.jpg")
+            cv2.imwrite(str(tmp), self.img, [cv2.IMWRITE_JPEG_QUALITY, 88])
+            os.replace(tmp, jp)
+            mp.write_text(json.dumps({"culture": self.culture, "at": time.strftime("%Y-%m-%d %H:%M")}), encoding="utf-8")
+        except Exception as _e:
+            quiet_err("real_city_photo", _e)
+
+
+def _city_seen(dev, shot, loc):
+    """A settled screenshot was found on the city map: remember where the camera was (fix C uses it to drive back) and,
+    while Map my city runs, paste it into the city picture (fix A)."""
+    if not loc:
+        return
+    dev._last_cam = (float(loc[0]), float(loc[1]), time.time())
+    photo = getattr(dev, "_photo", None)
+    if photo is not None:
+        try:
+            photo.paste(shot, loc)
+        except Exception as _e:
+            quiet_err("city_seen_paste", _e)
+
+
+def relocate_view(dev, cfg, log, stop, cmap, nav):
+    """Owner 28 Oct (fix C): the screen is not found on the city map - e.g. the camera parked on the farmland / forest
+    edge that the culture map does not cover. Instead of giving up: close what is open, then drag back toward the city
+    middle (from the last place the camera was seen; without one, try each direction and come back) and look again.
+    -> (cx, cy, points) or None."""
+    shot = dev.screenshot()
+    if find_detail_icon(shot):
+        close_ring(dev, stop, (270, 490))
+        shot = nav._settled()
+    r = cmap.locate(shot)
+    if r:
+        _city_seen(dev, shot, r)
+        return r
+    leave_to_city(dev, cfg, stop, log)                     # a window / pop-up in the way
+    shot = nav._settled()
+    r = cmap.locate(shot)
+    if r:
+        _city_seen(dev, shot, r)
+        log(f"[i]   nav: relocate=hit after closing windows cx={round(r[0])} cy={round(r[1])}")
+        return r
+    cams = [(k[0], k[1]) for k in (cmap.kf or [])]
+    if not cams:
+        return None
+    mx = sum(c[0] for c in cams) / len(cams)               # middle of the city (camera places)
+    my = sum(c[1] for c in cams) / len(cams)
+    last = getattr(dev, "_last_cam", None)
+    if last and time.time() - last[2] < 900:
+        vx, vy = mx - last[0], my - last[1]
+        ln = (vx * vx + vy * vy) ** 0.5 or 1.0
+        log(f"[i]   nav: relocate - screen not on the map, last seen at {round(last[0])},{round(last[1])}; dragging toward the city middle")
+        for k in range(3):
+            if nav.halted():
+                return None
+            fx, fy = vx / ln * 300, vy / ln * 420           # camera move toward the middle (finger the other way)
+            _dx, _dy, after = nav._drag(270 + fx / 2, 440 + fy / 2, 270 - fx / 2, 440 - fy / 2)
+            r = cmap.locate(after)
+            if r:
+                _city_seen(dev, after, r)
+                log(f"[i]   nav: relocate=hit after {k + 1} drag(s) cx={round(r[0])} cy={round(r[1])}")
+                return r
+    else:
+        log("[i]   nav: relocate - screen not on the map and no recent camera place; trying each direction")
+        for ux, uy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            if nav.halted():
+                return None
+            fx, fy = ux * 300, uy * 420
+            dx, dy, after = nav._drag(270 + fx / 2, 440 + fy / 2, 270 - fx / 2, 440 - fy / 2)
+            r = cmap.locate(after)
+            if r:
+                _city_seen(dev, after, r)
+                log(f"[i]   nav: relocate=hit dragging {ux},{uy} cx={round(r[0])} cy={round(r[1])}")
+                return r
+            if abs(dx) + abs(dy) > 30:                      # it moved: come back before the next direction
+                nav._drag(270 - fx / 2, 440 - fy / 2, 270 + fx / 2, 440 + fy / 2)
+    log("[i]   nav: relocate=miss shot=debug/duty_nav_relocate.png")
+    rd_snap(dev.screenshot(), "nav_relocate")
+    return None
+
+
+def _map_tap_note(dev, log, stop_no, bname, tx, ty, before, after, cmap):
+    """Owner 28 Oct (fix B): a picture match was tapped but no building menu opened. Log it and save before|after with
+    the tap marked (debug/map_notap/), so the real cause can be found. At most 30 pictures per mapping run."""
+    n = getattr(dev, "_notap_n", 0) + 1
+    dev._notap_n = n
+    try:
+        diff = float(np.mean(cv2.absdiff(before[190:780, 80:440], after[190:780, 80:440]))) if before is not None and after is not None else -1
+    except Exception:
+        diff = -1
+    if n > 30:
+        log(f"[!]   stop {stop_no}: tapped {bname} at {tx},{ty} - no menu opened (screen change {diff:.1f}; picture limit reached)")
+        return
+    on_city = "?"
+    try:
+        on_city = "city view" if cmap.locate(after) else "NOT the city view (window / pop-up?)"
+    except Exception:
+        pass
+    name = "?"
+    try:
+        d = USER / "debug" / "map_notap"
+        d.mkdir(parents=True, exist_ok=True)
+        a, b = before.copy(), after.copy()
+        for im in (a, b):
+            cv2.circle(im, (int(tx), int(ty)), 14, (0, 0, 255), 2)
+            cv2.line(im, (int(tx) - 20, int(ty)), (int(tx) + 20, int(ty)), (0, 0, 255), 1)
+            cv2.line(im, (int(tx), int(ty) - 20), (int(tx), int(ty) + 20), (0, 0, 255), 1)
+        if a.shape == b.shape:
+            img = np.hstack([a, b])
+        else:
+            img = b
+        ser = re.sub(r"[^A-Za-z0-9]+", "_", str(getattr(dev, "serial", "dev")))
+        name = f"{ser}_{time.strftime('%H%M%S')}_{re.sub(r'[^A-Za-z]+', '_', bname)}_{int(tx)}_{int(ty)}.png"
+        cv2.imwrite(str(d / name), img)
+    except Exception as _e:
+        quiet_err("map_tap_note", _e)
+    log(f"[!]   stop {stop_no}: tapped {bname} at {tx},{ty} - no menu opened (screen change {diff:.1f}, after the tap: {on_city}) "
+        f"shot=debug/map_notap/{name} (left before, right after)")
+
+
+def _canvas_mask(img):
+    """The city picture's never-photographed parts (the dark canvas, value 24): big flat blobs only."""
+    m = (np.abs(img.astype(np.int16) - 24) <= 10).all(axis=2).astype(np.uint8)
+    k = np.ones((9, 9), np.uint8)
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, k)            # a real dark pixel is never a 9x9 flat block
+    return cv2.dilate(m, np.ones((5, 5), np.uint8)) > 0    # + the jpg fringe along the edges
+
+
+def picture_from_pin(dev, bname, img=None):
+    """Owner 28 Oct 11:40: a pin the user placed by hand is a checked place - cut the building out of this city's own
+    picture there and save it as a CHECKED picture ('named'), so every instance of the same culture can match it
+    (K's hand pins -> Rob). Skipped when the spot was never photographed. -> True when saved."""
+    try:
+        p = _learn_path(dev, bname)
+        js = p.with_suffix(".json")
+        meta = json.loads(js.read_text(encoding="utf-8"))
+        pin = meta.get("map")
+        if not pin or meta.get("by") != "user":
+            return False
+        if img is None:
+            img = cv2.imread(str(real_city_paths(dev)[0]))
+        if img is None:
+            return False
+        px, py = int(round(pin[0] - CITY_VIEW[0])), int(round(pin[1] - CITY_VIEW[1]))   # nav frame -> picture
+        x0, y0 = px - 70, py - 45
+        if x0 < 0 or y0 < 0 or x0 + 140 > img.shape[1] or y0 + 130 > img.shape[0]:
+            return False
+        crop = img[y0:y0 + 130, x0:x0 + 140]
+        if _canvas_mask(crop).mean() > 0.1:                # the spot is (partly) dark: no picture
+            return False
+        if p.exists():
+            p.replace(p.with_name(p.stem + "_prev.png"))
+        cv2.imwrite(str(p), crop)
+        now = time.strftime("%Y-%m-%d %H:%M")
+        meta.update({"dx": 70, "dy": 45, "named": now, "pic_from_pin": list(pin)})
+        js.write_text(json.dumps(meta), encoding="utf-8")
+        return True
+    except Exception as _e:
+        quiet_err("picture_from_pin", _e)
+        return False
+
+
+def fill_city_gaps(dev):
+    """Owner 28 Oct 11:40: once EVERY building is pinned, the picture's dark parts that hold no building (grass, rocks,
+    roads) are filled from the culture's saved picture. Never near a pin (fixed or movable): buildings are never painted
+    from the database. -> number of pixels filled."""
+    cult = city_culture(dev)
+    cd = culture_dir(cult["culture"]) if cult else None
+    jp, mp = real_city_paths(dev)
+    if not cd or not jp.exists() or not (cd / "map.jpg").exists():
+        return 0
+    if any(not _pin_of(dev, b) for b in MOVABLE_BUILDINGS):
+        return 0                                           # a missing building could sit in the dark part
+    img = cv2.imread(str(jp))
+    ref = cv2.imread(str(cd / "map.jpg"))
+    if img is None or ref is None:
+        return 0
+    mask = _canvas_mask(img)
+    if not mask.any():
+        return 0
+    keep = np.zeros(mask.shape, np.uint8)
+    pins = list({**culture_pins(cult["culture"]), **pins_override(dev)}.values())
+    pins += [[v[0] - CITY_VIEW[0], v[1] - CITY_VIEW[1]] for v in (_pin_of(dev, b) for b in MOVABLE_BUILDINGS) if v]
+    for x, y in pins:
+        cv2.circle(keep, (int(x), int(y)), 110, 1, -1)    # a building and its plot stay dark if never photographed
+    mask &= keep == 0
+    mask[:70] = False                                      # the culture picture's own top edge still has HUD bits
+    n = int(mask.sum())
+    if not n:
+        return 0
+    ref = cv2.resize(ref, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
+    img[mask] = ref[mask]
+    tmp = jp.with_name("real_city.tmp.jpg")
+    cv2.imwrite(str(tmp), img, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    os.replace(tmp, jp)
+    try:
+        m = json.loads(mp.read_text(encoding="utf-8"))
+    except Exception:
+        m = {}
+    m["gaps_filled"] = time.strftime("%Y-%m-%d %H:%M")
+    mp.write_text(json.dumps(m), encoding="utf-8")
+    return n
+
+
+def city_picture_upkeep(dev):
+    """Called when the City map card loads (mapped, not mapping): new hand pins -> checked pictures; all pinned ->
+    fill the dark gaps. Cheap when nothing changed."""
+    try:
+        img = None
+        for b in MOVABLE_BUILDINGS:
+            try:
+                meta = json.loads(_learn_path(dev, b).with_suffix(".json").read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if meta.get("by") == "user" and meta.get("map") and meta.get("pic_from_pin") != meta.get("map"):
+                if img is None:
+                    img = cv2.imread(str(real_city_paths(dev)[0]))
+                picture_from_pin(dev, b, img)
+        jp, mp = real_city_paths(dev)
+        if jp.exists():
+            try:
+                m = json.loads(mp.read_text(encoding="utf-8"))
+            except Exception:
+                m = {}
+            sig = [round(jp.stat().st_mtime)] + sorted(str(_pin_of(dev, b)) for b in MOVABLE_BUILDINGS)
+            if m.get("gap_sig") != sig:
+                fill_city_gaps(dev)
+                try:
+                    m = json.loads(mp.read_text(encoding="utf-8"))
+                except Exception:
+                    m = {}
+                m["gap_sig"] = [round(jp.stat().st_mtime)] + sig[1:]
+                mp.write_text(json.dumps(m), encoding="utf-8")
+    except Exception as _e:
+        quiet_err("city_picture_upkeep", _e)
+
+
+def run_map_missing(dev, cfg, log, stop):
+    """Owner 28 Oct 10:47: once the city is mapped and some movable buildings are missing, look for ONLY those again -
+    nothing is wiped (picture, pins and hand pins stay). Before the first mapping there is nothing to 'find again'."""
+    if not city_mapped(dev):
+        log("[i] Find missing buildings: this city is not mapped yet - press Map my city first")
+        return
+    miss = [b for b in MOVABLE_BUILDINGS if not _pin_of(dev, b)]
+    if not miss:
+        log("[+] Find missing buildings: every movable building is pinned already")
+        mymap_save(dev, missing=[])
+        return
+    log(f"[*] Find missing buildings: looking for {', '.join(miss)} - nothing is wiped")
+    mymap_save(dev, running=True, stop=0, stops=0, found=len(MOVABLE_BUILDINGS) - len(miss), total=len(MOVABLE_BUILDINGS), last="")
+    try:
+        leave_to_city(dev, cfg, stop, log)
+        zoom_out_full(dev, cfg, stop, log)
+        run_map_movable(dev, cfg, log, stop, only=miss)
+    finally:
+        left = [b for b in MOVABLE_BUILDINGS if not _pin_of(dev, b)]
+        mymap_save(dev, running=False, found=len(MOVABLE_BUILDINGS) - len(left), total=len(MOVABLE_BUILDINGS), missing=left)
+
+
+def _pin_of(dev, bname):
+    try:
+        return json.loads(_learn_path(dev, bname).with_suffix(".json").read_text(encoding="utf-8")).get("map")
+    except Exception:
+        return None
+
+
 def run_map_movable(dev, cfg, log, stop, only=None):
-    """Map my city, part 2 (owner 27 Oct): the fixed buildings come from the culture pins; the MOVABLE ones are different
-    in every city, so: visit every stop of the city map, hold a finger down so the game shows the building names, read
-    them, and for each movable building seen go there, open its menu (the menu name is checked) and save its place.
-    Only a building whose menu opened is saved. -> list of the buildings mapped."""
+    """Map my city, the sweep: visit every stop of the city map; at each stop paste the screen into this city's picture,
+    match the saved building pictures (every match is tapped and its menu NAME checked before it is pinned) and, for a
+    movable building with no usable picture, read the names with a finger hold. Pins appear on the picture as found.
+    -> list of the movable buildings pinned."""
     cmap = city_map(dev)
     if cmap is None or not cmap.kf:
-        log("[!] Movable buildings: no city map - run Map my city first")
+        log("[!] Map my city: no city map to move on")
         return []
     x, y, w, h = CITY_VIEW
     stops = []                                             # camera places a good half view apart, row by row (serpentine)
     for kx, ky, _, _ in sorted(cmap.kf, key=lambda k: (round(k[1] / 300), k[0])):
-        if not any(abs(kx - sx) < w * 0.75 and abs(ky - sy) < h * 0.6 for sx, sy in stops):   # 22:36: 19 -> 12 stops on Russia
+        if not any(abs(kx - sx) < w * 0.75 and abs(ky - sy) < h * 0.6 for sx, sy in stops):
             stops.append((kx, ky))
     rows = {}
     for sx, sy in stops:
         rows.setdefault(round(sy / 300), []).append((sx, sy))
     stops = [p for i, r in enumerate(sorted(rows)) for p in (sorted(rows[r]) if i % 2 == 0 else sorted(rows[r], reverse=True))]
-    if only is None:                                       # City map card > Find one building... (asked once, then the file goes)
-        try:
-            f = _map_dir(dev) / "map_only.json"
-            only = json.loads(f.read_text(encoding="utf-8"))
-            f.unlink()
-        except Exception:
-            only = None
-    want = [b for b in MOVABLE_BUILDINGS if not only or b in only]
+    want = list(only) if only else list(MOVABLE_BUILDINGS)
+    base = len(MOVABLE_BUILDINGS) - len(want)              # Find missing: the buildings pinned before count as found
     found, tried, seen_all, later = {}, set(), set(), {}
-    for b in want:                                         # already mapped on this instance (an earlier run): kept, not searched again
-        try:
-            mp = json.loads(_learn_path(dev, b).with_suffix(".json").read_text(encoding="utf-8")).get("map")
-            if mp:
-                found[b] = mp
-        except Exception:
-            pass
-    kept = len(found)
-    # Owner 28 Oct 00:10: a pin that already WORKED (a task opened its building through it) is trusted - never searched
-    # again, never moved by the mapper. Only a task that later fails at it drops the 'worked' mark (see find_on_map).
-    user_pins, trusted = set(), set()
-    for b in want:
-        try:
-            m = json.loads(_learn_path(dev, b).with_suffix(".json").read_text(encoding="utf-8"))
-            if m.get("by") == "user":
-                user_pins.add(b)
-            elif m.get("map") and m.get("worked"):
-                trusted.add(b)
-        except Exception:
-            pass
-    if found:
-        log(f"[i]   already mapped here (kept): {', '.join(found)}"
-            + (f" - pins that worked in a task (trusted): {', '.join(b for b in found if b in trusted or b in user_pins)}" if trusted or user_pins else ""))
-    if only and len(found) == len(want):
-        log(f"[i]   {', '.join(want)}: already mapped - nothing to look for")
-        return list(found)
-    pics = {n: v for n, v in building_pictures(dev, want, own=True).items() if n not in user_pins}
-    need_confirm = {b for b in found if b in pics and b not in trusted and b not in user_pins}   # kept pins a picture can re-check
-    confirmed, moved_cand = set(), {}
+    photo = RealCityPhoto(dev, cmap) if city_culture(dev) and not only else None   # Find missing keeps the picture as it is
+    if photo is not None and photo.img is None:
+        photo = None
+    dev._photo = photo                                     # fix A: every located settled screenshot on the way is pasted too
+    dev._notap_n = 0
+    pics = building_pictures(dev, want, own=True)
+    last = [""]
 
     def missing():
         return [b for b in want if b not in found]
 
-    def done_all():
-        return not missing() and need_confirm <= confirmed
-
-    if not missing():                                      # owner 28 Oct: once mapped, use the pins - only the stops that
-        stops = [s for s in stops                          # hold a pin that has not worked yet are visited (picture check)
-                 if any(x + s[0] - 20 <= found[b][0] <= x + s[0] + w + 20 and y + s[1] - 20 <= found[b][1] <= y + s[1] + h + 20
-                        for b in need_confirm)]
-        if not stops:
-            log(f"[+] Movable buildings: all {len(want)} already mapped and their pins worked or can't be checked by picture - nothing to do")
-            return list(found)
-        log(f"[i]   all mapped - checking only the {len(stops)} stop(s) with pins that have not worked in a task yet")
-
-    # Names (finger hold): remember per emulator which way of holding shows them (owner 28 Oct: K and GK-P lost ~16 s
-    # per stop on holds that never showed a name). 'none' = this emulator shows no names: pictures only (retried weekly).
+    # Names (finger hold): remember per emulator which way of holding shows them. 'none' = pictures only (retried weekly).
     hold_f = _map_dir(dev) / "hold.json"
-    names_ok, proven = True, set()                         # proven = holds that showed names: never given up (Rob 28 Oct 00:26:
-    try:                                                   # 3 empty stops at the city edge switched a working hold away)
+    names_ok, proven = True, set()
+    try:
         hj = json.loads(hold_f.read_text(encoding="utf-8"))
         if hj.get("mode") == "none" and time.time() - hj.get("t", 0) < 7 * 86400:
             names_ok = False
@@ -12368,86 +12758,75 @@ def run_map_movable(dev, cfg, log, stop, only=None):
         except Exception as _e:
             quiet_err("save_hold", _e)
 
-    def act_map(stop_no, checking=None):                   # live activity panel (structured: the page does not parse text)
-        log("@act " + json.dumps({"k": "map", "stop": stop_no, "stops": len(stops), "found": list(found)[kept:],
+    def progress(stop_no, checking=None):
+        """'3 / 13 found - Market' on the instance's Now line, the live panel and the City map card."""
+        text = (f"{'Finding missing buildings' if only else 'Mapping your city'}: stop {stop_no} of {len(stops)} · {base + len(found)} / {base + len(want)} found"
+                + (f" - {last[0]}" if last[0] else ""))
+        log("@act " + json.dumps({"k": "step", "text": text}))
+        log("@act " + json.dumps({"k": "map", "stop": stop_no, "stops": len(stops), "found": list(found),
                                   "checking": checking, "seen": sorted(b for b in seen_all if b in want and b not in found),
-                                  "missing": missing(), "kept": kept, "t0": round(t0)}))
-    log(f"[*] Movable buildings: looking for {len(missing())} of {len(want)} on {len(stops)} stops - pictures first, names only when needed")
+                                  "missing": missing(), "kept": 0, "t0": round(t0)}))
+        mymap_save(dev, running=True, stop=stop_no, stops=len(stops), found=base + len(found), total=base + len(want), last=last[0])
+
+    def pinned(b, place):
+        found[b] = place
+        last[0] = b
+        log(f"[+]   {b}: pinned ({base + len(found)} / {base + len(want)})")
+
+    log(f"[*] Map my city: {len(stops)} stops, looking for {len(want)} movable buildings - pictures first, names only when needed")
     log(f"[i]   finger hold: {dev.hold_mode() if names_ok else 'off (this emulator shows no names - pictures only)'}; "
         "saved pictures of the same culture: " + (", ".join(f"{n} x{len(v)}" for n, v in pics.items()) if pics else "none"))
     state = {"empty": 0}
+    pic_hit = {}                                           # building -> picture score of its match on the current stop
     t0 = time.time()
     skipped = []                                           # stops whose names were not read in the first pass
 
-    def pictures_at(i, nav):
-        """Match the saved pictures on the screen at rest. -> (labels, names) of unsure matches to check by tap."""
-        labels, names = [], []
-        if not pics:
-            return labels, names
-        rest = dev.screenshot()
-        hits = match_building_pictures(rest, pics)
-        for n, px, py, sc in sorted(hits, key=lambda hh: -hh[3]):
-            rival = max([o[3] for o in hits if o[0] != n and abs(o[1] - px) < 50 and abs(o[2] - py) < 50] or [0])
-            mxy = [round(nav.cx + px), round(nav.cy + py)]
-            sure = sc >= 0.85 and sc - rival >= 0.05
-            if sure and n not in found:
-                learn_building(dev, rest, n, px, py)
-                found[n] = mxy
-                log(f"[+]   {n}: mapped by its picture ({sc:.2f}) at {px},{py}")
-            elif sure and n in found:
-                if ((mxy[0] - found[n][0]) ** 2 + (mxy[1] - found[n][1]) ** 2) ** 0.5 <= 90:
-                    if n in need_confirm and n not in confirmed:
-                        log(f"[i]   {n}: the pin is still right (picture {sc:.2f})")
-                    confirmed.add(n)
-                elif n in need_confirm and n not in moved_cand:
-                    moved_cand[n] = (rest.copy(), px, py, mxy, sc)   # moved? decided after the sweep (only if the old spot is empty)
-            elif n not in found and sc >= 0.70:
-                labels.append((n, mxy[0], mxy[1] + 30))
-                names.append(n)
-                log(f"[i]   stop {i + 1}: {n} picture matched ({sc:.2f}) at {px},{py} - checking it")
-        return labels, names
+    def pictures_at(i, nav, rest):
+        """Saved pictures on the screen at rest -> labels to check by tap (never pinned from a picture alone)."""
+        labels = []
+        for n, px, py, sc in sorted(match_building_pictures(rest, pics, skip=tuple(found)) if pics else [], key=lambda hh: -hh[3]):
+            if n not in found and sc >= 0.70:
+                labels.append((n, round(nav.cx + px), round(nav.cy + py) + 30))
+                pic_hit[n] = sc
+                log(f"[i]   stop {i + 1}: {n} picture matched ({sc:.2f}) at {px},{py}"
+                    + (" - pinning it, then tapping to confirm" if sc >= PIN_FIRST_SCORE else " - checking its name"))
+        return labels
 
-    def names_at(i, nav, labels, names):
-        """Hold a finger so the game shows the names, read them, tap the movable ones on this screen. -> False to skip."""
+    def names_at(i, nav, labels):
+        """Hold a finger so the game shows the names, read them, tap the movable ones on this screen."""
         nonlocal names_ok
         try:
-            more, _held_img, _ = look_with_names(dev, stop, nav, shots=1)   # one held picture: reading was ~30 of the ~40 s per stop
-            labels += [l for l in more if BUILDING_ALIASES.get(l[0], l[0]) not in names]
+            more, _held_img, _ = look_with_names(dev, stop, nav, shots=1)
+            labels = labels + [l for l in more if BUILDING_ALIASES.get(l[0], l[0]) not in {n for n, _, _ in labels}]
         except InstanceStopped:
             raise
         except Exception as e:
             log(f"[i]   stop {i + 1}: names not read ({e})")
-            return False
+            return
         got_names = sorted({BUILDING_ALIASES.get(n, n) for n, _, _ in more}) if more else []
-        names = sorted({n for n, _, _ in labels})
-        if i < 2 and _held_img is not None:                                          # owner 27 Oct (K on BlueStacks): keep what the held screen showed
-            try:
-                cv2.imwrite(str(USER / "debug" / f"held_{re.sub(r'[^0-9A-Za-z]', '_', dev.serial)}_{i + 1}_{dev.hold_mode()}.png"), _held_img)
-            except Exception as _e:
-                quiet_err("run_map_movable", _e)
         if got_names:
             state["empty"] = 0
             proven.add(dev.hold_mode())
-            save_hold(dev.hold_mode())                     # this way works here: the next run starts with it
-        elif dev.hold_mode() not in proven:                # a hold that worked: a stop with nothing to read is just empty
+            save_hold(dev.hold_mode())
+        elif dev.hold_mode() not in proven:
             state["empty"] += 1
         if state["empty"] >= 3:
             old = dev.hold_mode()
-            if old == "swipe":                             # every way tried, no name ever shown: pictures only from now on
+            if old == "swipe":
                 names_ok = False
                 save_hold("none")
-                log("[!]   no names shown with any finger hold (motion, window, swipe) - this emulator maps by pictures only "
-                    "from now on; what stays missing: City map card > Fix pins")
+                log("[!]   no names shown with any finger hold (motion, window, swipe) - this emulator maps by pictures only")
             else:
                 log(f"[i]   no names on 3 stops with the '{old}' finger hold - trying '{dev.next_hold_mode() or 'swipe'}'")
             state["empty"] = 0
+        names = sorted({BUILDING_ALIASES.get(n, n) for n, _, _ in labels})
         seen_all.update(names)
-        log(f"[i]   stop {i + 1}/{len(stops)}: names {', '.join(sorted(set(names))) if names else '(none read)'}")
-        return tap_names(i, nav, labels)
+        log(f"[i]   stop {i + 1}/{len(stops)}: names {', '.join(names) if names else '(none read)'}")
+        tap_labels(i, nav, labels)
 
-    def tap_names(i, nav, labels):
-        # Owner 27 Oct 22:33: no chasing one name across the city. Tap the names that are ON THIS SCREEN, read the menu
-        # that opens and save WHATEVER movable building it names; at most 3 taps per name, then the next stop.
+    def tap_labels(i, nav, labels):
+        """Tap each movable building on THIS screen, read the menu that opens and pin whatever movable building it names
+        (at most 3 spots per building, then the next stop)."""
         todo = []
         for n, mx, my in labels:
             nb = BUILDING_ALIASES.get(n, n)
@@ -12456,107 +12835,127 @@ def run_map_movable(dev, cfg, log, stop, only=None):
                 tried.add(key)
                 todo.append((nb, mx, my))
         for nb, mx, my in todo:
-            if stop.is_set() or not missing():
+            if stop.is_set():
                 break
-            loc = cmap.locate(dev.screenshot())            # the camera after the previous taps (a ring zooms the city a little)
-            if loc:
+            sc = pic_hit.pop(nb, 0.0)
+            pre = False                                    # owner 28 Oct: strong picture match -> pin FIRST, then tap
+            if sc >= PIN_FIRST_SCORE and nb not in found and pin_from_picture(dev, nb, mx, my - 30, sc):
+                pinned(nb, [mx, my - 30])
+                log(f"[+]   {nb}: pinned from its picture ({sc:.2f}) - tapping to confirm the name")
+                progress(i + 1)
+                pre = True
+            ok_name = False
+            progress(i + 1, nb)
+            # Owner 28 Oct (fix B findings): 1) a ring makes the camera glide to its building, so the closing tap can land
+            # on ANOTHER building (Kiravik: the Auction House opened, the next taps hit its window); 2) taps aimed a bit
+            # left of the building hit the ground (Stalds). So: before EVERY tap check the city is on screen (else back to
+            # it), measure the camera again, aim from the building's MAP place, and try a few spots around it.
+            for ox, oy in [(0, 0), (0, 35), (0, -35), (40, 15), (-40, 15)]:
+                if stop.is_set():
+                    break
+                before = nav._settled()
+                loc = cmap.locate(before)
+                if not loc:
+                    leave_to_city(dev, cfg, stop, log)
+                    before = nav._settled()
+                    loc = cmap.locate(before)
+                    if not loc:
+                        log(f"[i]   stop {i + 1}: the city view is not found before tapping {nb} - next")
+                        break
                 nav.cx, nav.cy = loc[0], loc[1]
-            sx, sy = int(mx - nav.cx), int(my - 30 - nav.cy)
-            act_map(i + 1, nb)
-            if not (70 <= sx <= 420 and 160 <= sy <= 800):
-                later.setdefault(nb, []).append((mx, my))  # near the screen edge / under the HUD: the second look goes there
-                continue
-            for tx, ty in [(sx, sy), (sx, sy + 35), (sx, sy - 35)]:
-                if stop.is_set() or not (70 <= tx <= 420 and 160 <= ty <= 800):
+                tx, ty = int(mx - nav.cx + ox), int(my - 30 - nav.cy + oy)
+                if not (70 <= tx <= 420 and 160 <= ty <= 800):
                     continue
-                before = dev.screenshot()
                 dev.tap(tx, ty)
                 _nap(stop, 1.2, 1.5)
                 shot = dev.screenshot()
                 if not find_detail_icon(shot):
-                    continue                               # no menu opened (ground): next spot
+                    _map_tap_note(dev, log, i + 1, nb, tx, ty, before, shot, cmap)   # fix B: never silent
+                    continue
                 rn = (ring_building_name(shot) or ("",))[0]
                 got = match_building(rn.split(",")[0]) if rn else None
                 close_ring(dev, stop, (tx, ty + 60))
                 _nap(stop, 0.6, 0.8)
+                if pre and got == nb:                      # the picture pin is confirmed by the menu name
+                    learn_building(dev, before, got, tx, ty)   # 'named' picture for the database (the pin stays as it is)
+                    try:
+                        js = _learn_path(dev, nb).with_suffix(".json")
+                        m = json.loads(js.read_text(encoding="utf-8"))
+                        m["by"] = "bot"                    # confirmed: an ordinary bot pin now
+                        js.write_text(json.dumps(m), encoding="utf-8")
+                    except Exception as _e:
+                        quiet_err("pin_confirm", _e)
+                    log(f"[+]   {nb}: name confirmed by its menu")
+                    ok_name = True
+                    break
                 if got in want and got not in found:
-                    learn_building(dev, before, got, tx, ty)   # picture + map place of this instance
-                    found[got] = [round(nav.cx + tx), round(nav.cy + ty)]
-                    log(f"[+]   {got}: mapped (menu read at {tx},{ty}" + ("" if got == nb else f", the name said {nb}") + ")")
+                    learn_building(dev, before, got, tx, ty)   # picture + pin of this instance (menu name checked)
+                    pinned(got, [round(nav.cx + tx), round(nav.cy + ty)])
+                    progress(i + 1)
                     if got == nb:
                         break
                 else:
-                    log(f"[i]   the menu at {tx},{ty} is '{rn or '?'}'" + (" (already mapped)" if got in found else "") + f" - looking for {nb}")
+                    log(f"[i]   the menu at {tx},{ty} is '{rn or '?'}'" + (" (already pinned)" if got in found else "") + f" - looking for {nb}")
                     if got in found and got == nb:
                         break
+            if pre and not ok_name and not stop.is_set():
+                log(f"[i]   {nb}: name not confirmed by a tap - the picture pin stays (tell me if it is wrong)")
             if nb not in found:
                 later.setdefault(nb, []).append((mx, my))
             leave_to_city(dev, cfg, stop, log)
-        return True
 
-    def visit(i, label):
+    def visit(i):
         duty_progress()
         sx, sy = stops[i]
         nav = CityNav(dev, stop, log)
-        at = goto_on_map(dev, cfg, log, stop, nav, cmap, sx + x + w / 2, sy + y + h / 2, tol=120)
-        if at is None:
-            log(f"[i]   {label} {i + 1}: could not get there - next")
+        if goto_on_map(dev, cfg, log, stop, nav, cmap, sx + x + w / 2, sy + y + h / 2, tol=120) is None:
+            log(f"[i]   stop {i + 1}: could not get there - next")
             leave_to_city(dev, cfg, stop, log)
-            return None
-        return nav
+            return None, None
+        rest = nav._settled()
+        loc = cmap.locate(rest)
+        if loc:
+            nav.cx, nav.cy = loc[0], loc[1]
+            _city_seen(dev, rest, loc)                     # pasted into the picture here (fix A)
+        return nav, rest
 
-    # Pass 1 (owner 28 Oct): pictures at every stop; the finger hold only while a missing building has NO saved picture
-    # (pictures can't find it). Ends as soon as every building is mapped and every kept pin is checked.
+    # The sweep: EVERY stop (the picture needs the whole city). Pictures at every stop; the finger hold only while a
+    # missing building has no saved picture at all.
     for i in range(len(stops)):
-        if stop.is_set() or done_all():
+        if stop.is_set():
             break
-        left = round((time.time() - t0) / i * (len(stops) - i) / 60) if i else None   # minutes left, from the pace so far
-        prog = (f"Mapping movable buildings: stop {i + 1} of {len(stops)} ({round(100 * i / len(stops))}%)"
-                + (f", about {max(1, left)} min left" if left is not None else "")
-                + (f" - found {len(found)}: {', '.join(found)}" if found else " - none found yet"))
-        log("@act " + json.dumps({"k": "step", "text": prog}))
-        act_map(i + 1)
-        if i:
-            log(f"[i]   {prog}")
-        nav = visit(i, "stop")
+        progress(i + 1)
+        nav, rest = visit(i)
         if nav is None:
             continue
-        labels, names = pictures_at(i, nav)
         if not missing():
-            continue
-        blind = [b for b in missing() if b not in pics]    # no picture of it anywhere: only its name can find it
+            continue                                       # everything pinned: the rest of the sweep is the picture only
+        labels = pictures_at(i, nav, rest)
+        blind = [b for b in missing() if b not in pics]
         if names_ok and blind:
-            names_at(i, nav, labels, names)
+            names_at(i, nav, labels)
         else:
             if labels:
-                tap_names(i, nav, labels)                  # unsure picture matches: checked by tap (ring name)
+                tap_labels(i, nav, labels)
             skipped.append(i)
-    if done_all() and len(stops) > 1:
-        log(f"[+]   everything found - the sweep ended early after {round((time.time() - t0) / 60, 1)} min")
-    # Pass 2: buildings that HAVE a picture but did not match (another level / skin): names, only on the stops skipped
-    # above, nearest first (the camera is at the end of the sweep).
+    # Pass 2: still missing buildings that HAVE a picture but did not match (another level / skin): names on the stops
+    # skipped above.
     if missing() and names_ok and skipped and not stop.is_set():
         log(f"[*]   still missing {', '.join(missing())} - reading names on {len(skipped)} stop(s)")
         for i in reversed(skipped):
             if stop.is_set() or not missing() or not names_ok:
                 break
-            act_map(i + 1)
-            nav = visit(i, "names stop")
+            progress(i + 1)
+            nav, _rest = visit(i)
             if nav is not None:
-                names_at(i, nav, [], [])
-    for n, (shot_m, px, py, mxy, sc) in moved_cand.items():   # moved in the game: only when the old pin was not confirmed
-        if n not in confirmed and n not in trusted and n not in user_pins:
-            learn_building(dev, shot_m, n, px, py)
-            log(f"[+]   {n}: moved - the picture ({sc:.2f}) is at {mxy}, the pin was at {found[n]}; pin updated")
-            found[n] = mxy
-    # Second pass (owner 27 Oct 22:33): after the whole sweep, only the buildings still missing, straight to where their
-    # name was seen (centred on screen this time).
+                names_at(i, nav, [])
+    # Last look: buildings still missing, straight to where their name / picture was seen (centred this time).
     for nb in [b for b in want if b not in found and later.get(b)]:
         for mx, my in later[nb][:2]:
             if stop.is_set() or nb in found:
                 break
             duty_progress()
-            log(f"[*]   second look: {nb} (name seen at map {mx},{my})")
+            log(f"[*]   second look: {nb} (seen at map {mx},{my})")
             try:
                 ok = find_on_map(dev, cfg, log, stop, nb, None, {"map": [mx, my - 30], "dx": 0, "dy": 0}, _learn_path(dev, nb))
             except InstanceStopped:
@@ -12565,13 +12964,41 @@ def run_map_movable(dev, cfg, log, stop, only=None):
                 log(f"[i]   {nb}: {e}")
                 ok = None
             if ok:
-                found[nb] = [mx, my - 30]
-                log(f"[+]   {nb}: mapped (second look)")
+                pinned(nb, [mx, my - 30])
             leave_to_city(dev, cfg, stop, log)
-    miss = [b for b in want if b not in found]
-    act_map(len(stops))
-    log(f"[*] Movable buildings: {len(found)} of {len(want)} mapped in {round((time.time() - t0) / 60)} min"
-        + (f" ({', '.join(found)})" if found else "") + (f"; not found: {', '.join(miss)}" if miss else ""))
+    # Fix A (owner 28 Oct): the picture's dark parts (failed stops, gaps) - drive there for a photo only (no taps), at most
+    # 6 extra moves, each place once.
+    if photo is not None and not stop.is_set():
+        cams = [(k[0], k[1]) for k in cmap.kf]
+        log(f"[i]   picture: {round(photo.coverage(cams) * 100)}% of the city covered after the sweep")
+        t_photo = time.time()
+        for k in range(6):
+            if stop.is_set():
+                break
+            if time.time() - t_photo > 240:                # Rob 28 Oct: stuck drags made each photo move 1-2 min - 4 min at most
+                log("[i]   picture: 4 min of photo moves - stopping here")
+                break
+            mymap_save(dev, running=True)                  # keep 'mapping now' fresh (the card hid the map after 5 min of photo moves)
+            best = photo.darkest(cams)
+            if not best or best[0] < 0.2:
+                break
+            share, tx, ty, cam = best
+            cams.remove(cam)
+            duty_progress()
+            log(f"[*]   picture: {round(share * 100)}% dark around map {round(tx)},{round(ty)} - going there for a photo ({k + 1}/6)")
+            nav = CityNav(dev, stop, log)
+            if goto_on_map(dev, cfg, log, stop, nav, cmap, tx, ty, tol=120) is None:
+                leave_to_city(dev, cfg, stop, log)
+                continue
+            rest = nav._settled()
+            _city_seen(dev, rest, cmap.locate(rest))
+        log(f"[i]   picture: {round(photo.coverage([(k[0], k[1]) for k in cmap.kf]) * 100)}% of the city covered")
+        photo.save()
+    dev._photo = None
+    miss = missing()
+    log(f"[*] Map my city: {len(found)} of {len(want)} movable buildings pinned in {round((time.time() - t0) / 60, 1)} min"
+        + (f"; missing: {', '.join(miss)} - place them in Fix pins" if miss else " - all found"))
+    mymap_save(dev, found=base + len(found), total=base + len(want), last=last[0], missing=miss)
     return list(found)
 
 
@@ -12657,11 +13084,29 @@ def run_map_city(dev, cfg, log, stop):
     """Duty 'Map my city': at the widest zoom, explore the city from the current view (each direction once from every
     view, one measured drag per step), keep every view that shows buildings and is new ground, then solve all the
     views' places from their picture links at once and save them as keyframes. The finger only chooses the next drag."""
+    # Owner spec 28 Oct: Map my city (and Map city again) starts from 0 - this instance's picture and all its pins go.
+    log("[*] Map my city: " + (wipe_city_map(dev, "Map my city") or "starting from 0"))
+    dev._mapping = True                                    # the city map + culture pins are usable while mapping
+    mymap_save(dev, running=True, complete=False, stop=0, stops=0, found=0, total=len(MOVABLE_BUILDINGS), last="", missing=[])
+    try:
+        _run_map_city(dev, cfg, log, stop)
+        if not stop.is_set() and city_map(dev) is not None:
+            mymap_save(dev, running=False, complete=True, at=time.strftime("%Y-%m-%d %H:%M"))
+            log("[+] Map my city: done - the map stays until you press Map city again")
+        else:
+            mymap_save(dev, running=False, complete=False)
+            log("[i] Map my city: not finished - press Map my city to start again")
+    finally:
+        dev._mapping = False
+        dev._photo = None
+
+
+def _run_map_city(dev, cfg, log, stop):
     leave_to_city(dev, cfg, stop, log)
     zoom_out_full(dev, cfg, stop, log)
     nav = CityNav(dev, stop, log, pause=0.6)
     if try_culture_match(dev, cfg, log, stop, nav):
-        run_map_movable(dev, cfg, log, stop)               # owner 27 Oct: fixed buildings = culture pins, movable ones = searched
+        run_map_movable(dev, cfg, log, stop)               # fixed buildings = culture pins, movable ones = found in the sweep
         return
     x, y, w, h = CITY_VIEW
     STEPX, STEPY = int(w * 0.5), int(h * 0.6)          # one step in GAME px: views overlap half sideways, 40 % up/down. The
@@ -12853,6 +13298,8 @@ def run_map_city(dev, cfg, log, stop):
     dropped = len(views) - len(kept)
     log(f"[+]  City map built: {len(kept)} keyframes ({dropped} views without a picture link dropped), {len(edges)} links, "
         f"{W}x{H} px, {drags[0]} moves, {round(time.time() - t0)} s (solve {round(time.time() - t1)} s)")
+    if not stop.is_set():
+        run_map_movable(dev, cfg, log, stop)               # the movable buildings on the own walked map too
 
 
 _BUFF_SWIPES = {}                                          # serial -> swipes down the City Buff list to City Labor
@@ -12980,6 +13427,11 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
         shot = dev.screenshot()
     r = cmap.locate(shot)                                  # already looking at the pin? then no jump at all
     rd_snap(shot, "nav_initial")
+    if not r:                                              # fix C (owner 28 Oct): drive back onto the known city first
+        log("[i]   nav: initial_locate=miss shot=debug/duty_nav_initial.png - relocating")
+        r = relocate_view(dev, cfg, log, stop, cmap, nav)   # (pastes its own located screenshot)
+    else:
+        _city_seen(dev, shot, r)
     if r:
         log(f"[i]   nav: initial_locate=hit cx={round(r[0])} cy={round(r[1])} points={r[2]} shot=debug/duty_nav_initial.png")
     else:
@@ -13056,6 +13508,7 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
         if ra:                                             # falls back to 'moved like the finger' and drifted 197 px - the map
             cx, cy = ra[0], ra[1]                          # match is absolute, so it wins whenever it hits
             log(f"[i]   nav: located cx={round(cx)} cy={round(cy)} points={ra[2]}")
+            _city_seen(dev, after, ra)
         if fl > 150:
             k_new = max(0.6, min(2.5, ratio))
             k_scale = round(0.5 * k_scale + 0.5 * k_new, 3) if dev.serial in _DRAG_SCALE else round(k_new, 3)
@@ -13106,8 +13559,11 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
                 log("[i]   the screen is not found on the city map (zoomed differently, window in the way, or the city changed?)")
                 log("[i]   nav: goto_on_map=failure reason=map_not_located")
                 return None
-            leave_to_city(dev, cfg, stop, log)
-            continue
+            r = relocate_view(dev, cfg, log, stop, cmap, nav)   # fix C: drive back toward the city, don't give up
+            if not r:
+                continue
+        else:
+            _city_seen(dev, shot, r)
         lost = 0
         nav.cx, nav.cy = r[0], r[1]
         sx, sy = mapx - nav.cx, mapy - nav.cy
@@ -13158,19 +13614,14 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
     if open_building_here(dev, cfg, log, stop, bname, spots=near, how=f"the city map (match {mv:.2f})"):
         try:                                               # refresh the place and the picture (open_building_here learned it)
             m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8")) if p.with_suffix(".json").exists() else {"dx": 0, "dy": 0}
-            m2["map"] = [round(nav.cx + spot[0]), round(nav.cy + spot[1])]
-            m2["worked"] = time.strftime("%Y-%m-%d %H:%M")   # owner 28 Oct: this pin opened its building - the mapper trusts it
+            if not m2.get("map"):                          # owner spec 28 Oct: an existing pin never moves
+                m2["map"] = [round(nav.cx + spot[0]), round(nav.cy + spot[1])]
+            m2["worked"] = time.strftime("%Y-%m-%d %H:%M")   # this picture opened its building: good for the picture database
             p.with_suffix(".json").write_text(json.dumps(m2), encoding="utf-8")
         except Exception:
             pass
         return True
-    try:                                                   # arrived but it did not open: the next Map my city checks this pin again
-        m2 = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
-        if m2.pop("worked", None):
-            p.with_suffix(".json").write_text(json.dumps(m2), encoding="utf-8")
-    except Exception:
-        pass
-    return False
+    return False                                           # the pin stays; the task tries again later
 
 # --- Alliance page ------------------------------------------------------------------------------------------------
 def run_alliance_gift(dev, cfg, log, stop):
@@ -14914,6 +15365,9 @@ DUTY_LIBRARY = [
     {"id": "tavern_catalog", "group": "Common tasks", "title": "General library (Tavern portraits)", "every_min": 1440, "verified": False,
      "note": "Tavern > Recruit > Portraits: reads every general (picture + name) and adds the new ones to the general library. Nothing is recruited.",
      "target": "building:Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Tavern", "tavern_catalog"]},
+    {"id": "map_missing", "group": "Common tasks", "title": "Find missing buildings", "every_min": 0, "verified": False,
+     "note": "Owner 28 Oct: after Map my city, looks again for the movable buildings that are still missing. Nothing is wiped.",
+     "target": "self:", "steps": ["map_missing"]},
     {"id": "map_movable", "group": "Common tasks", "title": "Test: map movable buildings", "every_min": 0, "verified": False,
      "note": "Walks the whole city with a finger held so the names show, finds the movable buildings (Market, Prison, Barracks...), opens each to check and saves its place. Map my city does this too.",
      "target": "self:", "steps": ["map_movable"]},
@@ -15207,7 +15661,9 @@ def duty_status(serial, duty_id, cfg):
     every = int(conf.get("every_min", d["every_min"]) or 0)
     last_ok = row.get("last_ok", 0)
     if every == 0:                                          # once per game day
-        if last_ok and time.strftime("%Y-%m-%d", time.gmtime(last_ok)) == day:
+        # 28 Oct: compare the GAME day of last_ok (was its UTC date: everything done between UTC midnight, 05:30 IST, and
+        # the game reset showed 'Due' again and ran twice - Skip's Map my city re-ran and wiped its new map at 10:29)
+        if last_ok and time.strftime("%Y-%m-%d", time.gmtime(last_ok - reset_min() * 60)) == day:
             return "done", "Done " + time.strftime("%H:%M", time.localtime(last_ok))
     elif last_ok and now - last_ok < every * 60:
         return "done", "Done " + time.strftime("%H:%M", time.localtime(last_ok))
@@ -15255,6 +15711,8 @@ def run_now_tasks(cfg, serial):
 def duty_tasks_due(cfg, serial):
     out = []
     for d in DUTY_LIBRARY:
+        if d["id"] in MAP_HEAVY:                           # owner spec 28 Oct: the bot never maps by itself - only the
+            continue                                       # Map my city / Map city again button (Run now) starts it
         if duty_status(serial, d["id"], cfg)[0] in ("due",):
             t = {k: d[k] for k in ("target", "steps", "no_tile", "go_page") if k in d}
             t["name"] = "duty:" + d["id"]
@@ -15894,8 +16352,8 @@ DUTY_BUDGET_MIN = 8      # owner 25 Oct: a duty that cannot finish is left after
 MAP_DUTIES = {"monster_rally"}             # duties that work on the world map: no trip to the city before / after (owner 25 Oct)
 
 
-MAP_HEAVY = {"map_city", "map_movable"}   # city mapping runs (long camera sweeps)
-MAP_AT_ONCE = 2                            # owner 28 Oct: at most 2 instances map at the same time - the others keep joining
+MAP_HEAVY = {"map_city", "map_movable", "map_missing"}   # city mapping runs (long camera sweeps)
+MAP_AT_ONCE = 99                           # owner spec 28 Oct: no limit - every instance may map at once
 _MAP_SLOTS = {}                            # rallies, and the PC stays fast (8 at once: 12-50 s per camera move)
 _MAP_SLOT_LOCK = threading.Lock()
 
@@ -16058,6 +16516,15 @@ def duty_failed_report(dev, cfg, log, shown, why):
 
 
 def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
+    """Owner 27 Oct: Stop acts at once - a Stop raised anywhere inside ends the instance here."""
+    try:
+        return _run_device(serial, adb, cfg, log, stop, on_frame=on_frame, ctl=ctl)
+    except InstanceStopped:
+        stop.set()
+        log("[+] Stopped.")
+
+
+def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     cfg = merge_device_cfg(cfg, serial)                              # per-instance overrides
     set_pacing(cfg)
     try:

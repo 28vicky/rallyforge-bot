@@ -1311,6 +1311,8 @@ function paintLive() {
   if (!bar) return;
   const devs = (S.devStatus || []).filter((d) => d.state === "run" || d.state === "pause" || d.state === "error");
   bar.innerHTML = "";
+  bar.style.display = "none";                                    // owner 28 Oct 11:45: no Live chips in the top bar - the sidebar
+  if (bar.style.display === "none") { paintLivePanel(); return; }  // already shows every instance's status
   if (!devs.length) { paintLivePanel(); return; }
   const rank = { bad: 0, busy: 1, ok: 2 };
   const rows = devs.map((d) => ({ d, ...liveInfo(d) })).sort((a, b) => rank[a.tone] - rank[b.tone]);
