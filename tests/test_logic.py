@@ -292,5 +292,23 @@ class AllyMatching(unittest.TestCase):
             self.assertFalse(rb.others_see_rallies("A"))
 
 
+class BmNameMatch(unittest.TestCase):
+    """Owner 28 Oct: a new Black Market item is named from the purchase question + its tile's pack size; a wrong
+    name is worse than no name, so anything unclear stays unnamed."""
+    def test_clear_matches(self):
+        self.assertEqual(rb.bm_name_match("Tribute", 5), "Tribute x5")
+        self.assertEqual(rb.bm_name_match("Tribu", 2), "Tribute x2")           # only part of the name read
+        self.assertEqual(rb.bm_name_match("Stamina 50", 10), "Stamina 50 x10")
+        self.assertEqual(rb.bm_name_match("Stamina 50", 1), "Stamina 50")
+        self.assertEqual(rb.bm_name_match("Food 200M", 1), "Food 200M")        # must not become Food 20M
+
+    def test_unclear_stays_unnamed(self):
+        self.assertIsNone(rb.bm_name_match("Tribute", None))     # pack size unreadable
+        self.assertIsNone(rb.bm_name_match("Tribute", 3))        # no such pack
+        self.assertIsNone(rb.bm_name_match("General EXP", 5))    # several amounts fit
+        self.assertIsNone(rb.bm_name_match("xyz", 1))
+        self.assertIsNone(rb.bm_name_match("", 1))
+
+
 if __name__ == "__main__":
     unittest.main()

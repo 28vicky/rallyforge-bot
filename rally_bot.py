@@ -8688,12 +8688,13 @@ def _mk_known():
 
 def market_learn_new(img, th=0.78):
     """Owner 28 Oct: on every Black Market visit, an item no known picture matches is saved once into market_new
-    (a little inside its icon box, so it works as a picture to look for after it is named). -> number saved."""
+    (a little inside its icon box, so it works as a picture to look for after it is named).
+    -> [(slot number, saved file)] of the items saved this time."""
     try:
         known = _mk_known()
         MK_NEW.mkdir(parents=True, exist_ok=True)
         seen = [_icon_hash(t) for t in (cv2.imread(str(f)) for f in MK_NEW.glob("*.png")) if t is not None]
-        new = 0
+        new = []
         for i, sl in enumerate(market_slots(img), 1):
             x, y, w, h = sl["icon"]
             area = img[y:y + h, x:x + w]
@@ -8712,12 +8713,184 @@ def market_learn_new(img, th=0.78):
             if any(bin(hh ^ k).count("1") <= 6 for k in seen):
                 continue
             seen.append(hh)
-            cv2.imwrite(str(MK_NEW / f"new_{int(time.time())}_{i}.png"), crop)
-            new += 1
+            f = MK_NEW / f"new_{int(time.time())}_{i}.png"
+            cv2.imwrite(str(f), crop)
+            new.append((i - 1, f))
         return new
     except Exception as _e:
         quiet_err("market_learn_new", _e)
-        return 0
+        return []
+
+
+# Owner 28 Oct: the game's Black Market items (same list as ui/pages.js BM_SUGGEST - keep both in step). Used to name a new
+# shop item from the purchase question ("Are you sure you want to purchase Tribute?") + the number on its tile (x5).
+def _bm_item_names():
+    out = []
+    x = lambda base, qs: out.extend(f"{base} x{q}" for q in qs)
+    x("Treasure Box", [1, 5, 10, 20]); x("Tactic Scroll", [1, 5, 10, 20])
+    gear = ["Intellect Crown", "Strength Crown", "Agile Crown", "Martial Crown", "Medicine Crown", "Durable Crown",
+            "Mountain Staff", "Thunder Staff", "Wind Staff", "Fire Staff", "Mountain Decoration", "Thunder Decoration",
+            "Wind Decoration", "Fire Decoration", "Mountain Grail", "Thunder Grail", "Wind Grail", "Fire Grail", "War Horn",
+            "Courage Horn", "Loyalty Horn", "Justice Horn", "Earth Crystal", "Water Crystal", "Wind Crystal", "Fire Crystal",
+            "Light Crystal", "Wood Crystal", "Thunder Crystal", "Golden Crystal"]
+    for lv in (4, 3):
+        out.extend(f"Gear Lv{lv} {g}" for g in gear)
+    for r in ("Food", "Lumber", "Stone", "Ore"):
+        out.extend(f"{r} {a}" for a in ("500K", "1M", "2M", "5M", "20M", "50M", "200M", "500M"))
+    x("Production Speed-up 24h", [1, 2, 5, 20])
+    out += ["VIP 30 Minutes x1", "VIP 60 Minutes x1", "VIP 1 Day x1", "VIP 1 Day x4", "VIP 7 Days x1", "VIP 30 Days x1",
+            "Gold 50K", "Gold 100K"]
+    x("Chips 100", [1, 2, 5]); x("Medal", [100, 200]); x("Refining Stone", [10, 50]); x("Research Stone", [5, 10, 25, 50])
+    x("Runestone Chest", [10]); x("Dragon Crystal", [10])
+    out += ["Stamina 50", "Stamina 50 x10", "Royal Waybill x1"]; x("Tribute", [1, 2, 5, 10])
+    x("Monarch EXP 1000", [1, 2, 5]); x("Monarch EXP 2000", [1, 2, 5]); x("Monarch EXP 5000", [1, 5]); x("Monarch EXP 10000", [1, 5])
+    x("General EXP 500", [1, 2, 5, 10]); x("General EXP 1000", [1, 2, 5]); x("General EXP 2000", [1, 2, 5])
+    x("General EXP 5000", [1, 2, 5]); x("General EXP 10000", [5]); x("General EXP 20000", [5]); x("Spiritual Beast EXP 1000", [5, 10])
+    out += ["Generals Scroll Chest x1", "Kings Scroll Chest x1", "Dragon Scroll Chest x1"]
+    out += [f"Artwork Fragment Chest {n} x5" for n in ("I", "II", "III", "IV", "V", "VI")]
+    out += [f"Generals {g}" for g in ("Bow", "Spear", "Axe", "Sword", "Leg Armor", "Boots", "Ring")]
+    out += [f"Fighters {g}" for g in ("Bow", "Spear", "Axe", "Sword", "Ring")]
+    out += [f"Champions {g}" for g in ("Helmet", "Armor", "Leg Armor", "Boots")]
+    out += [f"Elites {g}" for g in ("Bow", "Spear", "Axe", "Sword", "Helmet", "Armor", "Ring")]
+    out += ["Standard Leg Armor", "Leather Boots", "Transcendence Bow", "Transcendence Leg Armor", "Transcendence Boots",
+            "Transcendence Ring", "Cloth Hood", "Cloth Armor"]
+    return list(dict.fromkeys(out))
+
+
+BM_ITEM_NAMES = _bm_item_names()
+
+
+def bm_name_match(box_name, count):
+    """'Tribute' (read from the purchase question, maybe only part of it) + 5 (the number on the tile) -> 'Tribute x5'.
+    Only a clear match is returned (owner 28 Oct: a wrong name is worse than no name) - else None."""
+    import difflib
+    t = re.sub(r"[^a-z0-9 ]", " ", (box_name or "").lower())
+    t = re.sub(r"\s+", " ", t).strip()
+    if len(t) < 3:
+        return None
+    bases = {}                                               # base name -> {pack size: full name}
+    for n in BM_ITEM_NAMES:
+        m = re.match(r"^(.*?) x(\d+)$", n)
+        base, q = (m.group(1), int(m.group(2))) if m else (n, 1)
+        bases.setdefault(base, {})[q] = n
+    def score(base):
+        b = base.lower()
+        r = difflib.SequenceMatcher(None, t, b).ratio()
+        if len(t) >= 5 and (b.startswith(t) or t in b):      # only part of the name was read
+            r = max(r, 0.85 if len(t) >= 0.5 * len(b) else 0.75)
+        return r
+    exact = [b for b in bases if b.lower() == t]
+    if exact:
+        best = exact[0]                                      # read in full: 'Food 200M' must not lose to 'Food 20M'
+    else:
+        ranked = sorted(((score(b), b) for b in bases), reverse=True)
+        best_s, best = ranked[0]
+        second = ranked[1][0] if len(ranked) > 1 else 0.0
+        if best_s < 0.8 or best_s - second < 0.08:
+            return None
+    sizes = bases[best]
+    if len(sizes) == 1:
+        only = next(iter(sizes.values()))
+        return only if count in (None, next(iter(sizes))) else None
+    return sizes.get(count) if count else None
+
+
+def market_tile_count(img, slot):
+    """The number in the bottom-right corner of an item's tile (pack size: '5') -> 5, or None when unreadable."""
+    x, y, w, h = slot["icon"]
+    c = img[y + int(h * 0.6):y + h, x + int(w * 0.5):x + w]
+    if c.size == 0:
+        return None
+    g = cv2.resize(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY), None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+    for thr in (200, 170, 140):
+        b = 255 - cv2.threshold(g, thr, 255, cv2.THRESH_BINARY)[1]
+        b = cv2.copyMakeBorder(b, 8, 8, 8, 8, cv2.BORDER_CONSTANT, value=255)
+        try:
+            txt = pytesseract.image_to_string(b, config="--psm 7 -c tessedit_char_whitelist=0123456789")
+        except Exception:
+            return None
+        d = re.sub(r"\D", "", txt)
+        if d and 0 < int(d) <= 1000:
+            return int(d)
+    return None
+
+
+MARKET_BOX_OUTSIDE = (270, 140)   # the shop's picture banner, far above the purchase question and its Confirm button (540x960)
+
+
+def market_name_new(dev, log, stop, img, saved):
+    """Owner 28 Oct (test on Manhattan): name new shop items from the game's own purchase question. For each new item:
+    tap its price, read 'purchase <name>?', close the question WITHOUT buying (tap outside it, then Back if needed),
+    match the name against the item list + the tile's pack size, and save the picture under that name.
+    Safety: the gem / gold totals are read before and after; any drop stops naming at once. -> number named."""
+    named = 0
+    slots = market_slots(img)
+    for si, f in saved:
+        if stop.is_set() or si >= len(slots) or not f.exists():
+            continue
+        slot = slots[si]
+        if not slot["afford"]:
+            continue                                         # a red price may open a different box - not worth the risk
+        count = market_tile_count(img, slot)
+        g0, m0 = market_totals(img)
+        bx, by, bw, bh = slot["btn"]
+        dev.tap(bx + bw / 2, by + bh / 2)
+        shot, kind = None, None
+        for _ in range(4):
+            if stop.wait(0.8):
+                break
+            shot = dev.screenshot()
+            kind = market_dialog(shot)
+            if kind:
+                break
+        box = ""
+        if kind == "buy":
+            try:
+                txt = " ".join(t for t, _ in ocr_lines(shot[300:600, 20:520], 2.0))
+                m = re.search(r"purchase\s+(.+?)\s*\?", txt, re.I) or re.search(r"purchase\s+(.+)$", txt, re.I)
+                box = m.group(1).strip() if m else ""
+            except Exception as _e:
+                quiet_err("market_name_new.ocr", _e)
+        for close in ("outside", "back"):                    # never Confirm: tap the banner, then Back if the box stays
+            if kind is None:
+                break
+            if kind == "rebuy":
+                dev.tap(*REBUY_CLOSE)
+            elif close == "outside":
+                dev.tap(*MARKET_BOX_OUTSIDE)
+            else:
+                dev.back()
+            _nap(stop, 0.9, 1.2)
+            shot = dev.screenshot()
+            kind = market_dialog(shot)
+        if kind:
+            cv2.imwrite(str(USER / "debug" / "black_market_name_box.png"), shot)
+            log("[!] Black Market: the purchase question did not close while naming an item - naming stopped "
+                "(picture: debug/black_market_name_box.png)")
+            return named
+        if not market_on_screen(shot):
+            log("[!] Black Market: left the shop while naming an item - naming stopped")
+            return named
+        g1, m1 = market_totals(shot)
+        if (m0 is not None and m1 is not None and m1 < m0) or (g0 is not None and g1 is not None and g1 < g0):
+            log(f"[!] Black Market: totals dropped while naming (gems {m0} -> {m1}, gold {g0} -> {g1}) - naming stopped")
+            return named
+        name = bm_name_match(box, count)
+        if not name:
+            log(f"[i] Black Market: new item read as '{box or '?'}'{f' x{count}' if count else ''} - no clear match, "
+                f"left for you to name")
+            continue
+        pic = cv2.imread(str(f))
+        if pic is None:
+            continue
+        save_template("mk_" + re.sub(r"[^\w\-]", "_", name), pic)
+        f.unlink()
+        named += 1
+        price = read_price(img, slot["btn"])
+        pay = "gems" if slot["gem"] else "gold" if slot.get("gold") else "resources"
+        log(f"[+] Black Market: new item named '{name}' (read '{box}', tile x{count if count else '?'}; "
+            f"{price if price else '?'} {pay})")
+    return named
 
 
 def _icon_hash(img):
@@ -8853,9 +9026,17 @@ def run_market(dev, cfg, log, stop):
             if fresh_read:
                 pend = 0
         again = False
-        n_new = market_learn_new(img, th)
-        if n_new:
-            log(f"[i] Black Market: {n_new} item(s) without a name saved - name them on the Black Market page")
+        saved_new = market_learn_new(img, th)
+        if saved_new:
+            named = 0
+            # Owner 28 Oct: name new items from the game's purchase question. Owner's PC only (admin.txt) until it is
+            # tested on Manhattan - it taps prices and closes the question without buying.
+            if (USER / "admin.txt").exists() or cfg.get("market_auto_name"):
+                named = market_name_new(dev, log, stop, img, saved_new)
+                img = dev.screenshot()
+            left = len(saved_new) - named
+            if left:
+                log(f"[i] Black Market: {left} item(s) without a name saved - name them on the Black Market page")
         for si, slot in enumerate(market_slots(img)):
             if si in failed:
                 continue
