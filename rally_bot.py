@@ -12525,6 +12525,29 @@ def relocate_view(dev, cfg, log, stop, cmap, nav):
         _city_seen(dev, shot, r)
         log(f"[i]   nav: relocate=hit after closing windows cx={round(r[0])} cy={round(r[1])}")
         return r
+    # Owner 28 Oct 13:00 (Rob: a 'Comeback Celebration' ad with no X sat on the city 20 min while the bot dragged under
+    # it): ads close with Back - try Back, then a tap outside, BEFORE any drag; what worked is learned for that ad.
+    for how in ("back", "outside"):
+        if nav.halted():
+            return None
+        purchase_guard(dev, shot, log)
+        ph = _pop_hash(shot)
+        _poplib_seen(ph, shot, log)
+        if how == "back":
+            dev.back()
+        else:
+            dev.tap(8, 480)
+        _nap(stop, 0.8, 1.0)
+        nxt = nav._settled()
+        if cancel_quit_dialog(dev, nxt, log):              # Back on the bare city asks to quit: Cancel, the city is there
+            nxt = nav._settled()
+        r = cmap.locate(nxt)
+        if r:
+            _poplib_learn((ph, how, (0, 0) if how == "back" else (8, 480)), nxt, log)
+            _city_seen(dev, nxt, r)
+            log(f"[i]   nav: relocate=hit after {'Back' if how == 'back' else 'a tap outside'} (a pop-up was in the way)")
+            return r
+        shot = nxt
     cams = [(k[0], k[1]) for k in (cmap.kf or [])]
     if not cams:
         return None
