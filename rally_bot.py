@@ -15152,6 +15152,27 @@ def mr_rules(cfg):
 # Solo (attack alone). Rally and Solo are equals. Smart mode is shown as "soon" in the app only.
 MR_MODES = ("rally", "solo")
 MR_ATTACK = (170, 768)                    # Attack button on a monster page (solo; Alliance War sits at 384)
+
+
+def mr_button_y(page, default=768):
+    """Height of the Attack / Alliance War buttons on a monster page. An ad row (e.g. Hunting Privilege Card)
+    pushes them up from the usual 768, and a tap at 768 then lands outside the page and closes it."""
+    try:
+        h, w = page.shape[:2]
+        b, g, r = [page[:, 90:250, i].astype(np.int16).mean(axis=1) for i in range(3)]   # Attack button = green
+        rows = [y for y in range(int(h * 0.55), int(h * 0.95)) if g[y] > r[y] + 18 and g[y] > b[y] + 18 and g[y] > 38]
+        best, run = [], []
+        for y in rows:
+            if run and y != run[-1] + 1:
+                best, run = max(best, run, key=len), []
+            run.append(y)
+        best = max(best, run, key=len)
+        if len(best) >= 25:
+            return (best[0] + best[-1]) // 2
+    except Exception:
+        pass
+    return default
+
 RALLY_ONLY = {"aglaope"}                  # lower-case names that can only be rallied (owner 28 Oct; more to come)
 SOLO_ONLY = {"goblin"}                     # lower-case names that can only be attacked solo (owner 28 Oct)
 
@@ -15812,7 +15833,7 @@ def _run_monster_rally(dev, cfg, log, stop):
                 if got != "ok":
                     break
                 if solo:                                         # Solo: Attack opens the troop page straight away (no rally time)
-                    dev.tap(*MR_ATTACK)
+                    dev.tap(MR_ATTACK[0], mr_button_y(page))      # buttons sit higher when the page shows an ad row
                     _nap(stop, 1.0, 1.2)
                     for _ in range(12):
                         shot = dev.screenshot()
@@ -15833,7 +15854,7 @@ def _run_monster_rally(dev, cfg, log, stop):
                         return later(2, "no troop page after Attack (all marches busy?)")
                     rd_snap(shot, "hunt_solo_troops")
                     break
-                dev.tap(*MR_ALLIANCE_WAR)                        # fixed spot (the white-on-brown label is rarely read); window checked below
+                dev.tap(MR_ALLIANCE_WAR[0], mr_button_y(page))   # x fixed, height found on the page (ad row moves it) (the white-on-brown label is rarely read); window checked below
                 _nap(stop, 1.0, 1.2)
                 shot = None
                 for _ in range(5):                               # the rally time window can be slow to open
