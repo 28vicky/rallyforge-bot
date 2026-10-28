@@ -9508,7 +9508,8 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False                                   # owner 25 Oct 16:28: tasks work with the map, not the Activity window
         elif bname and bname.strip() in MOVABLE_BUILDINGS and city_mapped(dev):
             log(f"[!]   {bname.strip()}: not pinned on this city - place it in Fix pins (City map card)")   # owner spec 28 Oct:
-            return False                                   # the bot never maps by itself
+            nav_state["missing_pin"] = bname.strip()       # the bot never maps by itself; no hourly retries until it is pinned
+            return False
         if bname and task.get("no_tile") and not _pinned(dev, bname.strip()):   # Black Market keep-going: the learned picture first
             leave_to_city(dev, cfg, stop, log)
             if find_learned_building(dev, cfg, log, stop, bname.strip()):
@@ -9733,6 +9734,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                       and (("#" not in name) or k.lower() == name.lower()))
         if not keys:
             log(f"[!] Task '{task.get('name')}': '{name}' is not on the city map. {CITY_MAP_HELP}")
+            nav_state["missing_pin"] = name.split("#")[0]       # owner 28 Oct (Stalds 0/17): no hourly retries on a missing pin
             return False
         if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
             zoom_out_city(dev, stop, log)
@@ -10513,20 +10515,33 @@ def ce_close_panel(dev, stop):
         _nap(stop, 0.9, 1.3)
 
 
-def ce_find_in_list(dev, stop, img):
+CE_TITLES = (90, 140, 260, 780)   # the event titles' column on the Activities list (x, y, w, h)
+
+
+def ce_find_in_list(dev, stop, img, log=None):
     """Find the Crazy Eggs row on the Activities tab: the list order differs per account, so look
-    down the whole list (until it stops moving), then back up to the top. -> (x, y) or None."""
+    down the whole list (until it stops moving), then back up to the top. -> (x, y) or None.
+    28 Oct (K BlueStacks, GK-P): fast swipes flung the list past the row and whole-screen reads took ~6 s each, so the
+    3-min no-progress watchdog stopped the duty. Now: only the titles column is read, slow swipes that hold before
+    lifting (no fling), and one log line per swipe (the watchdog sees progress)."""
     names = ["Crazy Eggs", "Crazy Egg"]
-    p = find_text(img, names, cutoff=0.72)
-    for sx, sy, ex, ey in ((270, 760, 270, 330), (270, 330, 270, 760)):     # down, then up
+    p = find_text(img, names, region=CE_TITLES, cutoff=0.72)
+    n = 0
+    for sx, sy, ex, ey in ((270, 700, 270, 420), (270, 420, 270, 700)):     # down, then up (280 px = 2 rows a swipe)
         last = img
-        for _ in range(8):
+        for _ in range(12):
             if p or stop.is_set():
                 return p
-            dev.swipe(sx, sy, ex, ey, 450)
-            _nap(stop, 1.1, 1.5)
+            if hasattr(dev, "slow_drag"):
+                dev.slow_drag(sx, sy, ex, ey, 700)         # inertia-free: the list stops where the finger lifts
+            else:
+                dev.swipe(sx, sy, ex, ey, 1100)
+            n += 1
+            _nap(stop, 0.7, 0.9)
             img = dev.screenshot()
-            p = find_text(img, names, cutoff=0.72)
+            p = find_text(img, names, region=CE_TITLES, cutoff=0.72)
+            if log:
+                log(f"[i]   Crazy Eggs: looking down the Activities list ({'down' if sy > ey else 'up'}, swipe {n})")
             if not p and cv2.absdiff(img[140:900], last[140:900]).mean() < 2:   # end of the list
                 break
             last = img
@@ -10557,11 +10572,17 @@ def run_crazy_eggs(dev, cfg, log, stop):
             _nap(stop, 1.6, 2.2)
             img = dev.screenshot()
             ce_snap(img, "1_activities")
-            p = ce_find_in_list(dev, stop, img)
+            p = ce_find_in_list(dev, stop, img, log)
             if p:
+                log(f"[i]   Crazy Eggs: row found at {p} - opening it")
                 dev.tap(*p)
-                _nap(stop, 2.5, 3.2)
-                if ce_on_screen(dev.screenshot()):
+                opened = False
+                for _w in range(3):                        # BlueStacks (K) can take a few seconds to open the page
+                    _nap(stop, 2.0, 2.5)
+                    if ce_on_screen(dev.screenshot()):
+                        opened = True
+                        break
+                if opened:
                     break
         else:
             ce_snap(dev.screenshot(), "2_failed_" + re.sub(r"\W", "_", str(serial)))   # one picture per instance
@@ -11211,7 +11232,8 @@ def ch_do_taps(dev, stop, log, name, want, serial, day):
         if after is None or (before is not None and after <= before):
             stuck += 1
             if stuck >= 3:
-                log("[i]   Champions: taps are not counting (or all 15 are used) - stopping the taps")
+                log("[i]   Champions: taps are not counting (or all 15 are used) - no more taps today")
+                ch_save(serial, taps_out_day=day)              # owner 28 Oct: never wait on taps again until the daily reset
                 break
         else:
             stuck = 0
@@ -11222,6 +11244,7 @@ def ch_do_taps(dev, stop, log, name, want, serial, day):
             before = after
             if after >= CH_TAPS:
                 log("[i]   Champions: the 15 daily taps are used up")
+                ch_save(serial, taps_out_day=day)
                 break
         _nap(stop, 4.4, 4.9)                                 # a tap only counts after the previous message has faded
     return done
@@ -11290,6 +11313,10 @@ def run_champions(dev, cfg, log, stop):
         return
     plan = ch_conf(cfg)["plan"]
     row = ch_row(serial)
+    # Owner 28 Oct: once the 15 daily taps are gone (game counter, or the taps stopped counting earlier today) the bot
+    # must not tap / wait on taps again for any champion - only greets are left.
+    taps_out = (t_used is not None and t_used >= CH_TAPS) or row.get("taps_out_day") == day
+    greets_out = g_used is not None and g_used >= CH_GREETS
     taps_used = row.get("taps") or {} if row.get("taps_day") == day else {}
     greets_used = row.get("greets") or {} if row.get("greets_day") == day else {}
     # Owner 25 Oct (Kiravik): the saved count said "done today" while the game still had taps / greets left, so the bot
@@ -11318,8 +11345,8 @@ def run_champions(dev, cfg, log, stop):
     for name in order:
         if stop.is_set():
             break
-        need_t = max(0, plan[name]["taps"] - int(taps_used.get(name, 0)))
-        need_g = max(0, plan[name]["greets"] - int(greets_used.get(name, 0)))
+        need_t = 0 if taps_out else max(0, plan[name]["taps"] - int(taps_used.get(name, 0)))
+        need_g = 0 if greets_out else max(0, plan[name]["greets"] - int(greets_used.get(name, 0)))
         if not (need_t or need_g):
             log(f"[i]   Champions: {name} - today's taps and greets already done")
             continue
@@ -11335,10 +11362,12 @@ def run_champions(dev, cfg, log, stop):
         if need_t:
             n = ch_do_taps(dev, stop, log, name, need_t, serial, day)
             total_taps += n
+            taps_out = taps_out or ch_row(serial).get("taps_out_day") == day
             log(f"[+]  Champions: {name} - {n} of {need_t} taps")
         if need_g and not stop.is_set():
             n = ch_do_greets(dev, stop, log, name, need_g, serial, day)
             total_greets += n
+            greets_out = greets_out or n >= CH_GREETS or ch_greet_label(dev.screenshot()).get("n") == CH_GREETS
             log(f"[+]  Champions: {name} - {n} of {need_g} greets")
     shot = dev.screenshot()
     used = ch_taps_used(shot)
@@ -14585,6 +14614,12 @@ def rd_train(dev, cfg, log, stop, duty_id, ring_word, qty_xy, what):
     """Barracks / Trap Factory ring menu is open: type the amount, check it was taken, press Train."""
     amount = max(1, min(int(float(rd_opt(cfg, duty_id, "amount", 500) or 500)), 9999999))
     if not rd_ring(dev, stop, [ring_word]):
+        # Stalds 28 Oct 14:13: the ring had Speed Up / Instant Finish / Cancel and a timer - the building is already
+        # training, so there is no Train item. That is "busy", not a failure (never press Instant Finish: gems).
+        ring = dev.screenshot()
+        if rd_find(ring, ["Speed Up", "Speedup"], region=(0, 110, 540, 650)) or rd_find(ring, ["Cancel"], region=(0, 110, 540, 650)):
+            log(f"[+]  {what}: already busy - tried again at the next run")
+            return                                           # not rd_nothing(): training must come back after the timer
         raise RuntimeError(f"no {ring_word} button in the menu")
     shot = dev.screenshot()
     rd_snap(shot, duty_id + "_1")
@@ -16636,6 +16671,11 @@ def duty_record(serial, duty_id, ok, msg="", nothing=False):
             hist.pop(k, None)
         if not ok:
             row["last_error"], row["last_error_at"] = msg, time.time()
+        m = re.match(r"pin (.+) on the city map first$", msg or "")
+        if m and not ok:
+            row["needs_pin"] = m.group(1)                        # waits (no retries) until that building is pinned
+        else:
+            row.pop("needs_pin", None)
         if ok:
             row["last_ok"], row["status"] = time.time(), "done"
             row["tries"] = 0                                     # fulfilled: failures start counting again from 0
@@ -16699,6 +16739,8 @@ def duty_status(serial, duty_id, cfg):
     row = (load_duty_state().get(serial or "default") or {}).get(duty_id) or {}
     day, now = _game_day(), time.time()
     tries = int(row.get("tries", 0)) if row.get("day") == day else 0
+    if row.get("needs_pin") and not _has_pin(serial, row["needs_pin"]):   # owner 28 Oct: a missing pin is not retried
+        return "waiting", f"Pin {row['needs_pin']} on the city map"      # every hour - it runs once the building is pinned
     if duty_id == "black_market" and bm_keep_going(cfg):     # owner 24 Oct: runs all day, never 'done' - the gem floor only pauses it
         fs = _duty_fail_state(row, tries, now)               # (checked before done_day: the Activity tile says nothing about the gems)
         if fs:
@@ -16735,6 +16777,17 @@ def duty_status(serial, duty_id, cfg):
     if fs:
         return fs
     return "due", "Due"
+
+
+def _has_pin(serial, name):
+    """Is `name` (e.g. 'Farm') on this instance's city map (bot or hand pin)?"""
+    d = type("D", (), {"serial": serial or "default"})()
+    try:
+        if any(k.split("#")[0].lower() == str(name).lower() for k in city_map_items(d)):
+            return True
+        return _pinned(d, name)                              # Fix pins / Map my city pins (keyframe map)
+    except Exception:
+        return False
 
 
 def _duty_fail_state(row, tries, now):
@@ -17535,6 +17588,9 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                     if not on_map:
                         leave_to_city(dev, cfg, stop, log)
                 result = (ok is not False, "" if ok is not False else "could not open it")
+                if ok is False and nav_state.get("missing_pin"):
+                    result = (False, f"pin {nav_state['missing_pin']} on the city map first")
+                    break                                    # a second try can't find a pin that isn't there
             except Exception as e:
                 log(f"[!] {'Duty' if duty_id else 'City task'} '{shown}' failed: {e}")
                 result = (False, str(e)[:120])
