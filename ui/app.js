@@ -428,9 +428,9 @@ function renderSide() {
   if (F) {
     F.innerHTML = "";
     if (devs.length >= 5) {
-      if (S.sideFilter === "prob" && !nProb) S.sideFilter = "";
+      if (S.sideFilter === "prob") S.sideFilter = "";
       const seg = (k, lab) => h("button", { class: "segb" + ((S.sideFilter || "") === k ? " on" : ""), type: "button", disabled: k === "prob" && !nProb, onclick: () => { S.sideFilter = k; renderSide(); } }, lab);
-      F.appendChild(h("div", { class: "seg small" }, seg("", "All"), seg("run", "Running " + nRun), seg("prob", "Needs attention " + nProb)));
+      F.appendChild(h("div", { class: "seg small" }, seg("", "All"), seg("run", "Running " + nRun)));   // owner 29 Oct 02:47: Needs attention filter hidden for now (rows still show "Needs attention")
     }
   }
   if (!devs.length) L.appendChild(h("div", { class: "sideempty" }, "No instances yet.", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.sel = "control"; pickTab("dashboard"); renderSide(); } }, "Add your emulators")));
