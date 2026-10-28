@@ -15227,6 +15227,7 @@ def hunt_decisions(serial):
     with _hunt_dec_lock:
         _hunt_dec_load()
         rows = list((_hunt_dec["rows"].get(serial or "default") or {}).items())
+    rows = [(k, r) for k, r in rows if not str(r.get("why") or "").startswith("Too old")]   # rows saved before 29 Oct
     return sorted([dict(r, key=k) for k, r in rows], key=lambda r: -r["t"])
 
 
@@ -15430,9 +15431,8 @@ def mr_targets(cfg, tried, serial=None):
             skip(it, {"rallied": "Taken by another rally", "dead": "Gone (not on the map any more)"}.get(w, "Picked by another instance"),
                  "taken", keep=True)
             continue
-        if now - float(it.get("t") or 0) > age:
-            skip(it, f"Too old · coordinates refresh every {age_min:g} min", "too old")
-            continue
+        if now - float(it.get("t") or 0) > age:     # owner 29 Oct: the cache REFRESHES - older coordinates are simply
+            continue                                   # dropped (not listed as "too old"); the next Telegram list shows
         if max_km and it.get("km") is not None and float(it["km"]) > max_km:    # owner 28 Oct: e.g. only 700 km or closer
             skip(it, f"Too far · max distance is {max_km:g} km", "too far")
             continue
