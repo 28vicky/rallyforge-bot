@@ -8746,6 +8746,55 @@ def market_match(img, slot, tpl_name, threshold):
     return float(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED).max())
 
 
+MK_NEW = USER / "market_new"          # Black Market items the bot saw but has no picture for - the owner names them once
+
+
+def _mk_known():
+    """Every Black Market picture the bot can look for (shipped + captured + named): {stem: image}."""
+    out = {}
+    for base in (USER / "templates", RES / "templates", RES):
+        for f in sorted(base.glob("mk_*.png")) if base.exists() else []:
+            if f.stem not in out:
+                t = cv2.imread(str(f))
+                if t is not None:
+                    out[f.stem] = t
+    return out
+
+
+def market_learn_new(img, th=0.78):
+    """Owner 28 Oct: on every Black Market visit, an item no known picture matches is saved once into market_new
+    (a little inside its icon box, so it works as a picture to look for after it is named). -> number saved."""
+    try:
+        known = _mk_known()
+        MK_NEW.mkdir(parents=True, exist_ok=True)
+        seen = [_icon_hash(t) for t in (cv2.imread(str(f)) for f in MK_NEW.glob("*.png")) if t is not None]
+        new = 0
+        for i, sl in enumerate(market_slots(img), 1):
+            x, y, w, h = sl["icon"]
+            area = img[y:y + h, x:x + w]
+            if area.size == 0 or area.shape[0] < 40 or area.shape[1] < 40:
+                continue
+            hit = False
+            for t in known.values():
+                if area.shape[0] >= t.shape[0] and area.shape[1] >= t.shape[1] and \
+                        float(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED).max()) >= th:
+                    hit = True
+                    break
+            if hit:
+                continue
+            crop = area[4:-4, 4:-4]
+            hh = _icon_hash(crop)
+            if any(bin(hh ^ k).count("1") <= 6 for k in seen):
+                continue
+            seen.append(hh)
+            cv2.imwrite(str(MK_NEW / f"new_{int(time.time())}_{i}.png"), crop)
+            new += 1
+        return new
+    except Exception as _e:
+        quiet_err("market_learn_new", _e)
+        return 0
+
+
 def _icon_hash(img):
     g = cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), (9, 8), interpolation=cv2.INTER_AREA).astype("int16")
     bits = (g[:, 1:] > g[:, :-1]).flatten()
@@ -8879,16 +8928,20 @@ def run_market(dev, cfg, log, stop):
             if fresh_read:
                 pend = 0
         again = False
+        n_new = market_learn_new(img, th)
+        if n_new:
+            log(f"[i] Black Market: {n_new} item(s) without a name saved - name them on the Black Market page")
         for si, slot in enumerate(market_slots(img)):
             if si in failed:
                 continue
             for name, tname, pay in wanted:
                 if market_match(img, slot, tname, th) < th:
                     continue
-                kind_ok = (slot["gem"] and pay in ("gems", "both")) or (not slot["gem"] and pay in ("resources", "both"))
+                kind_ok = (slot["gem"] and pay in ("gems", "both")) or (not slot["gem"] and pay in ("resources", "both")) or \
+                          (slot.get("gold") and pay == "gold")      # owner 28 Oct: Gold = only a gold price, never other resources
                 price = read_price(img, slot["btn"])
                 if not kind_ok:
-                    log(f"[i] {bm_label(name)} is for sale but paid with {'gems' if slot['gem'] else 'resources'} - not allowed")
+                    log(f"[i] {bm_label(name)} is for sale but paid with {'gems' if slot['gem'] else 'gold' if slot.get('gold') else 'resources'} - not allowed")
                 elif not slot["afford"]:
                     log(f"[i] {bm_label(name)} is for sale but you cannot afford it")
                 elif slot["gem"] and budget and price and spent + price > budget:

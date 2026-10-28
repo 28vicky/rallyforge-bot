@@ -2570,6 +2570,31 @@ class Api:
         rb.save_template("mk_" + re.sub(r"[^\w\-]", "_", name), img[y:y + h, x:x + w])
         return {"name": name}
 
+    def market_new_list(self, p):
+        """Items the bot saw in the shop but has no picture name for (owner names them once)."""
+        d = rb.MK_NEW
+        return {"items": sorted(f.stem for f in d.glob("new_*.png")) if d.exists() else []}
+
+    def market_new_name(self, p):
+        stem = re.sub(r"[^\w\-]", "", p.get("file") or "")
+        name = re.sub(r"[^\w\- ]", "", p.get("name") or "").strip()
+        if not name:
+            raise ApiError("Give the item a name.")
+        f = rb.MK_NEW / (stem + ".png")
+        img = rb.cv2.imread(str(f)) if f.exists() else None
+        if img is None:
+            raise ApiError("That picture is gone.")
+        rb.save_template("mk_" + re.sub(r"[^\w\-]", "_", name), img)
+        f.unlink()
+        return {"name": name}
+
+    def market_new_drop(self, p):
+        stem = re.sub(r"[^\w\-]", "", p.get("file") or "")
+        f = rb.MK_NEW / (stem + ".png")
+        if f.exists():
+            f.unlink()
+        return {"ok": True}
+
     def market_pictures(self, p):
         """Every Black Market picture the bot can look for (shipped + captured), as item names for the picture picker."""
         seen = {}
@@ -2970,6 +2995,11 @@ class Handler(BaseHTTPRequestHandler):
             if img is None:
                 return self._send(404, "no picture", "text/plain")
             return self._send(200, png_bytes(img), "image/png", {"Cache-Control": "max-age=30"})
+        if path == "/api/market_new_img":
+            f = rb.MK_NEW / (re.sub(r"[^\w\-]", "", q["file"][0]) + ".png")
+            if f.exists():
+                return self._send(200, f.read_bytes(), "image/png", {"Cache-Control": "max-age=30"})
+            return self._send(404, "no picture", "text/plain")
         if path == "/api/market_img":
             stem = "mk_" + re.sub(r"[^\w\-]", "_", q["name"][0])
             for base in (rb.USER / "templates", rb.RES / "templates", rb.RES):

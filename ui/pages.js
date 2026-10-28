@@ -1074,7 +1074,7 @@ PAGES.tasks = function (fixed, inPanel, redraw) {
 };
 
 // ====================================================================== market
-const PAY = [["gems", "Gems only"], ["resources", "Resources only"], ["both", "Gems or resources"]];
+const PAY = [["gems", "Gems only"], ["gold", "Gold only"], ["resources", "Gold or other resources"], ["both", "Anything"]];
 const REFRESH = [["none", "Never"], ["count", "A set number of times"], ["all", "Until the gem floor"]];
 // Black Market pictures that ship with the app (templates mk_BM_NN.png, cut from a real shop recording): plain name + category.
 // The item keeps its "BM NN" name in the settings (that is the picture the bot looks for); only the label shown changes.
@@ -1101,7 +1101,8 @@ PAGES.market = function () {
   const c = S.cfg;
   c.market_items = c.market_items || [];
   let cat = "all", q = "", names = [];
-  const PAY_SHORT = [["gems", "Gems"], ["resources", "Resources"], ["both", "Either"]];
+  // owner 28 Oct: shop prices are gems, gold or other resources. Resources = any non-gem price (gold, food, lumber, stone, ore)
+  const PAY_SHORT = [["gems", "Gems"], ["gold", "Gold"], ["resources", "Resources"], ["both", "Any"]];
   const fmt = (v) => Number(v || 0).toLocaleString("en-US");
   const chosen = (n) => c.market_items.find((i) => i.name === n);
   const addItem = (n) => { if (!chosen(n)) c.market_items.push({ name: n, pay: c.market_pay || "gems" }); };
@@ -1161,7 +1162,7 @@ PAGES.market = function () {
     }
     picksBody.appendChild(h("div", { class: "bmpicks" }, ...c.market_items.map((it) => {
       const f = bmInfo(it.name), st = { v: it.pay || "gems" };
-      return h("div", { class: "bmpick", title: it.name },
+      return h("div", { class: "bmpick", title: f.label },
         h("img", { src: `/api/market_img?name=${encodeURIComponent(it.name)}&k=${window.KEY}`, alt: "", onerror: (e) => (e.target.style.visibility = "hidden") }),
         h("div", { class: "bmpn" }, f.label),
         segPick(st, "v", PAY_SHORT, { small: true, label: "Pay for " + f.label + " with", after: (v) => { it.pay = v; draw(); } }),
@@ -1171,6 +1172,30 @@ PAGES.market = function () {
   const picks = panel(null, picksHead, picksBody);
   // ---- 3. Add items (folded; opens by itself while nothing is picked)
   const holder = h("div", {});
+  // owner 28 Oct: items the bot saw in the shop but has no picture name for - name each once and it can be picked
+  const newBox = h("div", {});
+  let newItems = [];
+  const drawNew = () => {
+    newBox.innerHTML = "";
+    if (!newItems.length) return;
+    newBox.append(h("div", { class: "bmnewhead" }, h("b", {}, "New items seen in the shop (" + newItems.length + ")"),
+      h("span", { class: "hint" }, "Give each a name once (e.g. Speed-up 8h) - then it can be picked. \u00d7 = not an item")),
+      h("div", { class: "bmgrid" }, ...newItems.map((f) => h("div", { class: "bmcard bmnew" },
+        h("img", { src: `/api/market_new_img?file=${encodeURIComponent(f)}&k=${window.KEY}`, alt: "" }),
+        h("button", { type: "button", class: "btn sm", onclick: async () => {
+          const name = await promptBox("Name this item", "What is it? (e.g. Stamina 100, Speed-up 8h)", "");
+          if (!name) return;
+          const j = await act(api("market_new_name", { file: f, name }));
+          if (!j) return;
+          newItems = newItems.filter((x) => x !== f);
+          if (!names.includes(j.name)) names.push(j.name);
+          draw();
+        } }, "Name it"),
+        h("button", { type: "button", class: "bmx", title: "Not an item - remove", "aria-label": "Remove this picture", onclick: async () => {
+          if (!(await act(api("market_new_drop", { file: f })))) return;
+          newItems = newItems.filter((x) => x !== f); drawNew();
+        } }, "\u00d7")))));
+  };
   const pills = h("div", { class: "rtnpills" });
   const search = h("input", { type: "search", placeholder: "Search, e.g. stamina, food, chest", oninput: (e) => { q = e.target.value.trim().toLowerCase(); draw(); } });
   const addSum = h("summary", {});
@@ -1193,6 +1218,7 @@ PAGES.market = function () {
           addItem(j.name);
           draw();
         }, "sm")),
+      newBox,
       h("div", { class: "bmbar" }, pills, search),
       holder));
   let autoOpened = false;
@@ -1208,16 +1234,17 @@ PAGES.market = function () {
     holder.innerHTML = "";
     holder.appendChild(list.length ? h("div", { class: "bmgrid" }, ...list.map((n) => {
       const it = chosen(n), f = bmInfo(n);
-      return h("button", { type: "button", class: "bmcard" + (it ? " on" : ""), title: n, "aria-pressed": !!it, onclick: () => pick(n) },
+      return h("button", { type: "button", class: "bmcard" + (it ? " on" : ""), title: f.label, "aria-pressed": !!it, onclick: () => pick(n) },
         h("img", { src: `/api/market_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, alt: "", onerror: (e) => (e.target.style.visibility = "hidden") }),
         h("div", { class: "bmname" }, f.label), h("div", { class: "bmsub" }, it ? "Picked" : "Tap to add"));
     })) : h("div", { class: "empty" }, q ? "Nothing matches “" + q + "”." : "No pictures in this group yet."));
     const left = all.filter((n) => !chosen(n)).length;
     addSum.textContent = "Add items" + (all.length ? " · " + left + " more to choose from" : "");
     if (!c.market_items.length && !autoOpened) { add.open = true; autoOpened = true; }
-    drawPicks(); drawSum(); lockSpend();
+    drawNew(); drawPicks(); drawSum(); lockSpend();
   };
   api("market_pictures", {}, { quiet: true }).then((j) => { names = (j && j.names) || []; draw(); }).catch(() => draw());
+  api("market_new_list", {}, { quiet: true }).then((j) => { newItems = (j && j.items) || []; if (newItems.length) add.open = true; drawNew(); }).catch(() => {});
   draw();
   return h("div", { class: "bmpage" }, sum, spend, picks, panel(null, add));
 };
