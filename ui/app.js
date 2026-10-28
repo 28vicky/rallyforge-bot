@@ -125,7 +125,7 @@ const TABS = [
   ["tasks", "My tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram coordinates"], ["reliability", "Reliability"],
   ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Appearance"], ["license", "Account"],
 ];
-const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Problem - see the log" };
+const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Needs attention - see the log" };
 
 // ------------------------------------------------------------------ theme
 const DARK_ON = true;                             // dark mode back on (owner 23 Oct, after the contrast pass); was hidden since 21 Oct, the saved choice (ui_mode) was kept
@@ -212,7 +212,7 @@ function layout() {
   root.innerHTML = "";
   root.appendChild(h("div", { class: "app" + (S.cfg.sidebar_open === false ? " nosb" : ""), id: "app" },
     h("div", { class: "side" },
-      h("div", { class: "brand" }, h("img", { src: "/assets/logo.png", alt: "" }),
+      h("div", { class: "brand", title: "All instances", style: { cursor: "pointer" }, onclick: () => { S.sel = "control"; S.tab = "dashboard"; renderSide(); renderTabs(); renderPage(); } }, h("img", { src: "/assets/logo.png", alt: "" }),
         h("div", { class: "bt" }, h("b", {}, "RallyForge"), h("small", {}, "Automation Hub"))),
       h("h4", {}, h("span", {}, "Instances"), h("span", { class: "cnt", id: "instCnt" })),
       h("div", { class: "instfilter", id: "instFilter" }),
@@ -221,7 +221,7 @@ function layout() {
       h("div", { class: "sidefoot" }, h("div", { class: "whorow" }, h("div", { class: "whoami", id: "whoami" }),
         DARK_ON ? h("button", { type: "button", class: "iconbtn", id: "modeBtn", onclick: quickMode }) : null),     // light / dark in one click from any screen
         // (ui-simple) Pause all / Stop all live only in the page header - one place for run controls
-        h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "Control settings"))),
+        h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Dashboard, settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "All instances"))),   // A8 (28 Oct): was "Control settings" - the way home
     h("div", { class: "main" },
       h("div", { class: "top" }, sideBtn(), h("img", { src: "/assets/logo.png", alt: "" }),
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
@@ -305,7 +305,7 @@ function buildRibbon() {
       btn("Tools ▾", (e) => menu(e.currentTarget, [
         { label: "Generals", icon: "users", run: () => openGeneralManager() },
         ...(S.dev ? [{ label: "Scan generals", icon: "scan", run: () => scanGeneralsFlow() }] : []),
-        { label: "Scan city", icon: "city", run: () => scanCityFlow(S.sel === "control" ? undefined : S.sel) },
+        ...(S.dev ? [{ label: "Scan city", icon: "city", run: () => scanCityFlow(S.sel === "control" ? undefined : S.sel) }] : []),   // A5: the old stopped-instance mapper - users use Map my city
         { label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) },
         { label: "Save profile\u2026", icon: "save", run: saveProfileFlow }, { label: "Load profile\u2026", icon: "down", run: loadProfileFlow }]), "", "grid"),
       btn("App ▾", (e) => menu(e.currentTarget, [
@@ -461,7 +461,7 @@ function sideStatus(d) {
   if (d.start_at) return ["starts in", "", T("data-at", d.start_at)];
   if (d.queued) return ["queued", ""];
   if (d.state === "pause") return d.resume_at ? ["paused · resumes in", "warn", T("data-at", d.resume_at)] : ["paused", "warn"];
-  if (d.state === "error") return ["problem · see the log", "bad"];
+  if (d.state === "error") return ["needs attention · see the log", "bad"];
   return ["stopped", "off"];
 }
 function sideRunAct(d) {      // what the row's button does now: [icon, label, fn] or a greyed spinner while it cannot act
@@ -652,7 +652,7 @@ const TAB_GROUPS = [
   ["tasks", "My tasks", null],
   ["market", "Market", null],
   // one row only (ui-simple): the rarely used pages live under More, grouped by small headings ("#...")
-  ["more", "More", ["logs", "reports", "#Setup", "settings", "reliability", "schedule", "#App", "updates", "themes", "telegram", "license"]],
+  ["more", "More", ["logs", "reports", "#Setup", "settings", "reliability", "schedule", "#App", "themes", "telegram", "license"]],   // A9: Updates lives in the App menu only
 ];
 function closeTabMenu() { const m = document.getElementById("tabmenu"); if (m) m.remove(); document.removeEventListener("mousedown", tabMenuOutside, true); document.removeEventListener("keydown", tabMenuKey, true); }
 function tabMenuOutside(e) { const m = document.getElementById("tabmenu"); if (m && !m.contains(e.target) && !e.target.closest(".tab.grp")) closeTabMenu(); }
@@ -784,7 +784,7 @@ function fmtHM(sec) {
   const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60);
   return hh ? `${hh}h ${mm}m` : mm ? `${mm}m` : `${sec % 60}s`;
 }
-function hhmm(t) { return t ? new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-"; }
+function hhmm(t) { return t ? new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "-"; }
 function todayModel(j, serial) {
   j = j || {};
   const nowText = ((S.now && S.now[serial]) || {}).text || "";
@@ -811,7 +811,7 @@ function todayModel(j, serial) {
     resetAt: j.reset_at || 0, skew, resetLocal: hhmm(j.reset_at), items, summary,
     results: [
       ["Rallies joined", r.joins || 0, ""],
-      ["Skipped (late)", r.late || 0, "Rallies left alone because too little time was left for the march"],
+      ["Skipped (too late)", r.late || 0, "Rallies left alone because too little time was left for the march"],
       ["Monsters hit", monList.length, monList.map(([m, n]) => `${m} ×${n}`).join(", ") || "none yet"],
       ["Duties done", cnt.on ? `${cnt.done}/${cnt.on}` : "0", "Duties switched on that finished at least once today"],
       ["Restarts", r.restarts || 0, "Evony or the emulator restarted by the bot"],
@@ -860,8 +860,10 @@ function paintStats(el, serial) {
   const joins = list.filter((l) => l.a.k === "join" && l.a.took != null);
   const avg = joins.length ? (joins.reduce((t, l) => t + l.a.took, 0) / joins.length).toFixed(1) + " s" : "-";
   el.innerHTML = "";
+  // A4 (28 Oct): these count since the app started and every skip reason - the Today card counts the game day and late skips only
   [["Joined", n("join")], ["Skipped", n("skip")], ["Failed", n("fail")], ["Average join", avg]].forEach(([l, v]) =>
-    el.appendChild(h("div", { class: "stile" }, h("b", {}, String(v)), h("span", {}, l))));
+    el.appendChild(h("div", { class: "stile", title: "Since the app started" }, h("b", {}, String(v)), h("span", {}, l))));
+  el.appendChild(h("small", { class: "hint", style: { gridColumn: "1 / -1" } }, "Since the app started · every skip reason (Today counts late skips only)"));
 }
 function actNow(serial) {
   if (serial !== null) { const x = S.now[serial]; return x ? `${x.t}  ${x.text}` : "Waiting for the bot to start\u2026"; }
@@ -1053,6 +1055,7 @@ async function boot() {
   applyTheme();
   document.title = "RallyForge Bot " + S.version;
   layout();
+  AUTO.saved = AUTO.seen = cfgSnap(); AUTO.touched = false; AUTO.ready = true;   // A12 (28 Oct): the loaded settings are the starting point - opening the app saves nothing and is no undo step
   saveState("saved");
   poll();
   checkWhatsNew();
@@ -1066,7 +1069,7 @@ async function boot() {
 const AUTO = { saved: null, seen: null, busy: false, err: "" };
 function cfgSnap() { try { return JSON.stringify({ c: S.cfg, d: S.devices }); } catch (e) { return null; } }
 setInterval(async () => {
-  if (!S.cfg || AUTO.busy) return;
+  if (!S.cfg || AUTO.busy || !AUTO.ready) return;
   const now = cfgSnap();
   if (now === null) return;
   if (AUTO.saved === null) { AUTO.saved = AUTO.seen = now; return; }          // first look after start: nothing changed yet
@@ -1095,6 +1098,7 @@ const UNDO_SKIP = /^(tour_done|last_seen_version|sidebar_open|ui_)/;   // view-o
 function pushUndo(before, after) {
   const touched = AUTO.touched; AUTO.touched = false;              // only what you changed; the app filling in defaults by itself is not an undo step
   if (!touched || !before || !after || before === after) return;
+  try { if (!Object.keys(JSON.parse(before).c || {}).length) return; } catch (e) { return; }   // never offer to undo back to empty settings
   const strip = (j) => { const o = JSON.parse(j); for (const k of Object.keys(o.c || {})) if (UNDO_SKIP.test(k)) delete o.c[k]; return JSON.stringify(o); };
   if (strip(before) === strip(after)) return;
   UNDO.push({ before, after }); if (UNDO.length > 30) UNDO.shift();

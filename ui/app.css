@@ -257,7 +257,7 @@ table.t td{padding:2px 8px 2px 0;vertical-align:middle}
 .hint{color:var(--mute);font-size:14px}
 .chip{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--line);font-size:13px;color:var(--fg)}
 .pill-ok{color:var(--good)}.pill-bad{color:var(--bad)}
-@media (max-width:900px){.grid2,.grid3{grid-template-columns:1fr}.side{width:200px}.gen-body{grid-template-columns:1fr}}
+@media (max-width:900px){.grid2,.grid3{grid-template-columns:1fr}.gen-body{grid-template-columns:1fr}}   /* sidebar keeps its width: the page never lays out below 900 px (A11) */
 .row>select,.row>input[type=text],.row>input[type=search],.row>input[type=number]{width:auto;flex:0 1 260px}.row>input.short{flex:0 0 110px}
 
 .pbar{height:10px;border-radius:6px;background:var(--bg2,#222);overflow:hidden;margin:8px 0 10px;border:1px solid var(--line,#333)}
@@ -1021,7 +1021,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .side{padding-bottom:12px}
 .main{padding-bottom:34px}
 .app:not(.inst-mode) .main{padding-bottom:44px}
-@media (max-width:900px){.app:not(.nosb) .status{left:200px}}
+
 .ovgrid .actwrap:has(tbody:empty)::after{content:"No rallies yet - joins and skips show here as they happen.";display:block;padding:22px 12px;color:var(--mute);font-size:13px;text-align:center}
 /* ---- type + spacing scale (one pass for every page): body 14, small text 12.5-13.5, card titles 16, page title 24 ---- */
 :root body{font-size:14px}
@@ -1897,3 +1897,5 @@ select.pick-open{border-color:var(--accent1)}
 .hu .hustep input.hustepv,.hustepv{width:70px;min-width:70px;max-width:70px}
 :root .stickyhead{background:var(--card);border-bottom:1px solid var(--line)}
 :root .stickyhead.stuck{box-shadow:0 8px 18px -12px rgba(20,22,29,.28)}
+:root .app:not(.nosb) .status{left:256px}   /* status bar starts where the 256 px sidebar ends (was 240: "141 MB" sat on the sidebar) */
+.huwhyb.off{background:var(--hu-soft)}   /* A1: "Monster hunts is off" is grey, not the green Ready colour */

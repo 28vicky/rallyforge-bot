@@ -9,7 +9,7 @@ const TOUR_STEPS = [
   { sel: "#ribbon .grp:nth-child(2)", title: "4. Teach it your generals", text: "Open Tools > Generals to pick which generals the bot may use as main and assistant, best first. Do this once; every instance can use the same list or its own.", side: "bottom" },
   { tab: "monsters", sel: "#pages", title: "5. Choose what to join", text: "Tick the monsters you want the bot to join and untick the ones to skip. Open a monster to choose single levels. Anything unticked is ignored, so start with the ones you want most.", side: "top" },
   { tab: "duties", sel: "#pages", title: "6. Daily duties (optional)", text: "Duties are the extras: greeting champions, claiming gifts and so on. This page holds the defaults for new instances; each instance switches its own under Routines. Building duties need the city mapped once: Tools › Scan city.", side: "top" },
-  { sel: "#ribbon .grp:first-child", title: "7. Start it", text: "Select an instance on the left, then press Start. Open “Control settings” (bottom left) first and Start runs every instance at once. Pause holds the bot, Stop ends it. Watch the Activity and Log tabs to see what it is doing.", side: "bottom" },
+  { sel: "#ribbon .grp:first-child", title: "7. Start it", text: "Select an instance on the left, then press Start. Open “All instances” (bottom left) first and Start runs every instance at once. Pause holds the bot, Stop ends it. Watch the Activity and Log tabs to see what it is doing.", side: "bottom" },
   { title: "You are ready", text: "That is all. Settings, Reliability and Telegram alerts are under Setup and App when you want them. This tour will not show again; Setup › Settings › Take the tour opens it whenever you need it." },
 ];
 const TOUR = { i: 0, on: false };

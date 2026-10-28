@@ -530,7 +530,7 @@ function instancePage(serial) {
   const ownP = [panel("March presets & generals",
     ownLine(customP, () => { ensureBotPresets(S.cfg); PKEYS.forEach((k) => { if (S.cfg[k] !== undefined) ov[k] = clone(S.cfg[k]); }); rerender(); },
       async () => { if (await confirmBox("Reset to defaults", "This instance drops its own presets and generals and uses the universal ones again.", "Reset")) { PKEYS.forEach((k) => delete ov[k]); rerender(); } }),
-    customP ? null : note("Make own to give this instance its own presets and generals; it starts as a copy of the universal set (Control settings \u203a Presets & generals)."))];
+    customP ? null : note("Make own to give this instance its own presets and generals; it starts as a copy of the universal set (All instances \u203a Presets & generals)."))];
   if (customP) ownP.push(...presetPanels(pview, true));
   // ---- phone / shared device (important, so it sits right under Activity)
   const eff = (k, dflt) => (ov[k] !== undefined ? ov[k] : S.cfg[k] !== undefined ? S.cfg[k] : dflt);
@@ -590,7 +590,7 @@ function instancePage(serial) {
       const L = a.querySelector(".actleft"), R = a.querySelector(".actright");
       const st = (S.devStatus.find((x) => x.id === serial) || {}).state;
       L.querySelector("h3").replaceWith(h("div", { class: "cardhead" },
-        h("h3", {}, h("span", { class: "livedot" + (st === "run" ? " on" : "") }), "Now executing"), h("span", { class: "livetag" }, "Live")));
+        h("h3", {}, h("span", { class: "livedot" + (st === "run" ? " on" : "") }), st === "run" ? "Now executing" : "Last step"), st === "run" ? h("span", { class: "livetag" }, "Live") : null));   // A2: a stopped instance shows its last step, not a live one
       const lab = L.querySelector(".actlab"); if (lab) lab.remove();
       R.querySelector("h3").replaceWith(h("div", { class: "cardhead" },
         h("div", {}, h("h3", {}, "Monster joins"), h("small", { class: "sub" }, "Live rally history log")),
@@ -604,7 +604,7 @@ function instancePage(serial) {
         h("p", { class: "hint", style: { marginTop: "8px" } }, "Have the Rally Monthly Card? Pick Auto-Join - no presets needed. You can change it any time with the Auto-Join switch at the top."));
       return [lead, renderTodayCard(serial), h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, cityMapCard(serial), runNowCard(serial)))];
     }],
-    ["routines", "Routines", () => [PAGES.duties(serial)]],
+    ["routines", "Duties", () => [PAGES.duties(serial)]],   // A9: one word - "Duties" everywhere
     ["rally", "Rally setup", () => sections("rally", [
       ["mon", "Monsters", () => [PAGES.monsters(serial)]],
       ["gen", "March presets & generals", () => ownP],
@@ -629,7 +629,8 @@ function instancePage(serial) {
     body.innerHTML = "";
     if (k !== "ov") {
       const nv = h("span", { class: "nowtxt" }, actNow(serial));
-      body.appendChild(h("div", { class: "nowstrip" }, h("span", { class: "actlab" }, "Now"), nv));
+      const running = ((S.devStatus.find((x) => x.id === serial) || {}).state) === "run";
+      body.appendChild(h("div", { class: "nowstrip" }, h("span", { class: "actlab" }, running ? "Now" : "Last"), nv));
       const iv = setInterval(() => { if (!nv.isConnected) clearInterval(iv); else nv.textContent = actNow(serial); }, 2000);
     }
     const t = ITABS.find((x) => x[0] === k);
@@ -645,7 +646,7 @@ function instancePage(serial) {
 // ====================================================================== per-instance Itinerary and Log history (read only)
 function instItinerary(serial) {
   const root = h("div", {});
-  const fmtT = (t) => new Date(t * 1000).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  const fmtT = (t) => new Date(t * 1000).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
   const grp = (title, rows, bad) => rows.length ? h("div", { class: "itgrp" + (bad ? " bad" : "") }, h("div", { class: "ithead" }, title + " (" + rows.length + ")"),
     ...rows.map((r) => h("div", { class: "itrow" }, r.st ? dutyBadge(r.st, r.when) : h("span", { class: "itwhen" }, r.when), h("span", { class: "itname" }, r.name)))) : null;
   const load = async () => {
@@ -660,8 +661,8 @@ function instItinerary(serial) {
     const parts = [grp("Due now", mk((x) => x.status === "due" || x.status === "retry"), true), grp("Gave up today - still tried every hour", mk((x) => x.status === "gaveup"), true),
       grp("Coming up", mk((x) => x.status === "waiting")), grp("Done today", mk((x) => x.status === "done")), grp("Latest things the bot did here", mine)].filter(Boolean);
     root.appendChild(panel("Itinerary",
-      h("small", { class: "sub" }, "What this instance has to do today" + (row && row.count && row.count.on ? " \u00b7 " + row.count.done + " / " + row.count.on + " done" : "") + ". Changes in Routines are picked up without stopping it."),
-      ...(parts.length ? parts : [h("div", { class: "empty" }, "No duty is switched on for this instance. ", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("routines"); } }, "Switch some on in Routines"))])));
+      h("small", { class: "sub" }, "What this instance has to do today" + (row && row.count && row.count.on ? " \u00b7 " + row.count.done + " / " + row.count.on + " done" : "") + ". Changes in Duties are picked up without stopping it."),
+      ...(parts.length ? parts : [h("div", { class: "empty" }, "No duty is switched on for this instance. ", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("routines"); } }, "Switch some on in Duties"))])));
   };
   root.appendChild(note("Loading\u2026"));
   setTimeout(load, 0);
@@ -930,7 +931,7 @@ PAGES.monsters = function (fixed) {
   if (sc.own) return monstersPanel(sc.c, sc.bar);
   const cat = (S.catalog || []).flatMap((x) => x[1]), skip = S.cfg.monster_skip || {};
   const joins = cat.filter(([n, lv]) => (skip[n] || []).length < lv.length).length;
-  return panel("Monsters", sc.bar, h("p", { class: "sumline" }, h("b", {}, "Joins " + joins + " of " + cat.length + " monsters"), " with the universal list (Control settings \u203a Monsters)."),
+  return panel("Monsters", sc.bar, h("p", { class: "sumline" }, h("b", {}, "Joins " + joins + " of " + cat.length + " monsters"), " with the universal list (All instances \u203a Monsters)."),
     note("Make own to pick different monsters or levels for this instance."));
 };
 function monstersPanel(c, top) {
@@ -1157,7 +1158,8 @@ PAGES.market = function () {
   const lockSpend = () => {
     const m = c.market_refresh_mode || "none";
     const nIn = nInp.tagName === "INPUT" ? nInp : nInp.querySelector("input");
-    if (nIn) { nIn.disabled = m !== "count"; nIn.title = m === "count" ? "" : "Only used with 'A set number of times'"; }
+    if (nIn) { nIn.disabled = m !== "count"; nIn.title = m === "count" ? "" : "Only used with 'A set number of times'";
+      nIn.value = m === "count" ? String(c.market_refresh_n ?? "") : ""; }                 // A6: no stray 500000000 in the unused box
     const pIn = paidTog.querySelector("input"); if (pIn) pIn.disabled = m === "none";
     paidTog.classList.toggle("dim", m === "none");
   };
@@ -1169,6 +1171,17 @@ PAGES.market = function () {
     grid2(fld("Gem floor", inp(c, "market_min_gems", { type: "int", cls: "short" }), "Never go below this. 0 = no floor"),
       fld("Gold floor", inp(c, "market_min_gold", { type: "int", cls: "short" }), "Never go below this. 0 = no floor"),
       fld("Gem limit per visit", inp(c, "market_max_gems", { type: "int", cls: "short" }), "0 = no limit")));
+  // A6 (28 Oct, charter: never spend gems unexpectedly): say it plainly when these settings can use up every gem
+  const gemWarn = h("div", { class: "bmwarn", role: "alert", style: { display: "none", marginTop: "10px", padding: "10px 12px", borderRadius: "10px",
+    color: "var(--bad)", background: "color-mix(in srgb, var(--bad) 10%, transparent)", fontWeight: "600", fontSize: "13.5px" } },
+    "These settings can spend ALL your gems: paid refresh until the gem floor, with no gem floor and no gem limit. Set a gem floor or a gem limit per visit to keep some.");
+  const drawWarn = () => {
+    const all = (c.market_refresh_mode || "none") !== "none" && !!c.market_paid_refresh && !(Number(c.market_min_gems) > 0) && !(Number(c.market_max_gems) > 0);
+    gemWarn.style.display = all ? "" : "none";
+  };
+  spend.appendChild(gemWarn); drawWarn();
+  spend.addEventListener("input", () => drawWarn());
+  spend.addEventListener("change", () => drawWarn());
   spend.addEventListener("input", () => drawSum());
   spend.addEventListener("change", () => drawSum());
   // ---- 2. Your picks
@@ -1509,7 +1522,7 @@ function renderTodayCard(serial) {
     const stale = run && r.age_s > Math.max(3 * checkMin * 60, 30 * 60);
     const hm = (t) => Math.floor(t / 3600) + "h " + String(Math.floor(t % 3600 / 60)).padStart(2, "0") + "m";
     aj.append(dot(stale || left === 0 ? "bad" : "ok"), h("b", {}, "Auto-Join"), h("span", {}, hm(left) + " left"),
-      h("span", { class: "ajsub" }, left <= renewMin * 60 ? "renews now" : "renews at " + at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
+      h("span", { class: "ajsub" }, left <= renewMin * 60 ? "renews now" : "renews at " + at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })),
       stale ? h("span", { class: "ajwarn" }, "Not checked for " + Math.round(r.age_s / 60) + " min") : h("span", { class: "ajsub" }, "checked " + (r.age_s < 60 ? "just now" : Math.round(r.age_s / 60) + " min ago")));
   };
   const card = h("div", { class: "panel today" },
@@ -1517,7 +1530,7 @@ function renderTodayCard(serial) {
     aj,
     h("div", { class: "tdgrid" },
       h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Duties today",
-        h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("routines"); } }, "Edit in Routines \u2192")), list, sum),
+        h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("routines"); } }, "Edit in Duties \u2192")), list, sum),
       h("div", { class: "tdcol" }, h("div", { class: "tdlab" }, "Today's results"), res, week)));
   let m = todayModel({}, serial), last = "";
   const tick = () => {
@@ -1531,8 +1544,8 @@ function renderTodayCard(serial) {
     list.innerHTML = "";
     m.items.slice(0, 9).forEach((x) => list.appendChild(h("div", { class: "tdrow " + x.k },
       h("span", { class: "tdt", title: x.tip || "" }, x.title), dutyBadge(x.k, x.text, x.tip))));
-    if (m.items.length > 9) list.appendChild(h("small", { class: "hint" }, "+" + (m.items.length - 9) + " more in Routines"));
-    if (!m.items.length) list.appendChild(h("div", { class: "empty sm" }, "No duty is switched on. ", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("routines"); } }, "Switch some on in Routines")));
+    if (m.items.length > 9) list.appendChild(h("small", { class: "hint" }, "+" + (m.items.length - 9) + " more in Duties"));
+    if (!m.items.length) list.appendChild(h("div", { class: "empty sm" }, "No duty is switched on. ", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("routines"); } }, "Switch some on in Duties")));
     sum.textContent = m.summary;
     res.innerHTML = "";
     const gameJoins = ajEff("game_auto_join", false);
@@ -1547,7 +1560,10 @@ function renderTodayCard(serial) {
     tick(); paint();
     ajPaint();
   };
-  paint(); tick();
+  // A3 (28 Oct): until the first numbers arrive show "Loading..." - never 0s and "No duty is switched on" that are not true
+  list.appendChild(h("div", { class: "empty sm" }, "Loading today's duties…"));
+  ["Rallies joined", "Skipped (too late)", "Monsters hit", "Duties done", "Restarts"].forEach((l) => res.appendChild(h("div", { class: "stile" }, h("b", {}, "–"), h("span", {}, l))));
+  head.textContent = "Daily reset …";
   const t1 = setInterval(() => { if (!card.isConnected) { clearInterval(t1); return; } tick(); }, 1000);
   const t2 = setInterval(() => { if (!card.isConnected) { clearInterval(t2); return; } load(); }, 5000);
   setTimeout(load, 0);
@@ -1617,15 +1633,15 @@ function renderTodayAll() {
     else if (!c.off.length) ce.append(h("span", {}, `on for all ${c.total} instance${c.total > 1 ? "s" : ""}`));
     else {
       ce.append(h("span", {}, `\u26a0 off on ${c.off.length} of ${c.total}: `));
-      c.off.forEach((n, i) => { const r = j.rows.find((x) => x.name === n); ce.append(i ? ", " : "", r ? h("a", { href: "#", class: "lnk", title: "Open " + n + " \u203a Routines", onclick: (e) => { e.preventDefault(); toRoutines(r.serial); } }, n) : n); });
+      c.off.forEach((n, i) => { const r = j.rows.find((x) => x.name === n); ce.append(i ? ", " : "", r ? h("a", { href: "#", class: "lnk", title: "Open " + n + " \u203a Duties", onclick: (e) => { e.preventDefault(); toRoutines(r.serial); } }, n) : n); });
     }
     // Shield / Buff appear only once the bot reads them from the game (a row carries shield / buff)
     const sb = j.rows.some((r) => r.shield != null || r.buff != null);
-    const want = ["Instance"].concat(sb ? ["Shield", "Buff"] : [], ["Auto-Join", "Duties", "Joins", "Skipped (late)"]);
+    const want = ["Instance"].concat(sb ? ["Shield", "Buff"] : [], ["Auto-Join", "Duties", "Joins", "Skipped (too late)"]);
     if (cols !== want.join()) { cols = want.join(); hrow.innerHTML = ""; want.forEach((c) => hrow.appendChild(h("th", {}, c))); }
     body.innerHTML = "";
     if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: String(want.length), class: "mute" }, "No instances in your list yet.")));
-    const WORD = { error: "problem", stop: "stopped", idle: "stopped" };
+    const WORD = { error: "needs attention", stop: "stopped", idle: "stopped" };
     j.rows.forEach((r) => {
       const off = !["run", "pause"].includes(st[r.serial]);
       const all = r.duties_total && r.duties_done >= r.duties_total;
@@ -2390,6 +2406,7 @@ function monsterRallyTab(serial) {
     && (!name || String(d.name || "").toLowerCase() === name.toLowerCase())).length;
   const presetState = (p) => {
     if (!used(p)) return ["Free for joining rallies", "off"];
+    if (!(duty && duty.on)) return ["Off", "off"];                           // A1 (28 Oct): Monster hunts switched off - never show green Ready
     const back = (live.busy || {})[p];
     if (back && back > Date.now() / 1000) return [(mode(p) === "solo" ? "Attacking · back " : "Busy · back ") + left(back), "busy", back];
     const lim = huntsFor(p);
@@ -2572,10 +2589,11 @@ function monsterRallyTab(serial) {
     const tw = Object.keys(top).sort((a, b) => top[b] - top[a])[0];
     let t, x;
     if (k === "busy") { t = mode(sel) === "solo" ? "Troops are attacking" : "Troops are out"; x = "Back about " + hm(back) + ". Then it takes the next monster on its list."; }
+    else if (k === "off") { t = "Monster hunts is off"; x = "Switch it on at the top to hunt with this preset."; }
     else if (k === "done") { t = "Done for today"; x = "Did its " + huntsFor(sel) + " solo hunts. Raise the limit to hunt more."; }
     else { t = "Ready to hunt"; x = "Goes as soon as a monster on its list shows up in Telegram" + (tw ? " · most skipped today: " + tw + " (" + top[tw] + ")" : "") + "."; }
     why.className = "huwhyb " + k;
-    why.append(h("span", { class: "hudot " + (k === "busy" ? "wait" : k === "done" ? "off" : "ok") }), h("div", {}, h("b", {}, t), h("span", {}, x)));
+    why.append(h("span", { class: "hudot " + (k === "busy" ? "wait" : k === "done" || k === "off" ? "off" : "ok") }), h("div", {}, h("b", {}, t), h("span", {}, x)));
   };
   const listBox = h("div", { class: "hulst" });
   let drag = -1;
