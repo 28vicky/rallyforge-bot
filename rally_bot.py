@@ -8709,6 +8709,24 @@ def market_confirm(dev, log, stop, rebuy=False):
     return False
 
 
+# What the user sees for a Black Market item (same labels as ui/pages.js BM_INFO). The saved name ("BM 44", "VIT 50") is
+# only the picture's name; logs show the label (owner 28 Oct: users only ever see "Stamina 50", never "VIT 50").
+BM_LABEL = {"BM 44": "Stamina 50 x10", "VIT 50": "Stamina 50",
+            "BM 04": "Gold 100K", "BM 08": "Food 200M", "BM 21": "Food 500M", "BM 19": "Lumber 200M", "BM 17": "Resource 50M",
+            "BM 13": "Stone 200M", "BM 42": "Stone 200M (2)", "BM 22": "Ore 500M",
+            "BM 01": "Chest VI x5", "BM 25": "Chest V x5", "BM 03": "Chest IV x5", "BM 07": "Red chest x20", "BM 10": "Red chest x1",
+            "BM 27": "Gold chest x1", "BM 29": "Jewel chest x50",
+            "BM 06": "Green jewel Lv.4", "BM 11": "Gear: axe", "BM 15": "Gear: boots", "BM 30": "Gear: horn Lv.4", "BM 32": "Gear: spear",
+            "BM 39": "Gear: legs", "BM 12": "Blue crystal x25", "BM 41": "Blue crystal x50", "BM 14": "Orange shard x50",
+            "BM 45": "Rainbow crystal x20", "BM 48": "Purple crystal x20",
+            "BM 05": "EXP 5000 x10", "BM 09": "EXP 20000", "BM 16": "EXP 10000", "BM 02": "Medals x500",
+            "BM 31": "Scroll x10", "BM 51": "Scroll x20"}
+
+
+def bm_label(name):
+    return BM_LABEL.get(name, name)
+
+
 def market_wanted(cfg):
     out = []
     for it in cfg.get("market_items") or []:
@@ -8870,19 +8888,19 @@ def run_market(dev, cfg, log, stop):
                 kind_ok = (slot["gem"] and pay in ("gems", "both")) or (not slot["gem"] and pay in ("resources", "both"))
                 price = read_price(img, slot["btn"])
                 if not kind_ok:
-                    log(f"[i] {name} is for sale but paid with {'gems' if slot['gem'] else 'resources'} - not allowed")
+                    log(f"[i] {bm_label(name)} is for sale but paid with {'gems' if slot['gem'] else 'resources'} - not allowed")
                 elif not slot["afford"]:
-                    log(f"[i] {name} is for sale but you cannot afford it")
+                    log(f"[i] {bm_label(name)} is for sale but you cannot afford it")
                 elif slot["gem"] and budget and price and spent + price > budget:
-                    log(f"[i] {name} costs {price:,} gems - over the gem limit")
+                    log(f"[i] {bm_label(name)} costs {price:,} gems - over the gem limit")
                 elif slot["gem"] and min_gems and (price is None or gems is None):
-                    log(f"[i] {name}: price or gem total not readable - not bought (gem floor {min_gems:,})")
+                    log(f"[i] {bm_label(name)}: price or gem total not readable - not bought (gem floor {min_gems:,})")
                 elif slot["gem"] and min_gems and gems - price < min_gems:
-                    log(f"[i] {name} costs {price:,} gems - would leave {gems - price:,}, under the floor of {min_gems:,}")
+                    log(f"[i] {bm_label(name)} costs {price:,} gems - would leave {gems - price:,}, under the floor of {min_gems:,}")
                 elif slot.get("gold") and min_gold and (price is None or gold is None):
-                    log(f"[i] {name}: price or gold total not readable - not bought (gold floor {min_gold:,})")
+                    log(f"[i] {bm_label(name)}: price or gold total not readable - not bought (gold floor {min_gold:,})")
                 elif slot.get("gold") and min_gold and gold - price < min_gold:
-                    log(f"[i] {name} costs {price:,} gold - would leave {gold - price:,}, under the floor of {min_gold:,}")
+                    log(f"[i] {bm_label(name)} costs {price:,} gold - would leave {gold - price:,}, under the floor of {min_gold:,}")
                 else:
                     bx, by, bw, bh = slot["btn"]
                     g0, m0 = market_totals(img)
@@ -8902,7 +8920,7 @@ def run_market(dev, cfg, log, stop):
                         failed.add(si)
                     elif not ok_buy or not (paid or (gone and (m1 is None or m0 is None))):
                         failed.add(si)                       # the purchase did not go through
-                        log(f"[!] {name}: not bought (confirm {'tapped' if ok_buy else 'not found'}; "
+                        log(f"[!] {bm_label(name)}: not bought (confirm {'tapped' if ok_buy else 'not found'}; "
                             f"{'gems' if slot['gem'] else 'gold'} {m0 if slot['gem'] else g0} -> {m1 if slot['gem'] else g1})")
                         if not market_on_screen(after):
                             cv2.imwrite(str(USER / "debug" / "black_market_not_bought.png"), after)
@@ -8912,7 +8930,7 @@ def run_market(dev, cfg, log, stop):
                         if slot["gem"] and price:
                             spent += price
                             pend += price
-                        log(f"[+] Bought {name} for {price if price is not None else '?'} "
+                        log(f"[+] Bought {bm_label(name)} for {price if price is not None else '?'} "
                             f"{'gems' if slot['gem'] else 'resources'}")
                     again = True
                 break
