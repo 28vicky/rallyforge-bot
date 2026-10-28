@@ -304,10 +304,20 @@ class BmNameMatch(unittest.TestCase):
 
     def test_unclear_stays_unnamed(self):
         self.assertIsNone(rb.bm_name_match("Tribute", None))     # pack size unreadable
-        self.assertIsNone(rb.bm_name_match("Tribute", 3))        # no such pack
+        self.assertEqual(rb.bm_name_match("Tribute", 3), "Tribute x3")   # full name + pack read: a pack the list lacks
+        self.assertIsNone(rb.bm_name_match("Tribu", 3))          # part of the name + unknown pack
         self.assertIsNone(rb.bm_name_match("General EXP", 5))    # several amounts fit
         self.assertIsNone(rb.bm_name_match("xyz", 1))
         self.assertIsNone(rb.bm_name_match("", 1))
+        self.assertIsNone(rb.bm_name_match("Courage Horn", 1))  # gear level not read
+
+    def test_game_wording(self):
+        self.assertEqual(rb.bm_name_match("2K General EXP", 2), "General EXP 2000 x2")
+        self.assertEqual(rb.bm_name_match("100 Chips", 1), "Chips 100 x1")
+        self.assertEqual(rb.bm_name_match("50 Stamina", 10), "Stamina 50 x10")
+        self.assertEqual(rb.bm_name_match("24 Hour Farm Speedup", 2), "24h Farm Speed-up x2")
+        self.assertEqual(rb.bm_name_match("Fighter's Ring", 1), "Fighters Ring")
+        self.assertEqual(rb.bm_name_match("Courage Horn", 1, 3), "Gear Lv3 Courage Horn")
 
 
 if __name__ == "__main__":

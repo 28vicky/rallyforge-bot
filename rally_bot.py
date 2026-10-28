@@ -8517,8 +8517,9 @@ def refresh_cost(img, refresh, default=50):
     return int(default)
 
 
-def market_totals(img):
-    """The gold (left) and gem (right) totals in the row under the shop picture -> (gold, gems); None when unread."""
+def market_totals(img, which="both"):
+    """The gold (left) and gem (right) totals in the row under the shop picture -> (gold, gems); None when unread.
+    which="gems" / "gold" reads only that one (each read is a slow text read - owner 28 Oct: faster shop)."""
     def num(x0, x1):
         best = None
         try:
@@ -8540,7 +8541,8 @@ def market_totals(img):
         except Exception as _e:
             quiet_err("market_totals.num", _e)
         return best
-    gold, gems = num(0, 275), num(265, 540)              # each half on its own: read together, one of them is often lost
+    gold = num(0, 275) if which in ("both", "gold") else None    # each half on its own: read together, one is often lost
+    gems = num(265, 540) if which in ("both", "gems") else None
     return gold, gems
 
 
@@ -8700,6 +8702,10 @@ def market_learn_new(img, th=0.78):
             area = img[y:y + h, x:x + w]
             if area.size == 0 or area.shape[0] < 40 or area.shape[1] < 40:
                 continue
+            top = area[:int(area.shape[0] * 0.75)]           # sold (greyed) or empty (bare stand) tiles are not new items
+            if float(cv2.cvtColor(top, cv2.COLOR_BGR2HSV)[:, :, 1].mean()) < 90 or \
+                    float(cv2.cvtColor(top, cv2.COLOR_BGR2GRAY).std()) < 20:
+                continue
             hit = False
             for t in known.values():
                 if area.shape[0] >= t.shape[0] and area.shape[1] >= t.shape[1] and \
@@ -8737,7 +8743,8 @@ def _bm_item_names():
         out.extend(f"Gear Lv{lv} {g}" for g in gear)
     for r in ("Food", "Lumber", "Stone", "Ore"):
         out.extend(f"{r} {a}" for a in ("500K", "1M", "2M", "5M", "20M", "50M", "200M", "500M"))
-    x("Production Speed-up 24h", [1, 2, 5, 20])
+    for b in ("Farm", "Sawmill", "Quarry", "Iron Mine"):   # the game: "24 Hour Farm Speedup" (one item per building)
+        x(f"24h {b} Speed-up", [1, 2, 5, 20])
     out += ["VIP 30 Minutes x1", "VIP 60 Minutes x1", "VIP 1 Day x1", "VIP 1 Day x4", "VIP 7 Days x1", "VIP 30 Days x1",
             "Gold 50K", "Gold 100K"]
     x("Chips 100", [1, 2, 5]); x("Medal", [100, 200]); x("Refining Stone", [10, 50]); x("Research Stone", [5, 10, 25, 50])
@@ -8760,11 +8767,27 @@ def _bm_item_names():
 BM_ITEM_NAMES = _bm_item_names()
 
 
-def bm_name_match(box_name, count):
+def bm_game_name(text):
+    """The game's wording -> the item list's wording: "2K General EXP" -> "General EXP 2000", "100 Chips" -> "Chips 100",
+    "50 Stamina" -> "Stamina 50", "24 Hour Farm Speedup" -> "24h Farm Speed-up", "Fighter's Ring" -> "Fighters Ring"."""
+    t = re.sub(r"[\'\u2019`]", "", (text or "")).strip()
+    t = re.sub(r"\s+", " ", t)
+    m = re.match(r"^(\d+(?:\.\d+)?)\s*([kK])?\s+(General EXP|Monarch EXP|Spiritual Beast EXP|Chips|Stamina)$", t, re.I)
+    if m:
+        n = float(m.group(1)) * (1000 if m.group(2) else 1)
+        return f"{m.group(3)} {int(n)}"
+    m = re.match(r"^24\s*Hours?\s+(.+?)\s+Speed\s*-?\s*up$", t, re.I)
+    if m:
+        return f"24h {m.group(1)} Speed-up"
+    return t
+
+
+def bm_name_match(box_name, count, level=None):
     """'Tribute' (read from the purchase question, maybe only part of it) + 5 (the number on the tile) -> 'Tribute x5'.
+    level = 'Lv.3' read on a gear tile -> 'Gear Lv3 Courage Horn'.
     Only a clear match is returned (owner 28 Oct: a wrong name is worse than no name) - else None."""
     import difflib
-    t = re.sub(r"[^a-z0-9 ]", " ", (box_name or "").lower())
+    t = re.sub(r"[^a-z0-9 ]", " ", bm_game_name(box_name).lower())
     t = re.sub(r"\s+", " ", t).strip()
     if len(t) < 3:
         return None
@@ -8773,15 +8796,22 @@ def bm_name_match(box_name, count):
         m = re.match(r"^(.*?) x(\d+)$", n)
         base, q = (m.group(1), int(m.group(2))) if m else (n, 1)
         bases.setdefault(base, {})[q] = n
+    def norm(b):
+        return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", b.lower())).strip()
     def score(base):
-        b = base.lower()
+        b = norm(base)
         r = difflib.SequenceMatcher(None, t, b).ratio()
         if len(t) >= 5 and (b.startswith(t) or t in b):      # only part of the name was read
             r = max(r, 0.85 if len(t) >= 0.5 * len(b) else 0.75)
         return r
-    exact = [b for b in bases if b.lower() == t]
+    exact = [b for b in bases if norm(b) == t]
+    if not exact and level:                                  # gear: the box says "Courage Horn", the tile says Lv.3
+        exact = [b for b in bases if norm(b) == f"gear lv{level} {t}"]
     if exact:
         best = exact[0]                                      # read in full: 'Food 200M' must not lose to 'Food 20M'
+        sizes = bases[best]
+        if count and count not in sizes:                     # the name was read in full and the pack size too: a pack the
+            return f"{best} x{count}"                        # item list does not know yet (e.g. General EXP 10000 x2)
     else:
         ranked = sorted(((score(b), b) for b in bases), reverse=True)
         best_s, best = ranked[0]
@@ -8796,25 +8826,57 @@ def bm_name_match(box_name, count):
 
 
 def market_tile_count(img, slot):
-    """The number in the bottom-right corner of an item's tile (pack size: '5') -> 5, or None when unreadable."""
+    """The number in the bottom-right corner of an item's tile (pack size: '5') -> 5, or None when unreadable.
+    Only the cream digits are kept (the coloured frame next to them made a '1' read as '4'); the read must have as many
+    digits as digit shapes were found. Tested on 23 of 24 real tiles, none wrong (28 Oct)."""
     x, y, w, h = slot["icon"]
-    c = img[y + int(h * 0.6):y + h, x + int(w * 0.5):x + w]
+    c = img[y + int(h * 0.55):y + int(h * 0.82), x + int(w * 0.55):x + int(w * 0.97)]
     if c.size == 0:
         return None
-    g = cv2.resize(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY), None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-    for thr in (200, 170, 140):
-        b = 255 - cv2.threshold(g, thr, 255, cv2.THRESH_BINARY)[1]
-        b = cv2.copyMakeBorder(b, 8, 8, 8, 8, cv2.BORDER_CONSTANT, value=255)
+    m = cv2.inRange(cv2.cvtColor(c, cv2.COLOR_BGR2HSV), (0, 0, 170), (179, 110, 255))
+    n, lab, st, _ = cv2.connectedComponentsWithStats(m)
+    keep, parts = np.zeros_like(m), []
+    for i in range(1, n):
+        bx, by, bw, bh, ar = st[i]
+        if 0.35 * c.shape[0] <= bh <= 0.95 * c.shape[0] and ar >= 15 and bw <= 0.6 * bh + 10:
+            keep[lab == i] = 255
+            parts.append((bx, by, bw, bh))
+    if not parts:
+        return None
+    x0, x1 = min(p[0] for p in parts), max(p[0] + p[2] for p in parts)
+    y0, y1 = min(p[1] for p in parts), max(p[1] + p[3] for p in parts)
+    d = cv2.resize(255 - keep[y0:y1, x0:x1], None, fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
+    d = cv2.copyMakeBorder(d, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
+    for psm in (7, 8, 10):
         try:
-            txt = pytesseract.image_to_string(b, config="--psm 7 -c tessedit_char_whitelist=0123456789")
+            t = re.sub(r"\D", "", pytesseract.image_to_string(d, config=f"--psm {psm} -c tessedit_char_whitelist=0123456789"))
         except Exception:
             return None
-        d = re.sub(r"\D", "", txt)
-        if d and 0 < int(d) <= 1000:
-            return int(d)
+        if t and len(t) == len(parts) and 0 < int(t) <= 1000:
+            return int(t)
     return None
 
 
+def market_tile_level(img, slot):
+    """'Lv.3' in the top-left corner of a gear tile -> 3 (only 3 or 4, the levels the shop sells), else None."""
+    x, y, w, h = slot["icon"]
+    c = img[max(0, y - 3):y + int(h * 0.16), x + int(w * 0.15):x + int(w * 0.58)]
+    if c.size == 0:
+        return None
+    g = cv2.resize(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY), None, fx=5, fy=5, interpolation=cv2.INTER_CUBIC)
+    for thr in (150, 130, 170):
+        b = 255 - cv2.threshold(g, thr, 255, cv2.THRESH_BINARY)[1]
+        b = cv2.copyMakeBorder(b, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
+        try:
+            mm = re.search(r"L[vV]\s*[.,]\s*(\d)\b", pytesseract.image_to_string(b, config="--psm 7"))
+        except Exception:
+            return None
+        if mm and int(mm.group(1)) in (3, 4):
+            return int(mm.group(1))
+    return None
+
+
+BM_NEAR_FLOOR = 50_000                 # gems: closer than this to the gem floor, the shop reads the gem total every round
 MARKET_BOX_OUTSIDE = (270, 140)   # the shop's picture banner, far above the purchase question and its Confirm button (540x960)
 
 
@@ -8832,6 +8894,7 @@ def market_name_new(dev, log, stop, img, saved):
         if not slot["afford"]:
             continue                                         # a red price may open a different box - not worth the risk
         count = market_tile_count(img, slot)
+        level = market_tile_level(img, slot)
         g0, m0 = market_totals(img)
         bx, by, bw, bh = slot["btn"]
         dev.tap(bx + bw / 2, by + bh / 2)
@@ -8875,7 +8938,7 @@ def market_name_new(dev, log, stop, img, saved):
         if (m0 is not None and m1 is not None and m1 < m0) or (g0 is not None and g1 is not None and g1 < g0):
             log(f"[!] Black Market: totals dropped while naming (gems {m0} -> {m1}, gold {g0} -> {g1}) - naming stopped")
             return named
-        name = bm_name_match(box, count)
+        name = bm_name_match(box, count, level)
         if not name:
             log(f"[i] Black Market: new item read as '{box or '?'}'{f' x{count}' if count else ''} - no clear match, "
                 f"left for you to name")
@@ -8986,6 +9049,8 @@ def run_market(dev, cfg, log, stop):
     free_left = None                                     # once the free refreshes are used up they stay at 0: no more reading them
     cost_seen = None                                     # the paid refresh cost, read once and re-checked every 10 refreshes
     next_img = None                                      # the picture taken right after a refresh is reused (one screenshot less)
+    rounds = last_read = 0
+    t_round = time.time()
     if keep:
         _TL.duty_deadline = None                             # no 20-min budget: the stall check below takes its place
         left_for = bm_leave_for(cfg, serial)                 # e.g. Auto-Join not checked yet since the start: that goes first
@@ -9019,12 +9084,19 @@ def run_market(dev, cfg, log, stop):
             cv2.imwrite(str(USER / "debug" / "black_market_closed.png"), img)
             log("[!] Black Market: the shop is no longer on screen (picture saved: debug/black_market_closed.png)")
             break
-        if need_totals:
+        rounds += 1
+        # owner 28 Oct (faster shop): the totals are read only near the floor (or every 10 rounds) - far above it the bot
+        # counts down what it spent itself; every buy still reads the gems fresh right before buying.
+        near = bool(min_gold) or (min_gems and (gems is None or gems - pend - min_gems < BM_NEAR_FLOOR))
+        if need_totals and (near or rounds - last_read >= 10):
+            last_read = rounds
             g2, m2, fresh_read = bm_gems_checked(dev, img, gems, pend, log)
             gold = g2 if g2 is not None else gold
             gems = m2 if m2 is not None else gems
             if fresh_read:
                 pend = 0
+        elif need_totals and pend and gems is not None:
+            gems, pend = gems - pend, 0
         again = False
         saved_new = market_learn_new(img, th)
         if saved_new:
@@ -9062,7 +9134,12 @@ def run_market(dev, cfg, log, stop):
                     log(f"[i] {bm_label(name)} costs {price:,} gold - would leave {gold - price:,}, under the floor of {min_gold:,}")
                 else:
                     bx, by, bw, bh = slot["btn"]
-                    g0, m0 = market_totals(img)
+                    cur = "gems" if slot["gem"] else "gold"
+                    g0, m0 = market_totals(img, cur)
+                    if slot["gem"] and min_gems and price and m0 is not None and m0 - price < min_gems:
+                        log(f"[i] {bm_label(name)} costs {price:,} gems - gems now {m0:,}, would go under the floor of {min_gems:,}")
+                        failed.add(si)
+                        break
                     dev.tap(bx + bw / 2, by + bh / 2)
                     ok_buy = market_confirm(dev, log, stop, rebuy=bool(cfg.get("market_rebuy")))   # "Are you sure ...?" -> Confirm
                     after = dev.screenshot()
@@ -9071,7 +9148,7 @@ def run_market(dev, cfg, log, stop):
                             break
                         _nap(stop, 0.8, 1.2)
                         after = dev.screenshot()
-                    g1, m1 = market_totals(after) if market_on_screen(after) else (None, None)
+                    g1, m1 = market_totals(after, cur) if market_on_screen(after) else (None, None)
                     paid = (slot["gem"] and m0 is not None and m1 is not None and m1 < m0) or \
                            ((not slot["gem"]) and g0 is not None and g1 is not None and g1 < g0)
                     gone = market_on_screen(after) and market_match(after, slot, tname, th) < th
@@ -9175,7 +9252,9 @@ def run_market(dev, cfg, log, stop):
         refreshes += 1
         last_prog = time.time()
         failed.clear()
-        log(f"[*] Black Market: refresh {refreshes}" + (f" of {limit}" if mode == "count" else ""))
+        now_r = time.time()
+        log(f"[*] Black Market: refresh {refreshes}" + (f" of {limit}" if mode == "count" else "") + f" ({now_r - t_round:.1f} s)")
+        t_round = now_r
     total = ", ".join(f"{n} x{c}" for n, c in bought.items()) or "nothing"
     log(f"[+] Black Market done: bought {total}; {refreshes} refresh(es)")
     sg, si, sr = bm_spend_add(serial, spent, sum(bought.values()), refreshes)
@@ -15499,7 +15578,7 @@ def run_monster_rally(dev, cfg, log, stop):
                 return
             if getattr(dev, "aj_next", 0) and time.time() >= dev.aj_next:
                 log("[*]  Monster rally: Auto-Join needs renewing - doing that, the rallies go on after it")
-                hunt_status(serial, "running", "Renewing Auto-Join", "Back to Hunts after")
+                hunt_status(serial, "running", "Renewing Auto-Join", "Back to Monster hunts after")
                 return
             try:
                 other = [t for t in city_tasks_due(cfg, getattr(_TL, "city_last", None) or {}, serial)
@@ -15511,7 +15590,7 @@ def run_monster_rally(dev, cfg, log, stop):
                 log(f"[*]  Monster rally: {len(other)} other task(s) due - doing them, the rallies go on after")
                 nm = str(other[0].get("name") or "").split(":", 1)[-1]
                 nm = (DUTY_BY_ID.get(nm) or {}).get("title") or nm
-                hunt_status(serial, "running", f"Doing {nm}", "Back to Hunts after")
+                hunt_status(serial, "running", f"Doing {nm}", "Back to Monster hunts after")
                 return
             if _TL.mr_idle:                                  # nothing to rally right now: wait on the map for new coordinates
                 _nap(stop, 20, 25)
@@ -15537,8 +15616,8 @@ def _run_monster_rally(dev, cfg, log, stop):
         elif now - float(row["heal_at"]) >= heal_min * 60 and "duty:troop_healing" not in run_now_list(serial):
             run_now_set(serial, run_now_list(serial) + ["duty:troop_healing"])
             mr_save(serial, heal_at=now)
-            log("[*]  Hunts: time to heal the troops - healing first, the hunts go on after")
-            hunt_status(serial, "running", "Healing troops", "Auto heal · back to Hunts after")
+            log("[*]  Monster hunts: time to heal the troops - healing first, the hunts go on after")
+            hunt_status(serial, "running", "Healing troops", "Auto heal · back to Monster hunts after")
             _TL.mr_go_on = True
             return
     targets = mr_targets(cfg, tried, serial)
@@ -15667,7 +15746,7 @@ def _run_monster_rally(dev, cfg, log, stop):
                             dev.back()
                             _nap(stop, 1.0, 1.3)
                         if not max_wait or time.time() - t0 < max_wait:
-                            log(f"[*]  Hunts: {label} - no troop page after Attack (no free march?), trying again in 30 s")
+                            log(f"[*]  Monster hunts: {label} - no troop page after Attack (no free march?), trying again in 30 s")
                             hunt_status(serial, "waiting", f"Waiting on {short}", "No free march for a solo attack · tries again in 30 s")
                             _nap(stop, 30, 32)
                             continue
@@ -15776,10 +15855,10 @@ def _run_monster_rally(dev, cfg, log, stop):
                 hunt_status(serial, "blocked", "Out of stamina", "Turn on Refill stamina, or wait for stamina to come back")
                 hunt_note(serial, tgt, "Waiting", "wait", "Out of stamina · Refill stamina is off")
                 return later(30, "not enough stamina (Refill stamina is off)")
-            log(f"[!]  Hunts: not enough stamina ({st_[0]:,} of {st_[1]:,}) - using stamina items")
+            log(f"[!]  Monster hunts: not enough stamina ({st_[0]:,} of {st_[1]:,}) - using stamina items")
             if not refill_stamina(dev, cfg, log, stop, st_[1]):
                 dev.back()
-                hunt_status(serial, "blocked", "No stamina items left", "Hunts go on when stamina comes back")
+                hunt_status(serial, "blocked", "No stamina items left", "Monster hunts go on when stamina comes back")
                 hunt_note(serial, tgt, "Waiting", "wait", "Out of stamina · no stamina items left")
                 return later(30, "not enough stamina (and no stamina items)")
             shot = dev.screenshot()
@@ -15820,7 +15899,7 @@ def _run_monster_rally(dev, cfg, log, stop):
             mr_save(serial, solo_day=_game_day(), solo_n=n_)
             hunt_note(serial, tgt, "Solo attack", "solo", why)
             hunt_status(serial, "running", f"Attacked {short} with Preset {mr_pnum(preset)}", f"Solo attack sent{far} · looking for the next monster")
-            log(f"[+]  Hunts: solo attack on {label} - preset {mr_pnum(preset)}")
+            log(f"[+]  Monster hunts: solo attack on {label} - preset {mr_pnum(preset)}")
             started += 1
             continue
         hunt_note(serial, tgt, "Rallied", "go", why)
@@ -16429,7 +16508,7 @@ DUTY_LIBRARY = [
      "target": "self:", "steps": ["royal_thief"],
      "opts": [{"k": "troops", "label": "Troops", "type": "select", "def": "Power First",
                "choices": ["Power First"] + ["Preset " + n for n in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")]}]},
-    {"id": "monster_rally", "group": "Daily activities", "title": "Hunts", "every_min": 5, "verified": False,
+    {"id": "monster_rally", "group": "Daily activities", "title": "Monster hunts", "every_min": 5, "verified": False,
      "note": "Takes monster coordinates from the Telegram section, flies there with the map search and hunts each monster with the preset it sits on: "
              "Rally presets start an Alliance War rally, Solo presets attack alone. No free march: waits on the monster.",
      "target": "self:", "steps": ["monster_rally"],
