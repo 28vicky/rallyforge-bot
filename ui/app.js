@@ -306,7 +306,7 @@ function buildRibbon() {
         { label: "Generals", icon: "users", run: () => openGeneralManager() },
         ...(S.dev ? [{ label: "Scan generals", icon: "scan", run: () => scanGeneralsFlow() }] : []),
         ...(S.dev ? [{ label: "Scan city", icon: "city", run: () => scanCityFlow(S.sel === "control" ? undefined : S.sel) }] : []),   // A5: the old stopped-instance mapper - users use Map my city
-        ...(S.dev ? [{ label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) }] : []),   // PCR2 B3: owner tool; users fix buildings with Fix pins (Overview > City map)
+        { label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) },   // owner 28 Oct 23:16: testers need it to pin buildings the bot misses
         { label: "Save profile\u2026", icon: "save", run: saveProfileFlow }, { label: "Load profile\u2026", icon: "down", run: loadProfileFlow }]), "", "grid"),
       btn("App ▾", (e) => menu(e.currentTarget, [
         { label: "Updates", icon: "refresh", run: () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); } },

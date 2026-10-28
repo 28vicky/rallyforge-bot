@@ -1785,7 +1785,7 @@ PAGES.duties = function (fixed) {
     r.id === "@tasks" ? PAGES.tasks(serial || undefined, true, () => drawSide()) : null,
     r.id === "collect_resources" && serial ? h("div", { class: "subset" }, h("div", { class: "subtitle" }, "City map"),
       note("Resource collecting taps the farms on this instance's city map (Overview \u203a City map). Missing a farm? Place it with Fix pins."),
-      h("div", { class: "row" }, S.dev ? btn("Scan city", () => scanCityFlow(serial), "sm") : null, S.dev ? btn("Map by hand", () => manualMapFlow(serial), "sm") : null, btn("Fix pins", () => { if (S.gotoInstTab) S.gotoInstTab("ov"); }, "sm"))) : null,   // PCR2 B3: one city-map word set
+      h("div", { class: "row" }, S.dev ? btn("Scan city", () => scanCityFlow(serial), "sm") : null, btn("Map by hand", () => manualMapFlow(serial), "sm"), btn("Fix pins", () => { if (S.gotoInstTab) S.gotoInstTab("ov"); }, "sm"))) : null,   // PCR2 B3: one city-map word set
   ].filter(Boolean);
   // ---- side panel (C2): Settings on the row opens it; Esc, Done or a click outside closes; changes save as they are made
   let sideId = null;
