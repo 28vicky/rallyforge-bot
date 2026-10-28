@@ -3990,6 +3990,35 @@ def purchase_guard(dev, shot, log=None):
         return False
 
 
+def claim_popup(dev, shot, log=None):
+    """Owner 28 Oct 13:19 (K sat on 'Daily Rewards' after a start): a daily reward pop-up is CLAIMED (Check-in / Claim -
+    free buttons only), then closed - never waited on. -> True when something was tapped."""
+    try:
+        if shot is None or not find_text(shot, ["Daily Rewards", "Sign-in Rewards", "Daily Sign-in", "Check-in Rewards"],
+                                         region=(40, 100, 460, 260), cutoff=0.8):
+            return False
+        b = find_text(shot, ["Check-in", "Check In", "Sign in", "Claim"], region=(60, 620, 420, 260), cutoff=0.8)
+        if b:
+            dev.tap(int(b[0]), int(b[1]))
+            if log:
+                log("[+] Daily Rewards pop-up - tapped Check-in (claimed)")
+            time.sleep(1.5)
+            dev.tap(*GROUND_TAP)                           # the reward panel after the claim closes with a tap outside
+        else:                                              # already claimed today: just close it
+            cx = find_close_x(shot)
+            if cx:
+                dev.tap(cx[0][0], cx[0][1])
+            else:
+                dev.back()
+            if log:
+                log("[*] Daily Rewards pop-up (already claimed) - closed")
+        time.sleep(0.8)
+        return True
+    except Exception as _e:
+        quiet_err("claim_popup", _e)
+        return False
+
+
 def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
     """Close whatever covers the game (offers, event pop-ups, full-screen sales, dialogs) so the bot can carry on with
     what it was doing. Uses your popup_* pictures first; on a screen it does not know it presses Back, but only when it
@@ -4010,7 +4039,7 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
             return closed
         _poplib_learn(pending, shot, log)
         pending = None
-        if purchase_guard(dev, shot, log):
+        if purchase_guard(dev, shot, log) or claim_popup(dev, shot, log):
             closed += 1
             continue
         if screen_state(shot, cfg) == "unknown" and safety_stop(dev, shot, cfg, log, stop):
@@ -5855,11 +5884,15 @@ def settle_game(dev, cfg, log, stop):
     """After a start / restart / reconnect: give the game a few calm seconds (late pop-ups, icons still appearing,
     animations) before any task starts. Needs `settle_seconds` to have passed AND the screen to be a known one and
     unchanged for 3 checks in a row."""
-    secs = max(cfg.get("settle_seconds", 8) or 0, cfg.get("restart_settle_seconds", 25) or 0)   # owner 25 Oct: 20-30 s after a (re)start
+    # Owner 28 Oct 13:21: no waiting when the game was already open (app restart) and fine; after a real game start the
+    # wait ends as soon as the screen is known and steady (8 s at least) - pop-ups are handled at once, not waited on.
+    if dev.serial not in _FRESH_START:
+        return
+    secs = 8
     if not secs or secs <= 0:
         return
     log(f"[*] Letting the game settle ({secs}s) before starting")
-    t_end, limit = time.time() + secs, time.time() + secs + 90
+    t_end, limit = time.time() + secs, time.time() + secs + 45
     prev, calm, odd_since = None, 0, None
     while not stop.is_set() and time.time() < limit:
         try:
@@ -5867,8 +5900,8 @@ def settle_game(dev, cfg, log, stop):
         except Exception:
             _nap(stop, 2)
             continue
-        closed = False
-        for name in list_templates("popup_"):
+        closed = purchase_guard(dev, screen, log) or claim_popup(dev, screen, log)
+        for name in ([] if closed else list_templates("popup_")):
             h = find(screen, name, 0.85)
             if h:
                 tap_hit(dev, h)
@@ -5878,7 +5911,7 @@ def settle_game(dev, cfg, log, stop):
         if closed:
             prev, calm, odd_since = None, 0, None
             t_end = max(t_end, time.time() + 3)
-            _nap(stop, 1.5)
+            _nap(stop, 1.0)
             continue
         small = cv2.resize(cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY), (54, 96), interpolation=cv2.INTER_AREA)
         ok = ready_screen(screen, cfg)
@@ -5895,7 +5928,7 @@ def settle_game(dev, cfg, log, stop):
         else:
             calm = 0
             odd_since = odd_since or time.time()
-            if time.time() - odd_since > 8:                  # something is in the way
+            if time.time() - odd_since > 3:                  # something is in the way: deal with it now (owner 28 Oct: never wait)
                 odd_since = None
                 clear_popups(dev, cfg, log, stop, rounds=2)
         if time.time() >= t_end and calm >= 3:
@@ -6037,8 +6070,8 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
             log(f"[+] The game picture is back after {time.time() - black_since:.0f}s")
             black_since = None
             end = max(end, time.time() + 60)
-        closed = False
-        for name in list_templates("popup_"):
+        closed = purchase_guard(dev, screen, log) or claim_popup(dev, screen, log)
+        for name in ([] if closed else list_templates("popup_")):
             h = find(screen, name, 0.85)
             if h:
                 tap_hit(dev, h)
@@ -6080,7 +6113,7 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
             if now - last_note > 30:
                 last_note = now
                 log("[*] Waiting for the game to finish loading...")
-            if now - not_ready_since > 10 and now - last_clear > 10:   # not a loading screen any more: a pop-up / page is in the way
+            if now - not_ready_since > 3 and now - last_clear > 4:     # not a loading screen any more: a pop-up / page is in the way (owner 28 Oct: at once)
                 last_clear = now
                 if clear_popups(dev, cfg, log, stop, rounds=3):
                     not_ready_since = None
@@ -9700,7 +9733,7 @@ def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
             quit_seen = True
             _nap(stop, 0.8, 1.2)
             continue
-        if purchase_guard(dev, shot, say):                  # never anything inside a payment / Store page
+        if purchase_guard(dev, shot, say) or claim_popup(dev, shot, say):   # never inside a Store; daily rewards claimed
             continue
         v = view_of(shot, cfg)
         ring = v == "city" and find_detail_icon(shot)
@@ -17273,7 +17306,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     def dismiss_popup(screen, x_ok=False):
         _poplib_learn(pop_pending[0], screen, log)        # owner 28 Oct 12:57: learn each ad once, close it at once next time
         pop_pending[0] = None
-        if purchase_guard(dev, screen, log):
+        if purchase_guard(dev, screen, log) or claim_popup(dev, screen, log):
             return True
         if cancel_quit_dialog(dev, screen, log):
             return True
