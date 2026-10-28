@@ -1812,7 +1812,7 @@ select.pick-open{border-color:var(--accent1)}
 .hurailh{display:flex;align-items:center;gap:8px;padding:0 4px;font-size:12px;color:var(--mute)}.hurailh span:last-child{margin-left:auto;white-space:nowrap}
 .hurc{display:flex;flex-direction:column;gap:3px;flex:none;width:100%;padding:9px 12px;border-radius:12px;background:var(--card);border:var(--bd);text-align:left;color:var(--fg);font:inherit;cursor:pointer;min-width:0}
 .hurc.sel{border:1.5px solid var(--accent1);box-shadow:0 2px 8px color-mix(in srgb,var(--accent1) 18%,transparent)}
-.hutop{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hutop{font-size:13px;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;word-break:break-word}   /* PCR2 B1: 2 lines, no "Lav..." cut */
 .hufoot{font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hufree{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;font-size:12px;color:var(--mute)}
 .hufreeb{display:flex;gap:6px;flex-wrap:wrap}
@@ -1879,6 +1879,7 @@ select.pick-open{border-color:var(--accent1)}
 @media (max-width:1023px){
   .husetup{grid-template-columns:minmax(0,1fr)}
   .hurail,.huedit{position:static;max-height:none}
+  .huedit{scroll-margin-top:84px}   /* PCR2 B1: clear of the sticky header when scrolled to */
   .hurow,.hufold{grid-template-columns:62px minmax(120px,2fr) 60px 100px minmax(0,2fr)}
   .huage{display:none}.huage2{display:block}
   .hufold>span:nth-child(2){grid-column:2/5}

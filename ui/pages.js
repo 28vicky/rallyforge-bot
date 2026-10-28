@@ -673,18 +673,19 @@ function instHistory(serial) {
   const root = h("div", {});
   const q = h("input", { type: "search", placeholder: "Search this instance's log...  (for example: stamina, joined, kicked)", style: { width: "100%", marginBottom: "8px" } });
   const only = h("label", { class: "tgl", style: { marginBottom: "8px" } }, h("input", { type: "checkbox" }), h("span", { class: "sw" }), "Only problems");
+  const det = h("label", { class: "tgl", style: { marginBottom: "8px" }, title: "Also show the bot's technical steps (camera, map moves, debug pictures) - useful when sending a log for support" }, h("input", { type: "checkbox" }), h("span", { class: "sw" }), "Show details");   // PCR2 B4
   const body = h("div", { class: "histlog" });
   const draw = () => {
     if (!root.isConnected) return;
-    const f = q.value.trim().toLowerCase(), bad = only.querySelector("input").checked;
-    const rows = S.logs.filter((l) => l.s === serial && (!f || l.t.toLowerCase().includes(f)) && (!bad || l.t.startsWith("[!]") || l.t.startsWith("[-]"))).slice(-400).reverse();
+    const f = q.value.trim().toLowerCase(), bad = only.querySelector("input").checked, all = det.querySelector("input").checked;
+    const rows = S.logs.filter((l) => l.s === serial && (!f || l.t.toLowerCase().includes(f)) && (!bad || l.t.startsWith("[!]") || l.t.startsWith("[-]")) && (all || !isTechLine(l.t))).slice(-400).reverse();
     body.innerHTML = "";
     if (!rows.length) { body.appendChild(note("No lines yet" + (f || bad ? " for this search." : "."))); return; }
     for (const l of rows) body.appendChild(h("div", { class: "hrow " + lineClass(l.t) }, l.t));
   };
-  q.addEventListener("input", draw); only.querySelector("input").addEventListener("change", draw);
+  q.addEventListener("input", draw); only.querySelector("input").addEventListener("change", draw); det.querySelector("input").addEventListener("change", draw);
   const dev = S.devices.find((d) => d.id === serial) || {};
-  root.appendChild(panel("Log history - this instance", saveLogRow(dev.name || short(serial)), h("div", { style: { marginTop: "12px" } }, q, only), body));
+  root.appendChild(panel("Log history - this instance", saveLogRow(dev.name || short(serial)), h("div", { style: { marginTop: "12px" } }, q, h("div", { class: "row", style: { gap: "18px" } }, only, det)), body));
   draw();
   const t = setInterval(() => { if (!root.isConnected) clearInterval(t); else draw(); }, 3000);
   return root;
@@ -1061,7 +1062,7 @@ PAGES.tasks = function (fixed, inPanel, redraw) {
         ondblclick: () => editAt(i) },
         h("span", { class: "grip", "aria-hidden": "true" }, "\u22ee\u22ee"),
         h("label", { class: "tgl" }, sw, h("span", { class: "sw" })),
-        h("div", { class: "tname" }, h("b", {}, x.name), h("small", {}, (x.target ? "Opens " + String(x.target).replace(/^building:/, "").replace(/^icon:(.*)$/, "the $1 button").replace(/^(go|via|learned):/, "") + " \u00b7 " : "") + (x.at ? "at " + x.at : "every " + (x.every_min ?? 60) + " min"))),
+        h("div", { class: "tname" }, h("b", {}, x.name), h("small", {}, (x.target ? "Opens " + String(x.target).replace(/^building:/, "").replace(/^icon:(.*)$/, "the $1 button").replace(/^(go|via|learned):/, "") + " \u00b7 " : "") + (x.at ? "at " + x.at : "every " + fmtMins(x.every_min ?? 60)))),
         h("button", { class: "btn sm", type: "button", onclick: () => editAt(i) }, "Edit\u2026"),
         h("button", { class: "ix", type: "button", "aria-label": "Remove " + x.name, title: "Remove", onclick: async () => { if (!(await confirmBox("Remove task", `Remove '${x.name}' from the list?`, "Remove"))) return; M().splice(i, 1); draw(); } }, "\u2715")));
     });
@@ -1783,8 +1784,8 @@ PAGES.duties = function (fixed) {
     r.id === "black_market" ? PAGES.market(serial || undefined, () => drawSide()) : null,
     r.id === "@tasks" ? PAGES.tasks(serial || undefined, true, () => drawSide()) : null,
     r.id === "collect_resources" && serial ? h("div", { class: "subset" }, h("div", { class: "subtitle" }, "City map"),
-      note("Resource collecting taps the farms on this instance's city map (Overview \u203a City map). Missing a farm? Place it with Map by hand."),
-      h("div", { class: "row" }, S.dev ? btn("Scan city", () => scanCityFlow(serial), "sm") : null, btn("Map by hand", () => manualMapFlow(serial), "sm"))) : null,
+      note("Resource collecting taps the farms on this instance's city map (Overview \u203a City map). Missing a farm? Place it with Fix pins."),
+      h("div", { class: "row" }, S.dev ? btn("Scan city", () => scanCityFlow(serial), "sm") : null, S.dev ? btn("Map by hand", () => manualMapFlow(serial), "sm") : null, btn("Fix pins", () => { if (S.gotoInstTab) S.gotoInstTab("ov"); }, "sm"))) : null,   // PCR2 B3: one city-map word set
   ].filter(Boolean);
   // ---- side panel (C2): Settings on the row opens it; Esc, Done or a click outside closes; changes save as they are made
   let sideId = null;
@@ -2335,7 +2336,7 @@ function monsterRallyTab(serial) {
     if (row.all) return "All levels";
     const q2 = [...row.lv].sort((a, b) => a - b), out = [];
     for (let i = 0; i < q2.length;) { let j = i; while (j + 1 < q2.length && q2[j + 1] === q2[j] + 1) j++; out.push(j > i ? q2[i] + "–" + q2[j] : String(q2[i])); i = j + 1; }
-    return q2.length ? "Lv " + out.join(", ") : "";
+    return q2.length ? "Lv" + out.join(", ") : "";   // PCR2 B2: "Lv6", "Lv1–3, 5"
   };
   const hasLv = (row, l) => row.all || row.lv.has(l);
 
@@ -2515,7 +2516,7 @@ function monsterRallyTab(serial) {
     const head = h("div", { class: "hurow hd" }, h("span", {}, "Time"), h("span", {}, "Monster"), h("span", { class: "hukm" }, "Dist"), h("span", { class: "huage" }, "Age"), h("span", {}, "Decision"), h("span", {}, "Why"));
     const line = (d) => h("div", { class: "hurow" },
       h("span", { class: "hut" }, clock(d.t)),
-      h("span", { class: "hunm", title: (d.level ? "Lv" + d.level + " " : "") + d.name }, (d.level ? "Lv" + d.level + " " : "") + (d.name || "?"),
+      h("span", { class: "hunm", title: (d.name || "?") + (d.level ? " Lv" + d.level : "") }, (d.name || "?") + (d.level ? " Lv" + d.level : ""),   // PCR2 B2: "Pumpkin Monster Lv6"
         h("small", { class: "huage2" }, d.seen ? ago(d.t - d.seen) + " old" : "")),
       h("span", { class: "hukm" }, d.km != null ? d.km + " km" : "–"),
       h("span", { class: "huage" }, d.seen ? ago(d.t - d.seen) : "–"),
@@ -2575,7 +2576,7 @@ function monsterRallyTab(serial) {
       grp("Patience", stepper("max_wait", "Give up on monster", "when no preset frees up", 0, 1, 0, 120, (v) => v ? v + " min" : "Never")),
       grp("Troops",
         toggle("refill", "Refill stamina", "uses stamina items", "waits for stamina", true),
-        stepper("heal_min", "Auto heal every", "heals wounded troops", 0, 15, 0, 1440, (v) => v ? v + " min" : "Off")));
+        stepper("heal_min", "Auto heal every", "heals wounded troops", 0, 15, 0, 1440, (v) => v ? fmtMins(v) : "Off")));
   };
 
   // ---- Setup: preset rail
@@ -2590,7 +2591,7 @@ function monsterRallyTab(serial) {
       rail.appendChild(h("button", { type: "button", class: "hurc" + (sel === p ? " sel" : ""), "aria-pressed": sel === p ? "true" : "false", onclick: () => pick(p) },
         h("div", { class: "hucrow" }, h("b", {}, "Preset " + pN(p)), h("span", { class: "humode " + mode(p) }, mode(p) === "solo" ? "Solo" : "Rally"),
           h("span", Object.assign({ class: "hust sm " + k }, back ? { "data-back": String(back), "data-pre": mode(p) === "solo" ? "Attacking · back " : "Busy · back " } : {}), txt)),
-        h("span", { class: "hutop", title: top.name }, "① " + top.name + " " + lvText(top).replace("Lv ", "Lv") + (model[p].length > 1 ? " · +" + (model[p].length - 1) + " more" : "")),
+        h("span", { class: "hutop", title: top.name + " " + lvText(top) }, "① " + top.name + " " + lvText(top) + (model[p].length > 1 ? " · +" + (model[p].length - 1) + " more" : "")),
         h("span", { class: "hufoot" }, model[p].length + (model[p].length === 1 ? " monster" : " monsters") + " · " + ((c) => c + (mode(p) === "solo" ? (c === 1 ? " hunt" : " hunts") : (c === 1 ? " rally" : " rallies")))(countToday(p)) + " today · "
           + (mode(p) === "solo" ? (huntsFor(p) ? huntsFor(p) + " hunts a day" : "no hunt limit") : (times[p] || "5") + " min rally"))));
     }
@@ -2598,7 +2599,9 @@ function monsterRallyTab(serial) {
     if (free.length) rail.appendChild(h("div", { class: "hufree" }, h("span", {}, "Not hunting · free for joining rallies"),
       h("div", { class: "hufreeb" }, ...free.map((p) => h("button", { type: "button", class: sel === p ? "sel" : "", "aria-label": "Set up Preset " + pN(p), onclick: () => pick(p) }, String(pN(p)))))));
   };
-  const pick = (p) => { sel = p; S.huSel[serial] = p; paintRail(); paintEditor(); };
+  const pick = (p) => { sel = p; S.huSel[serial] = p; paintRail(); paintEditor();
+    // PCR2 B1: below 1024 px the editor sits under all preset cards - bring it into view on a click
+    if (window.matchMedia("(max-width:1023px)").matches) requestAnimationFrame(() => editor.scrollIntoView({ behavior: "smooth", block: "start" })); };
 
   // ---- Setup: editor of the picked preset (sticky; only its monster list scrolls)
   const editor = h("section", { class: "panel huedit" });
@@ -2674,7 +2677,7 @@ function monsterRallyTab(serial) {
       return;
     }
     paintWhy();
-    const summary = "Hunting " + model[sel].map((r) => r.name + " " + lvText(r).replace("Lv ", "Lv")).join(", then ");
+    const summary = "Hunting " + model[sel].map((r) => r.name + " " + lvText(r)).join(", then ");
     editor.append(why, h("div", { class: "husum" }, h("span", { title: summary }, summary), h("button", { type: "button", class: "btn pri sm", onclick: openDrawer }, "+ Add monsters")));
     paintList();
     editor.appendChild(listBox);

@@ -10286,6 +10286,14 @@ def ce_row(serial):
     return (load_duty_state().get(serial or "default") or {}).get("crazy_eggs") or {}
 
 
+def fmt_mins(m):
+    """PCR2 B3: minutes as users read them - '45 min', '1 h', '6 h', '1 h 30 min'."""
+    m = int(m or 0)
+    if m < 60:
+        return f"{m} min"
+    return f"{m // 60} h" + (f" {m % 60} min" if m % 60 else "")
+
+
 BM_AGAIN_MIN = 10        # Black Market 'until the gem floor' + paid refresh: comes back this many minutes after a run that did not finish
 
 
@@ -17573,9 +17581,9 @@ def duty_failed_report(dev, cfg, log, shown, why):
         path = str(p)
     except Exception as e:
         log(f"[!] Could not save the failure report: {e}")
-    log(f"[!] {shown} failed 3 times today ({why}) - it keeps trying every {DUTY_RETRY_MIN} min; Retry on the Duties page runs it now."
+    log(f"[!] {shown} failed 3 times today ({why}) - it keeps trying every {fmt_mins(DUTY_RETRY_MIN)}; Retry on the Duties page runs it now."
         + (f" Report saved: {path}" if path else ""))
-    notify(cfg, serial, f"{shown} failed 3 times today ({why}). The bot keeps trying every {DUTY_RETRY_MIN} min."
+    notify(cfg, serial, f"{shown} failed 3 times today ({why}). The bot keeps trying every {fmt_mins(DUTY_RETRY_MIN)}."
            + (f" Report: {path}" if path else ""))
 
 
@@ -17736,7 +17744,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             act_seen[key] = time.time()
             act("skip", mon=mon or "?", why=why, rally=rally, march=march)
 
-    last_dn = [None]                      # monster name with its level, e.g. "Witch 6", of the rally find_target chose
+    last_dn = [None]                      # monster name with its level, e.g. "Witch Lv6", of the rally find_target chose
     last_base = [None]
 
     name_cache = {}
@@ -17768,7 +17776,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             return "?"
 
     def level_name(screen, hit, mon, mlv):
-        """'Witch 6' for the Activity screen (reads the level from the card's power when it is not known yet)."""
+        """'Witch Lv6' for the Activity screen (PCR2 B2: one format everywhere) (reads the level from the card's power when it is not known yet)."""
         if not mon or mon == "hidden":
             return show_name(screen, hit, mon)
         if mlv is None:
@@ -17777,7 +17785,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 mlv = level_from_power(mon, pw) if pw else None
             except Exception:
                 mlv = None
-        return f"{mon} {mlv}" if mlv else mon
+        return f"{mon} Lv{mlv}" if mlv else mon
 
     def mtxt(march):
         return f", march {fmt(march)}" if cfg.get("march_timer_source") else ""

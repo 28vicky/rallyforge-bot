@@ -122,7 +122,7 @@ const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", mon
 
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Join rallies"],
-  ["tasks", "My tasks"], ["duties", "Duties"], ["market", "Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram coordinates"], ["reliability", "Reliability"],
+  ["tasks", "My tasks"], ["duties", "Duties"], ["market", "Black Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram coordinates"], ["reliability", "Reliability"],
   ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Appearance"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Needs attention - see the log" };
@@ -224,7 +224,7 @@ function layout() {
         h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Dashboard, settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "All instances"))),   // A8 (28 Oct): was "Control settings" - the way home
     h("div", { class: "main" },
       h("div", { class: "top" }, sideBtn(), h("img", { src: "/assets/logo.png", alt: "" }),
-        h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "Created by " + (S.author || "Kiravik") }, "v" + S.version),
+        h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "RallyForge" }, "v" + S.version),
         saveStEl(),
         h("div", { class: "livebar", id: "liveBar", role: "group", "aria-label": "Live - what each instance is doing" }),
         h("button", { class: "btn sm newbtn", id: "newBtn", type: "button", title: "What changed in this version", onclick: () => openWhatsNew() }, "What\u2019s new"),
@@ -237,7 +237,7 @@ function layout() {
       h("div", { class: "sbl" }, h("span", { class: "sbrun" }, h("span", { class: "sbdot", id: "sbDot" }), h("span", { id: "sbRun" }, "0 running")),
         h("span", { id: "sbRam" }), h("span", { id: "sbTg" }), h("span", { id: "sbLic" })),
       h("div", { class: "sbr" }, h("button", { id: "sbUpd", class: "sb-upd", type: "button", style: { display: "none" } }),
-        h("span", { class: "l vlink", role: "button", tabindex: "0", title: "What changed in this version" + (S.copyright ? "\n" + S.copyright : ""), onclick: () => openWhatsNew(), onkeydown: (e) => { if (e.key === "Enter") openWhatsNew(); } }, "v" + S.version + " \u00b7 by " + (S.author || "Kiravik"))))));
+        h("span", { class: "l vlink", role: "button", tabindex: "0", title: "What changed in this version", onclick: () => openWhatsNew(), onkeydown: (e) => { if (e.key === "Enter") openWhatsNew(); } }, "v" + S.version + " \u00b7 RallyForge")))));   // PCR2 B11: product brand, no personal name
   buildRibbon();
   paintRunState();
   renderModeIcon();
@@ -306,7 +306,7 @@ function buildRibbon() {
         { label: "Generals", icon: "users", run: () => openGeneralManager() },
         ...(S.dev ? [{ label: "Scan generals", icon: "scan", run: () => scanGeneralsFlow() }] : []),
         ...(S.dev ? [{ label: "Scan city", icon: "city", run: () => scanCityFlow(S.sel === "control" ? undefined : S.sel) }] : []),   // A5: the old stopped-instance mapper - users use Map my city
-        { label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) },
+        ...(S.dev ? [{ label: "Map by hand", icon: "pin", run: () => manualMapFlow(S.sel === "control" ? undefined : S.sel) }] : []),   // PCR2 B3: owner tool; users fix buildings with Fix pins (Overview > City map)
         { label: "Save profile\u2026", icon: "save", run: saveProfileFlow }, { label: "Load profile\u2026", icon: "down", run: loadProfileFlow }]), "", "grid"),
       btn("App ▾", (e) => menu(e.currentTarget, [
         { label: "Updates", icon: "refresh", run: () => { S.sel = "control"; S.tab = "updates"; renderSide(); renderTabs(); renderPage(); } },
@@ -421,7 +421,7 @@ function renderSide() {
   const devs = S.devStatus || [];
   const nRun = devs.filter((d) => d.state === "run").length, nPause = devs.filter((d) => d.state === "pause").length;
   const ic = $("#instCnt"); if (ic) ic.textContent = runText();
-  // (ui-simple) All / Running / Problems filter once the list gets long
+  // (ui-simple) All / Running / Needs attention filter once the list gets long
   const isProb = (d) => d.state === "error" || (d.state === "run" && (d.kicked_at || d.no_stamina || (d.hunt && d.hunt.state === "blocked")));
   const nProb = devs.filter(isProb).length;
   const F = $("#instFilter");
@@ -430,12 +430,12 @@ function renderSide() {
     if (devs.length >= 5) {
       if (S.sideFilter === "prob" && !nProb) S.sideFilter = "";
       const seg = (k, lab) => h("button", { class: "segb" + ((S.sideFilter || "") === k ? " on" : ""), type: "button", disabled: k === "prob" && !nProb, onclick: () => { S.sideFilter = k; renderSide(); } }, lab);
-      F.appendChild(h("div", { class: "seg small" }, seg("", "All"), seg("run", "Running " + nRun), seg("prob", "Problems " + nProb)));
+      F.appendChild(h("div", { class: "seg small" }, seg("", "All"), seg("run", "Running " + nRun), seg("prob", "Needs attention " + nProb)));
     }
   }
   if (!devs.length) L.appendChild(h("div", { class: "sideempty" }, "No instances yet.", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.sel = "control"; pickTab("dashboard"); renderSide(); } }, "Add your emulators")));
   const shown = devs.filter((d) => !S.sideFilter || (S.sideFilter === "run" ? d.state === "run" : isProb(d)));
-  if (devs.length && !shown.length) L.appendChild(h("div", { class: "sideempty" }, S.sideFilter === "run" ? "Nothing is running." : "No problems right now."));
+  if (devs.length && !shown.length) L.appendChild(h("div", { class: "sideempty" }, S.sideFilter === "run" ? "Nothing is running." : "Nothing needs attention right now."));
   for (const d of shown) L.appendChild(sideRow(d));
   // Pause all / Stop all: one quiet line under the list, only when 2 or more are active
   const A = $("#instAll");
@@ -471,10 +471,12 @@ function sideRunAct(d) {      // what the row's button does now: [icon, label, f
   if (d.state === "pause") return ["play", "Resume " + (d.name || ""), () => act(api("pause", { serial }))];
   return ["play", "Start " + (d.name || ""), () => collectAndRun("start", { serial })];
 }
+function joinsTxt(n) { return n + (n === 1 ? " join" : " joins"); }
 function sideRow(d) {
-  const [txt, tone, tm] = sideStatus(d);
+  let [txt, tone, tm] = sideStatus(d);
+  txt = txt.charAt(0).toUpperCase() + txt.slice(1);   // PCR2 B7: "Running", same case as the header
   const [icon, lab, fn] = sideRunAct(d);
-  const joins = d.state === "run" && d.joins ? " · " + d.joins + " joins" : "";
+  const joins = d.state === "run" && d.joins ? " · " + joinsTxt(d.joins) : "";   // PCR2 B7: "1 join" / "3 joins"
   const dot = (d.state === "run" && (d.no_stamina || d.kicked_at)) ? "pause" : d.state;
   const full = ((S.now && S.now[d.id]) || {}).text || "";
   const row = h("div", { class: "inst st-" + (dot || "run") + (S.sel === d.id ? " sel" : ""), tabindex: "0", role: "button", "aria-current": S.sel === d.id ? "true" : null,
@@ -487,7 +489,7 @@ function sideRow(d) {
       h("span", { class: "ist " + tone }, txt, tm ? h("span", Object.assign({ class: "ctimer" }, tm)) : null, joins)),
     h("button", { class: "irun" + (fn ? "" : " wait"), type: "button", title: lab, "aria-label": lab, disabled: !fn, onclick: (e) => { e.stopPropagation(); if (fn) fn(); } },
       icon === "spin" ? h("span", { class: "ispin" }) : ico(icon)));
-  row.dataset.tip = (d.name || short(d.id)) + " - " + (d.state === "run" && full ? full : txt) + (d.joins ? "\n" + d.joins + " joins today" : "");
+  row.dataset.tip = (d.name || short(d.id)) + " - " + (d.state === "run" && full ? full : txt) + (d.joins ? "\n" + joinsTxt(d.joins) + " today" : "");
   sideDrag(row, d.id);
   return row;
 }
@@ -650,7 +652,7 @@ const TAB_GROUPS = [
   ["monsters", "Join rallies", null],   // owner 28 Oct 21:01: the monsters the bot JOINS (not Monster hunts)
   ["duties", "Duties", null],
   ["tasks", "My tasks", null],
-  ["market", "Market", null],
+  ["market", "Black Market", null],   // PCR2 B3: one name (tab + duty)
   // one row only (ui-simple): the rarely used pages live under More, grouped by small headings ("#...")
   ["more", "More", ["logs", "reports", "#Setup", "settings", "reliability", "schedule", "#App", "themes", "telegram", "license"]],   // A9: Updates lives in the App menu only
 ];
@@ -742,6 +744,11 @@ setInterval(stickyUpdate, 700);
 function rerender() { const p = $("#pages"); const y = p.scrollTop; renderPage(); p.scrollTop = y; }
 
 // ------------------------------------------------------------------ logs
+// PCR2 B4: technical detail lines (indented "[i]   ..." steps, camera/nav/drag numbers, debug picture paths) -
+// shown in an instance's log only with "Show details" on; [!] failures and [-] warnings are never hidden.
+function isTechLine(t) { return !/^\[[!-]\]/.test(t) && (/^\[i\] {3}/.test(t) || /\bnav:|camera at |drag finger|shot=|\bdebug\//.test(t)); }
+// PCR2 B3: long intervals in hours - "45 min", "6 h", "1 h 30 min" (same as the bot's fmt_mins)
+function fmtMins(m) { m = Math.round(+m || 0); return m < 60 ? m + " min" : Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : ""); }
 function lineClass(t) { return t.startsWith("[!]") ? "e" : t.startsWith("[+]") ? "g" : t.startsWith("[-]") ? "w" : ""; }
 function addLine(view, l) {
   const el = view.el;
@@ -1056,8 +1063,6 @@ async function reloadMeta() {
 async function boot() {
   const j = await api("state");
   S.version = j.version;
-  S.author = j.author;
-  S.copyright = j.copyright;
   S.license = j.license || { required: false };
   S.dev = !!j.dev_tools;
   if (S.license.required && !S.license.valid) setTimeout(() => showLogin(S.license.error), 300);
