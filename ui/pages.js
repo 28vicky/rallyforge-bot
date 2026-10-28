@@ -1115,6 +1115,7 @@ PAGES.market = function () {
     const parts = ["Buys " + k + " item" + (k > 1 ? "s" : "") + " when the shop has them",
       m === "none" ? "no refresh" : m === "count" ? "refreshes up to " + rn + " time" + (rn === 1 ? "" : "s") : "refreshes until the gem floor",
       c.market_paid_refresh && m !== "none" ? "paid refresh on" : null,
+      c.market_rebuy ? "rebuys on" : null,
       Number(c.market_min_gems) > 0 ? "keeps " + fmt(c.market_min_gems) + " gems" : "no gem floor",
       Number(c.market_max_gems) > 0 ? "max " + fmt(c.market_max_gems) + " gems a visit" : null];
     sum.textContent = parts.filter(Boolean).join(" · ");
@@ -1133,6 +1134,7 @@ PAGES.market = function () {
     grid2(fld("Refresh the shop", sel(c, "market_refresh_mode", REFRESH, { dropdown: true, after: () => draw() })),
       fld("How many times", nInp)),
     h("div", { class: "bmtog" }, paidTog),
+    h("div", { class: "bmtog" }, tog(c, "market_rebuy", "Use Rebuy Chances to buy a picked item again", { after: () => drawSum() })),
     grid2(fld("Gem floor", inp(c, "market_min_gems", { type: "int", cls: "short" }), "Never go below this. 0 = no floor"),
       fld("Gold floor", inp(c, "market_min_gold", { type: "int", cls: "short" }), "Never go below this. 0 = no floor"),
       fld("Gem limit per visit", inp(c, "market_max_gems", { type: "int", cls: "short" }), "0 = no limit")));

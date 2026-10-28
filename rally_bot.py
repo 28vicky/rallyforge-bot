@@ -200,6 +200,7 @@ DEFAULTS = {
     "market_match": 0.78,
     "market_min_gems": 0,                   # never let a gem purchase / paid refresh take the gems below this (0 = no floor)
     "market_min_gold": 0,                   # never let a gold purchase take the gold below this (gem-priced goods are still bought)
+    "market_rebuy": False,                  # owner 28 Oct: use the game's Rebuy Chances to buy a picked item again (same floors / limit)
     "tg_api_id": "",                        # from https://my.telegram.org -> API development tools
     "tg_api_hash": "",
     "tg_phone": "",                         # your number with country code, e.g. +911234567890
@@ -8656,8 +8657,9 @@ def _green_button(img, region):
     return (x0 + best[0] + best[2] / 2, y0 + best[1] + best[3] / 2) if best else None
 
 
-def market_confirm(dev, log, stop):
+def market_confirm(dev, log, stop, rebuy=False):
     """After tapping a price: wait for the purchase question (up to ~4 s), tap Confirm, check the box closed.
+    rebuy=True (setting 'Use Rebuy Chances'): the 'You will consume 1 Rebuy Chance' box is answered with its gem button.
     -> True when Confirm was tapped and the box is gone."""
     kind = None
     for _ in range(4):
@@ -8671,8 +8673,23 @@ def market_confirm(dev, log, stop):
     else:
         log("[i] Black Market: no purchase question appeared")
         return False
-    if kind == "rebuy":                                     # buying it again costs a Rebuy Chance: not decided yet -> close, do not buy
-        log("[i] Black Market: this would use a Rebuy Chance - closed the box, not bought")
+    if kind == "rebuy" and rebuy:                           # owner 28 Oct: Rebuy Chances on -> the gem button of the box buys it again
+        p = _green_button(shot, (60, 560, 420, 260))
+        if p:
+            dev.tap(*p)
+            _nap(stop, 1.0, 1.4)
+            shot = dev.screenshot()
+            if market_dialog(shot) == "rebuy":
+                dev.tap(*REBUY_CLOSE)
+                _nap(stop, 0.9, 1.2)
+                log("[!] Black Market: the Rebuy box stayed open - closed it")
+                return False
+            log("[i] Black Market: used a Rebuy Chance")
+            return True
+        cv2.imwrite(str(USER / "debug" / "black_market_rebuy.png"), shot)
+        log("[!] Black Market: the Rebuy box's gem button was not found - see debug/black_market_rebuy.png")
+    if kind == "rebuy":                                     # Rebuy Chances off (or button not found) -> close, do not buy
+        log("[i] Black Market: this would use a Rebuy Chance (off in the settings) - closed the box, not bought")
         dev.tap(*REBUY_CLOSE)
         _nap(stop, 0.9, 1.2)
         return None                                         # None = refused rebuy (the caller logs nothing more)
@@ -8870,7 +8887,7 @@ def run_market(dev, cfg, log, stop):
                     bx, by, bw, bh = slot["btn"]
                     g0, m0 = market_totals(img)
                     dev.tap(bx + bw / 2, by + bh / 2)
-                    ok_buy = market_confirm(dev, log, stop)       # "Are you sure you want to purchase X?" -> Confirm
+                    ok_buy = market_confirm(dev, log, stop, rebuy=bool(cfg.get("market_rebuy")))   # "Are you sure ...?" -> Confirm
                     after = dev.screenshot()
                     for _w in range(4):                          # the shop comes back after the dialog / reward pop-up
                         if market_on_screen(after) or stop.is_set():
