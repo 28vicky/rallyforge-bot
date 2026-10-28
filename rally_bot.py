@@ -10456,16 +10456,17 @@ def ch_name(img):
     """Name of the champion on the page (read from the banner), or None."""
     import difflib
     x, y, w, h = CH_NAME_BOX
-    lines = [t for t, _ in ocr_lines(img[y:y + h, x:x + w], 3.0)]
     norm = {_ch_norm(n): n for n in CHAMPIONS}
-    txt = _ch_norm(" ".join(lines))
-    for k, n in sorted(norm.items(), key=lambda kv: -len(kv[0])):
-        if k in txt:
-            return n
-    for l in lines:
-        m = difflib.get_close_matches(_ch_norm(l), list(norm), n=1, cutoff=0.72)
-        if m:
-            return norm[m[0]]
+    for sc, br in ((3.0, False), (2.0, False), (3.0, True)):   # K 28 Oct: 'Dulcinea' (yellow on red) only read at 2x / bright
+        lines = [t for t, _ in ocr_lines(img[y:y + h, x:x + w], sc, bright=br)]
+        txt = _ch_norm(" ".join(lines))
+        for k, n in sorted(norm.items(), key=lambda kv: -len(kv[0])):
+            if k in txt:
+                return n
+        for l in lines:
+            m = difflib.get_close_matches(_ch_norm(l), list(norm), n=1, cutoff=0.72)
+            if m:
+                return norm[m[0]]
     return None
 
 
@@ -10494,11 +10495,12 @@ def ch_greet_word(img):
     against 'Greet' and the bot said there was no Greet button), so only the letters of each word are compared."""
     x0, y0, w0, h0 = CH_GREET_SEARCH
     try:
-        for _t, ws in ocr_lines(img[y0:y0 + h0, x0:x0 + w0]):
-            for w in ws:
-                letters = re.sub(r"[^a-z]", "", str(w[0]).lower())
-                if letters.startswith("greet") or letters in ("gree", "greel", "greer"):
-                    return (int(w[1]) + x0, int(w[2]) + y0)
+        for sc, br in ((2.0, False), (2.0, True), (3.0, False)):   # K 28 Oct: not read at 2x plain, read bright / 3x
+            for _t, ws in ocr_lines(img[y0:y0 + h0, x0:x0 + w0], sc, bright=br):
+                for w in ws:
+                    letters = re.sub(r"[^a-z]", "", str(w[0]).lower())
+                    if letters.startswith("greet") or letters in ("gree", "greel", "greer"):
+                        return (int(w[1]) + x0, int(w[2]) + y0)
     except Exception as _e:
         quiet_err("ch_greet_word", _e)
     return None
