@@ -455,8 +455,8 @@ function sideStatus(d) {
   if (d.state === "run" && d.kicked_at) return ["kicked · back in", "warn", T("data-at", d.kicked_at)];
   if (d.state === "run" && d.loading) return [d.loading, "warn", T("data-since", d.loading_since)];
   if (d.state === "run" && d.no_stamina) return ["no stamina", "warn"];
-  if (d.state === "run" && d.hunt && d.hunt.state === "blocked") return ["Hunts · " + d.hunt.text, "warn"];
-  if (d.state === "run" && d.hunt && Date.now() / 1000 - d.hunt.t < 120) return ["Hunts · " + d.hunt.text, d.hunt.state === "waiting" ? "" : "ok"];
+  if (d.state === "run" && d.hunt && d.hunt.state === "blocked") return ["Monster hunts · " + d.hunt.text, "warn"];
+  if (d.state === "run" && d.hunt && Date.now() / 1000 - d.hunt.t < 120) return ["Monster hunts · " + d.hunt.text, d.hunt.state === "waiting" ? "" : "ok"];
   if (d.state === "run") return [busyTask(d.id, true) || "running", "ok"];        // C7: same word as the header when nothing is busy
   if (d.start_at) return ["starts in", "", T("data-at", d.start_at)];
   if (d.queued) return ["queued", ""];

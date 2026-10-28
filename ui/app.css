@@ -1875,7 +1875,7 @@ select.pick-open{border-color:var(--accent1)}
 .hudf .btn{margin-left:auto}
 .inst .nm .needs{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;color:var(--warn);background:color-mix(in srgb,var(--warn) 18%,transparent);border-radius:99px;padding:1px 7px;white-space:nowrap;vertical-align:1px}
 /* responsive: 1024-1279 rules wrap; 900-1023 one column, Age column folds under the name */
-@media (max-width:1279px){.hugrp,.hugrp:nth-child(2){flex:1 1 45%}.hugrp:nth-child(3){border-left:0}}
+@media (max-width:1099px){.hugrp,.hugrp:nth-child(2){flex:1 1 45%}.hugrp:nth-child(3){border-left:0}.hugi{flex-wrap:wrap}}
 @media (max-width:1023px){
   .husetup{grid-template-columns:minmax(0,1fr)}
   .hurail,.huedit{position:static;max-height:none}
@@ -1888,3 +1888,12 @@ select.pick-open{border-color:var(--accent1)}
 }
 .hu .hustep input.hustepv{width:80px;min-width:80px;max-width:80px;flex:none;margin:0}
 .hudrw .hurange input{flex:none;margin:0;width:64px}
+
+/* owner 28 Oct 20:35: Monster hunts settings in ONE compact row (5 settings side by side) so the presets move up;
+   below 1100 px they fold to two rows. The instance header gets its own white bar, with a soft shadow once the page scrolls. */
+.hugrp{flex:2 1 auto}.hugrp:nth-child(2){flex:1 1 auto}
+.hugi{flex-wrap:nowrap;gap:12px 16px}
+.hurule{flex:1 1 0;min-width:142px}
+.hu .hustep input.hustepv,.hustepv{width:70px;min-width:70px;max-width:70px}
+:root .stickyhead{background:var(--card);border-bottom:1px solid var(--line)}
+:root .stickyhead.stuck{box-shadow:0 8px 18px -12px rgba(20,22,29,.28)}

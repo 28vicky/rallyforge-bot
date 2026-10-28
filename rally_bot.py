@@ -15318,7 +15318,7 @@ def run_monster_rally(dev, cfg, log, stop):
                 return
             if getattr(dev, "aj_next", 0) and time.time() >= dev.aj_next:
                 log("[*]  Monster rally: Auto-Join needs renewing - doing that, the rallies go on after it")
-                hunt_status(serial, "running", "Renewing Auto-Join", "Back to Hunts after")
+                hunt_status(serial, "running", "Renewing Auto-Join", "Back to Monster hunts after")
                 return
             try:
                 other = [t for t in city_tasks_due(cfg, getattr(_TL, "city_last", None) or {}, serial)
@@ -15330,7 +15330,7 @@ def run_monster_rally(dev, cfg, log, stop):
                 log(f"[*]  Monster rally: {len(other)} other task(s) due - doing them, the rallies go on after")
                 nm = str(other[0].get("name") or "").split(":", 1)[-1]
                 nm = (DUTY_BY_ID.get(nm) or {}).get("title") or nm
-                hunt_status(serial, "running", f"Doing {nm}", "Back to Hunts after")
+                hunt_status(serial, "running", f"Doing {nm}", "Back to Monster hunts after")
                 return
             if _TL.mr_idle:                                  # nothing to rally right now: wait on the map for new coordinates
                 _nap(stop, 20, 25)
@@ -15356,8 +15356,8 @@ def _run_monster_rally(dev, cfg, log, stop):
         elif now - float(row["heal_at"]) >= heal_min * 60 and "duty:troop_healing" not in run_now_list(serial):
             run_now_set(serial, run_now_list(serial) + ["duty:troop_healing"])
             mr_save(serial, heal_at=now)
-            log("[*]  Hunts: time to heal the troops - healing first, the hunts go on after")
-            hunt_status(serial, "running", "Healing troops", "Auto heal · back to Hunts after")
+            log("[*]  Monster hunts: time to heal the troops - healing first, the hunts go on after")
+            hunt_status(serial, "running", "Healing troops", "Auto heal · back to Monster hunts after")
             _TL.mr_go_on = True
             return
     targets = mr_targets(cfg, tried, serial)
@@ -15486,7 +15486,7 @@ def _run_monster_rally(dev, cfg, log, stop):
                             dev.back()
                             _nap(stop, 1.0, 1.3)
                         if not max_wait or time.time() - t0 < max_wait:
-                            log(f"[*]  Hunts: {label} - no troop page after Attack (no free march?), trying again in 30 s")
+                            log(f"[*]  Monster hunts: {label} - no troop page after Attack (no free march?), trying again in 30 s")
                             hunt_status(serial, "waiting", f"Waiting on {short}", "No free march for a solo attack · tries again in 30 s")
                             _nap(stop, 30, 32)
                             continue
@@ -15595,10 +15595,10 @@ def _run_monster_rally(dev, cfg, log, stop):
                 hunt_status(serial, "blocked", "Out of stamina", "Turn on Refill stamina, or wait for stamina to come back")
                 hunt_note(serial, tgt, "Waiting", "wait", "Out of stamina · Refill stamina is off")
                 return later(30, "not enough stamina (Refill stamina is off)")
-            log(f"[!]  Hunts: not enough stamina ({st_[0]:,} of {st_[1]:,}) - using stamina items")
+            log(f"[!]  Monster hunts: not enough stamina ({st_[0]:,} of {st_[1]:,}) - using stamina items")
             if not refill_stamina(dev, cfg, log, stop, st_[1]):
                 dev.back()
-                hunt_status(serial, "blocked", "No stamina items left", "Hunts go on when stamina comes back")
+                hunt_status(serial, "blocked", "No stamina items left", "Monster hunts go on when stamina comes back")
                 hunt_note(serial, tgt, "Waiting", "wait", "Out of stamina · no stamina items left")
                 return later(30, "not enough stamina (and no stamina items)")
             shot = dev.screenshot()
@@ -15639,7 +15639,7 @@ def _run_monster_rally(dev, cfg, log, stop):
             mr_save(serial, solo_day=_game_day(), solo_n=n_)
             hunt_note(serial, tgt, "Solo attack", "solo", why)
             hunt_status(serial, "running", f"Attacked {short} with Preset {mr_pnum(preset)}", f"Solo attack sent{far} · looking for the next monster")
-            log(f"[+]  Hunts: solo attack on {label} - preset {mr_pnum(preset)}")
+            log(f"[+]  Monster hunts: solo attack on {label} - preset {mr_pnum(preset)}")
             started += 1
             continue
         hunt_note(serial, tgt, "Rallied", "go", why)
@@ -16248,7 +16248,7 @@ DUTY_LIBRARY = [
      "target": "self:", "steps": ["royal_thief"],
      "opts": [{"k": "troops", "label": "Troops", "type": "select", "def": "Power First",
                "choices": ["Power First"] + ["Preset " + n for n in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")]}]},
-    {"id": "monster_rally", "group": "Daily activities", "title": "Hunts", "every_min": 5, "verified": False,
+    {"id": "monster_rally", "group": "Daily activities", "title": "Monster hunts", "every_min": 5, "verified": False,
      "note": "Takes monster coordinates from the Telegram section, flies there with the map search and hunts each monster with the preset it sits on: "
              "Rally presets start an Alliance War rally, Solo presets attack alone. No free march: waits on the monster.",
      "target": "self:", "steps": ["monster_rally"],

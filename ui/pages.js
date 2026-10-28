@@ -612,7 +612,7 @@ function instancePage(serial) {
         const el = staminaPanel(sc.own ? ov : S.cfg, S.cfg, sc.bar);
         if (sc.locked) [...el.children].forEach((x) => { if (x !== sc.bar && x.tagName !== "H3") lockedWrap(x, true); });   // shows the universal values, read-only until Make own
         return [el]; }]])],
-    ["mrally", "Hunts", () => [monsterRallyTab(serial)]],
+    ["mrally", "Monster hunts", () => [monsterRallyTab(serial)]],
     ["logs", "Itinerary & Logs", () => [h("div", { class: "loggrid" }, instItinerary(serial), instHistory(serial))]],
     ["settings", "Settings", settingsTab],
   ];
@@ -1663,7 +1663,7 @@ const DUTY_UI = {
   black_market: ["Market & Tavern", "Black Market", 4], wheel: ["Market & Tavern", "Wheel of Fortune", 3], trade_carriage: ["Market & Tavern", "Trade Carriage", 3],
   champions: ["Market & Tavern", "Greet champions", 2], ranger_knight: ["Market & Tavern", "Ranger Knight Order", 3], tavern_catalog: ["Market & Tavern", "General library", 0],
   alliance_help: ["Alliance", "Alliance help", 1], alliance_science: ["Alliance", "Alliance donation", 1],
-  monster_rally: ["Army", "Hunts", 0],
+  monster_rally: ["Army", "Monster hunts", 0],
   crazy_eggs: ["Events", "Crazy Eggs", 0], wisdom_dome_tokens: ["Events", "Wisdom Dome tokens", 0], royal_thief: ["Events", "Royal Thief", 0],
   ev_legion: ["Events", "Legion Hunting", 0], ev_garuda: ["Events", "Garuda Trial", 0], ev_windmill: ["Events", "Wishful Windmill", 0],
   ev_eagle: ["Events", "Eagle of Freedom", 0], ev_star_trail: ["Events", "Grace of Star Trail", 0], ev_duel: ["Events", "Alliance Duel", 0],
@@ -1743,7 +1743,7 @@ PAGES.duties = function (fixed) {
   const dutyOpts = (r) => h("div", { class: "fgrid" },
     r.opts.map((o) => {
       if (o.type === "rules") return h("div", { class: "wide" }, h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); closeSide(); if (S.gotoInstTab && serial) S.gotoInstTab("mrally"); } },
-        serial ? "Monsters, presets and rules: Hunts tab →" : "Monsters, presets and rules are set on each instance's Hunts tab."));
+        serial ? "Monsters, presets and rules: Monster hunts tab →" : "Monsters, presets and rules are set on each instance's Monster hunts tab."));
       if (o.type === "presets") return null;
       const save = async (v) => take(await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } })));
       if (o.type === "bool") return h("div", { class: "wide" }, h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label)));
@@ -2403,12 +2403,12 @@ function monsterRallyTab(serial) {
   const paintStatus = () => {
     status.innerHTML = "";
     const on = !!(duty && duty.on), st = live.status || {}, fresh = st.t && Date.now() / 1000 - st.t < 600;
-    let tone = "off", title = "Off · no hunts", sub = "Turn on to hunt the monsters in your presets";
+    let tone = "off", title = "Off", sub = "Turn on to hunt the monsters in your presets";
     if (on && !usedList().length) { tone = "wait"; title = "Waiting · no monsters picked"; sub = "Add monsters to a preset in Setup"; }
     else if (on && !live.running) { tone = "off"; title = "Instance stopped"; sub = "Start the instance to hunt"; }
     else if (on && fresh) { tone = st.state === "blocked" ? "bad" : st.state === "waiting" ? "wait" : "ok"; title = (st.state === "blocked" ? "Blocked · " : st.state === "waiting" ? "" : "Running · ") + st.title; sub = st.sub || ""; }
-    else if (on) { tone = "wait"; title = "Starting…"; sub = "Hunts begin when the bot reaches them"; }
-    const sw = h("button", { type: "button", class: "husw" + (on ? " on" : ""), "aria-pressed": on ? "true" : "false", "aria-label": on ? "Turn Hunts off" : "Turn Hunts on", onclick: () => setOn(!on) },
+    else if (on) { tone = "wait"; title = "Starting…"; sub = "Monster hunts begin when the bot reaches them"; }
+    const sw = h("button", { type: "button", class: "husw" + (on ? " on" : ""), "aria-pressed": on ? "true" : "false", "aria-label": on ? "Turn Monster hunts off" : "Turn Monster hunts on", onclick: () => setOn(!on) },
       h("span", { class: "hutrack" }, h("span", { class: "huknob" })), on ? "On" : "Off");
     status.append(...[h("span", { class: "hudot " + tone }),
       h("div", { class: "hustx" }, h("b", { title }, title), h("span", { title: sub }, sub)),
@@ -2420,7 +2420,7 @@ function monsterRallyTab(serial) {
   };
 
   // ---- views switch
-  const views = h("div", { class: "huviews", role: "tablist", "aria-label": "Hunts views" });
+  const views = h("div", { class: "huviews", role: "tablist", "aria-label": "Monster hunts views" });
   const paintViews = () => {
     views.innerHTML = "";
     for (const [k, l] of [["live", "Live"], ["setup", "Setup"]]) views.appendChild(h("button", { type: "button", role: "tab", class: "huvb" + (view === k ? " on" : ""), "aria-selected": view === k ? "true" : "false",
@@ -2531,7 +2531,7 @@ function monsterRallyTab(serial) {
     strip.append(
       grp("Which monsters",
         stepper("max_km", "Max distance", "only monsters this close", 0, 50, 0, 99999, (v) => v ? v + " km" : "Any"),
-        stepper("max_age", "Refresh cache every", "old coordinates get cleared", 10, 5, 1, 600, (v) => v + " min")),
+        stepper("max_age", "Refresh cache every", "clears old coordinates", 10, 5, 1, 600, (v) => v + " min")),
       grp("Patience", stepper("max_wait", "Give up on monster", "when no preset frees up", 0, 1, 0, 120, (v) => v ? v + " min" : "Never")),
       grp("Troops",
         toggle("refill", "Refill stamina", "uses stamina items", "waits for stamina", true),
