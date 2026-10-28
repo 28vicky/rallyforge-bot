@@ -1906,3 +1906,5 @@ select.pick-open{border-color:var(--accent1)}
 .stickybox .sidebtn{margin-left:-8px}
 .stickyhead .stickybox .insthead{margin-left:-44px!important;margin-right:-44px!important;padding-left:44px;padding-right:44px}   /* its divider line still runs edge to edge */
 .top .sidebtn{margin-left:-7px}   /* All instances: menu glyph on the same line as the buttons and tabs under it */
+/* owner 29 Oct: the account box + "All instances" at the bottom of the sidebar line up with the instance rows above */
+:root .side .sidefoot{margin-left:10px;margin-right:10px;padding-left:14px;padding-right:8px}
