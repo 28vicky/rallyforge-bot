@@ -13176,6 +13176,9 @@ def run_map_movable(dev, cfg, log, stop, only=None):
     for i in range(len(stops)):
         if stop.is_set():
             break
+        if time.time() - t0 > 11 * 60:                     # owner 28 Oct: 55 min was far too long - the sweep ends at ~11 min
+            log(f"[i]   sweep time limit - {len(stops) - i} stop(s) left; checking the pins now (missing -> Find missing)")
+            break
         progress(i + 1)
         nav, rest = visit(i)
         if nav is None or not pics:
@@ -13207,6 +13210,9 @@ def run_map_movable(dev, cfg, log, stop, only=None):
     unconfirmed = []
     for k, nb in enumerate([b for b in want if b in found]):
         if stop.is_set():
+            break
+        if time.time() - t0 > 17 * 60:                     # the whole run stays under ~20 min with the photo moves
+            log("[i]   time limit - the remaining pins stay unchecked (tasks check them when they open the building)")
             break
         duty_progress()
         log("@act " + json.dumps({"k": "step", "text": f"Checking the pins: {k + 1} of {len(found)} - {nb}"}))
@@ -13873,6 +13879,11 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
             return sx, sy
         if i and prev_cam and abs(prev_cam[0] - nav.cx) < 15 and abs(prev_cam[1] - nav.cy) < 15:
             log("[!]   camera: the last drag did not move the map (a button or building under the finger?)")
+            still_n = getattr(nav, "_still_n", 0) + 1
+            nav._still_n = still_n
+            if still_n >= 2:                               # owner 28 Oct (Rob, 55 min): the city edge - don't fight it
+                log("[i]   nav: goto_on_map=failure reason=edge (the map does not move this way) - skipping")
+                return None
         prev_cam = (nav.cx, nav.cy)
         log(f"[i]   camera at {round(nav.cx)},{round(nav.cy)} ({r[2]} points) - target {round(sx - mid_x)},{round(sy - mid_y)} px from the middle, moving (round {i + 1})")
         nav.pan(sx - mid_x, sy - mid_y)                    # measured drags (the diamond's edge stops them safely)
