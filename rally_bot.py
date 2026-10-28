@@ -12568,6 +12568,16 @@ class _SerialOnly:
 def migrate_city_maps_v2():
     """One time (owner 28 Oct 03:03): every instance starts clean with 0 map - all old pictures/pins of the instances go
     (backed up). The building picture database and the culture pins/maps stay."""
+    try:                                                   # app start: no mapping can be running - a run an app restart
+        for d in (LEARN_DIR.iterdir() if LEARN_DIR.exists() else []):   # cut off must not show 'Mapping now' for 5 min
+            f = d / MYMAP_FILE
+            if d.is_dir() and f.exists():
+                m = json.loads(f.read_text(encoding="utf-8"))
+                if m.get("running"):
+                    m["running"] = False
+                    f.write_text(json.dumps(m), encoding="utf-8")
+    except Exception as _e:
+        quiet_err("mymap_reset_running", _e)
     try:
         mark = LEARN_DIR / ".mapper_v2_clean_start"
         if mark.exists() or not LEARN_DIR.exists():
