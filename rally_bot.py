@@ -523,8 +523,8 @@ def build_report(path, include_debug=True, description="", devices=None):
         z.writestr("info.txt", info)
         dbg = USER / "debug"
         if include_debug and dbg.exists():
-            for img in sorted(dbg.glob("*.png"), key=lambda f: f.stat().st_mtime)[-8:]:      # the newest ones
-                z.write(img, f"debug/{img.name}")
+            for img in sorted(dbg.rglob("*.png"), key=lambda f: f.stat().st_mtime)[-16:]:    # the newest ones (all instance folders)
+                z.write(img, "debug/" + img.relative_to(dbg).as_posix())
 
 
 def migrate_cfg(cfg):
@@ -1860,7 +1860,7 @@ def read_monster_power(screen, hit, hard=False):
     if not hard:
         return None, raw
     try:                                                # keep the picture of a failed read so it can be studied
-        d = USER / "debug"
+        d = debug_dir()
         d.mkdir(exist_ok=True)
         old = sorted(d.glob("power_fail_*.png"), key=lambda f: f.stat().st_mtime)
         for f in old[:max(0, len(old) - 19)]:
@@ -2551,7 +2551,7 @@ def _refill_once(dev, cfg, log, stop, needed):
 
 def _stamina_snap(img, tag):
     try:
-        d = USER / "debug"
+        d = debug_dir()
         d.mkdir(exist_ok=True)
         cv2.imwrite(str(d / f"stamina_{tag}.png"), img)
     except Exception as _e:
@@ -2565,7 +2565,7 @@ def preset_xy(cfg, n):
 
 def save_debug(serial, screen, limit=40):
     """Keep a few screenshots of screens the bot did not recognise (for making templates)."""
-    d = USER / "debug"
+    d = debug_dir()
     d.mkdir(exist_ok=True)
     shots = sorted(d.glob("127_*.png"), key=lambda f: f.stat().st_mtime) + sorted(d.glob("emulator_*.png"), key=lambda f: f.stat().st_mtime)
     for old in shots[:max(0, len(shots) - limit + 1)]:            # keep the newest ones: drop the oldest instead of never saving again
@@ -2582,7 +2582,7 @@ def housekeeping(log=None):
     debug pictures: only the newest 60 and nothing older than 3 days; old program versions: only the current and the
     previous one (also after a hand-made install); the log files clean themselves (5 days)."""
     freed, n = 0, 0
-    d = USER / "debug"
+    d = debug_dir()
     if d.exists():
         files = sorted((f for f in d.iterdir() if f.is_file()), key=lambda f: f.stat().st_mtime, reverse=True)
         cutoff = time.time() - 3 * 86400
@@ -2614,6 +2614,39 @@ def housekeeping(log=None):
 
 # ------------------------------------------------------------------ helpers
 _TL = threading.local()                 # per bot thread: pace + speed counters
+
+
+def debug_dir():
+    """Owner review 28 Oct: debug pictures were one file per duty for ALL instances (Stalds and Kiravik overwrote each
+    other's Alliance Science pictures). In a bot thread they go to debug/<instance>/; elsewhere to debug/."""
+    who = getattr(_TL, "debug_who", None)
+    d = USER / "debug" / who if who else USER / "debug"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    return d
+
+
+def debug_fail_copy(since, duty):
+    """A duty failed: keep a time-stamped copy of the newest picture this instance saved during the attempt
+    (debug/<instance>/fail/), the last 40 only. -> the copy's name (for tasks_log) or ''."""
+    try:
+        d = debug_dir()
+        pics = [f for f in d.glob("*.png") if f.stat().st_mtime >= since - 1]
+        if not pics:
+            return ""
+        src = max(pics, key=lambda f: f.stat().st_mtime)
+        out = d / "fail"
+        out.mkdir(exist_ok=True)
+        name = f"{time.strftime('%Y%m%d-%H%M%S')}_{re.sub(r'[^A-Za-z0-9]+', '_', duty)[:30]}_{src.name}"
+        shutil.copy2(src, out / name)
+        for old in sorted(out.glob("*.png"), key=lambda f: f.stat().st_mtime)[:-40]:
+            old.unlink(missing_ok=True)
+        return f"{d.name}/fail/{name}"
+    except Exception as _e:
+        quiet_err("debug_fail_copy", _e)
+        return ""
 
 
 def duty_progress(minutes=None):
@@ -3863,8 +3896,8 @@ def safety_stop(dev, shot, cfg, log, stop):
     if not hit:
         return False
     try:
-        (USER / "debug").mkdir(exist_ok=True)
-        cv2.imwrite(str(USER / "debug" / f"safety_stop_{dev.serial.replace(':', '_')}.png"), shot)
+        debug_dir().mkdir(exist_ok=True)
+        cv2.imwrite(str(debug_dir() / f"safety_stop_{dev.serial.replace(':', '_')}.png"), shot)
     except Exception:
         pass
     log(f"[!] SAFETY: an account / payment window is open ({hit}) - closing it with Cancel / X / Back, never the confirm button (picture saved)")
@@ -3989,7 +4022,7 @@ def popup_seen(dev, shot, how):
     """Keep the picture of every pop-up / page the bot closed WITHOUT knowing it (by X, by a tap outside, by Back): the
     library in debug\\popups grows by itself and recurring ones become popup_* pictures (owner 24 Oct). Newest 300 kept."""
     try:
-        d = USER / "debug" / "popups"
+        d = debug_dir() / "popups"
         d.mkdir(parents=True, exist_ok=True)
         serial = re.sub(r"\W", "_", str(getattr(dev, "serial", "")))
         cv2.imwrite(str(d / f"{time.strftime('%Y%m%d_%H%M%S')}_{serial}_{how}.png"), shot)
@@ -4287,8 +4320,8 @@ def clear_popups(dev, cfg, log, stop, rounds=5, want_city=True):
         _STUCK_POPUPS[dev.serial] = []
         log("[!] Could not get past an unknown screen 3 times in 10 min - restarting the game")
         try:
-            (USER / "debug").mkdir(exist_ok=True)
-            cv2.imwrite(str(USER / "debug" / "stuck_before_restart.png"), _end)
+            debug_dir().mkdir(exist_ok=True)
+            cv2.imwrite(str(debug_dir() / "stuck_before_restart.png"), _end)
         except Exception:
             pass
         force_restart_game(dev, cfg, log, stop, must=True, reason="stuck on the same screen")
@@ -6020,7 +6053,7 @@ def save_start_picture(dev, cfg, log, keep=30):
     try:
         shot = dev.screenshot()
         view = view_of(shot, cfg) or "unknown"
-        out = USER / "debug" / "game_start" / re.sub(r"[^\w.-]", "_", dev.serial)
+        out = debug_dir() / "game_start" / re.sub(r"[^\w.-]", "_", dev.serial)
         out.mkdir(parents=True, exist_ok=True)
         prev = sorted(out.glob("*_city.png"))
         name = f"{time.strftime('%Y%m%d-%H%M%S')}_{view}.png"
@@ -6461,7 +6494,7 @@ def _chat_pic(shot, name, region, words, ocr_region):
 
 def _chat_fail_shot(dev, shot):
     try:
-        cv2.imwrite(str(USER / "debug" / f"chat_check_fail_{re.sub(r'[^0-9A-Za-z]', '_', dev.serial)}.png"), shot)
+        cv2.imwrite(str(debug_dir() / f"chat_check_fail_{re.sub(r'[^0-9A-Za-z]', '_', dev.serial)}.png"), shot)
     except Exception as _e:
         quiet_err("read_alliance_chat", _e)
 CHAT_STATE = {}                # serial -> {"last", "nowar", "off", "broken", "noally"}
@@ -8649,7 +8682,7 @@ def market_confirm(dev, log, stop, rebuy=False):
                 return False
             log("[i] Black Market: used a Rebuy Chance")
             return True
-        cv2.imwrite(str(USER / "debug" / "black_market_rebuy.png"), shot)
+        cv2.imwrite(str(debug_dir() / "black_market_rebuy.png"), shot)
         log("[!] Black Market: the Rebuy box's gem button was not found - see debug/black_market_rebuy.png")
     if kind == "rebuy":                                     # Rebuy Chances off (or button not found) -> close, do not buy
         log("[i] Black Market: this would use a Rebuy Chance (off in the settings) - closed the box, not bought")
@@ -8660,7 +8693,7 @@ def market_confirm(dev, log, stop, rebuy=False):
         p = find_text(shot, ["Confirm"], region=(60, 470, 420, 200), cutoff=0.6) or _green_button(shot, (60, 470, 420, 200))
         if not p:
             log("[!] Black Market: the Confirm button was not found")
-            cv2.imwrite(str(USER / "debug" / "black_market_confirm.png"), shot)
+            cv2.imwrite(str(debug_dir() / "black_market_confirm.png"), shot)
             return False
         dev.tap(*p)
         _nap(stop, 1.0, 1.4)
@@ -8668,7 +8701,7 @@ def market_confirm(dev, log, stop, rebuy=False):
         if not market_dialog(shot):
             return True
     log("[!] Black Market: the purchase question is still open after tapping Confirm")
-    cv2.imwrite(str(USER / "debug" / "black_market_confirm.png"), shot)
+    cv2.imwrite(str(debug_dir() / "black_market_confirm.png"), shot)
     return False
 
 
@@ -8963,7 +8996,7 @@ def market_name_new(dev, log, stop, img, saved):
             shot = dev.screenshot()
             kind = market_dialog(shot)
         if kind:
-            cv2.imwrite(str(USER / "debug" / "black_market_name_box.png"), shot)
+            cv2.imwrite(str(debug_dir() / "black_market_name_box.png"), shot)
             log("[!] Black Market: the purchase question did not close while naming an item - naming stopped "
                 "(picture: debug/black_market_name_box.png)")
             return named
@@ -9033,7 +9066,7 @@ def run_market_capture(dev, cfg, log, stop):
         cv2.imwrite(str(lib / f"item_{int(time.time())}_{i}.png"), crop)
         new += 1
     log(f"[+]  Black Market: {len(slots)} item(s) on sale, {new} new picture(s) saved to the library ({len(known)} in total)")
-    cv2.imwrite(str(USER / "debug" / "black_market.png"), img)
+    cv2.imwrite(str(debug_dir() / "black_market.png"), img)
 
 
 def run_market(dev, cfg, log, stop):
@@ -9075,8 +9108,8 @@ def run_market(dev, cfg, log, stop):
     bought, failed = {}, set()                              # failed: slot numbers that did not sell (until the next refresh)
     gold, gems = market_totals(img)
     try:                                                     # the shop with its gold / gem row, to check the numbers read (a 6-digit
-        (USER / "debug").mkdir(exist_ok=True)               # gem total was read as 32,750 on Kulim (tester system) 24 Oct)
-        cv2.imwrite(str(USER / "debug" / f"bm_totals_{str(getattr(dev, 'serial', '')).replace(':', '_')}.png"), img)
+        debug_dir().mkdir(exist_ok=True)               # gem total was read as 32,750 on Kulim (tester system) 24 Oct)
+        cv2.imwrite(str(debug_dir() / f"bm_totals_{str(getattr(dev, 'serial', '')).replace(':', '_')}.png"), img)
     except Exception as _e:
         quiet_err("bm_totals_pic", _e)
     log(f"[*] Black Market: looking for {', '.join(w[0] for w in wanted)}; gold {gold if gold is not None else '?'}, "
@@ -9117,7 +9150,7 @@ def run_market(dev, cfg, log, stop):
                 _nap(stop, 1.0, 1.5)
             img = dev.screenshot()
         if not market_on_screen(img):
-            cv2.imwrite(str(USER / "debug" / "black_market_closed.png"), img)
+            cv2.imwrite(str(debug_dir() / "black_market_closed.png"), img)
             log("[!] Black Market: the shop is no longer on screen (picture saved: debug/black_market_closed.png)")
             break
         rounds += 1
@@ -9195,7 +9228,7 @@ def run_market(dev, cfg, log, stop):
                         log(f"[!] {bm_label(name)}: not bought (confirm {'tapped' if ok_buy else 'not found'}; "
                             f"{'gems' if slot['gem'] else 'gold'} {m0 if slot['gem'] else g0} -> {m1 if slot['gem'] else g1})")
                         if not market_on_screen(after):
-                            cv2.imwrite(str(USER / "debug" / "black_market_not_bought.png"), after)
+                            cv2.imwrite(str(debug_dir() / "black_market_not_bought.png"), after)
                     else:
                         bought[name] = bought.get(name, 0) + 1
                         last_prog = time.time()
@@ -9378,7 +9411,7 @@ def run_step(dev, cfg, log, stop, step):
             return                                         # Rob 27 Oct 20:12: the name was just read (10-15 s each) - no 2nd read
         shot = dev.screenshot()
         try:
-            cv2.imwrite(str(USER / "debug" / f"ring_{(arg or 'x').replace(' ', '_')}.png"), shot)
+            cv2.imwrite(str(debug_dir() / f"ring_{(arg or 'x').replace(' ', '_')}.png"), shot)
         except Exception as _e:
             quiet_err("run_step", _e)
         got = ring_building_name(shot)
@@ -9677,7 +9710,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
                 try:
                     pre = dev.screenshot()
                     cv2.circle(pre, (int(px), int(py + float(task.get("tap_dy", 0)))), 14, (0, 0, 255), 2)
-                    cv2.imwrite(str(USER / "debug" / "before_tap.png"), pre)
+                    cv2.imwrite(str(debug_dir() / "before_tap.png"), pre)
                 except Exception as _e:
                     quiet_err("city_task_target", _e)
                 dev.expect_city = False                     # from the tap on, a window opening is expected
@@ -9897,7 +9930,7 @@ def world_map(shot):
         if not hit and time.time() - _WM_NOTE[0] > 60:     # diagnostics: what was read when the world map was not recognised
             _WM_NOTE[0] = time.time()
             try:
-                cv2.imwrite(str(USER / "debug" / "not_world_map.png"), shot)
+                cv2.imwrite(str(debug_dir() / "not_world_map.png"), shot)
             except Exception as _e:
                 quiet_err("world_map", _e)
             _WM_NOTE[1] = joined[:120]
@@ -10446,7 +10479,7 @@ def ce_read_count(img, box, big=False):
 def ce_snap(img, tag):
     """Keep the last screenshot of each Crazy Eggs stage (overwritten every run) so a failure can be looked at."""
     try:
-        d = USER / "debug"
+        d = debug_dir()
         d.mkdir(exist_ok=True)
         cv2.imwrite(str(d / f"crazy_eggs_{tag}.png"), img)
     except Exception as _e:
@@ -11041,7 +11074,7 @@ def run_wheel(dev, cfg, log, stop):
         shot = dev.screenshot()
         if not wheel_on_page(shot):
             try:                                           # K 27 Oct 19:53: the ring's Wheel item opened a page the bot did not know
-                d = USER / "debug"
+                d = debug_dir()
                 d.mkdir(exist_ok=True)
                 cv2.imwrite(str(d / "wheel_after_ring_tap.png"), shot)
             except Exception as _e:
@@ -11159,7 +11192,7 @@ def run_wheel(dev, cfg, log, stop):
 
 def ch_snap(img, tag):
     try:
-        d = USER / "debug"
+        d = debug_dir()
         d.mkdir(exist_ok=True)
         cv2.imwrite(str(d / f"champions_{tag}.png"), img)
     except Exception as _e:
@@ -11407,7 +11440,7 @@ def _wait_view(dev, cfg, stop, want, secs=60):
 def run_view_reset_test(dev, cfg, log, stop):
     """From the city: 3 rounds of (move the camera) -> globe -> world map -> globe -> city, saving the city picture each
     time (debug/view_reset/). If the 3 city pictures match, the city always opens at the same camera place."""
-    out = USER / "debug" / "view_reset"
+    out = debug_dir() / "view_reset"
     out.mkdir(parents=True, exist_ok=True)
     moves = [(0, 0), (240, -300), (-260, 260)]
     pics = []
@@ -11480,8 +11513,8 @@ def as_donate_button(img):
 
 def as_snap(img, tag):
     try:
-        (USER / "debug").mkdir(exist_ok=True)
-        cv2.imwrite(str(USER / "debug" / f"alliance_science_{tag}.png"), img)
+        debug_dir().mkdir(exist_ok=True)
+        cv2.imwrite(str(debug_dir() / f"alliance_science_{tag}.png"), img)
     except Exception as _e:
         quiet_err("as_snap", _e)
 
@@ -11632,8 +11665,8 @@ def rd_nothing():
 
 def rd_snap(img, tag):
     try:
-        (USER / "debug").mkdir(exist_ok=True)
-        cv2.imwrite(str(USER / "debug" / f"duty_{tag}.png"), img)
+        debug_dir().mkdir(exist_ok=True)
+        cv2.imwrite(str(debug_dir() / f"duty_{tag}.png"), img)
     except Exception as _e:
         quiet_err("rd_snap", _e)
 
@@ -13357,7 +13390,7 @@ def _map_tap_note(dev, log, stop_no, bname, tx, ty, before, after, cmap):
         pass
     name = "?"
     try:
-        d = USER / "debug" / "map_notap"
+        d = debug_dir() / "map_notap"
         d.mkdir(parents=True, exist_ok=True)
         a, b = before.copy(), after.copy()
         for im in (a, b):
@@ -13935,7 +13968,7 @@ def run_test_pins(dev, cfg, log, stop):
         return
     log(f"[*] Pin test: {len(pins)} {name.title()} pins")
     ok, bad = [], []
-    tmp = USER / "debug" / "pintest"
+    tmp = debug_dir() / "pintest"
     tmp.mkdir(parents=True, exist_ok=True)
     for b in sorted(pins):
         if stop.is_set():
@@ -14687,6 +14720,7 @@ def rd_train(dev, cfg, log, stop, duty_id, ring_word, qty_xy, what):
         ring = dev.screenshot()
         if rd_find(ring, ["Speed Up", "Speedup"], region=(0, 110, 540, 650)) or rd_find(ring, ["Cancel"], region=(0, 110, 540, 650)):
             log(f"[+]  {what}: already busy - tried again at the next run")
+            _TL.duty_flag = "busy"
             return                                           # not rd_nothing(): training must come back after the timer
         raise RuntimeError(f"no {ring_word} button in the menu")
     shot = dev.screenshot()
@@ -16734,13 +16768,17 @@ def duty_record(serial, duty_id, ok, msg="", nothing=False):
         row["msg"] = msg
         hist = row.setdefault("hist", {})                        # per game day: [done, failed] - kept 7 days (task success stats)
         hd = hist.setdefault(str(day), [0, 0])
-        hd[0 if ok else 1] += 1
+        if len(hd) < 3:
+            hd.append(0)                                     # [done, failed, waiting for a pin] (owner review 28 Oct)
+        hd[0 if ok else 2 if DUTY_STATE_PIN_RE.match(msg or "") else 1] += 1
         for k in sorted(hist)[:-7]:
             hist.pop(k, None)
         if not ok:
             row["last_error"], row["last_error_at"] = msg, time.time()
         m = re.match(r"pin (.+) on the city map first$", msg or "")
+        new_pin = False
         if m and not ok:
+            new_pin = row.get("needs_pin") != m.group(1)         # first time for this building: one alert (caller)
             row["needs_pin"] = m.group(1)                        # waits (no retries) until that building is pinned
         else:
             row.pop("needs_pin", None)
@@ -16759,7 +16797,18 @@ def duty_record(serial, duty_id, ok, msg="", nothing=False):
             if row["tries"] == DUTY_MAX_TRIES:                   # the 3rd failure today: alert + report once (it keeps trying every hour)
                 row["status"] = "gaveup"
         save_duty_state(data)
-        return row.get("status")
+        return "needs_pin" if new_pin else row.get("status")
+
+
+DUTY_STATE_PIN_RE = re.compile(r"pin (.+) on the city map first$")
+
+
+def pin_wait_text(name):
+    """What the user is told while a duty waits for a building. Only the movable buildings can be placed by hand in
+    Fix pins - never ask for something the app cannot do (Farm, 28 Oct)."""
+    if name in MOVABLE_BUILDINGS:
+        return f"Pin {name} on the city map (City map card > Fix pins)"
+    return f"{name} is not on this city's map - this duty can't run yet"
 
 
 def duty_retry(serial, duty_id):
@@ -16807,8 +16856,11 @@ def duty_status(serial, duty_id, cfg):
     row = (load_duty_state().get(serial or "default") or {}).get(duty_id) or {}
     day, now = _game_day(), time.time()
     tries = int(row.get("tries", 0)) if row.get("day") == day else 0
-    if row.get("needs_pin") and not _has_pin(serial, row["needs_pin"]):   # owner 28 Oct: a missing pin is not retried
-        return "waiting", f"Pin {row['needs_pin']} on the city map"      # every hour - it runs once the building is pinned
+    if row.get("needs_pin"):                                 # owner 28 Oct: a missing pin is not retried every hour
+        if not _has_pin(serial, row["needs_pin"]):
+            return "waiting", pin_wait_text(row["needs_pin"])
+        if row.get("status") != "done" and not (duty_id == "black_market" and row.get("wait_gems")):
+            return "due", "Due"                                  # pinned now: runs at once (no hour of 'Retrying')
     if duty_id == "black_market" and bm_keep_going(cfg):     # owner 24 Oct: runs all day, never 'done' - the gem floor only pauses it
         fs = _duty_fail_state(row, tries, now)               # (checked before done_day: the Activity tile says nothing about the gems)
         if fs:
@@ -17503,12 +17555,32 @@ TASK_LOG = USER / "tasks_log.jsonl"
 _TASKLOG_LOCK = threading.Lock()
 
 
-def task_event(serial, task, ok, msg=""):
-    """One line per finished / failed task, so the app can show what the bot did (Duties tab)."""
+def task_code(ok, msg, flag=None):
+    """Short reason code for tasks_log (owner review 28 Oct): no_pin:<b>, busy, nothing_left, time_budget,
+    page_not_open, not_found, stopped, error - or ok."""
+    m = DUTY_STATE_PIN_RE.match(msg or "")
+    if m:
+        return "no_pin:" + m.group(1)
+    if ok:
+        return flag or "ok"
+    low = (msg or "").lower()
+    for code, words in (("time_budget", ("time limit",)), ("stopped", ("stopped by the user",)),
+                        ("page_not_open", ("did not open", "could not open", "not reached")),
+                        ("not_found", ("not found", "no ", "could not"))):
+        if any(w in low for w in words):
+            return code
+    return "error"
+
+
+def task_event(serial, task, ok, msg="", **extra):
+    """One line per finished / failed task, so the app can show what the bot did (Duties tab).
+    extra (owner review 28 Oct): start, dur (s), attempt, code, pic, wait - for diagnosing failures."""
     try:
+        e = {"t": int(time.time()), "s": serial, "task": task, "ok": bool(ok), "msg": str(msg)[:160]}
+        e.update({k: v for k, v in extra.items() if v not in (None, "")})
         with _TASKLOG_LOCK:
             with open(TASK_LOG, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"t": int(time.time()), "s": serial, "task": task, "ok": bool(ok), "msg": str(msg)[:160]}) + "\n")
+                f.write(json.dumps(e) + "\n")
             if TASK_LOG.stat().st_size > 400000:
                 lines = TASK_LOG.read_text(encoding="utf-8").splitlines()[-1500:]
                 TASK_LOG.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -17629,7 +17701,11 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
             task_event(getattr(dev, 'serial', ''), shown, False, 'needs the city map')
             continue
         RESTARTS = 1                                         # universal protocol: a stray window / failure = back to the city, then the whole operation starts again
+        t_start = time.time()
+        _TL.duty_flag = None                                 # a step may say e.g. "busy" (Barracks already training)
+        tries_made = 0
         for attempt in range(RESTARTS + 1):
+            tries_made = attempt + 1
             try:
                 if attempt:
                     log(f"[*] Restarting '{shown}' from the city view (attempt {attempt + 1})")
@@ -17673,10 +17749,18 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                 leave_to_city(dev, cfg, stop, log)           # failed or a wrong window opened: close everything, then (once) start over
         dev.expect_city = False
         if result is not None and not stop.is_set():
-            task_event(getattr(dev, "serial", ""), shown, *result)
+            code = task_code(result[0], result[1], getattr(_TL, "duty_flag", None) or ("nothing_left" if getattr(_TL, "rd_nothing", False) else None))
+            task_event(getattr(dev, "serial", ""), shown, *result, start=int(t_start), dur=round(time.time() - t_start),
+                       attempt=tries_made, code=code, wait="pin" if code.startswith("no_pin:") else None,
+                       pic=debug_fail_copy(t_start, shown) if not result[0] and not code.startswith("no_pin:") else None)
         if duty_id and result is not None and not stop.is_set():
-            if duty_record(getattr(dev, "serial", ""), duty_id, *result, nothing=bool(result[0] and getattr(_TL, "rd_nothing", False))) == "gaveup":
+            rec = duty_record(getattr(dev, "serial", ""), duty_id, *result, nothing=bool(result[0] and getattr(_TL, "rd_nothing", False)))
+            if rec == "gaveup":
                 duty_failed_report(dev, cfg, log, shown, result[1])
+            elif rec == "needs_pin":                         # one alert when the wait starts - no hourly repeats
+                nm = (DUTY_STATE_PIN_RE.match(result[1]) or [None, "?"])[1]
+                log(f"[!] {shown} waits: {pin_wait_text(nm)} - it starts by itself once that is done")
+                notify(cfg, getattr(dev, "serial", ""), f"{shown} is waiting: {pin_wait_text(nm)}. It starts by itself after that.")
         if duty_id in MAP_HEAVY:
             map_slot_free(getattr(dev, "serial", ""))
         if not on_map:                                       # map duties: the rally list is reached from the map (Alliance button)
@@ -17720,6 +17804,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     except OSError:
         cfg_seen = [None]
     _TL.ctl, _TL.stop = ctl, stop
+    _who = (cfg.get("device_names") or {}).get(serial) or ""
+    _TL.debug_who = re.sub(r"[^\w.-]+", "_", f"{_who}_{serial}" if _who else serial).strip("_")   # debug/<name_serial>/
 
     def nap(lo, hi=None):
         stop.wait(pace(random.uniform(lo, hi if hi is not None else lo)))
@@ -18141,8 +18227,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         last = dev.screenshot()
         save_debug(serial, last)
         try:                                                   # one picture per instance of the screen it took for "not the city"
-            (USER / "debug").mkdir(exist_ok=True)
-            cv2.imwrite(str(USER / "debug" / f"city_unknown_{re.sub(r'[^0-9A-Za-z]', '_', serial)}.png"), last)
+            debug_dir().mkdir(exist_ok=True)
+            cv2.imwrite(str(debug_dir() / f"city_unknown_{re.sub(r'[^0-9A-Za-z]', '_', serial)}.png"), last)
         except Exception as _e:
             quiet_err("reach_city.picture", _e)
         return False
@@ -18626,8 +18712,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 dev.acted = time.time()
             if st == "unknown" and has_template("rally_screen") and time.time() - dev.acted > 90:   # no tap for 90 s on a screen it does not know
                 try:
-                    (USER / "debug").mkdir(exist_ok=True)
-                    cv2.imwrite(str(USER / "debug" / ("idle_" + re.sub(r"\W", "_", serial) + ".png")), screen)
+                    debug_dir().mkdir(exist_ok=True)
+                    cv2.imwrite(str(debug_dir() / ("idle_" + re.sub(r"\W", "_", serial) + ".png")), screen)
                 except Exception as _e:
                     quiet_err("run_device", _e)
                 log(f"[!] Nothing to do on this screen for 90s ({st}) - pressing Back")
