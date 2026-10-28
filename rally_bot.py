@@ -15586,26 +15586,6 @@ def mr_still_there(dev, stop):
     return False
 
 
-def mr_page_buttons(page):
-    """Owner 29 Oct 03:39: the bot tapped "sometimes and missed" - on some monster pages (e.g. Pumpkin with the
-    Hunting Privilege Card box) Attack / Alliance War sit ~45 px higher than the fixed spots (y 768 hit the edge).
-    Read the two gold buttons (enlarged, light text) -> {"attack": (x, y), "war": (x, y)}; missing ones fall back."""
-    out = {}
-    try:
-        for t, ws in ocr_lines(page[650:870, 0:540], 2.5, bright=True):
-            words = [(str(w[0]).lower().strip("|.,:;!() "), w) for w in ws]
-            for i, (wd, w) in enumerate(words):
-                cy = int(650 + w[2] + w[4] / 2)
-                if wd in ("attack", "attac", "atack") and "attack" not in out:
-                    out["attack"] = (int(w[1] + w[3] / 2), cy)
-                if wd == "alliance" and "war" not in out:
-                    end = words[i + 1][1] if i + 1 < len(words) and words[i + 1][0] == "war" else w
-                    out["war"] = (int((w[1] + end[1] + end[3]) / 2), cy)
-    except Exception as _e:
-        quiet_err("mr_page_buttons", _e)
-    return {"attack": out.get("attack", MR_ATTACK), "war": out.get("war", MR_ALLIANCE_WAR)}
-
-
 def mr_open_monster(dev, stop, want, level=None):
     """Tap the monster in the middle; its ring menu must have Attack, its page must show the wanted name.
     -> ('ok', page_shot) | ('gone', None) | ('other', name_read)"""
@@ -15825,7 +15805,7 @@ def _run_monster_rally(dev, cfg, log, stop):
                 if got != "ok":
                     break
                 if solo:                                         # Solo: Attack opens the troop page straight away (no rally time)
-                    dev.tap(*mr_page_buttons(page)["attack"])     # read on this page, not a fixed spot
+                    dev.tap(*MR_ATTACK)
                     _nap(stop, 1.0, 1.2)
                     for _ in range(12):
                         shot = dev.screenshot()
@@ -15846,7 +15826,7 @@ def _run_monster_rally(dev, cfg, log, stop):
                         return later(2, "no troop page after Attack (all marches busy?)")
                     rd_snap(shot, "hunt_solo_troops")
                     break
-                dev.tap(*mr_page_buttons(page)["war"])           # read on this page (fixed spot only as fallback); window checked below
+                dev.tap(*MR_ALLIANCE_WAR)                        # fixed spot (the white-on-brown label is rarely read); window checked below
                 _nap(stop, 1.0, 1.2)
                 shot = None
                 for _ in range(5):                               # the rally time window can be slow to open
