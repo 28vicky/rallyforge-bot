@@ -1,24 +1,24 @@
 {
-  "version": "2.5.17",
-  "notes": "BlueStacks zoom fix",
+  "version": "2.5.18",
+  "notes": "City map: Map my city builds your city's picture and pins buildings; Find missing, Fix pins, Map city again. New event tasks (off until switched on). Stop/Pause at once, daily tasks no longer run twice, faster Wheel.",
   "files": {
     "rally_bot.py": {
-      "sha256": "7694c659604ce0a3f0ecd0b70fc1e199fb03efdcc09b95ccea400a19298e20f9"
+      "sha256": "745a85007b09aebebf3f417d362ad8ef15eba16fb4163c614ee283434927b474"
     },
     "web_app.py": {
-      "sha256": "debef39b921ecfbb766debe14c2746681e60e56bf98b9838974cb8dfc7e314f6"
+      "sha256": "1b7c52494f456b358ef07f34290e0b99ad95e44dd923ad5bd3bdeb4ad3a4c6e3"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "bc47bcd5b5bffa6a251e116d4ea0f732cc2554d7855f4bc1d6d14ece1299f22a"
+      "sha256": "d9cfec913164ebaff98d5c91e33194d4ca0afdf5f1e68989a1604f58897e19f1"
     },
     "ui/app.js": {
-      "sha256": "9e4be6ae10e966a20e8839d258cbd03e94c4b503d346087328560d1044418010"
+      "sha256": "6a8128006fecb66334f7ea7d427c41ed9dc367c5fe3fb51bcce22dcb8d1a2489"
     },
     "ui/changelog.js": {
-      "sha256": "41c903660994162e033a3627ac180b841224e5c893dfdb6f7533ac695fa6e50c"
+      "sha256": "1f8350e4b5c88aae1a516c2acf51209ef81245210d5765acb99338a6de14ce6f"
     },
     "ui/dialogs.js": {
       "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "4a408589f476438cca2dd1a9903e36b7afcacae826550078bd75e597edf89cab"
+      "sha256": "e7c87f69352c37237271fddfd73abd0a2b9aba1a9780636621aca19a205d1d81"
     },
     "ui/tour.js": {
       "sha256": "3a4ca195aed40a7b56c7158ce844a5879f327325f7486a59c8e8814eed318da0"
@@ -265,6 +265,10 @@
     "america/map.json": {
       "sha256": "26f8076e7547ba2b8162f7aa542ec870a0f1d3393905cbed8fc9502222183410",
       "url": "cultures/america/map.json"
+    },
+    "america/pins.json": {
+      "sha256": "61bbdca0a31f9436031297319c336ff4095f02ed9258e45b225882192f022d2d",
+      "url": "cultures/america/pins.json"
     },
     "arabia/feats.npz": {
       "sha256": "897950f7d4b363ebb8e46baeeebf7b6c8ad9224f4f295e39151646afbfb1c79b",
@@ -526,6 +530,10 @@
       "sha256": "0a724d72eb463bbdd7aeaac88e06c898ea58bce126b1e08da5e4e11ad4091f3a",
       "url": "cultures/arabia/map.json"
     },
+    "arabia/pins.json": {
+      "sha256": "1d0773ba0eb5a6a280a67d73b7bf143a293b875b2670e3a602f306524316960f",
+      "url": "cultures/arabia/pins.json"
+    },
     "china/feats.npz": {
       "sha256": "651c3de59d290ad985c7541cc40458fa097dfc763865c615436db554603f53de",
       "url": "cultures/china/feats.npz"
@@ -699,7 +707,7 @@
       "url": "cultures/china/map.json"
     },
     "china/pins.json": {
-      "sha256": "ff0e06cb5cbb50900faf418878e96c877ab320ae4d0d52e6a59d64803e449358",
+      "sha256": "721c47e285a42a2bf1d045ce1f1c1ba33a835f2a062d86175b2bcdd69d6beca6",
       "url": "cultures/china/pins.json"
     },
     "europe/feats.npz": {
@@ -907,7 +915,7 @@
       "url": "cultures/europe/map.json"
     },
     "europe/pins.json": {
-      "sha256": "e72d9aabfd90aadff93fcc9b93956a3806e6d4924a743cd5b137642a9fa4026c",
+      "sha256": "0d3b6feb471d08fda463cbdb7204896e1db248e25b57d73777cbd6cfac3f3133",
       "url": "cultures/europe/pins.json"
     },
     "japan/feats.npz": {
@@ -1135,7 +1143,7 @@
       "url": "cultures/japan/map.json"
     },
     "japan/pins.json": {
-      "sha256": "6c8c87d57597b773081ba1a109ee44c638a77937e544dca4291e2c85b62d0d50",
+      "sha256": "01af014a80983703d4c1f1ca3d52461189a9be14145e068a478230349c5f6f2d",
       "url": "cultures/japan/pins.json"
     },
     "korea/feats.npz": {
@@ -1382,6 +1390,10 @@
       "sha256": "7172b1bba29b75891ea951ead088f69c0a3718cca56ff8916e767dcf1282a95f",
       "url": "cultures/korea/map.json"
     },
+    "korea/pins.json": {
+      "sha256": "126b0c535f3040b13c4e751ca98fcc673fcfae8d38d6b68dd0f79519f4007ad1",
+      "url": "cultures/korea/pins.json"
+    },
     "russia/feats.npz": {
       "sha256": "e6cd72f825893d810b322e09e597ea6d110a76b70023722258a6a81a6d0465c6",
       "url": "cultures/russia/feats.npz"
@@ -1611,7 +1623,7 @@
       "url": "cultures/russia/map.json"
     },
     "russia/pins.json": {
-      "sha256": "8e9177b470b6a5b878375e3c719f7cdbfff2cbb707caeafa8e98cd43923abe64",
+      "sha256": "a91d45018be5af54c718da8d13bd8340d316119c876cfd8730e4859d3e8dd3f2",
       "url": "cultures/russia/pins.json"
     }
   },
@@ -3166,6 +3178,12 @@
     "act_wheel_of_fortune.png": {
       "sha256": "f74a5ad07774fa69b233ba21186ec4e5d695c86bdbed8cc94fa13f7fa3420c34"
     },
+    "chat_alliance_tab.png": {
+      "sha256": "27375af0e1baac4839193b073604295338bc8f2776c2ecb5e116cf611a237947"
+    },
+    "chat_title.png": {
+      "sha256": "ab59b0a247258c5887f644c5c7ac2718067e6a434816acc641997496aac2e583"
+    },
     "city_whole.png": {
       "sha256": "84b36804a615b75d99646a369dae9f526d4c28a90f7494ba85277d4431aff5aa"
     },
@@ -3287,5 +3305,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "3b228e4bad00d557fbb8e9c4011064e9804dee595922dac8989ec61d2bbab76d"
+  "sig": "68fd671bbaf93f7a2d0f2295bf2dcec9026a32ea39054b1bb36f7fc22b65a6bb"
 }
