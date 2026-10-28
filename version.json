@@ -1,27 +1,27 @@
 {
-  "version": "2.5.19",
-  "notes": "Map my city handles pop-ups and carries on; Daily Rewards closes at once; Auto-Join setup page fix; troop-limit read fix; Alliance Science opens reliably; faster start.",
+  "version": "2.5.20",
+  "notes": "Monster hunts hunt order chips, Black Market gold goods and new pictures, joining and hunting fixes, cleaner layout",
   "files": {
     "rally_bot.py": {
-      "sha256": "0f9a9f3fd5690809476ab0cd2e5f0e77f16af43bdfbee19a09a34cf4073f9017"
+      "sha256": "78791d7a01d870e38cf39431205b756e711a4a6c847a54154aba1209e9122d56"
     },
     "web_app.py": {
-      "sha256": "9f738e28c997d2c730c9683a7084f1b6718689c91bdadc6ab07aa88ebf318ee2"
+      "sha256": "cf4a3e50e5de51a458d49c28033a409f7ff1330b89706aaeb9d3a5e5a78a9688"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "d9cfec913164ebaff98d5c91e33194d4ca0afdf5f1e68989a1604f58897e19f1"
+      "sha256": "8bcf55046f8b9a44c3d0560770ce990e71bdd1046231c97fa4e6b4f4059d7a52"
     },
     "ui/app.js": {
-      "sha256": "6a8128006fecb66334f7ea7d427c41ed9dc367c5fe3fb51bcce22dcb8d1a2489"
+      "sha256": "ee96a2d802437ef6ce47a798c533ad96ef9d80eb7db22837820b0beb5971dfb9"
     },
     "ui/changelog.js": {
-      "sha256": "b626f0a74ad7e3900aec4e87a69ef597306945818706ac7afcbd5be91bfee173"
+      "sha256": "e6c510f06ff25be89ff6ffd333b1ced9755022055723877e4ccbb8075839025d"
     },
     "ui/dialogs.js": {
-      "sha256": "996b2942bdb8308085d3b03a0ab57fbb7733afc1f62ba67bc27393a32ec505f0"
+      "sha256": "5a4e14faf9eb34d622f1cda72833ed5bf815da402ddd485a8277dac39053a162"
     },
     "ui/fonts.css": {
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
@@ -30,10 +30,10 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "e7c87f69352c37237271fddfd73abd0a2b9aba1a9780636621aca19a205d1d81"
+      "sha256": "fdeaa8f08122faf1f49f1f7536c8bed67d609c49c0b5b2415cd0ce4e2fdfa0db"
     },
     "ui/tour.js": {
-      "sha256": "3a4ca195aed40a7b56c7158ce844a5879f327325f7486a59c8e8814eed318da0"
+      "sha256": "13f3caea4e097cb210531c175e34809ead00eb7fca86570faa51a1929c787b32"
     }
   },
   "mode": "ask",
@@ -3196,6 +3196,21 @@
     "lag_wifi.png": {
       "sha256": "87b27e637e0de7ceeb05d4e19baf1bc5ad3243d08332ff23173797455b33d438"
     },
+    "mk_24h_Farm_Speed-up_x2.png": {
+      "sha256": "db53eb4586cea4901937061ba76c30f14ffb9c1fecfcc6a9efbcc6be4660ea61"
+    },
+    "mk_24h_Iron_Mine_Speed-up_x5.png": {
+      "sha256": "cbd706b616636b395277f173c8ddcf7980bbdefbd25b5e7071baf6fe4e5f163e"
+    },
+    "mk_24h_Quarry_Speed-up_x20.png": {
+      "sha256": "a6627da25d0fae77e792e954e8bf7d17ddb0eba71fb5a2b2c4c6137699bf929e"
+    },
+    "mk_24h_Quarry_Speed-up_x5.png": {
+      "sha256": "b730b1cef70c461a590ef8cbdde0ea89274e83003122507a0fecccf162ba36e0"
+    },
+    "mk_24h_Sawmill_Speed-up_x5.png": {
+      "sha256": "bb524ea3c64470d981f05ea721c73caeae8d637aed28030fb04afcb8f7893981"
+    },
     "mk_BM_01.png": {
       "sha256": "91463983e51625ee65f481ad93810174cc60b78a3d70298afcaa322df3713e00"
     },
@@ -3295,6 +3310,99 @@
     "mk_BM_51.png": {
       "sha256": "88f2c2edd0f8d814369668bfefd25b84ba1843c39fda23238d3ce87f9c73e1bd"
     },
+    "mk_Champions_Armor.png": {
+      "sha256": "e397c195b5ebe7697a1a1c3839ee11d6f0114774c830f3afbe55e32dae12eb2e"
+    },
+    "mk_Champions_Helmet.png": {
+      "sha256": "005c1b73326958b1deef282c729ba1827b20aeb87c1dab45619c5611bd34aff5"
+    },
+    "mk_Champions_Leg_Armor.png": {
+      "sha256": "708852c098d30296d6cf4baffc4f0e2546fe9800ac6b13be04009f3fa2915ee5"
+    },
+    "mk_Chips_100_x1.png": {
+      "sha256": "238d6f99558d1a7ab0019539317de5b47a929c4d5f4499fa7d1bc9d47922ea9e"
+    },
+    "mk_Chips_100_x5.png": {
+      "sha256": "64d7aceac1afd55883350aa653e13509342249d35e6dc3b198cb03d7b713d1f3"
+    },
+    "mk_Cloth_Armor.png": {
+      "sha256": "eee0c594adb50ed2a7e6b163752730ef3a10640db490754259a2d8e15524db32"
+    },
+    "mk_Cloth_Hood.png": {
+      "sha256": "7284c7275848a9a8431fca1ecf4773e5d456d93533eb83b5b3f2facbf4ca9ac7"
+    },
+    "mk_Dragon_Crystal_x10.png": {
+      "sha256": "37b807828fbc2ee7936facc43c45f191301b8f1303807d6523bd0b6a910b55b5"
+    },
+    "mk_Elites_Bow.png": {
+      "sha256": "57ce730bac0fd81f1b95d53e2d9a1eb07f160f90f940aadad27fd848ebe83c0c"
+    },
+    "mk_Fighters_Ring.png": {
+      "sha256": "65fd3e5f6076bae1b0cfcf6bb2568c3a3317be931f18495b4158cfef72d893fa"
+    },
+    "mk_Gear_Lv3_Mountain_Decoration.png": {
+      "sha256": "b74df482532315a0a4bc79d1f5679112423964a123c5a2d55d1dcb71af7a94c8"
+    },
+    "mk_Gear_Lv3_Thunder_Staff.png": {
+      "sha256": "cf8911d40792bf8598494ec3eef37fda47613337ca2202389ac5eb0850610cbe"
+    },
+    "mk_General_EXP_10000_x20.png": {
+      "sha256": "c2ea68c5acde9ac36849441b3f50d34aec2b806240e08be1515ff030167e051d"
+    },
+    "mk_General_EXP_20000_x20.png": {
+      "sha256": "fc9ad2bd7648c885e6a051b371614104b0ddb09af93fbea84ba8aef1a6761db2"
+    },
+    "mk_General_EXP_2000_x2.png": {
+      "sha256": "fb989254615a2ae61957d660bad4b23617b65571987cceb82bc8da1b355be3a5"
+    },
+    "mk_General_EXP_5000_x1.png": {
+      "sha256": "5908b241a19ce17f49f693f6bc39213ad6a60bbbdc26367fa34646c7fa592966"
+    },
+    "mk_General_EXP_5000_x2.png": {
+      "sha256": "b4f3d9ea76add0b46b26a4fe729bf4d52031c18a5a886c9490cc13fe0c1f53de"
+    },
+    "mk_General_EXP_500_x1.png": {
+      "sha256": "f0bef579a630a278f96be78ddd1b7c1c33cf55516c88af6809f69cccd9f56cce"
+    },
+    "mk_Generals_Axe.png": {
+      "sha256": "2d5449d9490c816760e4524522c703c3ce0bf5fd3d8da49c52a4c7b3e713e8e7"
+    },
+    "mk_Lumber_20M.png": {
+      "sha256": "ef9e79fd6f0df1ad9124b304fd8ead246cedcdbb748ab8a0b97447cebfdef7ea"
+    },
+    "mk_Monarch_EXP_2000_x5.png": {
+      "sha256": "f168bcd0d48e33ff66596436d2c96826d43694a8e61b23121cbaaf48c5c73d88"
+    },
+    "mk_Runestone_Chest_x1.png": {
+      "sha256": "0fc993f2c463312ed78faa4631b140523ecdaaea617c98e881492e235e8a4a3a"
+    },
+    "mk_Spiritual_Beast_EXP_1000_x10.png": {
+      "sha256": "26c6738af48f34ac5ce889acb174cf4879ca0aa0a4cc88ddd134693743d60ab6"
+    },
+    "mk_Standard_Leg_Armor.png": {
+      "sha256": "43abc8e90dd2eda16e9614ca6970675048e0bc2227b0d3fbaf53fd124691532f"
+    },
+    "mk_Transcendence_Boots.png": {
+      "sha256": "74b3da7ecde476fa64d04b6d3d521ad2e632e82274328d36fd45082815cd03ec"
+    },
+    "mk_Transcendence_Ring.png": {
+      "sha256": "7448dfa92ff60cc6e09bc99385b822c7ab7fb018bf1ab7f1ec5345b25347e8b8"
+    },
+    "mk_Tribute_x1.png": {
+      "sha256": "60d40ba18739004340a7aab92192613bb0425f61ff71e3e699233e3dee36cd1e"
+    },
+    "mk_VIP_1_Day_x1.png": {
+      "sha256": "e39a9d47b9860710ef85ac835cf1b04d9e0a66dbd61164ee449fd713f21c5669"
+    },
+    "mk_VIP_30_Days_x1.png": {
+      "sha256": "a85cc93ba464bf1ebd0659fd23f0a698807cf18c4210c08082b44f824602b843"
+    },
+    "mk_VIP_60_Minutes_x1.png": {
+      "sha256": "a399e84b56694582c83169ba9d0c27a90261b2c4c2022856260532e60eae7c17"
+    },
+    "mk_VIT_50.png": {
+      "sha256": "83c76006973da6dbd4503fd41cd9be8fb2eb2727a9004a9e232d202713669f9f"
+    },
     "rally_icon.png": {
       "sha256": "a8e83f9d54048e01c976346571b9df98cc8112da9d0c5054a1b7ec71f836686e"
     },
@@ -3305,5 +3413,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "ae1d90ca6621aa4c4b07fe1e6066f59d59da1f43c3f48b2f96e6aada94b4c25a"
+  "sig": "c20753897ed1d2276c333da2b67125db28bae1a617793c93f245025a1e063bcd"
 }
