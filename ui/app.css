@@ -1900,6 +1900,3 @@ select.pick-open{border-color:var(--accent1)}
 :root .stickyhead.stuck{box-shadow:0 8px 18px -12px rgba(20,22,29,.28)}
 :root .app:not(.nosb) .status{left:256px}   /* status bar starts where the 256 px sidebar ends (was 240: "141 MB" sat on the sidebar) */
 .huwhyb.off{background:var(--hu-soft)}   /* A1: "Monster hunts is off" is grey, not the green Ready colour */
-/* PCR2 B7 fix (owner 29 Oct 02:47: "Needs attention" was cut): sidebar filter fills the sidebar width, tighter segments */
-#instFilter .seg{display:grid;grid-template-columns:auto auto 1fr;width:100%;flex-wrap:nowrap;padding:3px;gap:2px}
-#instFilter .seg .segb{padding:5px 7px;font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:center}
