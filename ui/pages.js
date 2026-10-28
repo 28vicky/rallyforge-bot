@@ -1081,7 +1081,7 @@ const PAY = [["gems", "Gems only"], ["gold", "Gold only"], ["resources", "Gold o
 const REFRESH = [["none", "Never"], ["count", "A set number of times"], ["all", "Until the gem floor"]];
 // Black Market pictures that ship with the app (templates mk_BM_NN.png, cut from a real shop recording): plain name + category.
 // The item keeps its "BM NN" name in the settings (that is the picture the bot looks for); only the label shown changes.
-const BM_CATS = [["all", "All"], ["stamina", "Stamina"], ["res", "Resources"], ["speed", "Speed-ups"], ["chest", "Chests"], ["gear", "Gear & materials"], ["other", "Other"]];
+const BM_CATS = [["all", "All"], ["gold", "Gold & resources"], ["stamina", "Stamina"], ["res", "Resources"], ["speed", "Speed-ups"], ["chest", "Chests"], ["gear", "Gear & materials"], ["other", "Other"]];
 const BM_INFO = {
   "BM 44": ["Stamina 50 x10", "stamina"], "VIT 50": ["Stamina 50", "stamina"],   // VIT 50 = the owner's own capture (single item)
   "BM 04": ["Gold 100K", "res"], "BM 08": ["Food 200M", "res"], "BM 21": ["Food 500M", "res"], "BM 19": ["Lumber 200M", "res"], "BM 17": ["Resource 50M", "res"],
@@ -1126,6 +1126,11 @@ const BM_SUGGEST = (() => {
 const bmGuess = (n) => /stam|vit/i.test(n) ? "stamina" : /speed/i.test(n) ? "speed"
   : /gear|crown|staff|grail|horn|crystal|decoration|armor|ring|bow|spear|axe|sword|boots|helmet|hood|refining|research stone|runestone/i.test(n) ? "gear"
   : /chest|box/i.test(n) ? "chest" : /food|lumber|wood|stone|ore|iron|gold|silver|res/i.test(n) ? "res" : "other";
+// owner 29 Oct: goods the shop prices in gold / other resources (not gems) - from the game guide's price list.
+// They must be easy to find and get "Gold or other resources" as pay, or the bot would never buy them.
+const bmGold = (n) => { const t = String(bmInfo(n).label).replace(/_/g, " ");
+  return /^(Food|Lumber|Wood|Stone|Ore) (500K|1M|2M|5M)$/i.test(t) || /^24h .*Speed-up x(1|2|5)$/i.test(t) || /^VIP (30|60) Minutes/i.test(t)
+    || /^Chips 100/i.test(t) || /^Tribute x(1|2)$/i.test(t) || /^Monarch EXP (1000|2000) x/i.test(t) || /^General EXP (500|1000|2000) x/i.test(t); };
 const bmInfo = (n) => BM_INFO[n] ? { label: BM_INFO[n][0], cat: BM_INFO[n][1] } : { label: n, cat: bmGuess(n) };
 PAGES.market = function (fixed, redraw) {
   // owner 28 Oct 21:01: Black Market settings per instance - "Using universal defaults · Make own" like the other settings
@@ -1141,7 +1146,7 @@ PAGES.market = function (fixed, redraw) {
   const PAY_SHORT = [["gems", "Gems"], ["gold", "Gold"], ["resources", "Resources"], ["both", "Any"]];
   const fmt = (v) => Number(v || 0).toLocaleString("en-US");
   const chosen = (n) => c.market_items.find((i) => i.name === n);
-  const addItem = (n) => { if (!chosen(n)) c.market_items.push({ name: n, pay: c.market_pay || "gems" }); };
+  const addItem = (n) => { if (!chosen(n)) c.market_items.push({ name: n, pay: bmGold(n) && (c.market_pay || "gems") === "gems" ? "resources" : (c.market_pay || "gems") }); };   // gold-priced goods never get "Gems only"
   const pick = (n) => { if (chosen(n)) c.market_items = c.market_items.filter((i) => i.name !== n); else addItem(n); draw(); };
   // ---- summary line
   const sum = h("div", { class: "bmsum" });
@@ -1282,17 +1287,17 @@ PAGES.market = function (fixed, redraw) {
     const all = [...new Set([...names, ...c.market_items.map((i) => i.name)])];
     pills.innerHTML = "";
     for (const [k, l] of BM_CATS) {
-      const n = k === "all" ? all.length : all.filter((x) => bmInfo(x).cat === k).length;
+      const n = k === "all" ? all.length : all.filter((x) => (k === "gold" ? bmGold(x) : bmInfo(x).cat === k)).length;
       pills.appendChild(h("button", { type: "button", class: "rtnpill" + (cat === k ? " on" : ""), onclick: () => { cat = k; draw(); } }, l + " " + n));
     }
-    const list = all.filter((n) => { const f = bmInfo(n); return (cat === "all" || f.cat === cat) && (!q || (f.label + " " + n + " " + f.cat).toLowerCase().includes(q)); })
+    const list = all.filter((n) => { const f = bmInfo(n); return (cat === "all" || (cat === "gold" ? bmGold(n) : f.cat === cat)) && (!q || (f.label + " " + n + " " + f.cat).toLowerCase().includes(q)); })
       .sort((a, b) => bmInfo(a).label.localeCompare(bmInfo(b).label));
     holder.innerHTML = "";
     holder.appendChild(list.length ? h("div", { class: "bmgrid" }, ...list.map((n) => {
       const it = chosen(n), f = bmInfo(n);
       return h("button", { type: "button", class: "bmcard" + (it ? " on" : ""), title: f.label, "aria-pressed": !!it, onclick: () => pick(n) },
         h("img", { src: `/api/market_img?name=${encodeURIComponent(n)}&k=${window.KEY}`, alt: "", onerror: (e) => (e.target.style.visibility = "hidden") }),
-        h("div", { class: "bmname" }, f.label), h("div", { class: "bmsub" }, it ? "Picked" : "Tap to add"));
+        h("div", { class: "bmname" }, f.label), h("div", { class: "bmsub" }, it ? "Picked" : bmGold(n) ? "Gold / resources" : "Tap to add"));
     })) : h("div", { class: "empty" }, q ? "Nothing matches “" + q + "”." : "No pictures in this group yet."));
     const left = all.filter((n) => !chosen(n)).length;
     addSum.textContent = "Add items" + (all.length ? " · " + left + " more to choose from" : "");
