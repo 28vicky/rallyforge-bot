@@ -9227,6 +9227,13 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         dev.tap(p[0], p[1] - 38)                           # the icon sits just above its caption
         return True
     bases = [nm.split("#")[0].strip() for nm in str(name).split("+") if nm.strip()]
+    # Owner 28 Oct 13:55 (Kiravik's Wisdom Dome: the old whole-city picture lost the camera at the map corner, then
+    # minutes of name reading): a mapped city goes to the building's PIN (culture pin / own pin) like every other task.
+    if kind == "building" and len(bases) == 1 and city_mapped(dev) and (_pin_of(dev, bases[0]) or culture_pin(dev, bases[0])):
+        if find_learned_building(dev, cfg, log, stop, bases[0]):
+            return True
+        log(f"[i]   {bases[0]}: not opened at its pin - tried again later (no old routes)")
+        return False
     if SHRINE_ROUTE and kind == "building" and bases and all(b.lower() in SQUARE_BASES for b in bases) and str(cfg.get("city_nav", "auto")).lower() != "picture":
         done = found_shrine = False                          # every building visit starts from the Shrine, in every city style
         for b in bases:
