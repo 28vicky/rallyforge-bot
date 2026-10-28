@@ -3135,7 +3135,7 @@ def open_window(url, ctl):
     try:
         import webview
         ww, wh, wx, wy = window_size()
-        win = webview.create_window("RallyForge Bot", url, width=ww, height=wh, x=wx, y=wy, min_size=(860, 520),
+        win = webview.create_window("RallyForge Bot", url, width=ww, height=wh, x=wx, y=wy, min_size=(920, 560),    # owner 28 Oct: the app is built for 900 px and up; window frame included
                                     background_color="#12141f", text_select=True)
         ctl_events = {"win": win}
 

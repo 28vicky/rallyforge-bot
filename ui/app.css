@@ -92,9 +92,10 @@
 
 *{box-sizing:border-box;margin:0}
 html,body{height:100%}
-body{font:16px/1.45 var(--font);color:var(--fg);background:var(--bgc);overflow:hidden}
+body{font:16px/1.45 var(--font);color:var(--fg);background:var(--bgc);overflow:auto}
 ::selection{background:var(--accent1);color:var(--accfg)}
-.app{position:fixed;inset:0;display:flex;background:var(--bg)}
+/* owner 28 Oct: never narrower than 900 px (or 520 high) - a smaller window or a big text size scrolls the page instead of breaking it */
+.app{position:absolute;inset:0;min-width:900px;min-height:520px;display:flex;background:var(--bg)}
 
 /* ---------- scrollbars: thin pill */
 *{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
