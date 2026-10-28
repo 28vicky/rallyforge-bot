@@ -15467,7 +15467,9 @@ def mr_targets(cfg, tried, serial=None):
         with _hunt_dec_lock:
             hunt_dec_save()
     km = lambda it: it.get("km") if it.get("km") is not None else 1e9
-    out.sort(key=lambda it: (it["rank"], km(it)))     # owner 28 Oct: priority first (top of each preset box), then the closest
+    # owner 28 Oct: priority first (top of each preset box); owner 29 Oct 03:43: inside a row the HIGHER level goes first
+    # (Pumpkin Lv8 before a nearer Lv6), then the closest
+    out.sort(key=lambda it: (it["rank"], -int(it.get("level") or 0), km(it)))
     return out
 
 
