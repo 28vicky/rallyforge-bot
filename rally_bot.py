@@ -4023,13 +4023,18 @@ def claim_popup(dev, shot, log=None):
             if log:
                 log("[+] Daily Rewards pop-up - tapped Check-in (claimed)")
             time.sleep(1.5)
-            dev.tap(*GROUND_TAP)                           # the reward panel after the claim closes with a tap outside
-        else:                                              # already claimed today: just close it
-            cx = find_close_x(shot)
-            if cx:
-                dev.tap(cx[0][0], cx[0][1])
-            else:
-                dev.back()
+        # owner 28 Oct 14:22 (Rob): a tap outside did not close it - Back does; checked until it is really gone
+        for _ in range(3):
+            dev.back()
+            time.sleep(1.0)
+            sh = dev.screenshot()
+            if _quit_box(sh):                              # Back reached the bare city: Cancel, done
+                cancel_quit_dialog(dev, sh, log or (lambda *_: None))
+                break
+            if not find_text(sh, ["Daily Rewards", "Sign-in Rewards", "Daily Sign-in", "Check-in Rewards"],
+                             region=(40, 100, 460, 260), cutoff=0.8):
+                break
+        if not b:
             if log:
                 log("[*] Daily Rewards pop-up (already claimed) - closed")
         time.sleep(0.8)
@@ -13289,6 +13294,14 @@ def run_map_movable(dev, cfg, log, stop, only=None):
             break
         progress(i + 1)
         nav, rest = visit(i)
+        if nav is None and not last_edge[0] and not stop.is_set():   # owner 28 Oct: a pop-up came - pause, clear it, resume here
+            log(f"[i]   stop {i + 1}: the screen did not match the city - clearing it and trying this stop again")
+            leave_to_city(dev, cfg, stop, log)
+            clear_to_bare_city(dev, cfg, log, stop)
+            nav, rest = visit(i)
+        elif nav is not None and rest is not None and cmap.locate(rest) is None and not stop.is_set():
+            clear_to_bare_city(dev, cfg, log, stop)       # arrived, but something covers the view (a pop-up) - clear, look again
+            nav, rest = visit(i)
         if nav is None and last_edge[0]:
             edge_rows.add(round(sxy[1] / 300))
             edge_known.append(tuple(sxy))
@@ -13508,8 +13521,8 @@ def run_map_city(dev, cfg, log, stop):
     dev._mapping = True                                    # the city map + culture pins are usable while mapping
     mymap_save(dev, running=True, complete=False, stop=0, stops=0, found=0, total=len(MOVABLE_BUILDINGS), last="", missing=[])
     try:
-        _run_map_city(dev, cfg, log, stop)
-        if not stop.is_set() and city_map(dev) is not None:
+        ok = _run_map_city(dev, cfg, log, stop)
+        if ok is not False and not stop.is_set() and city_map(dev) is not None and (ok or (_map_dir(dev) / "map.json").exists()):
             mymap_save(dev, running=False, complete=True, at=time.strftime("%Y-%m-%d %H:%M"))
             log("[+] Map my city: done - the map stays until you press Map city again")
         else:
@@ -13520,13 +13533,44 @@ def run_map_city(dev, cfg, log, stop):
         dev._photo = None
 
 
+def clear_to_bare_city(dev, cfg, log, stop, tries=4):
+    """Owner 28 Oct 14:38: pop-ups come any time - clear the screen down to the bare city. Rewards are claimed, a Store
+    is left; then Back until the game's 'exit?' box shows (= nothing else is open), Cancel. -> True when the bare city
+    was reached."""
+    for _ in range(tries):
+        if stop.is_set():
+            return False
+        shot = dev.screenshot()
+        if purchase_guard(dev, shot, log) or claim_popup(dev, shot, log):
+            continue
+        if cancel_quit_dialog(dev, shot, log):
+            return True
+        dev.back()
+        _nap(stop, 0.9, 1.2)
+        sh2 = dev.screenshot()
+        if cancel_quit_dialog(dev, sh2, log):
+            return True
+    return False
+
+
 def _run_map_city(dev, cfg, log, stop):
     leave_to_city(dev, cfg, stop, log)
+    clear_to_bare_city(dev, cfg, log, stop)                # owner 28 Oct: Rob's Daily Rewards was still open when the zoom began
     zoom_out_full(dev, cfg, stop, log)
     nav = CityNav(dev, stop, log, pause=0.6)
-    if try_culture_match(dev, cfg, log, stop, nav):
-        run_map_movable(dev, cfg, log, stop)               # fixed buildings = culture pins, movable ones = found in the sweep
-        return
+    for attempt in range(3):                               # a pop-up in front makes the culture match fail: clear, try again
+        if try_culture_match(dev, cfg, log, stop, nav):
+            run_map_movable(dev, cfg, log, stop)           # fixed buildings = culture pins, movable ones = found in the sweep
+            return True
+        if stop.is_set():
+            return False
+        if attempt < 2:
+            log("[i]   the city did not match a culture map - a pop-up may be in the way: clearing the screen and trying again")
+            leave_to_city(dev, cfg, stop, log)
+            clear_to_bare_city(dev, cfg, log, stop)
+    if CULTURES:                                           # never the old walk with nothing on screen (Rob 14:22: 'done' with no map)
+        log("[!] Map my city: the city did not match any culture map 3 times - stopped, nothing marked as mapped (press Map my city again)")
+        return False
     x, y, w, h = CITY_VIEW
     STEPX, STEPY = int(w * 0.5), int(h * 0.6)          # one step in GAME px: views overlap half sideways, 40 % up/down. The
     views = []                                             # finger distance comes from the measured gain (a fixed 234 finger px
