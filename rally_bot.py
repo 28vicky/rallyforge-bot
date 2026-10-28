@@ -9553,14 +9553,16 @@ def ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
     if len(fails) < 3:
         return ok
     _VIEW_FAILS[serial] = []
-    _VIEW_RESTARTING.add(serial)
+    # Owner 28 Oct 13:02: a task that fails / a screen the bot does not know is a BOT problem, not a stuck game - the
+    # game is not restarted for it (Kiravik 12:59 was restarted after Alliance Science failed). A game that really does
+    # not react is caught by the frozen-screen check, which still restarts it.
+    (log or (lambda m: None))(f"[!] Recovery could not reach the {want} view 3 times in 5 min - the task stops, back to "
+                              "rallies (no game restart: the game reacts, the bot did not know this screen)")
     try:
-        lg = log or (lambda m: None)
-        lg("[!] Recovery went round in circles 3 times in 5 min - restarting Evony")
-        force_restart_game(dev, cfg, lg, stop, reason="recovery kept going in circles")
-        return _ensure_view(dev, cfg, stop, log, want, tries)
-    finally:
-        _VIEW_RESTARTING.discard(serial)
+        save_debug(serial, dev.screenshot())               # the screen it did not know: for a new picture / fix
+    except Exception:
+        pass
+    return ok
 
 
 def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
@@ -9595,6 +9597,10 @@ def _ensure_view(dev, cfg, stop, log=None, want="city", tries=12):
         ring = v == "city" and find_detail_icon(shot)
         if v == want and not ring:
             return True
+        if want == "city" and v not in ("city", "landscape", "world") and not find_detail_icon(shot):
+            cm = city_map(dev)                               # Kiravik 28 Oct 12:55: its city was not recognised -> Back ->
+            if cm is not None and cm.locate(shot):           # landscape -> city -> Back ... The own city map knows the city.
+                return True
         if ring:
             close_ring(dev, stop, (270, 430))
             continue
@@ -17093,10 +17099,10 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         (closing and reopening Evony fixed it on Renner, 23 Oct) instead of pausing again and again."""
         city_fails[0] += 1
         task_event(serial, "Tasks", False, "could not reach the city screen")
-        if city_fails[0] >= 2:
-            log(f"[!] Could not reach the city screen {city_fails[0]} times in a row - restarting the game")
+        if city_fails[0] >= 2:                            # owner 28 Oct 13:02: no game restart for a bot problem
+            log(f"[!] Could not reach the city screen {city_fails[0]} times in a row - city tasks wait 10 min (no game restart)")
             city_fails[0] = 0
-            force_restart_game(dev, cfg, log, stop, reason="city screen not reachable")
+            city_block[0] = time.time() + 600
             return
         log(msg)
         city_block[0] = time.time() + 600
