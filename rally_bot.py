@@ -15883,7 +15883,7 @@ def _run_monster_rally(dev, cfg, log, stop):
                 if mr_preset_loaded(shot):
                     used = p_
                     break
-                log(f"[*]  Monster rally: {label} - preset {p_} is empty (its general is still out)")
+                log(f"[*]  Monster rally: {label} - preset {mr_pnum(p_)} is empty (its general is still out)")
             if not used:                                     # every preset for it is out: stay here (owner 25 Oct 21:26)
                 rd_snap(shot, "mrally_empty_preset")
                 mr_to_map(dev, cfg, stop)
@@ -15976,7 +15976,7 @@ def _run_monster_rally(dev, cfg, log, stop):
             continue
         hunt_note(serial, tgt, "Rallied", "go", why)
         hunt_status(serial, "running", f"Rallying {short} with Preset {mr_pnum(preset)}", f"{mode} min rally started{far} · looking for the next monster")
-        log(f"[+]  Monster rally: started on {label} - {mode} min, preset {preset}")
+        log(f"[+]  Monster rally: started on {label} - {mode} min, preset {mr_pnum(preset)}")
         started += 1
         continue                                             # owner 25 Oct: straight to the next monster
     if started:
