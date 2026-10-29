@@ -136,7 +136,7 @@ Starter prompt for any chat: "Read CLAUDE.md and HANDOFF.md (section PARALLEL WO
 6. Owner's PC is shared: only ONE chat deploys / reopens the app at a time, and only after asking the owner. Write "PC: dev copy app\v2.4.99 = e9401a9 (2.5.7 + city-go) + T75 web_app + UI files; feat/city-go head fccf883 rally_bot.py (724237 bytes) staged by the city chat - deploy + restart only after Stalds' map run. - was: <task id> testing" in the PC line below while testing, clear it after.
 7. Low effort by default. Ask the owner before anything costly (live tests, screenshots, long reads, subagents, high-effort debugging).
 
-PC: free (24 Oct 18:10 IST). Dev copy app2.4.99 = release/2.5.8 build (rally_bot 727230, web_app 141032 bytes + ui/*) deployed by the city chat, app restarted.
+PC: Pan chat deploying fix/pan-only (29 Oct 13:50 IST) - app\v2.5.20\rally_bot.py = PC Hunts-live copy (13:39, 986387 b) + Pan patch; monsters\Pan.png replaced; backup rally_bot.py.bak_before_panfix29oct. Owner restarts the app.
 
 RELEASE PREP 2.5.7 (23 Oct 23:30 IST, owner asked): branch release/2.5.7 = main + T56 T57 T58 T60 T61 T63 T64 T67 T68 T69 T70 (not T55 city-go). Conflicts T69 vs T61/T68 fixed (kept new code + quiet_err); tests reset the in-memory duty state; 31 tests pass; compiles; UI boots in preview. VERSION 2.5.7 + What's new done. NOT PUBLISHED: needs a smoke test on the PC (one instance, ~30 min) and make_update with UPDATE_KEY from a PC-linked chat.
 
