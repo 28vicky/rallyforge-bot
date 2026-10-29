@@ -2,6 +2,17 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## READY (29 Oct 15:30 IST, one chat) - fix/accent-buttons-stop-state 2d35033 (on fix/join-count-today): picked accent colour also colours the main buttons; no false 'Problem - see the log' after Stop. NOT on the PC - next release (merge only this tip: it contains fix/join-count-today + fix/lucky-on-2521). Doc claude/accent_buttons_stop_state_29oct.md.
+
+## READY (29 Oct 15:15 IST, one chat) - fix/join-count-today ae22f22 (on fix/lucky-on-2521): sidebar/header join chip = today's game-day joins (same as Today tile); Activity 'Skipped (all reasons)'. Display only, NOT on the PC - next release. Doc claude/join_count_mismatch_29oct.md.
+
+## PC FREE (29 Oct 15:00 IST) - fix/lucky-on-2521 ddecd3e (= fix/evidence-on-2521 + Crazy Eggs Lucky Hammer confirm ec9b488, patch unchanged, 58 tests OK) copied into app\v2.5.20\rally_bot.py (1,002,551 B, VERSION line kept 2.5.20; backup rally_bot.py.bak_before_lucky29oct = the evidence-only file 999,235 B). App RESTARTED 14:58 (restart_update_now -> all 8 instances resumed) - evidence store + Lucky Hammer fix are LOADED. Still: do NOT install 2.5.21 on the PC; next release must include fix/lucky-on-2521. Check: log '[+] Crazy Eggs: Lucky Hammer used (1 -> 0)' or failures\crazy_eggs.
+
+## PC FREE (29 Oct 14:47 IST) - fix/evidence-on-2521 copied into app\v2.5.20\rally_bot.py (999,235 B, VERSION line kept 2.5.20; backup of the previous file = rally_bot_before_evidence.py, 990,145 B). Loads at the owner's next app restart. Do NOT install the 2.5.21 update on the PC - it would drop the evidence store (2.5.21 does not have it); next release must include fix/evidence-on-2521.
+
+## READY (29 Oct 14:40 IST, Teach-the-Bot chat) - fix/evidence-on-2521 33d8c10
+- = main 2.5.21 + fix/failure-evidence ONLY (Phase 0 of claude/teach_the_bot_decisions_29oct.md). Patch identical to b6445c2's; 53 tests OK. NOT on the PC - waiting for the owner's OK. Doc: claude/fix_evidence_on_2521_29oct.md.
+
 ## READY (27 Oct 19:05 IST, Fable chat) - fix/city-nav-slow-drag (from release/batch-27oct)
 - City navigation closed loop (plan claude/city_nav_closed_loop_plan_25oct.md): DeviceCtl.slow_drag = motionevent DOWN / slow MOVE steps over ~600 ms / hold still 220 ms / UP (no glide; falls back to swipe on emulators without motion events). jump_to_pin: no more blind fixed drags - up to 6 slow drags in 30 s, each measured with safe_shift (before/after screenshots, no map match), camera corrected by dead reckoning, stops as soon as the pin is safely on screen, one cmap.locate at the end; ratio ~0 = close a ring / clear pop-ups once, then "city edge" and check. _DRAG_SCALE learned from the measured ratio. CityNav._drag (goto_on_map closed loop, pan, to_origin) uses slow_drag too.
 - Logs per drag: "nav: drag N finger=.. map=.. ratio=..", end line "dead-reckoning was N px off"; arrival picture debug/duty_nav_arrived.png.
