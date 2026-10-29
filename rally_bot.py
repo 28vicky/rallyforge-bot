@@ -11830,6 +11830,7 @@ def ch_do_taps(dev, stop, log, name, want, serial, day):
         else:
             stuck = 0
             done += 1
+            duty_progress()
             used = {**(ch_row(serial).get("taps") or {})} if ch_row(serial).get("taps_day") == day else {}
             used[name] = used.get(name, 0) + 1
             ch_save(serial, taps_day=day, taps=used)
@@ -11852,33 +11853,62 @@ def ch_dialogue(dev, stop):
             return
 
 
+CH_GREET_WAIT_MAX = 150                    # a greet timer up to this long is waited out on the page; longer -> come back later
+
+
 def ch_do_greets(dev, stop, log, name, want, serial, day):
-    """Greet the champion `want` times (stops at 10 a day in total). -> greets done."""
+    """Greet the champion `want` times (stops at 10 a day in total). -> greets done. Sets dev._ch_later (seconds) when
+    greetings are left but the game's timer is long - the duty comes back then instead of being 'done' (owner 30 Oct:
+    testers' greets stopped at 0-1 of 10 and the duty said Done for the whole day)."""
     done = 0
-    for _ in range(want + 4):
+    dev._ch_later = 0
+    misses = 0
+    for _ in range(want + 8):
         if done >= want or stop.is_set():
             break
         shot = dev.screenshot()
         spot, box = ch_find_greet(shot)
         if spot is None:                                   # no Greet word on the page: never tap blind (a pack / buy button may sit there)
-            log("[!]   Champions: no Greet button found on the page - not tapping anything")
+            lab = ch_greet_label(shot, CH_GREET_SEARCH)    # while the timer runs the button shows the countdown, not 'Greet'
+            if lab["n"] is not None and lab["n"] >= CH_GREETS:
+                log("[i]   Champions: the 10 daily greetings are used up")
+                break
+            if 0 < lab["wait"] <= CH_GREET_WAIT_MAX:
+                log(f"[i]   Champions: greet timer, waiting {lab['wait']} s")
+                if stop.wait(lab["wait"] + 3):
+                    break
+                continue
+            if lab["wait"] > CH_GREET_WAIT_MAX:
+                dev._ch_later = lab["wait"]
+                log(f"[i]   Champions: next greeting in {lab['wait'] // 60} min - coming back then")
+                break
+            misses += 1
+            if misses < 3:                                 # a tap message can cover the button for a few seconds
+                _nap(stop, 2.5, 3.0)
+                continue
+            log("[!]   Champions: no Greet button found on the page - not tapping anything (tried again later)")
             rd_snap(shot, "champ_nogreet")
+            dev._ch_later = 1800
             break
+        misses = 0
         lab = ch_greet_label(shot, box)
         if lab["n"] is not None and lab["n"] >= CH_GREETS:
             log("[i]   Champions: the 10 daily greetings are used up")
             break
+        if lab["wait"] > CH_GREET_WAIT_MAX:
+            dev._ch_later = lab["wait"]
+            log(f"[i]   Champions: next greeting in {lab['wait'] // 60} min - coming back then")
+            break
         if lab["wait"] > 0:
             log(f"[i]   Champions: greet timer, waiting {lab['wait']} s")
-            if stop.wait(min(lab["wait"], 75) + 3):
+            if stop.wait(lab["wait"] + 3):
                 break
-            spot, box = ch_find_greet(dev.screenshot())
-            if spot is None:
-                break
+            continue                                       # look at the page again (the button and its word are back)
         dev.tap(*spot)
         _nap(stop, 1.6, 2.2)
         ch_dialogue(dev, stop)
         done += 1
+        duty_progress()                                    # a greeting went through: 10 greets with 1-min timers take > 8 min
         used = {**(ch_row(serial).get("greets") or {})} if ch_row(serial).get("greets_day") == day else {}
         used[name] = used.get(name, 0) + (CH_GREETS if lab["pack"] else 1)
         ch_save(serial, greets_day=day, greets=used)
@@ -11901,6 +11931,7 @@ def run_champions(dev, cfg, log, stop):
     t_used, g_used = ch_taps_used(shot), ch_greet_label(shot).get("n")
     if t_used is not None and t_used >= CH_TAPS and g_used is not None and g_used >= CH_GREETS:
         log(f"[+]  Champions: today's taps ({t_used}/{CH_TAPS}) and greets ({g_used}/{CH_GREETS}) are all used - nothing to do")
+        ch_save(serial, all_done_day=day, next_at=0)
         return
     plan = ch_conf(cfg)["plan"]
     row = ch_row(serial)
@@ -11929,6 +11960,8 @@ def run_champions(dev, cfg, log, stop):
     if len(order) > 1 and ch_name(dev.screenshot()) in order and CHAMPIONS.index(ch_name(dev.screenshot())) > (CHAMPIONS.index(order[0]) + CHAMPIONS.index(order[-1])) / 2:
         order.reverse()                                    # start from the end that is nearer
     total_taps = total_greets = 0
+    left = 0                                               # planned taps / greets still not done after this run
+    later = 0
     for name in order:
         if stop.is_set():
             break
@@ -11939,6 +11972,7 @@ def run_champions(dev, cfg, log, stop):
             continue
         if not ch_goto(dev, stop, log, name):
             log(f"[!]  Champions: could not reach {name}")
+            left += need_t + need_g
             continue
         shot = dev.screenshot()
         ch_snap(shot, "2_" + _ch_norm(name))
@@ -11950,13 +11984,25 @@ def run_champions(dev, cfg, log, stop):
             n = ch_do_taps(dev, stop, log, name, need_t, serial, day)
             total_taps += n
             log(f"[+]  Champions: {name} - {n} of {need_t} taps")
+            tu = ch_taps_used(dev.screenshot())
+            if n < need_t and not (tu is not None and tu >= CH_TAPS):
+                left += need_t - n
         if need_g and not stop.is_set():
             n = ch_do_greets(dev, stop, log, name, need_g, serial, day)
             total_greets += n
             log(f"[+]  Champions: {name} - {n} of {need_g} greets")
+            if n < need_g and getattr(dev, "_ch_later", 0):
+                left += need_g - n
+                later = max(later, int(dev._ch_later))
     shot = dev.screenshot()
     used = ch_taps_used(shot)
     log(f"[+]  Champions done: {total_taps} tap(s), {total_greets} greet(s) this run" + (f"; taps today {used}/{CH_TAPS}" if used is not None else ""))
+    if left and not stop.is_set():                         # owner 30 Oct: never 'Done' for the day with greetings / taps left
+        wait = min(max(later or 1800, 120), 4 * 3600)
+        ch_save(serial, next_at=time.time() + wait, all_done_day="")
+        log(f"[i]   Champions: {left} tap(s)/greet(s) still to do - trying again at {time.strftime('%H:%M', time.localtime(time.time() + wait))}")
+    else:
+        ch_save(serial, all_done_day=day, next_at=0)
 
 
 # ------------------------------------------------------------ test: does world map -> city reset the camera?
@@ -17901,9 +17947,9 @@ def duty_status(serial, duty_id, cfg):
         return "due", "Due" + (" · " + sp if sp else "")
     if row.get("done_day") == day:                          # checked twice: nothing left in the game until the reset
         return "done", "Done for today"
-    if duty_id in ("crazy_eggs", "royal_thief", "monster_rally"):           # timer driven: comes back when the next egg is ready
+    if duty_id in ("crazy_eggs", "royal_thief", "monster_rally", "champions"):   # timer driven: comes back when the next egg / greeting is ready
         if row.get("all_done_day") == day:
-            return "done", "All eggs done"
+            return "done", "All eggs done" if duty_id == "crazy_eggs" else "Done for today"
         fs = _duty_fail_state(row, tries, now)
         if fs:
             return fs
