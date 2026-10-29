@@ -15674,13 +15674,23 @@ def mr_presets(cfg):
     return out
 
 
+def mr_own_order(cfg):
+    """Owner 29 Oct 21:15-21:26: the "Use my own hunt order" switch. Never set -> on only for an instance that already
+    saved an order in 2.5.24 (its setup stays exactly as it was); new instances start off."""
+    v = rd_opt(cfg, "monster_rally", "own_order", None)
+    if v is None:
+        return isinstance(rd_opt(cfg, "monster_rally", "order", None), list)
+    return bool(v)
+
+
 def mr_order(cfg, rules=None):
     """Hunts v2 (owner 29 Oct): ONE hunt order per instance, top = hunted first; each row = monster + levels + its own
-    max km (0 = any). No saved order yet -> built from the presets as before (place in its box, then lower preset)."""
+    max km (0 = any). Own order switched off -> built from the presets (place in its box, then lower preset); the
+    saved list is kept (switching off never deletes it)."""
     raw = rd_opt(cfg, "monster_rally", "order", None)
-    if isinstance(raw, list):
+    if mr_own_order(cfg):                              # own order on: its list (empty = only the presets, after it)
         out = []
-        for r in raw:
+        for r in (raw if isinstance(raw, list) else []):
             if isinstance(r, dict) and str(r.get("name") or "").strip():
                 try:
                     out.append({"name": str(r["name"]).strip(), "min": int(r.get("min") or 1), "max": int(r.get("max") or 99),
@@ -16057,9 +16067,8 @@ def mr_targets(cfg, tried, serial=None):
                 skip(it, "Not in any preset", "not in a preset")
             continue
         oi, orow = mr_order_index(order, it.get("name"), it.get("level") or 0)
-        if oi is None:
-            skip(it, "Not in the hunt order", "not in the order")
-            continue
+        if oi is None:                                   # owner 29 Oct 21:23: own order on -> a monster only in a preset
+            oi, orow = len(order), {"km": 0, "after": True}     # is hunted AFTER every row of the order (marches never idle)
         if orow["km"] and it.get("km") is not None and float(it["km"]) > orow["km"]:
             skip(it, f"Too far · its rule is up to {orow['km']:g} km", "too far")
             continue
@@ -16081,7 +16090,8 @@ def mr_targets(cfg, tried, serial=None):
                 continue
             seen_p.add(p)
             pairs.append({"preset": p, "mode": m, "rule": r,
-                          **({"rank": sum(1 for x in rules[:i] if x["preset"] == p), "top": 0} if "rank" in orow    # no saved order: old rule
+                          **({"rank": sum(1 for x in rules[:i] if x["preset"] == p), "top": 0} if "rank" in orow    # no own order: old rule
+                             else {"rank": oi + sum(1 for x in rules[:i] if x["preset"] == p), "top": 0, "after": True} if orow.get("after")   # after the order, box place
                              else {"rank": oi, "top": len(cover.get(p, set()) - {oi})})})   # v2: rank = hunt-order place
         if not pairs:
             skip(it, why_not, "wrong mode" if why_not.startswith(("Rally only", "Solo only")) else "at the hunt limit")
@@ -16823,7 +16833,7 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
     mr_save(serial, **kw)
     mr_block(key, serial, "rallied")
     why = (f"Preset {mr_pnum(preset)} · Preset {mr_pnum(first)} also has it but was busy" if preset != first
-           else f"Preset {mr_pnum(preset)} · {mr_why_rank(pair.get('rank') or 0)}")
+           else f"Preset {mr_pnum(preset)} · " + ("after the hunt order" if pair.get("after") else mr_why_rank(pair.get('rank') or 0)))
     if solo:
         n_ = mr_solo_done(serial)
         n_[preset] = int(n_.get(preset, 0)) + 1
@@ -17438,6 +17448,7 @@ DUTY_LIBRARY = [
      "opts": [{"k": "rules", "label": "Monsters", "type": "rules", "def": None},
               {"k": "presets", "label": "Preset modes", "type": "presets", "def": None},
               {"k": "order", "label": "Hunt order", "type": "order", "def": None},
+              {"k": "own_order", "label": "Use my own hunt order", "type": "bool", "def": None},
               {"k": "max_wait", "label": "Give up on a monster after (min, 0 = wait until it is hunted)", "type": "number", "min": 0, "max": 120, "def": 0},
               {"k": "max_age", "label": "Refresh coordinates every (min)", "type": "number", "min": 1, "max": 600, "def": 10},
               {"k": "max_km", "label": "Only monsters within (km, 0 = any distance)", "type": "number", "min": 0, "max": 99999, "def": 0},
