@@ -1,9 +1,9 @@
 {
-  "version": "2.5.24",
-  "notes": "Hunt order tab, preset on/off/copy/delete, Pan split into Ground/Ranged/Mounted, unclear rally cards checked before joining, hunts and Telegram Pan fixes",
+  "version": "2.5.25",
+  "notes": "Join rallies: the monster is checked on the march screen before March; full monster names.",
   "files": {
     "rally_bot.py": {
-      "sha256": "e333225f17a6a2eae34856b4b1944a5552dc16cec2ecd395199a878073195975"
+      "sha256": "2289457a069bf5cdd0732add21f028a86a15a69a448c589a13d36ccd5edb4157"
     },
     "web_app.py": {
       "sha256": "f681badcfd17b9de86a6ca1cf605414cb24d3522ca4da43f9b389a3114399a17"
@@ -12,13 +12,13 @@
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "bffae522e2bc14f93ac6e3d7fc0f428b067f95a3fee344155ae3d8972970602e"
+      "sha256": "90b97aa062cd737eb9e94915af731b0fb27dc322031b64ab012b8f67796b178d"
     },
     "ui/app.js": {
       "sha256": "6a29e0f54b57968017b892eaef6750d236bf1bdd021316aa38ad93ea7b2d8420"
     },
     "ui/changelog.js": {
-      "sha256": "fc4ee2b481c91a7dee80d86a0ccd80c659f145fdc4a49ca26c5030a863bf8052"
+      "sha256": "0d85aa984183a0bf741d575dd83df699534fb19599213a6f00af5c6f89973e37"
     },
     "ui/dialogs.js": {
       "sha256": "5a4e14faf9eb34d622f1cda72833ed5bf815da402ddd485a8277dac39053a162"
@@ -3413,5 +3413,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "df572d2e5477639b30d0f0860be3dd3abe6b892ca518551f5c662b752ed61d16"
+  "sig": "83bbb356958cffc770f46a42b01e88b66e599d574b7cc6b1deaba93b7e5549c7"
 }
