@@ -2855,8 +2855,30 @@ class Api:
             if back > now:
                 busy[k] = int(back)
         on = bool(((cfg.get("duties") or {}).get("monster_rally") or {}).get("on"))
+        # Live dashboard (owner 29 Oct): "live" = the coordinate is still in the Telegram cache and inside the cache
+        # time, so "Not in preset" only lists monsters a user can still go and hit by hand
+        cache_s = float(rb.rd_opt(cfg, "monster_rally", "max_age", 10) or 10) * 60
+        feed, _ = rb.feed_get(int(self.c.cfg.get("tg_keep_min", 60) or 0))
+        alive = {f"{f.get('x')},{f.get('y')}" for f in feed if now - float(f.get("t") or 0) <= cache_s}
+        decs = rb.hunt_decisions(serial)
+        counts = {"solo": 0, "go": 0, "nopreset": 0, "gone": 0, "replaced": 0}
+        for d in decs:
+            why, k = str(d.get("why") or ""), d.get("kind")
+            try:
+                d["x"], d["y"] = (int(v) for v in str(d.get("key") or "").split(","))
+            except ValueError:
+                pass
+            d["live"] = d.get("key") in alive
+            if k in ("go", "solo"):
+                counts[k] += 1
+            elif why.startswith("Gone"):
+                counts["gone"] += 1
+            elif why in ("Spot taken by another monster", "Another monster stands there"):
+                counts["replaced"] += 1
+            elif why == "Not in any preset" and d["live"]:
+                counts["nopreset"] += 1
         return {"on": on, "running": self.c.running(serial), "status": row.get("status") or {}, "busy": busy,
-                "solo_done": rb.mr_solo_done(serial), "decisions": rb.hunt_decisions(serial)[:300],
+                "solo_done": rb.mr_solo_done(serial), "decisions": decs[:400], "counts": counts,
                 "rally_only": sorted(rb.RALLY_ONLY), "solo_only": sorted(rb.SOLO_ONLY), "now": now}
 
     def coords_watch(self, p):

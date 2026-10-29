@@ -627,7 +627,7 @@ function instancePage(serial) {
     try { localStorage.setItem("rf_inst_tab", k); } catch (e) {}
     [...tabRow.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
     body.innerHTML = "";
-    if (k !== "ov") {
+    if (k !== "ov" && k !== "mrally") {   // Monster hunts: its status card already says what runs now (owner 29 Oct)
       const nv = h("span", { class: "nowtxt" }, actNow(serial));
       const running = ((S.devStatus.find((x) => x.id === serial) || {}).state) === "run";
       body.appendChild(h("div", { class: "nowstrip" }, h("span", { class: "actlab" }, running ? "Now" : "Last"), nv));
@@ -2313,7 +2313,8 @@ function monsterRallyTab(serial) {
   let live = { status: {}, busy: {}, decisions: [], solo_done: {}, rally_only: [], now: Date.now() / 1000, running: false }, liveOk = Date.now(), liveFail = false;
   S.huView = S.huView || {};
   S.huSel = S.huSel || {};
-  let view = S.huView[serial] || "", sel = S.huSel[serial] || "", drawer = false, pf = "mine", q = "", openUsed = "", moreRows = 50, openGroups = {};
+  S.huDec = S.huDec || {};   // Live > Decisions tab per instance: acted | nopreset | other
+  let view = S.huView[serial] || "", sel = S.huSel[serial] || "", drawer = false, pf = "mine", q = "", openUsed = "", moreRows = 50;
   let saveState = "saved", saveTimer = 0, retryTimer = 0, pending = null;
   const pN = (p) => MR_PRESETS.indexOf(p) + 1;
   const isBoss = (n) => (S.neverJoin || []).includes(String(n || "").toLowerCase().trim());
@@ -2495,24 +2496,40 @@ function monsterRallyTab(serial) {
         h("button", { type: "button", class: "btn pri", onclick: () => { view = "setup"; S.huView[serial] = view; sel = "I"; drawer = true; draw(); } }, "+ Add monsters")));
       return;
     }
-    const st = us.map((p) => presetState(p)[1]);
-    const n = (k) => st.filter((x) => x === k).length;
-    const chips = [[n("busy"), "busy", "busy"], [n("ok"), "ready", "ok"], [n("done"), "done for today", "done"], [8 - us.length, "not hunting", "off"]].filter((x) => x[0]);
-    liveBox.appendChild(h("div", { class: "humarch" }, h("b", {}, "Marches"), ...chips.map(([v, l, k]) => h("span", { class: "huchip " + k }, v + " " + l))));
-    const grid = h("section", { class: "hucards", "aria-label": "Presets" });
+    // Marches strip (owner 29 Oct): one compact chip per preset - number, mode, state (live timer while out).
+    // The monster list is in the tooltip; a click opens that preset in Setup.
+    const marches = h("section", { class: "humarch", "aria-label": "Marches" }, h("b", {}, "Marches"));
     for (const p of us) {
-      const [txt, k, back] = presetState(p);
-      grid.appendChild(h("button", { type: "button", class: "hucard", onclick: () => { sel = p; S.huSel[serial] = p; view = "setup"; S.huView[serial] = view; draw(); } },
-        h("div", { class: "hucrow" }, h("b", {}, "Preset " + pN(p)), h("span", { class: "humode " + mode(p) }, mode(p) === "solo" ? "Solo" : "Rally")),
-        h("span", { class: "hulist" }, model[p].map(chipName).join(" · ")),
+      const [txt, k, back] = presetState(p), m = mode(p) === "solo" ? "Solo" : "Rally";
+      marches.appendChild(h("button", { type: "button", class: "humchip " + k, title: "Preset " + pN(p) + " · " + m + "\n" + model[p].map(chipName).join(" · ") + "\nClick to edit in Setup",
+        onclick: () => { sel = p; S.huSel[serial] = p; view = "setup"; S.huView[serial] = view; draw(); } },
+        h("b", {}, pN(p)), h("span", { class: "humode " + mode(p) }, m),
         h("span", Object.assign({ class: "hust " + k }, back ? { "data-back": String(back), "data-pre": mode(p) === "solo" ? "Attacking · back " : "Busy · back " } : {}), txt)));
     }
     const free = MR_PRESETS.filter((p) => !used(p));
-    if (free.length) grid.appendChild(h("div", { class: "hucard free" }, h("b", {}, (free.length === 1 ? "Preset " : "Presets ") + free.map(pN).join(", ")), h("span", {}, "not hunting · free for joining")));
-    liveBox.appendChild(grid);
-    // decisions: rally / solo / wait rows one by one; skips with the same reason fold into one line (a Telegram list can bring hundreds)
+    if (free.length) marches.appendChild(h("span", { class: "humchip free", title: "Not hunting · free for joining rallies" }, free.map(pN).join(", ") + " free"));
+    liveBox.appendChild(marches);
+    // Decisions (owner 29 Oct): an operational view, not a log. Gone / replaced monsters are counts only;
+    // "Not in preset" lists live monsters (still in the Telegram cache) a user can hit by hand.
     const rows = (live.decisions || []).filter((d) => !isBoss(d.name));
-    const sec = h("section", { class: "panel hudec" }, h("div", { class: "hudhead" }, h("h3", {}, "Decisions"), h("small", { class: "sub" }, "every monster from Telegram today, and why")));
+    const cnt = live.counts || {};
+    const isGone = (d) => /^Gone/.test(d.why || "") || d.why === "Spot taken by another monster" || d.why === "Another monster stands there";
+    const isNoPre = (d) => d.kind === "skip" && d.why === "Not in any preset";
+    const lists = {
+      acted: rows.filter((d) => d.kind !== "skip"),
+      nopreset: rows.filter((d) => isNoPre(d) && d.live).sort((a, b) => (a.km ?? 1e9) - (b.km ?? 1e9)),   // closest first: what a user would run next
+      other: rows.filter((d) => d.kind === "skip" && !isNoPre(d) && !isGone(d)),
+    };
+    const tab = S.huDec[serial] || "acted";
+    const setTab = (k) => { S.huDec[serial] = k; moreRows = 50; paintLive(); };
+    const stat = (n, l, k, go) => h(go ? "button" : "span", Object.assign({ class: "hustat2 " + k }, go ? { type: "button", onclick: () => setTab(go) } : {}), h("i", {}), h("b", {}, String(n || 0)), " " + l);
+    const stats = h("div", { class: "hustats" },
+      stat(cnt.solo, "Attacked", "solo", "acted"), stat(cnt.go, "Rallied", "go", "acted"), stat(cnt.nopreset, "Not in preset", "nopre", "nopreset"),
+      stat(cnt.gone, "Gone before arrival", "gone"), stat(cnt.replaced, "Replaced", "gone"));
+    const tabs = h("div", { class: "hudtabs", role: "tablist", "aria-label": "Decisions filter" },
+      ...[["acted", "Acted"], ["nopreset", "Not in preset"], ["other", "Other skips"]].map(([k, l]) =>
+        h("button", { type: "button", role: "tab", class: "hudtab" + (tab === k ? " on" : ""), "aria-selected": tab === k ? "true" : "false", onclick: () => setTab(k) }, l, h("small", {}, String(lists[k].length)))));
+    const sec = h("section", { class: "panel hudec" }, h("div", { class: "hudhead" }, h("h3", {}, "Decisions"), stats, tabs));
     if (!rows.length) {
       const linked = coords.ready || (coords.items || []).length;
       const huOn = !!(duty && duty.on), ran = !!((live.status || {}).t);
@@ -2523,36 +2540,29 @@ function monsterRallyTab(serial) {
       liveBox.appendChild(sec);
       return;
     }
-    const items = [], groups = {};
-    for (const d of rows) {
-      if (d.kind !== "skip") { items.push({ d }); continue; }
-      const g = groups[d.why];
-      if (g) { g.rows.push(d); continue; }
-      groups[d.why] = { why: d.why, rows: [d] };
-      items.push({ g: groups[d.why] });
-    }
-    const head = h("div", { class: "hurow hd" }, h("span", {}, "Time"), h("span", {}, "Monster"), h("span", { class: "hukm" }, "Dist"), h("span", { class: "huage" }, "Age"), h("span", {}, "Decision"), h("span", {}, "Why"));
-    const line = (d) => h("div", { class: "hurow" },
+    const list = lists[tab];
+    const nowS = Date.now() / 1000;
+    const copyXY = async (d) => {
+      const txt = d.x + " " + d.y;
+      try { await navigator.clipboard.writeText(txt); } catch (e) { const t = h("textarea", {}); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+      toast("Copied X:" + d.x + " Y:" + d.y, "ok");
+    };
+    const head = h("div", { class: "hurow hd" }, h("span", {}, "Time"), h("span", {}, "Monster"), h("span", {}, "Location"), h("span", { class: "hukm" }, "Dist"), h("span", { class: "huage" }, "Seen"), h("span", {}, "Decision"), h("span", {}, "Why"));
+    const line = (d) => h("div", { class: "hurow" + (d.live ? "" : " old") },
       h("span", { class: "hut" }, clock(d.t)),
-      h("span", { class: "hunm", title: (d.name || "?") + (d.level ? " Lv" + d.level : "") }, (d.name || "?") + (d.level ? " Lv" + d.level : ""),   // PCR2 B2: "Pumpkin Monster Lv6"
-        h("small", { class: "huage2" }, d.seen ? ago(d.t - d.seen) + " old" : "")),
+      h("span", { class: "hunm", title: (d.name || "?") + (d.level ? " Lv" + d.level : "") }, (d.name || "?") + (d.level ? " Lv" + d.level : "")),   // PCR2 B2: "Pumpkin Monster Lv6"
+      d.x != null ? h("button", { type: "button", class: "huloc", title: "Copy X:" + d.x + " Y:" + d.y, "aria-label": "Copy coordinates X " + d.x + " Y " + d.y, onclick: () => copyXY(d) },
+        "X:" + d.x + " Y:" + d.y, h("span", { class: "hucopy", "aria-hidden": "true" }, "⧉")) : h("span", { class: "mute" }, "–"),
       h("span", { class: "hukm" }, d.km != null ? d.km + " km" : "–"),
-      h("span", { class: "huage" }, d.seen ? ago(d.t - d.seen) : "–"),
+      h("span", { class: "huage" }, d.seen ? ago(nowS - d.seen) + " ago" : "–"),
       h("span", {}, pill(d.kind)),
       h("span", { class: "huwhy", title: d.why }, d.why));
-    const body = h("div", { class: "hutable" }, head);
-    let shown = 0;
-    for (const it of items) {
-      if (shown >= moreRows) break;
-      shown++;
-      if (it.d) { body.appendChild(line(it.d)); continue; }
-      const g = it.g;
-      if (g.rows.length <= 3 || openGroups[g.why]) { g.rows.forEach((d) => body.appendChild(line(d))); if (g.rows.length > 3) body.appendChild(h("button", { type: "button", class: "hufold", onclick: () => { delete openGroups[g.why]; paintLive(); } }, "Fold " + g.rows.length + " · " + g.why)); continue; }
-      body.appendChild(h("button", { type: "button", class: "hufold", "aria-expanded": "false", onclick: () => { openGroups[g.why] = 1; paintLive(); } },
-        h("span", { class: "hut" }, clock(g.rows[0].t)), h("span", {}, "+" + g.rows.length + " skipped · " + g.why), h("span", { class: "hufoldc" }, "Show")));
-    }
+    const body = h("div", { class: "hutable", role: "table" }, head);
+    if (!list.length) body.appendChild(h("div", { class: "huempty in" }, h("span", { class: "mute" },
+      tab === "nopreset" ? "No live monsters outside your presets right now. New Telegram lists show here." : tab === "acted" ? "Nothing rallied or attacked yet today." : "No other skips today.")));
+    list.slice(0, moreRows).forEach((d) => body.appendChild(line(d)));
+    if (list.length > moreRows) body.appendChild(h("button", { type: "button", class: "btn sm humore", onclick: () => { moreRows += 50; paintLive(); } }, "Show " + Math.min(50, list.length - moreRows) + " more"));
     sec.appendChild(h("div", { class: "hutwrap" }, body));
-    if (items.length > shown) sec.appendChild(h("button", { type: "button", class: "btn sm humore", onclick: () => { moreRows += 50; paintLive(); } }, "Show more"));
     liveBox.appendChild(sec);
   };
 

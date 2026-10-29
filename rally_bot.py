@@ -15940,7 +15940,7 @@ def _run_monster_rally(dev, cfg, log, stop):
             log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
             continue
         if got == "other":
-            hunt_note(serial, tgt, "Skipped", "skip", "Another monster stands there")
+            hunt_note(serial, tgt, "Skipped", "skip", "Spot taken by another monster")
             mr_block(key, serial, "dead")
             log(f"[*]  Monster rally: {label} - another monster stands there ({page}), skipped")
             continue

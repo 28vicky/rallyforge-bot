@@ -1752,15 +1752,13 @@ select.pick-open{border-color:var(--accent1)}
 .huvb.on{background:var(--card);color:var(--fg);box-shadow:var(--sh2)}
 .hubody{display:flex;flex-direction:column;gap:14px;min-width:0}
 .hulive{display:flex;flex-direction:column;gap:12px;min-width:0}
-.humarch{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
-.huchip{font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;white-space:nowrap;background:var(--hu-soft);color:var(--mute)}
-.huchip.busy{background:color-mix(in srgb,var(--hu-wait) 20%,transparent);color:color-mix(in srgb,var(--hu-wait) 75%,var(--fg))}
-.huchip.ok{background:color-mix(in srgb,var(--hu-ok) 18%,transparent);color:color-mix(in srgb,var(--hu-ok) 75%,var(--fg))}
-.hucards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
-.hucard{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:12px;background:var(--card);border:var(--bd);text-align:left;color:var(--fg);font:inherit;cursor:pointer;min-width:0}
-.hucard:hover{border-color:var(--accent1)}
-.hucard.free{border:1px dashed var(--line);background:transparent;cursor:default;justify-content:center}
-.hucard.free span{font-size:12px;color:var(--mute)}
+.humarch{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}
+.humarch>b{margin-right:4px}
+.humchip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 8px;border-radius:99px;border:var(--bd);background:var(--card);color:var(--fg);font:inherit;font-size:12px;cursor:pointer;max-width:240px}
+.humchip:hover{border-color:var(--accent1)}
+.humchip>b{font-size:12.5px;font-variant-numeric:tabular-nums}
+.humchip .humode{padding:1px 6px;font-size:10.5px}
+.humchip.free{border-style:dashed;background:transparent;color:var(--mute);cursor:default}
 .hucrow{display:flex;align-items:center;gap:8px;min-width:0}.hucrow b{font-size:13.5px;white-space:nowrap}
 .hulist{font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .humode{font-size:11px;font-weight:700;padding:2px 7px;border-radius:99px;white-space:nowrap;background:color-mix(in srgb,var(--accent1) 16%,transparent);color:var(--accent2)}
@@ -1769,16 +1767,30 @@ select.pick-open{border-color:var(--accent1)}
 .hust.busy{color:var(--warn)}.hust.done,.hust.off,.hust.wait{color:var(--mute)}
 .hust.sm{margin-left:auto;display:inline-flex}
 .panel.hudec{padding:0;overflow:hidden;margin:0}
-.hudhead{display:flex;align-items:baseline;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.hudhead{display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px;padding:10px 16px;border-bottom:1px solid var(--line)}
 .hudhead h3{margin:0}
-.hutwrap{overflow-x:auto}
+.hutwrap{overflow:auto;max-height:max(240px,calc(100vh - 470px));overscroll-behavior:contain}   /* owner 29 Oct: only the table scrolls, never the page */
+.hurow.hd{position:sticky;top:0;z-index:1}
+.hurow.old .hunm,.hurow.old .huloc{color:var(--mute)}
+.huloc{display:inline-flex;align-items:center;gap:6px;justify-self:start;max-width:100%;padding:3px 8px;margin:-3px -8px;border:0;border-radius:8px;background:transparent;color:var(--fg);font:inherit;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer}
+.huloc:hover,.huloc:focus-visible{background:var(--hu-soft)}
+.hucopy{color:var(--mute);font-size:12px}.huloc:hover .hucopy{color:var(--accent2)}
+.hustats{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12.5px;color:var(--mute);min-width:0}
+.hustat2{display:inline-flex;align-items:center;gap:5px;padding:0;border:0;background:transparent;color:inherit;font:inherit;white-space:nowrap}
+button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
+.hustat2 b{color:var(--fg);font-variant-numeric:tabular-nums}
+.hustat2 i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.hustat2.solo i{background:#3b82f6}.hustat2.go i{background:var(--hu-ok)}.hustat2.nopre i{background:var(--accent1)}
+.hudtabs{display:flex;gap:2px;margin-left:auto;padding:2px;border-radius:10px;background:var(--hu-soft)}
+.hudtab{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:0;border-radius:8px;background:transparent;color:var(--mute);font:inherit;font-size:12.5px;font-weight:600;white-space:nowrap;cursor:pointer}
+.hudtab small{font-weight:600;font-variant-numeric:tabular-nums;opacity:.8}
+.hudtab.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .hutable{min-width:0}
-.hurow,.hufold{display:grid;grid-template-columns:70px minmax(140px,2fr) 66px 58px 108px minmax(0,2.4fr);gap:12px;align-items:center;padding:9px 16px;border-top:1px solid var(--line);font-size:13px;min-width:0}
+.hurow{display:grid;grid-template-columns:70px minmax(140px,1.6fr) 136px 66px 76px 104px minmax(0,2fr);gap:12px;align-items:center;padding:9px 16px;border-top:1px solid var(--line);font-size:13px;min-width:0}
 .hurow.hd{border-top:0;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);background:var(--hu-soft)}
 .hurow>span{min-width:0}
 .hut{font-family:var(--mono);font-size:12px;color:var(--mute)}
 .hunm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.huage2{display:none;font-weight:400;font-size:11px;color:var(--mute)}
 .hukm,.huage{color:var(--mute);white-space:nowrap}
 .huwhy{color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hupill{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;white-space:nowrap}
@@ -1786,10 +1798,6 @@ select.pick-open{border-color:var(--accent1)}
 .hupill.solo{background:color-mix(in srgb,#3b82f6 18%,transparent);color:color-mix(in srgb,#3b82f6 70%,var(--fg))}
 .hupill.wait{background:color-mix(in srgb,var(--hu-wait) 20%,transparent);color:color-mix(in srgb,var(--hu-wait) 75%,var(--fg))}
 .hupill.skip{background:var(--hu-soft);color:var(--mute)}
-.hufold{width:100%;background:transparent;border-left:0;border-right:0;border-bottom:0;color:var(--mute);font:inherit;font-size:13px;text-align:left;cursor:pointer}
-.hufold>span:nth-child(2){grid-column:2/6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hufoldc{color:var(--accent2);font-weight:600}
-.hufold:hover{background:var(--hu-soft)}
 .humore{margin:10px 16px 14px}
 .huempty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:30px 16px;border:1px dashed var(--line);border-radius:12px;text-align:center;color:var(--mute)}
 .huempty b{color:var(--fg)}.huempty .btn{margin-top:6px}
@@ -1880,10 +1888,8 @@ select.pick-open{border-color:var(--accent1)}
   .husetup{grid-template-columns:minmax(0,1fr)}
   .hurail,.huedit{position:static;max-height:none}
   .huedit{scroll-margin-top:84px}   /* PCR2 B1: clear of the sticky header when scrolled to */
-  .hurow,.hufold{grid-template-columns:62px minmax(120px,2fr) 60px 100px minmax(0,2fr)}
-  .huage{display:none}.huage2{display:block}
-  .hufold>span:nth-child(2){grid-column:2/5}
-  .hucards{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+  .hurow{grid-template-columns:62px minmax(120px,1.6fr) 128px 60px 100px minmax(0,1.6fr)}
+  .huage{display:none}
   .hudpanel{width:100%}
   .hustat{display:none}
 }
