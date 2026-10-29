@@ -2,6 +2,9 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## READY (29 Oct 14:40 IST, Teach-the-Bot chat) - fix/evidence-on-2521 33d8c10
+- = main 2.5.21 + fix/failure-evidence ONLY (Phase 0 of claude/teach_the_bot_decisions_29oct.md). Patch identical to b6445c2's; 53 tests OK. NOT on the PC - waiting for the owner's OK. Doc: claude/fix_evidence_on_2521_29oct.md.
+
 ## READY (27 Oct 19:05 IST, Fable chat) - fix/city-nav-slow-drag (from release/batch-27oct)
 - City navigation closed loop (plan claude/city_nav_closed_loop_plan_25oct.md): DeviceCtl.slow_drag = motionevent DOWN / slow MOVE steps over ~600 ms / hold still 220 ms / UP (no glide; falls back to swipe on emulators without motion events). jump_to_pin: no more blind fixed drags - up to 6 slow drags in 30 s, each measured with safe_shift (before/after screenshots, no map match), camera corrected by dead reckoning, stops as soon as the pin is safely on screen, one cmap.locate at the end; ratio ~0 = close a ring / clear pop-ups once, then "city edge" and check. _DRAG_SCALE learned from the measured ratio. CityNav._drag (goto_on_map closed loop, pan, to_origin) uses slow_drag too.
 - Logs per drag: "nav: drag N finger=.. map=.. ratio=..", end line "dead-reckoning was N px off"; arrival picture debug/duty_nav_arrived.png.
