@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## RELEASED (29 Oct ~16:38 IST, one chat) - 2.5.23 = 2.5.22 + hunts stack (hunts-service + duty-stall-budget + hunts-pair-select) + wheel-zero + start-up loop guard + Auto-Join renew in duty batches + separate Join rallies switch. Signed, check_release OK. Owner PC installed it through the app (app\v2.5.23, 8 running). PC = main. feat/join-rallies-switch DROPPED. Owner starts hunts on testers for logs. Doc claude/release_2523_29oct.md.
+
 ## PC TEST (29 Oct 16:30 IST, one chat) - fix/autojoin-renew-guards d392fad ON THE PC (app\v2.5.22: rally_bot.py 1,007,607, ui/pages.js 255,681, ui/app.css = main). = stall budget + start-up way-back loop guard + duty batches give way to a due Auto-Join renew + separate 'Join rallies' switch. OWNER 16:26: Auto-Join stays completely separate, the bot never presses Stop -> feat/join-rallies-switch is DROPPED (never merge). Next: calm period, then 2.5.23. Do NOT reinstall 2.5.22 on the PC. Doc claude/join_rallies_switch_build_29oct.md.
 
 ## PC TEST (29 Oct 16:25 IST, one chat) - feat/join-rallies-switch aabf838 ON THE PC (app\v2.5.22: rally_bot.py 1,013,552, ui/pages.js 256,545, ui/app.css 154,471; backups *.bak_before_rj29oct / *.bak_before_stall29oct). Contains fix/stall-budget-on-2522 + Rallies Off/Bot/Auto-Join + Stop in the game's Auto-Join (live-tested on Stalds: stopped 16:09, renewed 16:20) + duty batches give way to a due Auto-Join renew + start-up way-back loop guard. Next: calm period, then 2.5.23. Do NOT reinstall 2.5.22 on the PC. Doc claude/join_rallies_switch_build_29oct.md.
