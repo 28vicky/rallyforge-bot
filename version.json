@@ -1,9 +1,9 @@
 {
-  "version": "2.5.26",
-  "notes": "Hunt order lists, presets used in turn, Live On the map, every screen lined up, BlueStacks recording.",
+  "version": "2.5.27",
+  "notes": "Joining is fast again.",
   "files": {
     "rally_bot.py": {
-      "sha256": "b0d464512158308195bccb824ecc8f268f20d7571a7ac0edfb7a18e6c9429454"
+      "sha256": "3510d3b15dc5b991340049808ee67babcf192f9d0234f082af231e66a47ed42e"
     },
     "web_app.py": {
       "sha256": "d73f5be2be492e07d640c65c12e87bb9f87d1b11bbab95e248a1930e9607de5b"
@@ -18,7 +18,7 @@
       "sha256": "6a29e0f54b57968017b892eaef6750d236bf1bdd021316aa38ad93ea7b2d8420"
     },
     "ui/changelog.js": {
-      "sha256": "73c098d3ecb7a5aa545d18012925c412d24abcf579c92239fb8296839739f2b1"
+      "sha256": "75d460b5fe3c38d1e92af39a41d8df6355d9ba9ec389a871cb74f19773be3cde"
     },
     "ui/dialogs.js": {
       "sha256": "f9222b8cf22cb7d06737e48bee98a1a431b919b44397560cc92e8ad16c113252"
@@ -3413,5 +3413,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "85f70ff428ff3efc57b3b99d115609276ed091bb390b41564f9aaa0631bdbc5c"
+  "sig": "716cde960f6776e0a98ba5444fd148fc1ebbb3c36e841e005b18ef30682445e5"
 }
