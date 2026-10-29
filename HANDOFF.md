@@ -136,7 +136,7 @@ Starter prompt for any chat: "Read CLAUDE.md and HANDOFF.md (section PARALLEL WO
 6. Owner's PC is shared: only ONE chat deploys / reopens the app at a time, and only after asking the owner. Write "PC: dev copy app\v2.4.99 = e9401a9 (2.5.7 + city-go) + T75 web_app + UI files; feat/city-go head fccf883 rally_bot.py (724237 bytes) staged by the city chat - deploy + restart only after Stalds' map run. - was: <task id> testing" in the PC line below while testing, clear it after.
 7. Low effort by default. Ask the owner before anything costly (live tests, screenshots, long reads, subagents, high-effort debugging).
 
-PC: free (24 Oct 18:10 IST). Dev copy app2.4.99 = release/2.5.8 build (rally_bot 727230, web_app 141032 bytes + ui/*) deployed by the city chat, app restarted.
+PC: Pan chat deploying fix/pan-only (29 Oct 13:50 IST) - app\v2.5.20\rally_bot.py = PC Hunts-live copy (13:39, 986387 b) + Pan patch; monsters\Pan.png replaced; backup rally_bot.py.bak_before_panfix29oct. Owner restarts the app.
 
 RELEASE PREP 2.5.7 (23 Oct 23:30 IST, owner asked): branch release/2.5.7 = main + T56 T57 T58 T60 T61 T63 T64 T67 T68 T69 T70 (not T55 city-go). Conflicts T69 vs T61/T68 fixed (kept new code + quiet_err); tests reset the in-memory duty state; 31 tests pass; compiles; UI boots in preview. VERSION 2.5.7 + What's new done. NOT PUBLISHED: needs a smoke test on the PC (one instance, ~30 min) and make_update with UPDATE_KEY from a PC-linked chat.
 
@@ -234,6 +234,7 @@ PUBLISHED 2.4.76 (T8 update-restart) on 21 Oct 12:20 IST; check_release OK. Not 
 | R | Release chat: merge finished branches into main, version bump, changelog, publish (owner says publish) | main | everything | - | when owner asks |
 | T82 | Pan joined while off (29 Oct): Pan troop names -> Pan, real Pan.png, unknown monster never joins while any filter is on, JOIN lines show monster + source (doc claude/pan_join_investigation_29oct.md) | feat/pan-unknown-safety | rally_bot.py monster naming/filter (read_monster_name, monster_allowed, find_target), monsters/Pan.png, tests/test_monster_filter.py | Hunts chat (find_target) - rebase | ready (74f5e27), tests pass, not tested live |
 | T83 | Strict monster allow-list (owner 29 Oct): always identify; strict_monsters='shadow' logs '[shadow] ... strict mode would SKIP (reason)' + activity join field shadow; 'on' enforces. Witch.png placeholder cleanup. Includes T82. Next: deploy to owner PC with his OK, run 24 h, report joins vs shadow skips (doc claude/strict_allowlist_review_29oct.md) | feat/strict-allowlist | same area as T82 | Hunts chat (find_target) - rebase | ready (bb2d0fb), 50 tests pass, not tested live |
+| T84 | PRIORITY - owner approved as tester hotfix (13:40), deploy plan doc claude/pan_hotfix_deploy_plan_29oct.md (owner 13:33): Pan-only fix, separate from strict mode - Pan troop names -> Pan, real Pan.png + old blurred one removed, troop looks learned, JOIN shows id source. Nothing else changes. T82/T83 stay parked for the strict rollout. | fix/pan-only | rally_bot.py name reading / _base_monster / learn_monster / find_target log lines, monsters/Pan.png, tests/test_pan_names.py | Hunts chat (find_target) - rebase | ready (0b96ebe), merges clean on fix/wheel-zero + PC Hunts copy, not deployed |
 
 Safe to run together: T1 + T3 + T4 + T6, or T2 + T6 + T7. Avoid pairs listed in "Clash with".
 
