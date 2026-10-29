@@ -733,7 +733,8 @@ function stickyUpdate() {
     box = h("div", { id: "jumpbox", class: "jumpbox" },
       h("button", { class: "jump", id: "jumpUp", title: "Go to the top", onclick: () => { const q = $("#pages"); q.scrollTo({ top: 0, behavior: "smooth" }); } }, "\u2191"),
       h("button", { class: "jump", id: "jumpDown", title: "Go to the bottom", onclick: () => { const q = $("#pages"); q.scrollTo({ top: q.scrollHeight, behavior: "smooth" }); } }, "\u2193"));
-    (document.querySelector(".main") || document.body).appendChild(box);
+    const sb = document.querySelector(".status .sbr");             // owner 29 Oct: in the status bar, never over page content
+    if (sb) sb.prepend(box); else (document.querySelector(".main") || document.body).appendChild(box);
   }
   const max = p.scrollHeight - p.clientHeight;
   $("#jumpUp").classList.toggle("on", p.scrollTop > 160);
@@ -818,7 +819,7 @@ function todayModel(j, serial) {
     resetAt: j.reset_at || 0, skew, resetLocal: hhmm(j.reset_at), items, summary,
     results: [
       ["Rallies joined", r.joins || 0, ""],
-      ["Skipped (too late)", r.late || 0, "Rallies left alone because too little time was left for the march"],
+      ["Too late", r.late || 0, "Rallies left alone because too little time was left for the march"],
       ["Monsters hit", monList.length, monList.map(([m, n]) => `${m} ×${n}`).join(", ") || "none yet"],
       ["Duties done", cnt.on ? `${cnt.done}/${cnt.on}` : "0", "Duties switched on that finished at least once today"],
       ["Restarts", r.restarts || 0, "Evony or the emulator restarted by the bot"],
