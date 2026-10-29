@@ -2867,8 +2867,8 @@ class Api:
         rules = rb.mr_rules(cfg)
         rtime = {r["preset"]: int(r["time"]) for r in rules}
         busy = {}
-        for k, t in (row.get("busy") or {}).items():
-            back = float(t) + rtime.get(k, 5) * 60
+        for k in set(row.get("busy") or {}) | set(row.get("pout") or {}):
+            back = rb.mr_preset_until(cfg, serial, k, now, row)   # rally time + the march home (learned) or seen empty
             if back > now:
                 busy[k] = int(back)
         on = bool(((cfg.get("duties") or {}).get("monster_rally") or {}).get("on"))

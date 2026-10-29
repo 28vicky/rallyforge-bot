@@ -16452,8 +16452,8 @@ def run_monster_rally(dev, cfg, log, stop):
 
 
 # ---- Hunts step 6: (target, preset) pairs (owner 29 Oct 13:31, claude/hunts_preset_selection_29oct.md) ----
-HUNT_OUT_DEFAULT_S = 120       # a preset seen empty on the troop page counts as out this long (unless the March panel says sooner)
-HUNT_WAIT_CAP_S = 60           # waits for presets / marches are at most this long, then the list is planned again
+HUNT_OUT_DEFAULT_S = 30        # owner 29 Oct 23:57: a preset seen empty is tried again after 30 s (unless the March panel says when it is back)
+HUNT_WAIT_CAP_S = 30           # owner 29 Oct 23:57: waits for presets / marches are at most 30 s, then it simply tries again
 HUNT_ROUNDS = 12               # targets tried in one pass
 
 
@@ -16474,13 +16474,15 @@ def mr_last_used(serial):
 
 
 MR_MARCH_BACK_MIN = 1          # extra minutes after the rally time before a preset counts as back (the march home)
-MR_STILL_OUT_S = 120           # a preset found still out on the troop page is not tried again for this long
+MR_STILL_OUT_S = 30            # a preset found still out on the troop page is not tried again for this long
 MR_BACK_MAX_MIN = 12           # learned march-home time is never counted longer than this (minutes after the rally time)
 
 
-def mr_preset_until(cfg, serial, preset, now=None, row=None):
+def mr_preset_until(cfg, serial, preset, now=None, row=None, seen_only=False):
     """When this preset is expected back; 0 = free now, or not known to be out (the troop page proves it).
-    From its last march (start + its rally time, as before) and 'pout' (seen empty on the troop page)."""
+    From its last march (start + its rally time, as before) and 'pout' (seen empty on the troop page).
+    seen_only (owner 29 Oct 23:57): only what the game showed (empty on the troop page / March panel) - a guessed
+    return time never stops the bot from trying; it tries, and a preset still out is tried again 30 s later."""
     now = now or time.time()
     row = row if row is not None else mr_row(serial)
     until = 0.0
@@ -16489,7 +16491,9 @@ def mr_preset_until(cfg, serial, preset, now=None, row=None):
         if b and now - b < 1800:
             rt = next((int(r["time"]) for r in mr_rules(cfg) if r["preset"] == preset), 5)
             back = float(row.get("back_min") or MR_MARCH_BACK_MIN)   # learned per instance: march there + fight + home
-            until = b + (rt + back) * 60                       # owner 29 Oct 18:22: the troops still march home after the rally
+            # the rally time itself is certain (the troops wait in the rally); the march home is a guess, so with
+            # seen_only the bot starts trying as soon as the rally time is over
+            until = b + (rt + (0 if seen_only else back)) * 60   # owner 29 Oct 18:22: the troops still march home after the rally
         until = max(until, float((row.get("pout") or {}).get(preset) or 0))
     except Exception as _e:
         quiet_err("mr_preset_until", _e)
@@ -16502,7 +16506,7 @@ def mr_free_presets(cfg, serial, presets, now=None):
     row = mr_row(serial)
     if float(row.get("slots_until") or 0) > now:
         return set()
-    return {p for p in presets if not mr_preset_until(cfg, serial, p, now, row)}
+    return {p for p in presets if not mr_preset_until(cfg, serial, p, now, row, seen_only=True)}
 
 
 def mr_plan(targets, free, hold=None, skip=(), last=None):
@@ -16529,7 +16533,7 @@ def mr_next_back(cfg, serial, targets, now=None):
     """The earliest time a preset used by these targets (or a march) is expected back; 0 = not known."""
     now = now or time.time()
     row = mr_row(serial)
-    ts = [mr_preset_until(cfg, serial, p, now, row) for p in {e["preset"] for t in targets for e in (t.get("pairs") or [])}]
+    ts = [mr_preset_until(cfg, serial, p, now, row, seen_only=True) for p in {e["preset"] for t in targets for e in (t.get("pairs") or [])}]
     su = float(row.get("slots_until") or 0)
     ts = [x for x in ts if x] + ([su] if su > now else [])
     return min(ts) if ts else 0
