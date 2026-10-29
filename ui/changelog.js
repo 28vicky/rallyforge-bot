@@ -1,5 +1,15 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.24", date: "2026-10-29",
+    new: ["Monster hunts: a new Hunt order tab - one list for the whole instance, top is hunted first. Drag rows to change the order and give each monster its own max distance (any distance unless you set one).",
+      "Monster hunts: each preset can be switched off (its monsters stay), copied to another preset or deleted. When two presets can kill the same monster, the one that is needed less goes and the stronger one stays free.",
+      "Pan is split into Ground, Ranged and Mounted Pan in both Join rallies and Monster hunts, so each type can have its own levels and presets.",
+      "Join rallies: when a rally card is hard to read (picture cut off at the top), the bot reads the name below it or opens the rally to check the monster and level before joining."],
+    fixed: ["Monster hunts now see Pan coordinates from Telegram (lines like \"Pan (Ranged Troop)\" were missed).",
+      "Monster hunts check the March panel before every hunt and go at once when a march is free; a preset that is still marching home is no longer tried again and again.",
+      "A monster listed again in Telegram counts as fresh again, so fewer trips to monsters that are already gone.",
+      "The bot notices much sooner when the game was closed and starts it again.",
+      "The instance header fits narrow windows, Take back sits next to the switches, and the City map buttons stay inside the box."] },
   { v: "2.5.23", date: "2026-10-29",
     new: ["Monster hunts run in the background: they keep going between other duties instead of waiting at the end of the list, and solo presets keep hunting while a rally preset is out.",
       "Join rallies has its own switch at the top of each instance, next to Auto-Join. With Auto-Join on, the bot never joins rallies on that instance."],
