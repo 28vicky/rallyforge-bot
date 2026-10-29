@@ -940,12 +940,15 @@ function pillSections(key, list) {
 function lockedWrap(el, locked) { if (locked) { el.style.opacity = "0.55"; el.style.pointerEvents = "none"; } return el; }
 
 // ====================================================================== monsters
+// owner 29 Oct: both monster lists (Join rallies, Hunts) show Pan as Ground / Ranged / Mounted Pan
+const PAN_KINDS = ["Ground Pan", "Ranged Pan", "Mounted Pan"];
+const panSplit = (catalog) => (catalog || []).map(([g, list]) => [g, list.flatMap((m) => m[0] === "Pan" ? PAN_KINDS.map((k) => [k, m[1]]) : [m])]);
 PAGES.monsters = function (fixed) {
   const sc = scopeBar("monsters", ["monster_skip", "monster_presets", "monster_unknown"], "monster list", fixed);
   if (fixed === undefined) return monstersPanel(S.cfg, sc.bar);
   if (ajIsOn(fixed)) sc.bar = h("div", {}, sc.bar, note("Auto-Join is on for this instance - the game joins rallies itself. This list is used only when Auto-Join is off."));   // PCR2 A4
   if (sc.own) return monstersPanel(sc.c, sc.bar);
-  const cat = (S.catalog || []).flatMap((x) => x[1]), skip = S.cfg.monster_skip || {};
+  const cat = panSplit(S.catalog).flatMap((x) => x[1]), skip = S.cfg.monster_skip || {};
   const joins = cat.filter(([n, lv]) => (skip[n] || []).length < lv.length).length;
   return panel("Monsters", sc.bar, h("p", { class: "sumline" }, h("b", {}, "Joins " + joins + " of " + cat.length + " monsters"), " with the universal list (All instances \u203a Join rallies)."),
     note("Make own to pick different monsters or levels for this instance."));
@@ -953,7 +956,9 @@ PAGES.monsters = function (fixed) {
 function monstersPanel(c, top) {
   c.monster_skip = c.monster_skip || {};
   c.monster_presets = c.monster_presets || {};
-  const cat = S.catalog || [];
+  // an old "Pan" setting becomes the same setting on all three Pan types (same meaning, nothing lost)
+  for (const key of ["monster_skip", "monster_presets"]) if (c[key].Pan) { for (const k of PAN_KINDS) if (!c[key][k]) c[key][k] = [...c[key].Pan]; delete c[key].Pan; }
+  const cat = panSplit(S.catalog);
   const known = new Set((S.monsters || []).map((n) => n.toLowerCase()));
   S.monTab = S.monTab || "All";
   S.monQ = S.monQ || "";
@@ -2345,11 +2350,8 @@ function monsterRallyTab(serial) {
   const huntsFor = (p) => (p in huntsLocal ? huntsLocal[p] : huntsOf(p));
 
   // ---- catalogue: [group, [[name, [[lv, power]...]]]] -> levels per monster
-  // v2 (owner 29 Oct): Hunts split Pan in three - a preset says which Pan it takes (a plain Telegram "Pan" fits all three)
-  const catRows = () => (S.catalog || []).flatMap(([g, list]) => list.flatMap(([n, lv]) => {
-    const levels = lv.map((x) => +x[0]).filter(Boolean);
-    return n === "Pan" ? ["Ground Pan", "Ranged Pan", "Mounted Pan"].map((k) => ({ name: k, group: g, levels })) : [{ name: n, group: g, levels }];
-  }));
+  // v2 (owner 29 Oct): a preset says which Pan it takes (a plain Telegram "Pan" fits all three)
+  const catRows = () => panSplit(S.catalog).flatMap(([g, list]) => list.map(([n, lv]) => ({ name: n, group: g, levels: lv.map((x) => +x[0]).filter(Boolean) })));
   const levelsOf = (name) => {
     const low = String(name || "").toLowerCase();
     const c = catRows().find((r) => r.name.toLowerCase() === low);

@@ -1828,8 +1828,13 @@ def collect_unknown_monster(screen, hit, cfg, log=None):
         quiet_err("collect_unknown_monster", _e)
 
 
+PAN_KINDS = ("Ground Pan", "Ranged Pan", "Mounted Pan")      # owner 29 Oct: the monster lists split Pan by troop type
+
+
 def monster_levels(name):
-    """All catalogue levels of a monster (empty when it is not in the catalogue)."""
+    """All catalogue levels of a monster (empty when it is not in the catalogue). Ground / Ranged / Mounted Pan = Pan."""
+    if str(name or "") in PAN_KINDS:
+        name = "Pan"
     for _c, ms in MONSTER_CATALOG:
         for n, lv in ms:
             if n.lower() == (name or "").lower():
@@ -1854,6 +1859,26 @@ def monster_rule_skip(name, cfg, level=None):
     if level is not None and int(level) in lv:
         return f"{name} Lv{level} is switched off in the monster list"
     return ""
+
+
+def pan_kind_read(strip):
+    """'Pan (Ranged Troop)' under a rally portrait -> 'Ranged Pan' (or Ground / Mounted), None when the type is not readable."""
+    for bright in (False, True):
+        try:
+            lines = ocr_lines(strip, scale=3.0, bright=bright)
+        except Exception:
+            lines = []
+        words = re.findall(r"[a-z]+", " ".join(t for t, _ in lines).lower())
+        for k in PAN_KINDS:
+            w = k.split()[0].lower()
+            if any(x == w or (len(x) >= 5 and x in w) for x in words):
+                return k
+    return None
+
+
+def pan_split_on(cfg):
+    """True when the monster list names a Pan type (then a Pan card's type is read)."""
+    return any(k in PAN_KINDS for k in (cfg.get("monster_skip") or {}))
 
 
 def monster_needs_level(name, cfg):
@@ -18399,8 +18424,12 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     mon_presets = {k.lower(): v for k, v in cfg.get("monster_presets", {}).items() if v}
     rots = {}
 
+    pan_last = [None]                  # the Pan troop type read on the card that find_target picked (owner 29 Oct)
+
     def rotator_for(mon):
         """Presets for this monster if you set some, otherwise the normal presets."""
+        if mon and _base_monster(mon) == "Pan" and pan_last[0] and pan_last[0].lower() in mon_presets:
+            mon = pan_last[0]
         if mon and mon.lower() in mon_presets:
             key = mon.lower()
             if key not in rots:
@@ -18567,6 +18596,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         return int(hit[1]) - 258 < 125
 
     def find_target(screen, nudged=False):
+        pan_last[0] = None
         hits = find_all(screen, "join_button", cfg["threshold"], cfg["search_region"])
         hits = [h0 for h0 in hits if not joined_button(screen, h0)]   # grey "Joined" = this account is already in it
         hits = sorted(hits, key=lambda h0: -h0[1])                    # bottom of the list first: those rallies have the least time left
@@ -18620,6 +18650,15 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             mon = lab if str(lab).lower() in NEVER_JOIN else f"{mon} King"
                     except Exception as _e:
                         quiet_err("run_device.find_target.label", _e)
+                pkind = None                                          # owner 29 Oct: Ground / Ranged / Mounted Pan in the list
+                if mon and _base_monster(mon) == "Pan" and pan_split_on(cfg):
+                    try:
+                        nx0, ny0 = int(hit[0] - 21), int(hit[1] - 113)
+                        pkind = pan_kind_read(screen[max(ny0 - 18, 0):ny0 + 18, max(nx0 - 150, 0):nx0 + 150])
+                    except Exception as _e:
+                        quiet_err("run_device.find_target.pan", _e)
+                    say(f"[Pan] troop type: {pkind or 'not readable'}")
+                    pan_last[0] = pkind
                 if mon == "Viking":                                   # which set is it? level on the card + power decide
                     nx, ny = int(hit[0] - 21), int(hit[1] - 113)
                     st = screen[max(ny - 18, 0):ny + 18, max(nx - 150, 0):nx + 150]
@@ -18648,7 +18687,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             if cfg["log_timers"]:
                                 say("[Viking] skip (set not recognised and %s is switched off)" % ", ".join(bad))
                             continue
-                elif monster_needs_level(mon, cfg):
+                elif monster_needs_level(pkind or mon, cfg) or (mon and _base_monster(mon) == "Pan" and not pkind and pan_split_on(cfg)
+                                                                       and any(monster_needs_level(k, cfg) for k in PAN_KINDS)):
                     nx, ny = int(hit[0] - 21), int(hit[1] - 113)
                     st = screen[max(ny - 18, 0):ny + 18, max(nx - 150, 0):nx + 150]
                     pw, praw = power_of(screen, hit, mon, hard)
@@ -18669,6 +18709,11 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             continue
                         say(f"[{mon}] level still not readable - joining anyway (a rally is never left unjoined just because of a blurry number)")
                 m_ok, m_why = monster_allowed(mon, cfg, mlv)
+                if m_ok and pkind:
+                    m_ok, m_why = monster_allowed(pkind, cfg, mlv)
+                elif m_ok and mon and _base_monster(mon) == "Pan" and pan_split_on(cfg) \
+                        and all(not monster_allowed(k, cfg, mlv)[0] for k in PAN_KINDS):
+                    m_ok, m_why = False, "Pan type not readable and every Pan type is switched off" + (f" at Lv{mlv}" if mlv else "")
                 if mon == "hidden" and mon_presets:
                     m_ok, m_why = False, "monster picture not fully on screen"
                 label = f"[{mon or '?'}] "
