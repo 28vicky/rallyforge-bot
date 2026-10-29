@@ -816,3 +816,85 @@ class WheelZero(unittest.TestCase):
     def test_zero_not_confirmed_is_not_trusted(self):
         with self.assertRaises(RuntimeError):                        # 0 then 5: reads disagree -> no decision on a bad read
             self._run([0, 5, 0])
+
+
+class MuMuFastCapture(unittest.TestCase):
+    """Owner 30 Oct: MuMu's own screen copy first, adb as the fallback - never a broken picture, never a stop."""
+
+    def setUp(self):
+        import rally_bot as rb
+        self.rb = rb
+        self.saved = (rb.nemu_open, rb.nemu_capture, rb.nemu_close, rb.log_to_file, dict(rb._NEMU))
+        rng = np.random.default_rng(5)
+        self.screen = (rng.random((960, 540, 3)) * 255).astype("uint8")
+        self.dev = rb.Device("127.0.0.1:16448", "adb")
+        self.dev._grab_raw = lambda: self.screen.copy()
+        self.logs = []
+        rb.log_to_file = self.logs.append
+        rb.nemu_close = lambda h: None
+
+    def tearDown(self):
+        rb = self.rb
+        rb.nemu_open, rb.nemu_capture, rb.nemu_close, rb.log_to_file = self.saved[:4]
+        rb._NEMU.clear()
+        rb._NEMU.update(self.saved[4])
+
+    def test_fast_picture_used_after_matching_adb_once(self):
+        self.rb.nemu_open = lambda s, a: (1, 0)
+        self.rb.nemu_capture = lambda c, d: self.screen.copy()
+        img = self.dev._grab()
+        self.assertEqual(self.dev.used, "mumu")
+        self.assertTrue((img == self.screen).all())
+        self.assertIn("fast MuMu screenshots on", self.logs[0])
+        self.dev._grab()
+        self.assertEqual(len(self.logs), 1)                     # the check runs once per instance
+
+    def test_upside_down_copy_is_turned_round(self):
+        self.rb.nemu_open = lambda s, a: (1, 0)
+        flipped = self.screen[::-1].copy()
+        self.rb.nemu_capture = lambda c, d: flipped.copy() if not self.rb._NEMU.get("flip") is False else flipped[::-1].copy()
+        img = self.dev._grab()
+        self.assertTrue((img == self.screen).all())
+        self.assertEqual(self.dev.used, "mumu")
+
+    def test_different_picture_turns_fast_capture_off(self):
+        self.rb.nemu_open = lambda s, a: (1, 0)
+        self.rb.nemu_capture = lambda c, d: np.zeros_like(self.screen)
+        img = self.dev._grab()
+        self.assertFalse(self.dev.fast)
+        self.assertNotEqual(self.dev.used, "mumu")
+        self.assertTrue((img == self.screen).all())
+        self.assertIn("NOT used", self.logs[0])
+
+    def test_not_mumu_uses_adb(self):
+        self.rb.nemu_open = lambda s, a: None
+        img = self.dev._grab()
+        self.assertEqual(self.dev.used, "raw")
+        self.assertGreater(self.dev.nemu_off, 0)
+        self.assertTrue((img == self.screen).all())
+
+    def test_three_failures_pause_fast_capture(self):
+        self.rb.nemu_open = lambda s, a: (1, 0)
+        self.rb.nemu_capture = lambda c, d: None
+        for _ in range(3):
+            self.dev._grab()
+        self.assertEqual(self.dev.used, "raw")
+        self.assertGreater(self.dev.nemu_off, time.time() + 500)
+
+    def test_capture_error_never_raises(self):
+        self.rb.nemu_open = lambda s, a: (1, 0)
+
+        def boom(c, d):
+            raise OSError("exception: access violation")
+        self.rb.nemu_capture = boom
+        img = self.dev._grab()
+        self.assertTrue((img == self.screen).all())
+
+    def test_switched_off_in_settings(self):
+        self.rb.nemu_open = lambda s, a: self.fail("must not be called")
+        self.dev.fast = False
+        self.dev._grab()
+        self.assertEqual(self.dev.used, "raw")
+
+    def test_bluestacks_port_never_tries_mumu(self):
+        self.assertIsNone(self.rb.nemu_open("127.0.0.1:5555", "adb"))
