@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.27", date: "2026-10-30",
+    new: [],
+    fixed: ["Join rallies: joining is fast again - the monster check on the march screen reads only what it needs."] },
   { v: "2.5.26", date: "2026-10-30",
     new: ["Monster hunts: \"Use my own hunt order\" - your own list of monsters in the order to hunt them, shown in columns. Move a monster by dragging it or typing its new place, tick several to move them together, and find one by name.",
       "Monster hunts: Save order and Load order - keep a hunt order for each event and switch between them in one click.",

@@ -85,7 +85,7 @@ pytesseract.image_to_data = _ocr_guard(pytesseract.image_to_data)
 
 AUTHOR = "Kiravik"                        # the creator of this software
 COPYRIGHT = "Copyright (c) 2026 Kiravik. All rights reserved."
-VERSION = "2.5.26"                       # shown in the window; the updater compares this with the published version
+VERSION = "2.5.27"                       # shown in the window; the updater compares this with the published version
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/28vicky/rallyforge-bot/main/version.json"
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")       # Tesseract would otherwise use every CPU core per call
 RES = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))          # bundled files
@@ -2012,28 +2012,53 @@ def rally_page_parse(page):
     return name, kind, lv
 
 
-def march_screen_monster(page):
-    """owner 29 Oct 23:03: the march screen (opened by Join) shows the rally's monster big at the top right - name,
-    power, coordinates. Read it there: it is the rally this march would really go to.
-    -> (name, pan_kind, level, power) - name '' when not readable."""
-    h0, w0 = page.shape[:2]
-    box = page[int(h0 * 0.15):int(h0 * 0.41), w0 // 2:w0]
-    name, _src = read_monster_name(box)
-    if name not in MONSTER_NAMES:
-        return "", None, None, None
-    kind = pan_kind_read(box) if name == "Pan" else None
-    pw = None
+def _msc_name(strip):
+    """The monster name on the march screen strip: one text read (a second, light-text read only when the first finds
+    no monster name). -> (name, raw lines)."""
+    import difflib
     for bright in (False, True):
         try:
-            lines = ocr_lines(box, scale=2.5, bright=bright)
+            lines = ocr_lines(strip, scale=2.5, bright=bright)
         except Exception:
             lines = []
-        for t, _ in lines:
-            pw = _power_num(t)
+        txt = " ".join(t for t, _ in lines)
+        t = " ".join(re.sub(r"[^A-Za-z ]", " ", txt).split())
+        best, score = "", 0.0
+        for form in {t, strip_troop_suffix(t) or t}:
+            for nm in MONSTER_NAMES + list(_MONSTER_ALIASES) + WORLD_BOSS_NAMES:
+                r_ = difflib.SequenceMatcher(None, form.lower(), nm.lower()).ratio()
+                if r_ > score:
+                    best, score = _MONSTER_ALIASES.get(nm, nm), r_
+        if score >= 0.75:
+            return best, lines
+    return "", []
+
+
+def march_screen_monster(page, need_power=True, need_kind=True):
+    """owner 29 Oct 23:03: the march screen (opened by Join) shows the rally's monster big at the top right - name,
+    power, coordinates. Read it there: it is the rally this march would really go to.
+    30 Oct: kept lean (joins had become 5 s slower) - a small strip per value, the power / Pan type only when needed.
+    -> (name, pan_kind, level, power) - name '' when not readable."""
+    h0, w0 = page.shape[:2]
+    name_strip = page[int(h0 * 0.331):int(h0 * 0.367), int(w0 * 0.555):w0]       # "Pumpkin Monster" / "Pan (Ranged Troop)"
+    name, lines = _msc_name(name_strip)
+    if name not in MONSTER_NAMES:
+        return "", None, None, None
+    kind = None
+    if name == "Pan" and need_kind:
+        words = re.findall(r"[a-z]+", " ".join(t for t, _ in lines).lower())
+        kind = next((k for k in PAN_KINDS if k.split()[0].lower() in words), None) or pan_kind_read(name_strip)
+    pw = None
+    if (need_power(name) if callable(need_power) else need_power) or name == "Viking":
+        pstrip = page[int(h0 * 0.194):int(h0 * 0.231), int(w0 * 0.70):int(w0 * 0.965)]   # "53.6M" in the top bar
+        for bright in (False, True):
+            try:
+                pl = ocr_lines(pstrip, scale=2.5, bright=bright)
+            except Exception:
+                pl = []
+            pw = next((v for v in (_power_num(t) for t, _ in pl) if v), None)
             if pw:
                 break
-        if pw:
-            break
     lv = level_from_power(name, pw) if pw and name != "Viking" else None
     return name, kind, lv, pw
 
@@ -19969,10 +19994,14 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
             # owner 29 Oct 23:03: the small list card only chooses which rally to try. The march screen shows this
             # rally's monster big and clear - read it there and press March only when it is allowed.
-            if mon != "hidden" or cfg.get("monster_skip"):
+            any_off = bool(cfg.get("monster_skip")) or (cfg.get("monster_mode") != "off" and bool(cfg.get("monster_list")))
+            if any_off and (mon != "hidden" or cfg.get("monster_skip")):   # nothing switched off: nothing to check
                 try:
                     mpage = dev.screenshot()
-                    m_n, m_k, m_lv, m_pw = march_screen_monster(mpage)
+                    # the power is read only when this monster has some levels switched off (the level decides then)
+                    m_n, m_k, m_lv, m_pw = march_screen_monster(
+                        mpage, need_power=lambda n: monster_needs_level(n, cfg) or (n == "Pan" and any(monster_needs_level(k, cfg) for k in PAN_KINDS)),
+                        need_kind=pan_split_on(cfg))
                 except Exception as _e:
                     quiet_err("run_device.march_screen_monster", _e)
                     m_n, m_k, m_lv, m_pw = "", None, None, None
