@@ -1,5 +1,9 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.25", date: "2026-10-29",
+    new: [],
+    fixed: ["Join rallies: the bot now checks the monster on the march screen before pressing March, so a monster you switched off (for example Pan) is never joined by mistake.",
+      "Join rallies: monster names like Ground Pan, Ranged Pan and Mounted Pan are shown in full."] },
   { v: "2.5.24", date: "2026-10-29",
     new: ["Monster hunts: a new Hunt order tab - one list for the whole instance, top is hunted first. Drag rows to change the order and give each monster its own max distance (any distance unless you set one).",
       "Monster hunts: each preset can be switched off (its monsters stay), copied to another preset or deleted. When two presets can kill the same monster, the one that is needed less goes and the stronger one stays free.",
