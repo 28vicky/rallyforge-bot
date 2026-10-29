@@ -19,3 +19,13 @@ def test_pan_switched_off_is_not_marched():
     assert not r.march_screen_allowed(PAN_OFF, "Pan", "Ranged Pan", 6, 361e6)[0]
     assert not r.march_screen_allowed(PAN_OFF, "Pan", None, None, 361e6)[0]     # type not readable: no guessing
     assert r.march_screen_allowed(PAN_OFF, "Pumpkin Monster", None, 5, 53.6e6)[0]
+
+
+def test_hunt_prefers_preset_used_longest_ago():
+    """owner 29 Oct 23:40: same monster on every preset -> the preset used longest ago goes first (not always preset 1)."""
+    pairs = [{"preset": p, "mode": "rally", "rank": 0, "top": 0} for p in ("I", "II", "III")]
+    last = {"I": 1000.0, "II": 3000.0, "III": 2000.0}
+    assert min(pairs, key=lambda e: r.mr_pair_order(e, last))["preset"] == "I"
+    last["I"] = 4000.0                                    # preset 1 just marched -> preset 3 (oldest) goes next
+    assert min(pairs, key=lambda e: r.mr_pair_order(e, last))["preset"] == "III"
+    assert min(pairs, key=lambda e: r.mr_pair_order(e, {}))["preset"] == "I"

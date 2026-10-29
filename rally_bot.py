@@ -16457,14 +16457,25 @@ HUNT_WAIT_CAP_S = 60           # waits for presets / marches are at most this lo
 HUNT_ROUNDS = 12               # targets tried in one pass
 
 
-def mr_pair_order(e):
+def mr_pair_order(e, last=None):
     """Hunts v2 (owner 29 Oct): the preset that can take fewer other hunt-order rows goes first (the strong one stays
-    free); a tie -> the lower preset number."""
-    return (int(e.get("rank") or 0), int(e.get("top") or 0), mr_pnum(e.get("preset")))
+    free); a tie -> (owner 29 Oct 23:40) the preset used longest ago (its troops are most likely home), then the lower
+    preset number. last = {preset: time it last marched}."""
+    return (int(e.get("rank") or 0), int(e.get("top") or 0), float((last or {}).get(e.get("preset")) or 0),
+            mr_pnum(e.get("preset")))
+
+
+def mr_last_used(serial):
+    """{preset: time it last marched} for this instance (hunts)."""
+    try:
+        return {p: float(t or 0) for p, t in (mr_row(serial).get("busy") or {}).items()}
+    except Exception:
+        return {}
 
 
 MR_MARCH_BACK_MIN = 1          # extra minutes after the rally time before a preset counts as back (the march home)
 MR_STILL_OUT_S = 120           # a preset found still out on the troop page is not tried again for this long
+MR_BACK_MAX_MIN = 12           # learned march-home time is never counted longer than this (minutes after the rally time)
 
 
 def mr_preset_until(cfg, serial, preset, now=None, row=None):
@@ -16477,7 +16488,8 @@ def mr_preset_until(cfg, serial, preset, now=None, row=None):
         b = float((row.get("busy") or {}).get(preset) or 0)
         if b and now - b < 1800:
             rt = next((int(r["time"]) for r in mr_rules(cfg) if r["preset"] == preset), 5)
-            until = b + (rt + MR_MARCH_BACK_MIN) * 60          # owner 29 Oct 18:22: the troops still march home after the rally
+            back = float(row.get("back_min") or MR_MARCH_BACK_MIN)   # learned per instance: march there + fight + home
+            until = b + (rt + back) * 60                       # owner 29 Oct 18:22: the troops still march home after the rally
         until = max(until, float((row.get("pout") or {}).get(preset) or 0))
     except Exception as _e:
         quiet_err("mr_preset_until", _e)
@@ -16493,7 +16505,7 @@ def mr_free_presets(cfg, serial, presets, now=None):
     return {p for p in presets if not mr_preset_until(cfg, serial, p, now, row)}
 
 
-def mr_plan(targets, free, hold=None, skip=()):
+def mr_plan(targets, free, hold=None, skip=(), last=None):
     """Every target with at least one FREE preset, best first, each with its best free preset:
     the held target first, then the place in that preset's box, higher level, closer, lower preset number.
     -> [(target, pair)]"""
@@ -16505,10 +16517,10 @@ def mr_plan(targets, free, hold=None, skip=()):
         ps = [e for e in (t.get("pairs") or []) if e["preset"] in free]
         if not ps:
             continue
-        e = min(ps, key=mr_pair_order)
+        e = min(ps, key=lambda x: mr_pair_order(x, last))
         km = t.get("km") if t.get("km") is not None else 1e9
         out.append(((0 if hold and key == hold else 1, int(e.get("rank") or 0), -int(t.get("level") or 0), km,
-                     mr_pnum(e["preset"])), t, e))
+                     float((last or {}).get(e["preset"]) or 0), mr_pnum(e["preset"])), t, e))
     out.sort(key=lambda x: x[0])
     return [(t, e) for _, t, e in out]
 
@@ -16595,7 +16607,7 @@ def _run_monster_rally(dev, cfg, log, stop):
             hold = None                                      # rallied / dead / taken / gone from the cache: let go
             mr_save(serial, hold=None)
         allp = {e["preset"] for t in live for e in (t.get("pairs") or [])}
-        plan = mr_plan(live, mr_free_presets(cfg, serial, allp, now), hold)
+        plan = mr_plan(live, mr_free_presets(cfg, serial, allp, now), hold, last=mr_last_used(serial))
         if not plan:
             break
         tgt, pair = plan[0]
@@ -16775,7 +16787,8 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
     # Owner 25 Oct: never March on an empty preset. Try this pair's preset, then the other FREE presets of the same mode
     # that have this monster (box place, then preset number). A preset found empty is marked out, not waited on.
     free_now = mr_free_presets(cfg, serial, {e["preset"] for e in tgt.get("pairs") or []}) | {preset}
-    cands = [preset] + [e["preset"] for e in sorted(tgt.get("pairs") or [], key=mr_pair_order)
+    _last = mr_last_used(serial)
+    cands = [preset] + [e["preset"] for e in sorted(tgt.get("pairs") or [], key=lambda x: mr_pair_order(x, _last))
                         if e["mode"] == pair["mode"] and e["preset"] != preset and e["preset"] in free_now]
     used, empty = None, []
     for p_ in cands:
@@ -16790,6 +16803,27 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
             break
         empty.append(p_)
         log(f"[*]  Monster rally: {label} - preset {mr_pnum(p_)} is empty (its general is still out)")
+    if empty:                                                # Dida 29 Oct: presets found empty 5-10 min after their rally
+        try:                                                 # started (the bot counted 6 min) - learn this instance's real
+            row_ = mr_row(serial)                            # time home, so a preset still out is not tapped again
+            back = float(row_.get("back_min") or MR_MARCH_BACK_MIN)
+            for p_ in empty:
+                b_ = float((row_.get("busy") or {}).get(p_) or 0)
+                if b_ and time.time() - b_ < 1800:
+                    rt_ = next((int(r["time"]) for r in mr_rules(cfg) if r["preset"] == p_), 5)
+                    back = max(back, min(MR_BACK_MAX_MIN, (time.time() - b_) / 60 - rt_ + 1.5))
+            if back != float(row_.get("back_min") or MR_MARCH_BACK_MIN):
+                log(f"[i]  Monster hunts: marches take longer to come home here - a preset now counts as back {back:.1f} min after its rally time ends")
+            mr_save(serial, back_min=round(back, 2))
+        except Exception as _e:
+            quiet_err("mr_back_learn", _e)
+    elif used:                                               # first preset was home: let the learned time come down slowly
+        try:                                                 # (one far monster must not keep every preset waiting)
+            back = float(mr_row(serial).get("back_min") or MR_MARCH_BACK_MIN)
+            if back > MR_MARCH_BACK_MIN:
+                mr_save(serial, back_min=round(max(MR_MARCH_BACK_MIN, back - 0.2), 2))
+        except Exception as _e:
+            quiet_err("mr_back_decay", _e)
     if used and empty:                                       # Dida 29 Oct: the empty ones were tried again on the next monster
         try:
             po = dict(mr_row(serial).get("pout") or {})
@@ -18589,6 +18623,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     at_bottom = [False]                   # True while a bottom-to-top sweep of the rally list is under way
     sweep_no = [0]                        # every new pass over the list: rallies that did not open are tried again
     back_at = {}                          # preset -> time its troops should be home again (rally left + march there and back + fight)
+    last_go = {}                          # preset -> time it last marched (a free preset used longest ago goes first)
     mon_presets = {k.lower(): v for k, v in cfg.get("monster_presets", {}).items() if v}
     rots = {}
 
@@ -19952,6 +19987,13 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     if not rest:
                         break
                     cand = rest[0]
+                # owner 29 Oct 23:40: a preset that just marched is still out - take one that is home (used longest ago)
+                # instead of tapping it and finding no general. Only when every preset seems out is it tried anyway.
+                if back_at.get(cand, 0) > time.time():
+                    home = [p for p in used.presets if p not in tried and p != cand and used.bad.get(p, 0) <= time.time()
+                            and back_at.get(p, 0) <= time.time()]
+                    if home:
+                        cand = min(home, key=lambda p: (last_go.get(p, 0), used.presets.index(p)))
                 if not priority and time.time() - t_join > 30:  # plenty of time left: let the other rallies go first
                     log("[*] 30 s on this rally without marching - moving on to the other rallies, back to this one on the next pass")
                     break
@@ -19978,6 +20020,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     out = back_at.get(cand, 0) > time.time()
                     log(f"[!] Preset {cand} has no general" + (" (its general is probably still out on the last march)" if out else "")
                         + " - trying the next preset")
+                    if not out:                                # seen empty: the next rallies try the others first for a while
+                        back_at[cand] = time.time() + 120
                     continue
                 if pcfg.get("max_troops"):
                     tr = troops_in_march(dev.screenshot())
@@ -20077,6 +20121,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 log(f"[i] Join timing: march screen {_o:.1f}s + preset/checks {_m:.1f}s = {t_march - t_join:.1f}s")
             mt = last_march[0] or 0
             back_at[preset] = time.time() + max(left, 0) + 2 * (mt if mt else 90) + 60   # march time unknown: count 90 s each way
+            last_go[preset] = time.time()
             if t_march:
                 lat = t_march - t_join
                 if preset is not None and preset_picks(cfg, preset):      # keep the slow general search apart from the base time
