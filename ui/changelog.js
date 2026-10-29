@@ -1,5 +1,12 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.22", date: "2026-10-29",
+    new: ["When a duty fails, the bot keeps a picture of the screen and what it saw, so problems can be found and fixed faster."],
+    fixed: ["Crazy Eggs uses the Lucky Hammer again - it now presses the real Confirm button.",
+      "The join count beside each instance now shows today's joins, the same number as the Today card, and no longer goes back to 0 after a restart.",
+      "A colour picked in Appearance now also colours the main buttons, such as Start and Resume.",
+      "Stopping an instance no longer shows \"Problem - see the log\" when nothing went wrong.",
+      "Overview fits small windows better: one row of tabs and one row of Today numbers."] },
   { v: "2.5.21", date: "2026-10-29",
     new: [],
     fixed: ["Pan rallies (Ranged, Ground and Mounted Troop) are now recognised, so unticking Pan really skips them."] },
