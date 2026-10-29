@@ -2896,7 +2896,35 @@ class Api:
                 counts["replaced"] += 1
             elif why == "Not in any preset" and d["live"]:
                 counts["nopreset"] += 1
+        # owner 29 Oct 23:57 / 30 Oct 00:02: "On the map" = every monster Telegram lists right now, the ones in the hunt
+        # order on top (in that order), the rest under "Not in any of your presets", each with why it is not rallied
+        # now; plus which hunt-order rows have nothing on the map (why the instance is idle).
+        order = rb.mr_order(cfg, rules)
+        last = {d.get("key"): d for d in reversed(decs)}           # newest decision per coordinate
+        onmap, have = [], set()
+        for key, seen_t in alive.items():
+            it = next((f for f in feed if f"{f.get('x')},{f.get('y')}" == key), None)
+            if not it or str(it.get("name") or "").lower().strip() in rb.NEVER_JOIN:
+                continue
+            lv = int(it.get("level") or 0)
+            oi, _r = rb.mr_order_index(order, it.get("name"), lv)
+            d = last.get(key) or {}
+            if oi is not None:
+                have.add(oi)
+                why = d.get("why") if d.get("kind") in ("go", "solo", "skip", "wait") and d.get("why") else "Next in line"
+                if d.get("kind") in ("go", "solo"):
+                    why = "Rallied" if d.get("kind") == "go" else "Attacked"
+            else:
+                why = ""                                       # the "Not in any of your presets" heading says it
+            x, y = (int(v) for v in key.split(","))
+            onmap.append({"key": key, "x": x, "y": y, "name": it.get("name"), "level": lv or None, "km": it.get("km"),
+                          "seen": seen_t, "order": oi, "why": why, "kind": d.get("kind") or ""})
+        onmap.sort(key=lambda m: (m["order"] is None, m["order"] if m["order"] is not None else 0,
+                                  m["km"] if m["km"] is not None else 1e9))
+        missing = [(r["name"] + (f" Lv{r['min']}" if r["min"] == r["max"] else f" Lv{r['min']}-{r['max']}" if r["max"] < 99 else ""))
+                   for i, r in enumerate(order) if i not in have]
         return {"on": on, "running": self.c.running(serial), "status": row.get("status") or {}, "busy": busy,
+                "onmap": onmap[:400], "missing": missing,
                 "solo_done": rb.mr_solo_done(serial), "decisions": decs[:400], "counts": counts,
                 "rally_only": sorted(rb.RALLY_ONLY), "solo_only": sorted(rb.SOLO_ONLY), "now": now}
 

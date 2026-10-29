@@ -2332,7 +2332,7 @@ function monsterRallyTab(serial) {
   let live = { status: {}, busy: {}, decisions: [], solo_done: {}, rally_only: [], now: Date.now() / 1000, running: false }, liveOk = Date.now(), liveFail = false;
   S.huView = S.huView || {};
   S.huSel = S.huSel || {};
-  S.huDec = S.huDec || {};   // Live > Decisions tab per instance: acted | nopreset | other
+  S.huDec = S.huDec || {};   // Live > Decisions tab per instance: onmap | acted | other
   let view = S.huView[serial] || "", sel = S.huSel[serial] || "", drawer = false, pf = "mine", q = "", openUsed = "", moreRows = 50, liveSig = "", keepTop = 0;
   let saveState = "saved", saveTimer = 0, retryTimer = 0, pending = null;
   const pN = (p) => MR_PRESETS.indexOf(p) + 1;
@@ -2555,22 +2555,24 @@ function monsterRallyTab(serial) {
     const cnt = live.counts || {};
     const isGone = (d) => /^Gone/.test(d.why || "") || d.why === "Spot taken by another monster" || d.why === "Another monster stands there";
     const isNoPre = (d) => d.kind === "skip" && d.why === "Not in any preset";
+    const onmap = (live.onmap || []).filter((d) => !isBoss(d.name));
     const lists = {
+      onmap,
       acted: rows.filter((d) => d.kind !== "skip"),
-      nopreset: rows.filter((d) => isNoPre(d) && d.live).sort((a, b) => (a.km ?? 1e9) - (b.km ?? 1e9)),   // closest first: what a user would run next
       other: rows.filter((d) => d.kind === "skip" && !isNoPre(d) && !isGone(d)),
     };
-    const tab = S.huDec[serial] || "acted";
+    const tab = S.huDec[serial] === "nopreset" ? "onmap" : (S.huDec[serial] || "onmap");   // owner 30 Oct: On the map opens first
     const setTab = (k) => { S.huDec[serial] = k; moreRows = 50; keepTop = 0; liveBox.querySelector(".hutwrap")?.scrollTo(0, 0); paintLive(); };
     const stat = (n, l, k, go, tip) => h(go ? "button" : "span", Object.assign({ class: "hustat2 " + k, title: tip || l }, go ? { type: "button", onclick: () => setTab(go) } : {}), h("i", {}), h("b", {}, String(n || 0)), " " + l);
     const stats = h("div", { class: "hustats" },
-      stat(cnt.solo, "Attacked", "solo", "acted"), stat(cnt.go, "Rallied", "go", "acted"), stat(cnt.nopreset, "Not in preset", "nopre", "nopreset"),
+      stat(cnt.solo, "Attacked", "solo", "acted"), stat(cnt.go, "Rallied", "go", "acted"), stat(cnt.nopreset, "Not in preset", "nopre", "onmap"),
       stat(cnt.gone, "Gone", "gone", null, "Gone before arrival (counted, not listed)"), stat(cnt.replaced, "Replaced", "gone", null, "Spot taken by another monster (counted, not listed)"));
     const tabs = h("div", { class: "hudtabs", role: "tablist", "aria-label": "Decisions filter" },
-      ...[["acted", "Acted"], ["nopreset", "Not in preset"], ["other", "Other skips"]].map(([k, l]) =>
+      ...[["onmap", "On the map"], ["acted", "Rallied"], ["other", "Other skips"]].map(([k, l]) =>
         h("button", { type: "button", role: "tab", class: "hudtab" + (tab === k ? " on" : ""), "aria-selected": tab === k ? "true" : "false", onclick: () => setTab(k) }, l, h("small", {}, String(lists[k].length)))));
-    const sec = h("section", { class: "panel hudec" }, h("div", { class: "hudhead" }, h("h3", {}, "Decisions"), rows.length ? stats : null, rows.length ? tabs : null));
-    if (!rows.length) {
+    const any = rows.length || onmap.length;
+    const sec = h("section", { class: "panel hudec" }, h("div", { class: "hudhead" }, h("h3", {}, "Decisions"), any ? stats : null, any ? tabs : null));
+    if (!any) {
       const linked = coords.ready || (coords.items || []).length;
       const huOn = !!(duty && duty.on), ran = !!((live.status || {}).t);
       // QA 28 Oct: say why the list is empty - switched off, or switched on but not run yet (was "No decisions yet today" in both cases)
@@ -2591,8 +2593,8 @@ function monsterRallyTab(serial) {
     };
     // fix 5 (29 Oct): each tab shows only the columns that differ between its rows
     const COLS = {
+      onmap: ["name", "loc", "km", "seen", "why"],
       acted: ["time", "name", "loc", "km", "dec", "why"],
-      nopreset: ["name", "loc", "km", "seen"],
       other: ["name", "loc", "km", "seen", "why"],
     }[tab];
     const TITLES = { time: "Time", name: "Monster", loc: "Location", km: "Dist", seen: "Seen", dec: "Decision", why: "Why" };
@@ -2613,11 +2615,20 @@ function monsterRallyTab(serial) {
       return h("span", { class: "huwhy", title: d.why }, d.why);
     };
     const head = h("div", { class: "hurow hd" }, ...COLS.map((c) => h("span", { class: "c-" + c + (c === "km" ? " hukm" : "") }, TITLES[c])));
-    const line = (d) => h("div", { class: "hurow" + (d.live || d.kind !== "skip" ? "" : " old") }, ...COLS.map((c) => { const el = cell(c, d); el.classList.add("c-" + c); return el; }));
+    const line = (d) => h("div", { class: "hurow" + (tab === "onmap" || d.live || d.kind !== "skip" ? "" : " old") }, ...COLS.map((c) => { const el = cell(c, d); el.classList.add("c-" + c); return el; }));
     const body = h("div", { class: "hutable t-" + tab, role: "table" }, head);
+    if (tab === "onmap" && (live.missing || []).length)            // why the instance is idle: hunt-order rows with nothing on the map
+      body.appendChild(h("div", { class: "humiss" }, h("b", {}, "Not on the map right now: "), (live.missing || []).join(" \u00b7 ")));
     if (!list.length) body.appendChild(h("div", { class: "huempty in" }, h("span", { class: "mute" },
-      tab === "nopreset" ? "No live monsters outside your presets right now. New Telegram lists show here." : tab === "acted" ? "Nothing rallied or attacked yet today." : "No other skips today.")));
-    list.slice(0, moreRows).forEach((d) => body.appendChild(line(d)));
+      tab === "onmap" ? "Telegram lists no monsters right now. New lists show here." : tab === "acted" ? "Nothing rallied or attacked yet today." : "No other skips today.")));
+    let grp = null;
+    list.slice(0, moreRows).forEach((d) => {
+      if (tab === "onmap") {                                        // presets on top (hunt order), the rest under a heading
+        const g = d.order == null ? "out" : "in";
+        if (g !== grp) { grp = g; body.appendChild(h("div", { class: "hugrp" }, g === "in" ? "In your presets" : "Not in any of your presets")); }
+      }
+      body.appendChild(line(d));
+    });
     if (list.length > moreRows) body.appendChild(h("button", { type: "button", class: "btn sm humore", onclick: () => { moreRows += 50; paintLive(); } }, "Show " + Math.min(50, list.length - moreRows) + " more"));
     const wrap = h("div", { class: "hutwrap" }, body);
     sec.appendChild(wrap);

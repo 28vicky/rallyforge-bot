@@ -1783,7 +1783,7 @@ select.pick-open{border-color:var(--accent1)}
 .huloc.done{color:var(--good)}.huloc.done .hucopy{display:none}
 /* per-tab columns (29 Oct) - Acted: Time Monster Location Dist Decision Why; Not in preset: Monster Location Dist Seen; Other: + Why */
 .t-acted .hurow{grid-template-columns:70px minmax(140px,1.6fr) 140px 66px 104px minmax(0,2fr)}
-.t-nopreset .hurow{grid-template-columns:minmax(160px,2fr) 150px 90px minmax(90px,1fr)}
+.t-onmap .hurow{grid-template-columns:minmax(140px,1.6fr) 140px 66px 90px minmax(0,2fr)}
 .t-other .hurow{grid-template-columns:minmax(140px,1.6fr) 140px 66px 90px minmax(0,2fr)}
 .hustats{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:12.5px;color:var(--mute);min-width:0}
 .hustat2{display:inline-flex;align-items:center;gap:5px;padding:0;border:0;background:transparent;color:inherit;font:inherit;white-space:nowrap}
@@ -1933,7 +1933,7 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
   /* 900-1023 px (29 Oct headless check): the card is ~550 px - drop the least needed column per tab, never clip */
   .t-acted .hurow{grid-template-columns:62px minmax(100px,1fr) 124px 58px 100px}.t-acted .c-why{display:none}
   .t-other .hurow{grid-template-columns:minmax(100px,1fr) 124px 58px minmax(0,1.2fr)}.t-other .c-seen{display:none}
-  .t-nopreset .hurow{grid-template-columns:minmax(120px,1.4fr) 124px 66px 90px}
+  .t-onmap .hurow{grid-template-columns:minmax(100px,1fr) 124px 58px minmax(0,1.2fr)}.t-onmap .c-seen{display:none}
   .hudpanel{width:100%}
   .hustat{display:none}
 }
@@ -1998,3 +1998,8 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .pagehead .stickyhead{position:static;margin-bottom:0!important;box-shadow:none!important}
 .pagehead .stickyhead.stuck{box-shadow:none!important}
 #app.inst-mode #pages{padding-top:16px}
+
+/* Hunts Live > On the map (owner 30 Oct): group headings + "not on the map" line */
+.hutable .hugrp{padding:12px 12px 4px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--mute)}
+.hutable .humiss{padding:8px 12px;font-size:13px;color:var(--mute)}
+.hutable .humiss b{color:var(--fg)}
