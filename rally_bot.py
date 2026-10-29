@@ -142,6 +142,7 @@ DEFAULTS = {
     "notify_joins": False,                  # a message for every joined rally
     "cpu_level": 2,                         # 1 = fastest scanning, 2 = balanced, 3 = light, 4 = lightest
     "screenshot_mode": "auto",              # auto = raw (lighter for the emulator) then png | png
+    "mumu_fast_capture": True,              # owner 30 Oct: MuMu 12's own screen copy (much faster than adb); adb stays the fallback
     "cv_threads": 1,                        # CPU threads used for picture matching per bot
     "perf_log_seconds": 60,                 # print a speed / load summary this often (0 = never)
     "after_join_steps": [],
@@ -871,6 +872,11 @@ class Device:
         self.mode = "auto"                   # auto | png (set from the config)
         self.raw_fail = 0
         self.used = "png"
+        self.fast = True                     # MuMu fast capture allowed (config mumu_fast_capture)
+        self.nemu = None                     # MuMu capture connection: (connection id, display id) or None
+        self.nemu_off = 0.0                  # MuMu capture paused until this time (after failures) - adb is used meanwhile
+        self.nemu_fails = 0
+        self.nemu_timed = False              # speed of fast vs adb logged once per instance
         self.real = EXPECTED_SIZE            # real screen size, updated on every screenshot
         self.sx = self.sy = 1.0              # real / 540x960 scale used for taps
         self.guard = None                    # (cfg, log, stop): the universal pop-up closer (see arm_guard)
@@ -1004,7 +1010,60 @@ class Device:
                 return cv2.cvtColor(px, cv2.COLOR_BGRA2BGR if fmt == 5 else cv2.COLOR_RGBA2BGR)
         return None
 
+    def _grab_nemu(self):
+        """MuMu 12 fast capture: copies the instance's screen straight from MuMu's renderer (no adb, no mouse, works while
+        the window is hidden). -> image or None (None = use adb). Never raises."""
+        if not self.fast or time.time() < self.nemu_off:
+            return None
+        try:
+            if self.nemu is None:
+                self.nemu = nemu_open(self.serial, self.adb)
+                if self.nemu is None:                    # not MuMu / no library / instance not found: stay on adb (look again in 30 min)
+                    self.nemu_off = time.time() + 1800
+                    return None
+            img = nemu_capture(*self.nemu)
+            if img is not None:
+                self.nemu_fails = 0
+                return img
+        except Exception as _e:
+            quiet_err("Device._grab_nemu", _e)
+        self.nemu_fails += 1
+        nemu_close(self.nemu)
+        self.nemu = None
+        if self.nemu_fails >= 3:                         # e.g. instance restarting or a MuMu update: adb for 10 min, then try again
+            self.nemu_fails = 0
+            self.nemu_off = time.time() + 600
+        return None
+
     def _grab(self):
+        if self.mode != "png":
+            t0 = time.perf_counter()
+            img = self._grab_nemu()
+            if img is not None and not self.nemu_timed:   # once per instance: must show the same screen as adb, and how fast
+                self.nemu_timed = True
+                fast_ms = (time.perf_counter() - t0) * 1000
+                ref, slow_ms = None, 0.0
+                try:
+                    t1 = time.perf_counter()
+                    ref = self._grab_raw()
+                    slow_ms = (time.perf_counter() - t1) * 1000
+                except Exception:
+                    ref = None
+                verdict = nemu_same_screen(img, ref)
+                if verdict == "flipped":                  # this MuMu build hands it over the other way up
+                    _NEMU["flip"] = not _NEMU.get("flip", False)
+                    img = cv2.flip(img, 0)
+                if verdict in ("same", "flipped"):
+                    log_to_file(f"[i] {self.serial}: fast MuMu screenshots on - {fast_ms:.0f} ms each (adb: {slow_ms:.0f} ms)")
+                else:                                     # not the same picture (or no adb picture to check): adb only
+                    self.fast = False
+                    nemu_close(self.nemu)
+                    self.nemu = None
+                    log_to_file(f"[i] {self.serial}: fast MuMu screenshots NOT used ({verdict}) - adb as before")
+                    img = ref
+            if img is not None and self.fast:
+                self.used = "mumu"
+                return img
         if self.mode != "png" and self.raw_fail < 3:
             try:
                 img = self._grab_raw()
@@ -6340,6 +6399,119 @@ def mumu_index(serial, adb, name=None):
         return str((port - 16384) // 32)
     return None
 
+
+
+# ------------------------------------------------------------ MuMu fast capture (owner 30 Oct 2026)
+# MuMu 12 ships a small library (nx_device\12.0\shell\sdk\external_renderer_ipc.dll) that hands out a copy of an
+# instance's screen directly. Same pixels as adb screencap, many times faster; no mouse, works while the window is hidden.
+# Only on MuMu 12 - BlueStacks and older MuMu keep using adb automatically.
+_NEMU = {"dll": None, "tried": False, "root": None, "lock": threading.Lock(), "flip": True}
+_NEMU_PKG = "com.topgamesinc.evony"
+
+
+def _nemu_lib(adb):
+    if _NEMU["tried"]:
+        return _NEMU["dll"]
+    _NEMU["tried"] = True
+    try:
+        import ctypes
+        mgr = mumu_manager(adb)
+        if not mgr:
+            return None
+        root = Path(mgr).parent.parent                     # ...\MuMuPlayer\nx_main\MuMuManager.exe -> ...\MuMuPlayer
+        for p in (root / "nx_device" / "12.0" / "shell" / "sdk" / "external_renderer_ipc.dll",
+                  root / "shell" / "sdk" / "external_renderer_ipc.dll", root / "sdk" / "external_renderer_ipc.dll"):
+            if p.exists():
+                dll = ctypes.CDLL(str(p))
+                dll.nemu_connect.restype = ctypes.c_int
+                dll.nemu_connect.argtypes = [ctypes.c_wchar_p, ctypes.c_int]
+                dll.nemu_disconnect.argtypes = [ctypes.c_int]
+                dll.nemu_capture_display.restype = ctypes.c_int
+                dll.nemu_capture_display.argtypes = [ctypes.c_int, ctypes.c_uint, ctypes.c_int, ctypes.POINTER(ctypes.c_int),
+                                                     ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_ubyte)]
+                if hasattr(dll, "nemu_get_display_id"):
+                    dll.nemu_get_display_id.restype = ctypes.c_int
+                    dll.nemu_get_display_id.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int]
+                _NEMU["dll"], _NEMU["root"] = dll, str(root)
+                return dll
+    except Exception as _e:
+        quiet_err("_nemu_lib", _e)
+    return None
+
+
+def nemu_open(serial, adb):
+    """-> (connection id, display id) for a MuMu 12 instance, or None (then adb is used)."""
+    m = re.fullmatch(r"127\.0\.0\.1:(\d+)", serial)
+    if not m or int(m.group(1)) < 16384:                   # MuMu 12 instances live on 16384+ (BlueStacks 5555+)
+        return None
+    dll = _nemu_lib(adb)
+    if dll is None:
+        return None
+    idx = mumu_index(serial, adb)
+    if idx in (None, "", "None"):
+        return None
+    with _NEMU["lock"]:
+        conn = int(dll.nemu_connect(_NEMU["root"], int(idx)))
+        if conn == 0:
+            return None
+        disp = 0
+        try:
+            if hasattr(dll, "nemu_get_display_id"):
+                d = int(dll.nemu_get_display_id(conn, _NEMU_PKG.encode(), 0))
+                if d >= 0:
+                    disp = d
+        except Exception:
+            disp = 0
+    return conn, disp
+
+
+def nemu_capture(conn, disp):
+    """One screen copy -> BGR image (540x960 normally) or None."""
+    import ctypes
+    dll = _NEMU["dll"]
+    if dll is None:
+        return None
+    w, h = ctypes.c_int(0), ctypes.c_int(0)
+    with _NEMU["lock"]:
+        if dll.nemu_capture_display(conn, disp, 0, ctypes.byref(w), ctypes.byref(h), None) != 0:
+            return None
+        if not (100 <= w.value <= 4000 and 100 <= h.value <= 4000):
+            return None
+        size = w.value * h.value * 4
+        buf = (ctypes.c_ubyte * size)()
+        if dll.nemu_capture_display(conn, disp, size, ctypes.byref(w), ctypes.byref(h), buf) != 0:
+            return None
+    px = np.frombuffer(buf, np.uint8, count=size).reshape(h.value, w.value, 4)
+    img = cv2.cvtColor(px, cv2.COLOR_RGBA2BGR)
+    return img if _NEMU.get("flip") is False else cv2.flip(img, 0)   # MuMu hands the picture over upside down (checked once)
+
+
+def nemu_same_screen(fast, ref):
+    """Does the MuMu copy show the same screen as adb? -> 'same' | 'flipped' | 'different' | 'no adb picture'.
+    Compared small and grey, so tiny timing differences (an animation) do not matter."""
+    if ref is None:
+        return "no adb picture"
+    try:
+        a = cv2.resize(cv2.cvtColor(fast, cv2.COLOR_BGR2GRAY), (54, 96), interpolation=cv2.INTER_AREA).astype(np.int16)
+        b = cv2.resize(cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY), (54, 96), interpolation=cv2.INTER_AREA).astype(np.int16)
+        d_same = float(np.abs(a - b).mean())
+        d_flip = float(np.abs(a[::-1] - b).mean())
+        if d_same <= 12 and d_same <= d_flip:
+            return "same"
+        if d_flip <= 12:
+            return "flipped"
+        return f"different picture, diff {min(d_same, d_flip):.0f}"
+    except Exception as _e:
+        return f"check failed: {type(_e).__name__}"
+
+
+def nemu_close(handle):
+    try:
+        if handle and _NEMU["dll"] is not None:
+            with _NEMU["lock"]:
+                _NEMU["dll"].nemu_disconnect(handle[0])
+    except Exception:
+        pass
 
 def emulator_stop_command(serial, adb, cfg):
     """Command that closes this emulator instance nicely, or None. Your own stop_cmd always wins."""
@@ -18933,6 +19105,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     dev = Device(serial, adb)
     dev.mode = cfg.get("screenshot_mode", "auto")
+    dev.fast = bool(cfg.get("mumu_fast_capture", True))
     dev.arm_guard(cfg, log, stop)
     auto = cfg["auto_launch_emulator"] or cfg["auto_launch_game"]
     try:
