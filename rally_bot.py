@@ -1980,6 +1980,71 @@ def read_monster_power(screen, hit, hard=False):
     return None, raw
 
 
+RALLY_PAGE_DIR = USER / "rally_pages"     # owner 29 Oct: pictures of the rally page, to test and tune the name reader
+RALLY_PAGE_KEEP = 30                     # pictures kept a day (all instances together)
+RALLY_PAGE_DY = -90                      # the "Boss Monster" label in the middle of a card, from its Join button
+_rally_page_n = {"day": "", "n": 0}
+
+
+def rally_page_parse(page):
+    """The rally page (tap the middle of a rally card) shows the monster big and clear at the top right: name, power,
+    coordinates. -> (name, pan_kind, level) - name '' when not readable."""
+    h0, w0 = page.shape[:2]
+    top = page[int(h0 * 0.10):int(h0 * 0.47), w0 // 2:w0]           # right half of the rally card at the top
+    name, src = read_monster_name(top)
+    if name not in MONSTER_NAMES:
+        return "", None, None
+    kind = pan_kind_read(top) if name == "Pan" else None
+    lv = None
+    for bright in (False, True):
+        try:
+            lines = ocr_lines(top, scale=2.5, bright=bright)
+        except Exception:
+            lines = []
+        for t, _ in lines:
+            pw = _power_num(t)
+            if pw:
+                lv = level_from_power(name, pw)
+                if lv:
+                    break
+        if lv:
+            break
+    return name, kind, lv
+
+
+def rally_page_save(page, label):
+    """Keep a few rally pages a day (shared by every instance) so the reader can be tested on real pictures."""
+    try:
+        day = _game_day()
+        if _rally_page_n["day"] != day:
+            _rally_page_n.update(day=day, n=0)
+        if _rally_page_n["n"] >= RALLY_PAGE_KEEP:
+            return
+        _rally_page_n["n"] += 1
+        RALLY_PAGE_DIR.mkdir(exist_ok=True)
+        cv2.imwrite(str(RALLY_PAGE_DIR / f"{time.strftime('%m%d_%H%M%S')}_{re.sub(r'[^A-Za-z0-9]+', '_', label)[:40]}.png"), page)
+    except Exception as _e:
+        quiet_err("rally_page_save", _e)
+
+
+def rally_page_read(dev, hit, stop=None):
+    """An unclear rally card: tap its middle, read the rally page, go back to the list. -> (name, pan_kind, level) or None.
+    Never taps when the middle of the card is under the list header; goes back only when a page really opened."""
+    x, y = 270, int(hit[1]) + RALLY_PAGE_DY
+    if y < MON_TOP + 10:
+        return None
+    dev.tap(x, y)
+    time.sleep(1.3)
+    page = dev.screenshot()
+    if find_all(page, "join_button", 0.85):        # still the list (nothing opened): no back, or the list would close
+        return None
+    name, kind, lv = rally_page_parse(page)
+    rally_page_save(page, f"{kind or name or 'unread'}_Lv{lv or 'x'}")
+    dev.back()
+    time.sleep(0.9)
+    return (name, kind, lv) if name else None
+
+
 def level_from_power(name, power):
     """Which catalogue level of this monster has this power (within 2%)? -> level or None."""
     best = None
@@ -18480,6 +18545,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     mon_presets = {k.lower(): v for k, v in cfg.get("monster_presets", {}).items() if v}
     rots = {}
 
+    page_tries = [0]                   # rally pages opened in this look at the list (max 2)
     pan_last = [None]                  # the Pan troop type read on the card that find_target picked (owner 29 Oct)
 
     def rotator_for(mon):
@@ -18651,8 +18717,12 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         """True when the power box of this card is hidden under the top bar of the list."""
         return int(hit[1]) - 258 < 125
 
+    page_mem = []                        # [(rally end time, (name, pan kind, level))]: a rally page is read once
+
     def find_target(screen, nudged=False):
         pan_last[0] = None
+        page_tries[0] = 0
+        page_mem[:] = [m for m in page_mem if m[0] > time.time() - 30]
         hits = find_all(screen, "join_button", cfg["threshold"], cfg["search_region"])
         hits = [h0 for h0 in hits if not joined_button(screen, h0)]   # grey "Joined" = this account is already in it
         hits = sorted(hits, key=lambda h0: -h0[1])                    # bottom of the list first: those rallies have the least time left
@@ -18680,17 +18750,19 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 mon, _ = identify_monster(screen, hit, cfg)
                 if mon and mon != "hidden":
                     msrc = "image match"
-                if mon is None and cfg.get("monster_skip"):        # no picture yet: read the name under the portrait instead
-                    try:
+                pkind = None
+                if mon in (None, "hidden") and int(hit[1]) - 113 - 18 >= MON_TOP:   # no picture / picture cut off: read the
+                    try:                                            # name under the portrait (owner 29 Oct: trust a clear name)
                         nx0, ny0 = int(hit[0] - 21), int(hit[1] - 113)
                         lab, lsrc = read_monster_name(screen[max(ny0 - 18, 0):ny0 + 18, max(nx0 - 150, 0):nx0 + 150])
                         if lab in MONSTER_NAMES:
+                            was_hidden = mon == "hidden"
                             mon, msrc = lab, lsrc
                             # first picture of a monster known only by name (e.g. Ymir): keep its portrait so the next
                             # rally is recognised from the picture. Only a fully visible card - never a cut-off one.
                             # A troop look (Pan Ranged / Ground / Mounted, read via the alias) is kept even when another
                             # look of that monster is already known (learn_monster skips duplicates, max 6 looks).
-                            if lab != "Viking" and not cut_off(hit) and (lsrc == "OCR alias" or not any(_base_monster(n) == lab for n in _raw_monsters())):
+                            if not was_hidden and lab != "Viking" and not cut_off(hit) and (lsrc == "OCR alias" or not any(_base_monster(n) == lab for n in _raw_monsters())):
                                 mdx, mdy = cfg["monster_offset"]
                                 mcx, mcy, mh = int(hit[0] + mdx), int(hit[1] + mdy), MON_SIZE // 2
                                 if mcy - mh >= MON_TOP + 10 and mcx - mh >= 0 and mcx + mh <= screen.shape[1] and mcy + mh <= screen.shape[0]:
@@ -18706,8 +18778,22 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             mon = lab if str(lab).lower() in NEVER_JOIN else f"{mon} King"
                     except Exception as _e:
                         quiet_err("run_device.find_target.label", _e)
-                pkind = None                                          # owner 29 Oct: Ground / Ranged / Mounted Pan in the list
-                if mon and _base_monster(mon) == "Pan" and pan_split_on(cfg):
+                if mon in (None, "hidden") and page_tries[0] < 2:     # owner 29 Oct: still unclear -> read the rally page
+                    left0 = read_seconds(screen, hit, cfg["rally_timer_source"])
+                    end0 = time.time() + left0 if left0 is not None else None
+                    got = next((g for e, g in page_mem if end0 is not None and abs(e - end0) <= 6), None)
+                    if got is None:
+                        page_tries[0] += 1
+                        got = rally_page_read(dev, hit, stop) or ("", None, None)
+                        if end0 is not None:
+                            page_mem.append((end0, got))
+                    if got[0]:
+                        mon, pkind, mlv, msrc = got[0], got[1], got[2], "rally page"
+                        pan_last[0] = pkind
+                        say(f"[{pkind or mon}] read on the rally page · level {mlv or 'not readable'}")
+                    else:
+                        say("[?] rally page not readable")
+                if mon and _base_monster(mon) == "Pan" and pan_split_on(cfg) and not pkind:
                     try:
                         nx0, ny0 = int(hit[0] - 21), int(hit[1] - 113)
                         pkind = pan_kind_read(screen[max(ny0 - 18, 0):ny0 + 18, max(nx0 - 150, 0):nx0 + 150])
@@ -18743,7 +18829,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             if cfg["log_timers"]:
                                 say("[Viking] skip (set not recognised and %s is switched off)" % ", ".join(bad))
                             continue
-                elif monster_needs_level(pkind or mon, cfg) or (mon and _base_monster(mon) == "Pan" and not pkind and pan_split_on(cfg)
+                elif mlv is None and monster_needs_level(pkind or mon, cfg) or mlv is None and (mon and _base_monster(mon) == "Pan" and not pkind and pan_split_on(cfg)
                                                                        and any(monster_needs_level(k, cfg) for k in PAN_KINDS)):
                     nx, ny = int(hit[0] - 21), int(hit[1] - 113)
                     st = screen[max(ny - 18, 0):ny + 18, max(nx - 150, 0):nx + 150]
