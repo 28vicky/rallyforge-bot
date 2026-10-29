@@ -2012,6 +2012,53 @@ def rally_page_parse(page):
     return name, kind, lv
 
 
+def march_screen_monster(page):
+    """owner 29 Oct 23:03: the march screen (opened by Join) shows the rally's monster big at the top right - name,
+    power, coordinates. Read it there: it is the rally this march would really go to.
+    -> (name, pan_kind, level, power) - name '' when not readable."""
+    h0, w0 = page.shape[:2]
+    box = page[int(h0 * 0.15):int(h0 * 0.41), w0 // 2:w0]
+    name, _src = read_monster_name(box)
+    if name not in MONSTER_NAMES:
+        return "", None, None, None
+    kind = pan_kind_read(box) if name == "Pan" else None
+    pw = None
+    for bright in (False, True):
+        try:
+            lines = ocr_lines(box, scale=2.5, bright=bright)
+        except Exception:
+            lines = []
+        for t, _ in lines:
+            pw = _power_num(t)
+            if pw:
+                break
+        if pw:
+            break
+    lv = level_from_power(name, pw) if pw and name != "Viking" else None
+    return name, kind, lv, pw
+
+
+def march_screen_allowed(cfg, name, kind, lv, pw):
+    """The final join check on the march screen. -> (allowed, reason, shown name)."""
+    if name == "Viking":                                  # which Viking set: the power decides
+        vname, vlv = viking_resolve(pw, None) if pw else (None, None)
+        if vname:
+            ok, why = monster_allowed(vname, cfg, vlv)
+            return ok, why, f"{vname} Lv{vlv}" if vlv else vname
+        if all(not monster_allowed(vn, cfg, None)[0] for vn in VIKING_SETS):
+            return False, "Viking set not recognised and every Viking group is switched off", "Viking"
+        return True, "", "Viking"
+    gate = kind or name
+    shown = f"{gate} Lv{lv}" if lv else gate
+    ok, why = monster_allowed(gate, cfg, lv)
+    if ok and name == "Pan" and not kind and pan_split_on(cfg):
+        if any(not monster_allowed(k, cfg, lv)[0] for k in PAN_KINDS):
+            return False, "Pan type not readable and some Pan types are switched off" + (f" at Lv{lv}" if lv else ""), shown
+    if ok and lv is None and monster_needs_level(gate, cfg):   # owner 29 Oct 13:24: no guessing
+        return False, f"{gate} level not readable and some of its levels are switched off", shown
+    return ok, why, shown
+
+
 def rally_page_save(page, label):
     """Keep a few rally pages a day (shared by every instance) so the reader can be tested on real pictures."""
     try:
@@ -18568,8 +18615,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         no_open[:] = [x for x in no_open if x[1] > now_t]
         for x in no_open:
             if x[0] == name and abs(x[1] - end) <= 6:
-                if kind == "joined":
-                    x[2] = "joined"
+                if kind in ("joined", "wrong"):
+                    x[2] = kind
                 else:
                     x[3] += 1
                     x[4] = now_t
@@ -18650,6 +18697,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     last_dn = [None]                      # monster name with its level, e.g. "Witch Lv6", of the rally find_target chose
     last_base = [None]
     last_src = [""]                       # how that monster was identified: image match / OCR / OCR alias / monster not identified
+    last_lv = [None]                      # level of that monster as read on the list
+    msc_miss = [0]                        # march screens in a row where the monster could not be read
 
     name_cache = {}
 
@@ -18895,10 +18944,12 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     and x[0] == (mon if mon and mon != "hidden" else show_name(screen, hit, mon))] if ok else []
             # the game itself says what is joined (grey "Joined" button, filtered out above). A rally that did not open is left
             # alone only for the rest of this pass over the list - the next pass tries it again while it still shows "Join".
-            seen_before = [x[2] for x in same if x[2] == "joined" or (x[2] == "failed" and x[5] == sweep_no[0])]
+            seen_before = [x[2] for x in same if x[2] in ("joined", "wrong") or (x[2] == "failed" and x[5] == sweep_no[0])]
             if seen_before:
                 if "joined" in seen_before:                   # our own join: already shown as JOINED - not a skip
                     say(f"{label}already joined by this emulator")
+                elif "wrong" in seen_before:                  # the march screen showed another monster: never tried again
+                    say(f"{label}skip (the march screen showed a monster that is switched off)")
                 else:
                     why_o = "did not open just now - tried again on the next pass over the list"
                     act_skip(level_name(screen, hit, mon, mlv), why_o, rally, march)
@@ -18915,6 +18966,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         last_dn[0] = level_name(screen, hit, mon, mlv)
         last_base[0] = mon if mon and mon != "hidden" else show_name(screen, hit, mon)
         last_src[0] = msrc or "monster not identified"
+        last_lv[0] = mlv
         return hit, rally, mon
 
     last_frame = [0.0]
@@ -19849,6 +19901,43 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     slower("The march screen did not open")
                     continue
 
+            # owner 29 Oct 23:03: the small list card only chooses which rally to try. The march screen shows this
+            # rally's monster big and clear - read it there and press March only when it is allowed.
+            if mon != "hidden" or cfg.get("monster_skip"):
+                try:
+                    mpage = dev.screenshot()
+                    m_n, m_k, m_lv, m_pw = march_screen_monster(mpage)
+                except Exception as _e:
+                    quiet_err("run_device.march_screen_monster", _e)
+                    m_n, m_k, m_lv, m_pw = "", None, None, None
+                if m_n:
+                    msc_miss[0] = 0
+                    if m_lv is None and last_lv[0] and _base_monster(mon or "") == m_n:
+                        m_lv = last_lv[0]                      # same monster as the list read: its level stands
+                    ok_m, why_m, shown_m = march_screen_allowed(cfg, m_n, m_k, m_lv, m_pw)
+                    if not ok_m:
+                        list_said = mon_name if mon_name and mon_name != "?" else "an allowed monster"
+                        log(f"[!] March screen shows {shown_m} ({why_m}) - the list read it as {list_said}. Not marching, back to the list")
+                        act_skip(shown_m, why_m + " (checked on the march screen)", left)
+                        remember_rally(mon if mon and mon != "hidden" else base_name, t_join + left, "wrong")
+                        dev.back()
+                        nap(0.8, 1.2)
+                        continue
+                    if _base_monster(mon or "") not in (m_n, "") and mon != "hidden":
+                        log(f"[i] March screen shows {shown_m}, the list read {mon_name} - {shown_m} is allowed, marching")
+                    mon_name = shown_m
+                else:
+                    msc_miss[0] += 1
+                    if msc_miss[0] <= 3:                       # when in doubt, do not join (owner 29 Oct 13:20)
+                        log("[!] Monster on the march screen not readable - not marching, back to the list")
+                        act_skip(mon_name, "monster not readable on the march screen", left)
+                        remember_rally(mon if mon and mon != "hidden" else base_name, t_join + left, "failed")
+                        dev.back()
+                        nap(0.8, 1.2)
+                        continue
+                    # reading keeps failing on this instance (a reader problem, not this rally): never stop joining
+                    # altogether - the list's reading decides until the march screen reads again
+                    log("[!] The march screen could not be read 3 times in a row - joining on the list's reading for now")
             t_open = time.time()                               # join speed: the march screen is open
             # Take the next preset in the rotation. A preset that has no general (or does not march) is
             # skipped and the next preset is tried straight away, on the same march screen.

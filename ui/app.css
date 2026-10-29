@@ -826,11 +826,11 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .mon-list{grid-template-columns:repeat(auto-fill,minmax(320px,1fr));align-items:stretch;gap:8px}
 .mon-card{min-width:0}
 .mon-card .mon-row{flex-wrap:nowrap;min-height:50px;gap:10px}
-.mon-card .mon-name{min-width:0;flex:0 1 auto;overflow:hidden;white-space:nowrap}
+.mon-card .mon-name{min-width:auto;flex:0 0 auto;white-space:nowrap}   /* owner 29 Oct: the name is never cut ("Mounted Pan") - the summary gives way */
 .mon-card .mon-pic{flex:0 0 auto}
 .mon-card .mon-sum{min-width:0;white-space:nowrap;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis}
 .mon-card .mon-row .btn{flex:0 0 auto}
-.mon-card input.short{flex:0 0 84px;width:84px}
+.mon-card input.short{flex:0 1 84px;width:84px;min-width:56px}
 
 /* ================= F7 dashboard (21 Oct mockup): warm off-white, rust primary, safety-red Stop, amber Pause ================= */
 .side{padding:0 0 40px;gap:0}
