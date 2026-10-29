@@ -1,12 +1,12 @@
 {
-  "version": "2.5.27",
-  "notes": "Joining is fast again.",
+  "version": "2.5.28",
+  "notes": "Faster screenshots on MuMu, safer city maps, fewer stuck loops.",
   "files": {
     "rally_bot.py": {
-      "sha256": "3510d3b15dc5b991340049808ee67babcf192f9d0234f082af231e66a47ed42e"
+      "sha256": "1d7833795f7bd3230887b897c51ac7b92f7fc9137a8379f47018572a7839500a"
     },
     "web_app.py": {
-      "sha256": "d73f5be2be492e07d640c65c12e87bb9f87d1b11bbab95e248a1930e9607de5b"
+      "sha256": "bd7a1461713cca3c87fe927ce71ebcce2fa316675a757267885d3d395dbc576f"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
@@ -18,7 +18,7 @@
       "sha256": "6a29e0f54b57968017b892eaef6750d236bf1bdd021316aa38ad93ea7b2d8420"
     },
     "ui/changelog.js": {
-      "sha256": "75d460b5fe3c38d1e92af39a41d8df6355d9ba9ec389a871cb74f19773be3cde"
+      "sha256": "c2c95ea3b2f7dcdb532ac653955cc050dc8bd1f22aa81aeb3b1daa03a6634281"
     },
     "ui/dialogs.js": {
       "sha256": "f9222b8cf22cb7d06737e48bee98a1a431b919b44397560cc92e8ad16c113252"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "d6dc34ddb77a86fdfabc07ffb2f5e18b5996305567130484a8f2b549ef1158b5"
+      "sha256": "aadfbb2509273fcc909132317d322b679413f75b80ca9a050ec6c1a85a74df53"
     },
     "ui/tour.js": {
       "sha256": "13f3caea4e097cb210531c175e34809ead00eb7fca86570faa51a1929c787b32"
@@ -3413,5 +3413,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "716cde960f6776e0a98ba5444fd148fc1ebbb3c36e841e005b18ef30682445e5"
+  "sig": "06f0bda558cb122f0e534b5038c9196b95d6f2ea8ef994298a9096265bfef5ea"
 }
