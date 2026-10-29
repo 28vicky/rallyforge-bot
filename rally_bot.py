@@ -928,8 +928,9 @@ class Device:
             halt_check()                                     # paused = wait; stopped = the task ends before this tap
             dl = getattr(_TL, "duty_deadline", None)         # a duty over its time budget: its next action aborts it (the runner
             if dl and time.time() > dl:                       # then closes pop-ups, leaves to the city and tries once more)
+                why = duty_budget_reason()
                 _TL.duty_deadline = None
-                raise RuntimeError(f"no progress for {DUTY_BUDGET_MIN} min - stopped (stuck on a window or page it does not know?)")
+                raise RuntimeError(why)
         return subprocess.run([self.adb, "-s", self.serial, *a], capture_output=True,
                               timeout=timeout, creationflags=NOWIN)
 
@@ -2825,9 +2826,65 @@ _TL = threading.local()                 # per bot thread: pace + speed counters
 
 def duty_progress(minutes=None):
     """Owner 27 Oct: the duty time limit is for a STUCK task only - a task that is getting things done (a spin, a buy)
-    calls this, and the limit starts again from now."""
+    calls this, and the limit starts again from now (never past the run's hard ceiling)."""
     if getattr(_TL, "duty_deadline", None):
-        _TL.duty_deadline = time.time() + (minutes or DUTY_BUDGET_MIN) * 60
+        _TL.duty_deadline = min(time.time() + (minutes or getattr(_TL, "duty_stall_min", 0) or DUTY_BUDGET_MIN) * 60,
+                                getattr(_TL, "duty_ceiling", 0) or float("inf"))
+
+
+# ---- Duty stall budget (owner 29 Oct, root_cause_plan P6-1/3): the limit is a STALL timer, not a wall clock.
+# Every log line the duty's own thread writes is progress and pushes the deadline (the limit then counts from the
+# last real activity), up to a hard ceiling per run. The same line repeated over and over is not progress
+# (a loop that keeps logging "trying again" must still time out).
+DUTY_CEILING_MIN = 30          # one duty run never lasts longer than this (backstop)
+DUTY_CEILING_MAP_MIN = 60      # Map my city / heavy map duties
+DUTY_SAME_LINE_MAX = 4         # the same line (numbers ignored) this many times in a row stops counting as progress
+_DIGITS = re.compile(r"\d+")
+
+
+def duty_budget_start(stall_min, ceiling_min):
+    now = time.time()
+    _TL.duty_stall_min, _TL.duty_start = stall_min, now
+    _TL.duty_ceiling = now + ceiling_min * 60
+    _TL.duty_ceiling_min = ceiling_min
+    _TL.duty_last_line, _TL.duty_same = "", 0
+    _TL.duty_deadline = now + stall_min * 60
+
+
+def duty_budget_end():
+    _TL.duty_deadline = None
+    _TL.duty_ceiling = 0
+
+
+def duty_note_progress(msg):
+    """Called for every log line of an instance (start_instance's log wrapper) - in the thread that wrote it."""
+    try:
+        if not getattr(_TL, "duty_deadline", None) or not isinstance(msg, str) or msg.startswith("@"):
+            return
+        norm = _DIGITS.sub("#", msg)[:160]
+        if norm == getattr(_TL, "duty_last_line", ""):
+            _TL.duty_same = getattr(_TL, "duty_same", 0) + 1
+            if _TL.duty_same >= DUTY_SAME_LINE_MAX:
+                return                                       # the same line again and again: not progress
+        else:
+            _TL.duty_last_line, _TL.duty_same = norm, 0
+        _TL.duty_deadline = min(time.time() + (getattr(_TL, "duty_stall_min", 0) or DUTY_BUDGET_MIN) * 60,
+                                getattr(_TL, "duty_ceiling", 0) or float("inf"))
+    except Exception:
+        pass
+
+
+def duty_budget_reason(now=None):
+    """The real reason a duty was stopped (replaces the fixed 'no progress for 8 min' text)."""
+    now = now or time.time()
+    ceil = getattr(_TL, "duty_ceiling", 0)
+    if ceil and now >= ceil - 1:
+        return f"ran for {getattr(_TL, 'duty_ceiling_min', DUTY_CEILING_MIN)} min (the limit for one run) - stopped, tried again later"
+    if getattr(_TL, "duty_same", 0) >= DUTY_SAME_LINE_MAX:
+        return (f"repeated the same step with no other progress for {getattr(_TL, 'duty_stall_min', DUTY_BUDGET_MIN)} min - "
+                "stopped, tried again later")
+    return (f"no progress for {getattr(_TL, 'duty_stall_min', DUTY_BUDGET_MIN)} min - stopped "
+            "(stuck on a window or page it does not know?)")
 
 
 class InstanceStopped(BaseException):
@@ -18048,7 +18105,11 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                 # time budget per duty (Kiravik 24 Oct 15:14: Champions sat on a purchase page for 10+ min with no log line):
                 # 20 min, 50 for the city map; over it, the next tap aborts the duty and the attempt-2 path takes over
                 # Monster hunts: no time budget at all (owner 29 Oct: a background service; it hands over by itself)
-                _TL.duty_deadline = None if duty_id == "monster_rally" else time.time() + (50 if duty_id in MAP_HEAVY else DUTY_BUDGET_MIN) * 60
+                if duty_id == "monster_rally":
+                    duty_budget_end()
+                else:                                        # stall timer: every log line of this duty pushes it (owner 29 Oct)
+                    duty_budget_start(50 if duty_id in MAP_HEAVY else DUTY_BUDGET_MIN,
+                                      DUTY_CEILING_MAP_MIN if duty_id in MAP_HEAVY else DUTY_CEILING_MIN)
                 if not ensure_view(dev, cfg, stop, log, "world" if on_map else "city") and not stop.is_set():
                     log(f"[!] Could not get back to the {'world map' if on_map else 'city view'}")
                 clear_popups(dev, cfg, log, stop, want_city=not on_map)   # close offers / pop-ups first, then do the task
@@ -18073,7 +18134,7 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                 log(f"[!] {'Duty' if duty_id else 'City task'} '{shown}' failed: {e}")
                 result = (False, str(e)[:120])
             finally:
-                _TL.duty_deadline = None
+                duty_budget_end()
             if result and not result[0] and not stop.is_set():
                 fail_shot = _ev_grab(dev)                    # raw grab before leave_to_city closes it (never waits / taps)
             if stop.is_set() or (result and result[0]):
@@ -19703,6 +19764,7 @@ def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
     def log(msg, *a, **k):                                   # every log line = this instance is alive (see watchdog below)
         HEARTBEAT[serial] = time.time()
         ev_note_log(serial, msg)
+        duty_note_progress(msg)                              # a duty that logs is working: its stall timer starts again
         if isinstance(msg, str) and ("failed" in msg or "Duty:" in msg or "rally list" in msg):
             TASK_ABORT.discard(serial)                       # the stopped task has ended: normal work again
         return _log0(msg, *a, **k)

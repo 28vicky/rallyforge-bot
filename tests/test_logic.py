@@ -635,3 +635,54 @@ class HuntsService(Base):
         # held target dropped out of this pass's list order on purpose: a solo target comes first
         self._pass([self._tg("Cerberus", 200, "II", "solo", 0), self._tg("Pumpkin", 100, "I", "rally", 1)], flown)
         self.assertNotIn("200,1", flown[:1])                         # no solo attack started when the rally is due
+
+
+class DutyStallBudget(unittest.TestCase):
+    """Owner 29 Oct: duty limit = stall timer (activity extends it), hard ceiling, same-line loops still time out."""
+    def tearDown(self):
+        rb.duty_budget_end()
+
+    def test_progress_extends(self):
+        rb.duty_budget_start(8, 30)
+        rb._TL.duty_deadline = time.time() + 5                     # nearly over
+        rb.duty_note_progress("[*] Wheel: spin 3")
+        self.assertGreater(rb._TL.duty_deadline, time.time() + 7 * 60)
+
+    def test_ceiling_caps(self):
+        rb.duty_budget_start(8, 30)
+        rb._TL.duty_ceiling = time.time() + 60                     # 1 min left of the run
+        rb.duty_note_progress("[*] still working")
+        self.assertLessEqual(rb._TL.duty_deadline, time.time() + 61)
+        rb._TL.duty_ceiling = time.time() - 1
+        self.assertIn("limit for one run", rb.duty_budget_reason())
+
+    def test_same_line_is_not_progress(self):
+        rb.duty_budget_start(8, 30)
+        for i in range(rb.DUTY_SAME_LINE_MAX):
+            rb.duty_note_progress(f"[*] Champions: no Greet button found ({i} s)")   # numbers ignored
+        rb._TL.duty_deadline = time.time() + 5
+        rb.duty_note_progress("[*] Champions: no Greet button found (99 s)")
+        self.assertLess(rb._TL.duty_deadline, time.time() + 10)    # not pushed
+        self.assertIn("same step", rb.duty_budget_reason())
+        rb.duty_note_progress("[*] Champions: greeted Ada")         # a different line counts again
+        self.assertGreater(rb._TL.duty_deadline, time.time() + 7 * 60)
+
+    def test_real_limit_in_message(self):
+        rb.duty_budget_start(50, 60)
+        self.assertIn("no progress for 50 min", rb.duty_budget_reason())
+
+    def test_no_duty_running_no_effect(self):
+        rb.duty_budget_end()
+        rb.duty_note_progress("[*] rally list")
+        self.assertFalse(rb._TL.duty_deadline)
+
+    def test_deadline_raises_real_reason(self):
+        class D(rb.Device):
+            def __init__(self):
+                self.adb, self.serial = "adb", "x"
+        rb.duty_budget_start(8, 30)
+        rb._TL.duty_deadline = time.time() - 1
+        with mock.patch.object(rb, "halt_check"):
+            with self.assertRaises(RuntimeError) as cm:
+                D()._run("shell", "input", "tap", "1", "1")
+        self.assertIn("no progress for 8 min", str(cm.exception))
