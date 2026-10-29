@@ -433,7 +433,7 @@ function instancePage(serial) {
     stBtn("Start", () => collectAndRun("start", { serial }), "pri"), stBtn("Pause", () => act(api("pause", { serial })), "pri"), stBtn("Stop", () => act(api("stop", { serial })), "stopb"), moreBtn);
   const head = h("div", { class: "row insthead", style: { margin: "0 0 12px", gap: "14px", alignItems: "center" } },
     sideBtn(), h("h2", { title: serial, style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx),
-    status, ajSwitch(serial, { after: () => rerender() }), h("span", { class: "mute iserial", style: { fontSize: "13px" } }, serial), h("span", { style: { flex: "1" } }), saveStEl(), bar);
+    status, ajSwitch(serial, { after: () => rerender() }), h("span", { class: "mute iserial", style: { fontSize: "13px" } }, serial), h("div", { class: "ihacts" }, saveStEl(), bar));   // owner 29 Oct: Saved stays with the buttons - the group wraps as one
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
@@ -1575,7 +1575,7 @@ function renderTodayCard(serial) {
   };
   // A3 (28 Oct): until the first numbers arrive show "Loading..." - never 0s and "No duty is switched on" that are not true
   list.appendChild(h("div", { class: "empty sm" }, "Loading today's duties…"));
-  ["Rallies joined", "Skipped (too late)", "Monsters hit", "Duties done", "Restarts"].forEach((l) => res.appendChild(h("div", { class: "stile" }, h("b", {}, "–"), h("span", {}, l))));
+  ["Rallies joined", "Too late", "Monsters hit", "Duties done", "Restarts"].forEach((l) => res.appendChild(h("div", { class: "stile" }, h("b", {}, "–"), h("span", {}, l))));
   head.textContent = "Daily reset …";
   const t1 = setInterval(() => { if (!card.isConnected) { clearInterval(t1); return; } tick(); }, 1000);
   const t2 = setInterval(() => { if (!card.isConnected) { clearInterval(t2); return; } load(); }, 5000);

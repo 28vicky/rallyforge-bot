@@ -517,6 +517,8 @@ input:not([readonly]):focus::placeholder{opacity:.45}
 /* jump to top / bottom */
 .main{position:relative}
 .jumpbox{position:absolute;right:26px;bottom:44px;z-index:60;display:flex;flex-direction:column;gap:8px}
+.status .jumpbox{position:static;flex-direction:row;gap:4px;flex:none}   /* in the status bar: never over content */
+.status .jump{width:24px;height:24px;font-size:13px;box-shadow:none}
 .jump{width:38px;height:38px;border-radius:50%;border:var(--bd);background:var(--btn);color:var(--accent2);font-size:18px;line-height:1;cursor:pointer;box-shadow:var(--sh2);display:grid;place-content:center;padding:0}
 .jump{opacity:0;transform:translateY(6px);pointer-events:none;transition:opacity .18s,transform .18s}
 .jump.on{opacity:1;transform:none;pointer-events:auto}
@@ -817,7 +819,7 @@ input:focus-visible,select:focus-visible{outline-offset:0}
 .pages{scrollbar-gutter:stable}
 .dutygrid{align-items:stretch}
 .dutygrid .dcol{display:flex;flex-direction:column;min-width:0}
-.dutygrid .dcol>.panel:last-child{flex:1 1 auto;margin-bottom:14px}
+.dutygrid .dcol>.panel:last-child{margin-bottom:14px}   /* owner 29 Oct: cards keep their own height (no stretched empty space) */
 .actsplit{align-items:stretch;gap:24px}
 .actleft,.actright{min-width:0;display:flex;flex-direction:column}
 .actright .actwrap{flex:1 1 auto}
@@ -1126,8 +1128,10 @@ button.bmcard{font:inherit;color:inherit}
 /* Today card (one instance): duty queue + today's results */
 .today .cardhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .tdreset{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
-.tdgrid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:22px;margin-top:10px}
-@media (max-width:900px){.tdgrid{grid-template-columns:1fr}}
+.tdgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:22px;margin-top:10px}
+@media (max-width:1279px){.tdgrid{grid-template-columns:1fr}}   /* 5 tiles need the full card width below 1280 px */
+.tdres .stile span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tdres .stile{min-width:0;padding:10px}
 .tdlab{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--fg);opacity:.78;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
 .tdq{display:flex;flex-direction:column}
 .tdrow{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
@@ -1140,7 +1144,7 @@ button.bmcard{font:inherit;color:inherit}
 .tdrow.run .tdi,.tdrow.run small{color:var(--accent)}
 .tdrow.gaveup .tdi,.tdrow.gaveup small{color:var(--bad)}
 .tdsum{margin-top:10px;font-size:13px;color:var(--mute)}
-.tdres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:1fr;gap:14px}
+.tdres{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}   /* owner 29 Oct: one row of 5, shrinking evenly */
 .tdres .stile{box-sizing:border-box;height:100%;justify-content:space-between}
 .tdweek{display:block;margin-top:12px;color:var(--mute)}
 
@@ -1936,3 +1940,11 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .hqchip .hucl{font-size:11px;font-weight:700;color:var(--accent1);text-transform:uppercase;letter-spacing:.04em}
 .hqchip.warn{border-style:dashed}
 .hqchip.over{border-color:var(--accent1)}.hqchip.dragging{opacity:.35}
+
+/* Overview layout fixes (owner 29 Oct): tab row scrolls sideways with an edge fade; header action group wraps as one */
+.stickybox .tabs{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);padding-right:28px}
+.stickybox .tabs::-webkit-scrollbar{display:none}
+.stickybox .tabs>.tab{flex:none}
+.insthead{flex-wrap:wrap}
+.ihacts{display:flex;align-items:center;gap:14px;margin-left:auto;flex-wrap:nowrap}
+@media (max-width:1023px){.tdres .stile{padding:10px 8px}.tdres .stile span{font-size:11.5px}}
