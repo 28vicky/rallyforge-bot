@@ -7073,10 +7073,8 @@ def feed_add(items, chat="", keep_min=60):
         for it in items:
             for f in _feed:
                 if f["x"] == it["x"] and f["y"] == it["y"] and f.get("chat") == chat and f.get("name") == it.get("name"):
-                    # owner 29 Oct 04:02: a duplicate is IGNORED while it is in the cache (its age keeps counting from
-                    # when it was added); once older than the cache time it counts as new again (still alive = re-added)
-                    if now - float(f.get("t") or 0) > _feed_cache_min[0] * 60:
-                        f["t"] = now
+                    # owner 29 Oct 18:22 (replaces 04:02): listed again = still alive -> its clock starts again at once
+                    f["t"] = now
                     break
             else:
                 _feed.insert(0, {**it, "chat": chat, "t": now})
@@ -16211,6 +16209,10 @@ def mr_pair_order(e):
     return (int(e.get("rank") or 0), mr_pnum(e.get("preset")))
 
 
+MR_MARCH_BACK_MIN = 1          # extra minutes after the rally time before a preset counts as back (the march home)
+MR_STILL_OUT_S = 120           # a preset found still out on the troop page is not tried again for this long
+
+
 def mr_preset_until(cfg, serial, preset, now=None, row=None):
     """When this preset is expected back; 0 = free now, or not known to be out (the troop page proves it).
     From its last march (start + its rally time, as before) and 'pout' (seen empty on the troop page)."""
@@ -16221,7 +16223,7 @@ def mr_preset_until(cfg, serial, preset, now=None, row=None):
         b = float((row.get("busy") or {}).get(preset) or 0)
         if b and now - b < 1800:
             rt = next((int(r["time"]) for r in mr_rules(cfg) if r["preset"] == preset), 5)
-            until = b + rt * 60
+            until = b + (rt + MR_MARCH_BACK_MIN) * 60          # owner 29 Oct 18:22: the troops still march home after the rally
         until = max(until, float((row.get("pout") or {}).get(preset) or 0))
     except Exception as _e:
         quiet_err("mr_preset_until", _e)
@@ -16536,6 +16538,14 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
             break
         empty.append(p_)
         log(f"[*]  Monster rally: {label} - preset {mr_pnum(p_)} is empty (its general is still out)")
+    if used and empty:                                       # Dida 29 Oct: the empty ones were tried again on the next monster
+        try:
+            po = dict(mr_row(serial).get("pout") or {})
+            for p_ in empty:
+                po[p_] = time.time() + MR_STILL_OUT_S
+            mr_save(serial, pout=po)
+        except Exception as _e:
+            quiet_err("mr_still_out", _e)
     if not used:
         rd_snap(shot, "mrally_empty_preset")
         mr_to_map(dev, cfg, stop)
