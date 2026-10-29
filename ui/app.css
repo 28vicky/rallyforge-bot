@@ -1850,6 +1850,31 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .hueacts .hueflex{flex:1 1 auto}
 .hueacts .btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
 .hurc.poff{opacity:.6}
+/* hunts v2 (29 Oct): Hunt order - one list, top = first, a max km per row */
+.huorder{display:flex;flex-direction:column;gap:10px}
+.huohead{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.huohead h3{margin:0 0 2px}
+.huobulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--accent1) 10%,transparent)}
+.huolist{display:flex;flex-direction:column;max-height:min(60vh,560px);overflow-y:auto;border:var(--bd);border-radius:12px}
+.huorow{display:grid;grid-template-columns:18px 18px 28px minmax(120px,1fr) 96px minmax(90px,auto) 28px;align-items:center;gap:8px;min-height:36px;padding:2px 8px;border-bottom:1px solid var(--line);background:var(--card)}
+.huorow:last-child{border-bottom:0}
+.huorow.sel{background:color-mix(in srgb,var(--accent1) 8%,var(--card))}
+.huorow.over{box-shadow:inset 0 2px 0 var(--accent1)}
+.huorow.dragging{opacity:.5}
+.huorow.nop .huoname{opacity:.6}
+.huodrag{cursor:grab;color:var(--mute,#888);letter-spacing:-2px;user-select:none}
+.huonum{font-variant-numeric:tabular-nums;color:var(--mute,#888)}
+.huoname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.huorule{font:inherit;font-size:13px;height:28px;padding:0 10px;border-radius:99px;border:1px dashed var(--line);background:transparent;color:var(--mute,#888);cursor:pointer;text-align:left}
+.huorule.set{border-style:solid;color:var(--fg)}
+.huokm{width:80px;height:28px;font:inherit;font-size:13px;padding:0 8px}
+.huops{display:flex;gap:4px;flex-wrap:wrap}
+.huop{font-size:12px;padding:1px 7px;border-radius:6px;background:color-mix(in srgb,var(--accent1) 14%,transparent)}
+.huop.off{opacity:.5;text-decoration:line-through}
+.huop.none{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.huomiss{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hqchip.add{cursor:pointer;padding:0 12px;font:inherit;font-size:13px}
+@media (max-width:1100px){.huorow{grid-template-columns:18px 18px 24px minmax(100px,1fr) 88px auto 28px}}
 .hupb{height:28px;padding:0 11px;border-radius:99px;border:var(--bd);background:var(--card);color:var(--fg);font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
 .hupb.on{background:var(--accent1);border-color:var(--accent1);color:var(--accfg)}
 .huwhyb{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--hu-ok) 9%,transparent)}

@@ -2328,7 +2328,7 @@ const MR_TIMES = ["5", "10", "30", "60"];                    // the game's Allia
 const HU_HUNTS = [0, 10, 25, 50];                            // solo hunts a day (0 = no limit)
 function monsterRallyTab(serial) {
   const root = h("div", { class: "hu" });
-  let duty = null, model = null, off = [], times = {}, modes = {}, ons = {}, copyMode = "", delArm = 0, coords = { items: [], now: Date.now() / 1000, ready: true };
+  let duty = null, model = null, off = [], times = {}, modes = {}, ons = {}, copyMode = "", delArm = 0, order = null, knownChips = null, oSel = new Set(), oEdit = -1, oDrag = -1, coords = { items: [], now: Date.now() / 1000, ready: true };
   let live = { status: {}, busy: {}, decisions: [], solo_done: {}, rally_only: [], now: Date.now() / 1000, running: false }, liveOk = Date.now(), liveFail = false;
   S.huView = S.huView || {};
   S.huSel = S.huSel || {};
@@ -2439,7 +2439,22 @@ function monsterRallyTab(serial) {
     }
     paintSave();
   };
-  const saveRules = () => queue({ rules: toRules() });
+  const chipKeys = () => new Set(MR_PRESETS.flatMap((p) => model[p].map((c) => c.name.toLowerCase() + "|" + (c.l || 0))));
+  const saveRules = () => {
+    const now = chipKeys();
+    if (order && knownChips) {                                       // v2: a monster newly added to a preset joins the
+      let add = false;                                                // bottom of the hunt order (nothing silently unhunted)
+      for (const k of now) if (!knownChips.has(k)) {
+        const [n, l] = k.split("|"), c = MR_PRESETS.flatMap((p) => model[p]).find((x) => x.name.toLowerCase() === n && (x.l || 0) === +l);
+        if (c && !order.some((r) => oFits(r.name, c.name) && (c.l ? r.min <= c.l && c.l <= r.max : r.min <= 1 && r.max >= 99))) {
+          order.push({ name: c.name, min: c.l || 1, max: c.l || 99, km: 0 }); add = true;
+        }
+      }
+      if (add) queue({ order });
+    }
+    knownChips = now;
+    queue({ rules: toRules() });
+  };
   const savePresets = () => {
     const pr = {};
     MR_PRESETS.forEach((p) => (pr[p] = { mode: mode(p), hunts: huntsFor(p), on: isOn(p) }));
@@ -2502,7 +2517,7 @@ function monsterRallyTab(serial) {
   const views = h("div", { class: "huviews", role: "tablist", "aria-label": "Monster hunts views" });
   const paintViews = () => {
     views.innerHTML = "";
-    for (const [k, l] of [["live", "Live"], ["setup", "Setup"]]) views.appendChild(h("button", { type: "button", role: "tab", class: "huvb" + (view === k ? " on" : ""), "aria-selected": view === k ? "true" : "false",
+    for (const [k, l] of [["live", "Live"], ["order", "Hunt order"], ["setup", "Presets"]]) views.appendChild(h("button", { type: "button", role: "tab", class: "huvb" + (view === k ? " on" : ""), "aria-selected": view === k ? "true" : "false",
       onclick: () => { view = k; S.huView[serial] = k; draw(); } }, l));
   };
 
@@ -2811,6 +2826,80 @@ function monsterRallyTab(serial) {
     editor.appendChild(listBox);
   };
 
+  // ---- Hunt order (v2, owner 29 Oct): ONE list per instance, top = hunted first; each row has its own max km (Any by
+  // default); the Presets column shows which presets can kill it (set on the Presets tab)
+  const panK = (n) => { const w = String(n || "").toLowerCase().match(/[a-z]+/g) || []; return w.includes("pan") ? (["ground", "ranged", "mounted"].find((k) => w.includes(k)) || "") : null; };
+  const oFits = (a, b) => { const x = panK(a), y = panK(b); if (x !== null && y !== null) return !x || !y || x === y;
+    a = String(a || "").toLowerCase(); b = String(b || "").toLowerCase(); return a.includes(b) || b.includes(a); };
+  const derivedOrder = () => {                                       // no saved order: the old priority (place in its box, then preset)
+    const rows = [], seen = new Set();
+    MR_PRESETS.forEach((p, pi) => model[p].forEach((c, i) => rows.push([i, pi, c])));
+    rows.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const out = [];
+    for (const [, , c] of rows) { const k = c.name.toLowerCase() + "|" + (c.l || 0); if (seen.has(k)) continue; seen.add(k); out.push({ name: c.name, min: c.l || 1, max: c.l || 99, km: 0 }); }
+    return out;
+  };
+  const oRows = () => order || derivedOrder();
+  const oSave = (rows) => { order = rows; queue({ order: rows }); };
+  const oKey = (r) => r.name.toLowerCase() + "|" + r.min + "|" + r.max;
+  const oName = (r) => r.name + (r.min <= 1 && r.max >= 99 ? " · all levels" : r.min === r.max ? " " + r.min : " " + r.min + "\u2013" + r.max);
+  const oPresets = (r) => MR_PRESETS.filter((p) => model[p].some((c) => oFits(c.name, r.name) && (!c.l || (c.l >= r.min && c.l <= r.max))));
+  const oMissing = () => { const rows = oRows(), out = [], seen = new Set();
+    for (const p of MR_PRESETS) for (const c of model[p]) { const k = c.name.toLowerCase() + "|" + (c.l || 0);
+      if (seen.has(k)) continue; seen.add(k);
+      if (!rows.some((r) => oFits(r.name, c.name) && (c.l ? r.min <= c.l && c.l <= r.max : r.min <= 1 && r.max >= 99))) out.push({ name: c.name, min: c.l || 1, max: c.l || 99, km: 0 }); }
+    return out; };
+  const kmTxt = (km) => km ? "\u2264 " + km + " km" : "Any";
+  const orderBox = h("section", { class: "panel huorder", "aria-label": "Hunt order" });
+  const paintOrder = () => {
+    orderBox.innerHTML = "";
+    const rows = oRows();
+    const list = h("div", { class: "huolist", role: "list", "aria-label": "Hunt order" });
+    orderBox.appendChild(h("div", { class: "huohead" }, h("div", {}, h("h3", {}, "Hunt order"),
+      h("span", { class: "mute" }, "Top = hunted first. Drag \u22ee\u22ee to change the order. Each row has its own max distance.")),
+      h("span", { class: "mute" }, rows.length + (rows.length === 1 ? " monster" : " monsters"))));
+    if (oSel.size) {
+      const inp = h("input", { type: "text", inputmode: "numeric", class: "huokm", placeholder: "Any", "aria-label": "Max km for selected" });
+      const apply = () => { const v = Math.max(0, Math.round(+inp.value || 0)); oSave(rows.map((r) => oSel.has(oKey(r)) ? Object.assign({}, r, { km: v }) : r)); oSel.clear(); paintOrder(); };
+      inp.onkeydown = (e) => { if (e.key === "Enter") apply(); };
+      orderBox.appendChild(h("div", { class: "huobulk" }, h("b", {}, oSel.size + " selected"), h("span", { class: "hurh" }, "Max km"), inp,
+        h("button", { type: "button", class: "btn sm pri", onclick: apply }, "Apply"),
+        h("button", { type: "button", class: "btn sm danger", onclick: () => { oSave(rows.filter((r) => !oSel.has(oKey(r)))); oSel.clear(); paintOrder(); } }, "Remove"),
+        h("button", { type: "button", class: "lnkb", onclick: () => { oSel.clear(); paintOrder(); } }, "Clear")));
+    }
+    if (!rows.length) list.appendChild(h("div", { class: "huempty in" }, h("b", {}, "No monsters yet."),
+      h("span", { class: "mute" }, " Add monsters to a preset on the Presets tab - they show up here.")));
+    rows.forEach((r, i) => {
+      const ps = oPresets(r), k = oKey(r);
+      const kmEl = oEdit === i
+        ? h("input", { type: "text", inputmode: "numeric", class: "huokm", value: r.km ? String(r.km) : "", placeholder: "Any", "aria-label": "Max km for " + oName(r),
+            onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { oEdit = -1; paintOrder(); } },
+            onblur: (e) => { const v = Math.max(0, Math.round(+e.target.value || 0)); oEdit = -1; if (v !== r.km) { const n = rows.slice(); n[i] = Object.assign({}, r, { km: v }); oSave(n); } paintOrder(); } })
+        : h("button", { type: "button", class: "huorule" + (r.km ? " set" : ""), title: "Click to set the max distance for this monster (empty = any distance)", onclick: () => { oEdit = i; paintOrder(); } }, kmTxt(r.km));
+      const el = h("div", { class: "huorow" + (oSel.has(k) ? " sel" : "") + (ps.length ? "" : " nop"), role: "listitem", draggable: "true", "data-i": String(i) },
+        h("span", { class: "huodrag", "aria-hidden": "true", title: "Drag to change the order" }, "\u22ee\u22ee"),
+        h("input", { type: "checkbox", checked: oSel.has(k), "aria-label": "Select " + oName(r), onchange: (e) => { if (e.target.checked) oSel.add(k); else oSel.delete(k); paintOrder(); } }),
+        h("b", { class: "huonum" }, String(i + 1)),
+        h("span", { class: "huoname", title: oName(r) }, oName(r)),
+        kmEl,
+        h("span", { class: "huops" }, ...(ps.length ? ps.map((p) => h("span", { class: "huop" + (isOn(p) ? "" : " off"), title: "Preset " + pN(p) + (isOn(p) ? "" : " (off)") }, "P" + pN(p)))
+          : [h("span", { class: "huop none", title: "No preset can kill it - add it on the Presets tab" }, "no preset")])),
+        h("button", { type: "button", class: "hucx", "aria-label": "Remove " + oName(r) + " from the hunt order", title: "Remove from the hunt order (stays in its presets)",
+          onclick: () => { oSave(rows.filter((_, j) => j !== i)); oSel.delete(k); paintOrder(); } }, "\u00d7"));
+      el.addEventListener("dragstart", (e) => { oDrag = i; el.classList.add("dragging"); try { e.dataTransfer.setData("text/plain", oName(r)); } catch (x) {} });
+      el.addEventListener("dragend", () => { oDrag = -1; el.classList.remove("dragging"); });
+      el.addEventListener("dragover", (e) => { if (oDrag < 0) return; e.preventDefault(); el.classList.add("over"); });
+      el.addEventListener("dragleave", () => el.classList.remove("over"));
+      el.addEventListener("drop", (e) => { e.preventDefault(); el.classList.remove("over"); if (oDrag < 0 || oDrag === i) return;
+        const n = rows.slice(), [m] = n.splice(oDrag, 1); n.splice(i, 0, m); oDrag = -1; oSave(n); paintOrder(); });
+      list.appendChild(el);
+    });
+    orderBox.appendChild(list);
+    const miss = oMissing();
+    if (miss.length) orderBox.appendChild(h("div", { class: "huomiss" }, h("span", { class: "hurh" }, "In your presets, not in the order (not hunted) \u00b7 click to add:"),
+      ...miss.map((r) => h("button", { type: "button", class: "hqchip add", onclick: () => { oSave(oRows().concat([r])); paintOrder(); } }, "+ " + oName(r)))));
+  };
+
   // ---- picker drawer (over the page): search, filters, level chips per monster (tap = add / remove that level)
   const drawerEl = h("div", { class: "hudrw", hidden: true });
   const recent = () => { try { return JSON.parse(localStorage.getItem("hu_recent") || "[]"); } catch (e) { return []; } };
@@ -2918,7 +3007,8 @@ function monsterRallyTab(serial) {
     paintStatus(); paintViews();
     body.innerHTML = "";
     if (view === "live") { paintLive(); body.appendChild(liveBox); }
-    else { paintStrip(); paintRail(); paintEditor(); body.append(strip, h("div", { class: "husetup" }, rail, editor)); }
+    else if (view === "order") { paintStrip(); paintOrder(); body.append(strip, orderBox); }
+    else { paintRail(); paintEditor(); body.append(h("div", { class: "husetup" }, rail, editor)); }
     root.append(status, views, body);
     if (!drawerEl.isConnected) document.body.appendChild(drawerEl);     // over the whole window, not inside the page box
     paintDrawer();
@@ -2930,6 +3020,9 @@ function monsterRallyTab(serial) {
     if (pending || saveState === "saving") return;               // never overwrite edits that are on their way
     model = toModel(Array.isArray(v) ? v : [{ name: "Ymir", min: 1, max: 99, preset: "I", time: "5", on: true }]);
     MR_PRESETS.forEach((p) => { modes[p] = (pr[p] && pr[p].mode) || "rally"; ons[p] = !(pr[p] && pr[p].on === false); });
+    const o = optVal("order", null);
+    order = Array.isArray(o) ? o.map((r) => ({ name: r.name, min: +r.min || 1, max: +r.max || 99, km: +r.km || 0 })) : null;
+    knownChips = chipKeys();
   };
   const loadLive = async () => {
     try {
