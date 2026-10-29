@@ -495,24 +495,6 @@ class HuntsService(Base):
         self.p_user.stop()
         super().tearDown()
 
-    def test_group_until(self):
-        now = time.time()
-        self.assertEqual(rb.mr_group_until(self.cfg, self.S, "rally", now), 0)
-        rb.mr_save(self.S, busy={"I": now - 60})
-        self.assertAlmostEqual(rb.mr_group_until(self.cfg, self.S, "rally", now), now - 60 + 300, delta=1)
-        self.assertEqual(rb.mr_group_until(self.cfg, self.S, "solo", now), 0)           # II and III free
-        rb.mr_save(self.S, busy={"I": now - 60, "II": now - 10})
-        self.assertEqual(rb.mr_group_until(self.cfg, self.S, "solo", now), 0)           # III still free
-        rb.mr_save(self.S, solo_full_until=now + 50)
-        self.assertEqual(rb.mr_group_until(self.cfg, self.S, "solo", now), now + 50)     # no march for solo: held out 1 min
-
-    def test_rally_eta_march_panel_wins(self):
-        now = time.time()
-        rb.mr_save(self.S, busy={"I": now - 280}, rback=now + 200)
-        self.assertEqual(rb.mr_rally_eta(self.cfg, self.S, now), now + 200)
-        rb.mr_save(self.S, rback=0)
-        self.assertAlmostEqual(rb.mr_rally_eta(self.cfg, self.S, now), now + 20, delta=1)
-
     def _dev(self):
         class D:
             serial = "127.0.0.1:16544"
@@ -594,9 +576,10 @@ class HuntsService(Base):
         self.assertGreaterEqual(rb.mr_row(self.S)["next_at"], t - 1)
         self.assertTrue(any("Crazy Eggs is due" in l for l in logs))
 
-    def _pass(self, targets, flown):
+    def _pass(self, targets, flown, marches=None):
         import threading
         d = self._dev()
+        naps = []
         def search(dev, stop, x, y):
             flown.append(f"{x},{y}")
             return False                                             # stop right after "flying" (later)
@@ -604,37 +587,97 @@ class HuntsService(Base):
                 mock.patch.object(rb, "ensure_view", return_value=True), \
                 mock.patch.object(rb, "_wait_view", return_value=d.screenshot()), \
                 mock.patch.object(rb, "mr_search", side_effect=search), \
+                mock.patch.object(rb, "rt_marches", return_value=marches), \
+                mock.patch.object(rb, "hunt_nap", side_effect=lambda *a, **k: naps.append(a[5]) or None), \
                 mock.patch.object(rb, "mr_return_secs", return_value=200):
             rb._run_monster_rally(d, self.cfg, lambda m: None, threading.Event())
+        return naps
 
-    def _tg(self, name, x, preset, mode, rank=0):
-        return {"name": name, "level": 1, "x": x, "y": 1, "km": 10, "t": time.time(), "rank": rank, "mode": mode,
-                "rule": {"name": name, "min": 1, "max": 8, "preset": preset, "time": "5"}}
-
-    def test_rally_out_solo_goes_first_and_rally_target_held(self):
-        rb.mr_save(self.S, busy={"I": time.time() - 30})            # rally preset just left (~4.5 min out)
-        flown = []
-        self._pass([self._tg("Pumpkin", 100, "I", "rally"), self._tg("Cerberus", 200, "II", "solo", 1)], flown)
-        self.assertEqual(flown, ["200,1"])                           # the rally monster was NOT flown to
-        self.assertEqual(rb.mr_row(self.S).get("hold"), "100,1")    # but it is held for the rally preset
+    def _tg(self, name, x, pairs, level=1, km=10):
+        """pairs = [(preset, mode, rank), ...]"""
+        ps = [{"preset": p, "mode": m, "rank": r, "rule": {"name": name, "min": 1, "max": 8, "preset": p, "time": "5"}}
+              for p, m, r in pairs]
+        ps.sort(key=rb.mr_pair_order)
+        return {"name": name, "level": level, "x": x, "y": 1, "km": km, "t": time.time(), "rank": ps[0]["rank"],
+                "mode": ps[0]["mode"], "rule": ps[0]["rule"], "pairs": ps}
 
     def test_rally_free_rally_first(self):
         flown = []
-        self._pass([self._tg("Pumpkin", 100, "I", "rally"), self._tg("Cerberus", 200, "II", "solo", 1)], flown)
+        self._pass([self._tg("Pumpkin", 100, [("I", "rally", 0)]), self._tg("Cerberus", 200, [("II", "solo", 1)])], flown)
         self.assertEqual(flown, ["100,1"])
 
-    def test_no_solo_targets_parks_as_before(self):
+    def test_rally_out_solo_goes_and_rally_target_held(self):
+        rb.mr_save(self.S, busy={"I": time.time() - 30})            # rally preset just left (~4.5 min out)
+        flown = []
+        self._pass([self._tg("Pumpkin", 100, [("I", "rally", 0)]), self._tg("Cerberus", 200, [("II", "solo", 1)])], flown)
+        self.assertEqual(flown, ["200,1"])                           # the rally monster was NOT flown to
+
+    def test_rally_out_other_rally_preset_used(self):
+        rb.mr_save(self.S, busy={"I": time.time() - 30})
+        t = self._tg("Pumpkin", 100, [("I", "rally", 0), ("VIII", "rally", 0)])
+        plan = rb.mr_plan([t], rb.mr_free_presets(self.cfg, self.S, {"I", "VIII"}))
+        self.assertEqual(plan[0][1]["preset"], "VIII")               # preset 1 out -> preset 8 takes the same target
+        flown = []
+        self._pass([t], flown)
+        self.assertEqual(flown, ["100,1"])
+
+    def test_box_place_then_lower_preset(self):
+        t = self._tg("Cerberus", 100, [("I", "rally", 2), ("II", "solo", 0)])
+        self.assertEqual(rb.mr_plan([t], {"I", "II"})[0][1]["preset"], "II")      # higher place in its box wins
+        t = self._tg("Cerberus", 100, [("III", "solo", 1), ("II", "solo", 1)])
+        self.assertEqual(rb.mr_plan([t], {"II", "III"})[0][1]["preset"], "II")    # tie -> lower preset number
+
+    def test_plan_order_and_hold_first(self):
+        a = self._tg("Pumpkin", 100, [("I", "rally", 0)], level=8)
+        b = self._tg("Pumpkin", 101, [("I", "rally", 0)], level=7)
+        c = self._tg("Turtle", 102, [("I", "rally", 2)], level=7)
+        self.assertEqual([t["x"] for t, _ in rb.mr_plan([c, b, a], {"I"})], [100, 101, 102])   # box place, higher level
+        self.assertEqual([t["x"] for t, _ in rb.mr_plan([c, b, a], {"I"}, hold="102,1")][0], 102)  # held one first
+
+    def test_no_free_preset_holds_without_flying(self):
         rb.mr_save(self.S, busy={"I": time.time() - 30})
         flown = []
-        self._pass([self._tg("Pumpkin", 100, "I", "rally")], flown)
-        self.assertEqual(flown, ["100,1"])                           # 25 Oct behaviour kept when there is no solo work
+        naps = self._pass([self._tg("Pumpkin", 100, [("I", "rally", 0)])], flown)
+        self.assertEqual(flown, [])                                   # no parking flight any more
+        self.assertEqual(rb.mr_row(self.S).get("hold"), "100,1")     # held, not forgotten
+        self.assertTrue(naps and naps[0] <= rb.HUNT_WAIT_CAP_S)      # waits at most 1 min, then plans again
 
-    def test_rally_due_soon_no_new_solo(self):
-        rb.mr_save(self.S, busy={"I": time.time() - 270}, hold="100,1")   # back by the clock in ~30 s
+    def test_no_march_slot_no_flight(self):
         flown = []
-        # held target dropped out of this pass's list order on purpose: a solo target comes first
-        self._pass([self._tg("Cerberus", 200, "II", "solo", 0), self._tg("Pumpkin", 100, "I", "rally", 1)], flown)
-        self.assertNotIn("200,1", flown[:1])                         # no solo attack started when the rally is due
+        self._pass([self._tg("Pumpkin", 100, [("I", "rally", 0)])], flown, marches=(6, 6, 40))
+        self.assertEqual(flown, [])
+        self.assertGreater(rb.mr_row(self.S).get("slots_until", 0), time.time())
+
+    def test_empty_preset_marked_out_then_free(self):
+        now = time.time()
+        rb.mr_save(self.S, pout={"II": now + 90})
+        self.assertEqual(rb.mr_free_presets(self.cfg, self.S, {"II", "III"}, now), {"III"})
+        self.assertEqual(rb.mr_free_presets(self.cfg, self.S, {"II", "III"}, now + 91), {"II", "III"})
+
+    def test_give_up_setting_drops_hold(self):
+        self.cfg["duties"]["monster_rally"]["max_wait"] = 1
+        rb.mr_save(self.S, busy={"I": time.time() - 30}, hold="100,1")
+        rb.mr_save(self.S, hold_at=time.time() - 120)
+        flown = []
+        self._pass([self._tg("Pumpkin", 100, [("I", "rally", 0)])], flown)
+        self.assertIsNone(rb.mr_row(self.S).get("hold"))
+        self.assertIn("100,1", rb.mr_row(self.S).get("tried") or {})
+
+    def test_targets_list_every_eligible_preset(self):
+        cfg = {"duties": {"monster_rally": {
+            "rules": [{"name": "Aglaope", "min": 1, "max": 1, "preset": "II", "time": "5"},
+                      {"name": "Aglaope", "min": 1, "max": 1, "preset": "I", "time": "5"},
+                      {"name": "Pumpkin", "min": 7, "max": 7, "preset": "I", "time": "5"},
+                      {"name": "Pumpkin", "min": 7, "max": 7, "preset": "VIII", "time": "5"},
+                      {"name": "Pumpkin", "min": 7, "max": 7, "preset": "III", "time": "5"}],
+            "presets": {"I": {"mode": "rally"}, "II": {"mode": "solo"}, "III": {"mode": "solo"}, "VIII": {"mode": "rally"}}}}}
+        feed = [{"name": "Aglaope", "level": 1, "x": 1, "y": 1, "t": time.time()},
+                {"name": "Pumpkin Monster", "level": 7, "x": 2, "y": 2, "t": time.time()}]
+        with mock.patch.object(rb, "feed_get", return_value=(feed, 0)), mock.patch.object(rb, "get_bosses", return_value=[]):
+            out = {t["x"]: t for t in rb.mr_targets(cfg, {}, self.S)}
+        self.assertEqual([e["preset"] for e in out[1]["pairs"]], ["I"])               # rally only: the solo box is left out
+        self.assertEqual(sorted(e["preset"] for e in out[2]["pairs"]), ["I", "III", "VIII"])
+        self.assertEqual(out[2]["pairs"][0]["preset"], "III")                          # 1st in boxes III + VIII (2nd in I): tie -> lower number
 
 
 class DutyStallBudget(unittest.TestCase):
