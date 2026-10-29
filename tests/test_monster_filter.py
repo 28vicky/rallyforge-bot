@@ -60,5 +60,39 @@ class UnknownMonsterSafetyTest(unittest.TestCase):
         self.assertFalse(rb.monster_allowed("hidden", cfg(monster_skip=off))[0])
 
 
+class StrictAllowListTest(unittest.TestCase):
+    OFF = {"Pan": [1, 2, 3], "Cerberus": [1, 2, 3, 4, 5]}
+
+    def r(self, mon, mlv=None, flags=()):
+        return rb.strict_reason(mon, mlv, cfg(monster_skip=self.OFF), set(flags))
+
+    def test_known_and_enabled_joins(self):
+        self.assertEqual(self.r("Pan", 5), "")
+        self.assertEqual(self.r("Pumpkin Monster", 8), "")
+        self.assertEqual(self.r("Pumpkin Monster"), "")          # level unknown but every level is on: level does not matter
+
+    def test_doubts_skip(self):
+        self.assertEqual(self.r(None), "unknown")
+        self.assertEqual(self.r("hidden"), "cut_off")
+        self.assertEqual(self.r("Pan"), "level_unreadable")      # Pan Lv1-3 off, level not read
+        self.assertEqual(self.r("Pumpkin Monster", 8, {"ambiguous_image"}), "ambiguous_image")
+        self.assertEqual(self.r("Pan", 5, {"ambiguous_ocr"}), "ambiguous_ocr")
+        self.assertEqual(self.r("Behemoth", None, {"behemoth_unsure"}), "behemoth_unsure")
+        self.assertEqual(self.r("Viking", None, {"viking_set_unknown"}), "viking_set_unknown")
+        self.assertEqual(self.r("Skullcrawler"), "not_in_catalogue")
+        for k in ("unknown", "cut_off", "level_unreadable", "not_in_catalogue"):
+            self.assertIn(k, rb.STRICT_REASONS)
+
+    def test_mode(self):
+        self.assertEqual(rb.strict_mode({}), "shadow")
+        self.assertEqual(rb.strict_mode({"strict_monsters": "on"}), "on")
+        self.assertEqual(rb.strict_mode({"strict_monsters": "off"}), "off")
+        self.assertEqual(rb.DEFAULTS["strict_monsters"], "shadow")
+
+    def test_bad_pictures_listed(self):
+        self.assertIn("Pan.png", rb._BAD_MONSTER_PICS)
+        self.assertIn("Witch.png", rb._BAD_MONSTER_PICS)
+
+
 if __name__ == "__main__":
     unittest.main()

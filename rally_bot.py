@@ -169,6 +169,7 @@ DEFAULTS = {
     "monster_unknown": "join",              # monster with no picture yet: "join" or "skip"
     "monster_threshold": 0.8,
     "monster_skip": {},                     # {"Witch": [1, 2, 3]} = levels of that monster to skip (all levels listed = whole monster)
+    "strict_monsters": "shadow",            # owner 29 Oct: "on" = join only positively identified + ticked monsters; "shadow" = log what it would skip
     "device_names": {},
     # navigation: templates tapped, in this order, to get from anywhere (e.g. the city) to the rally list.
     # Any template called popup_*.png is tapped whenever it is seen (use it for pop-up close buttons).
@@ -1492,7 +1493,8 @@ def _base_monster(stem):
 # Monster pictures shipped by mistake that match nothing useful. A copy in your own monsters folder that is byte-for-byte
 # this file is removed once, so the fixed picture from the update is used instead (owner 29 Oct: the old Pan.png was a
 # blurred square, so real Pan rallies were not recognised). Pictures the bot learned or you added are never touched.
-_BAD_MONSTER_PICS = {"Pan.png": "8094140c2b9f0fc6e924b4bea4683efe8fa25d1e4c4a4f47be2c7fbc9d27b97a"}
+_BAD_MONSTER_PICS = {"Pan.png": "8094140c2b9f0fc6e924b4bea4683efe8fa25d1e4c4a4f47be2c7fbc9d27b97a",
+                     "Witch.png": "ac394b658002e4cc611f77c3be72d6df12f52ff81baab3885483593887192316"}   # Witch #2 / #3 are the real looks
 _bad_pics_checked = [False]
 
 
@@ -1540,25 +1542,36 @@ def _monster_tpl(name):
 
 def identify_monster(screen, hit, cfg):
     """Which monster is this rally row against? -> (name | None if unknown | 'hidden', score)."""
+    name, best, _second = identify_monster_full(screen, hit, cfg)
+    return name, best
+
+
+def identify_monster_full(screen, hit, cfg):
+    """identify_monster plus the best score of a DIFFERENT monster -> (name | None | 'hidden', best, second).
+    A small gap between best and second means two monsters look alike here (strict mode: ambiguous)."""
     dx, dy = cfg["monster_offset"]
     cx, cy = hit[0] + dx, hit[1] + dy
     half, pad = MON_SIZE // 2, 25
     if cy - half < MON_TOP:
-        return "hidden", 0.0
+        return "hidden", 0.0, 0.0
     x0, y0 = max(cx - half - pad, 0), max(cy - half - pad, 0)
     x1, y1 = min(cx + half + pad, screen.shape[1]), min(cy + half + pad, screen.shape[0])
     area = screen[y0:y1, x0:x1]
-    best, best_name = 0.0, None
+    per = {}                                            # best score per monster (all its looks together)
     for name in _raw_monsters():
         t = _monster_tpl(name)
         if t is None or area.shape[0] < t.shape[0] or area.shape[1] < t.shape[1]:
             continue
         score = float(cv2.minMaxLoc(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED))[1])
-        if score > best:
-            best, best_name = score, name
+        b = _base_monster(name)
+        if score > per.get(b, -1.0):
+            per[b] = score
+    ranked = sorted(per.items(), key=lambda kv: -kv[1])
+    best_name, best = ranked[0] if ranked else (None, 0.0)
+    second = ranked[1][1] if len(ranked) > 1 else 0.0
     if best >= cfg["monster_threshold"]:
-        return _base_monster(best_name), best
-    return None, best
+        return best_name, best, second
+    return None, best, second
 
 
 _unknown_seen = []      # 40-bit look-alike hashes already saved (loaded from the folder on first use)
@@ -1705,8 +1718,15 @@ def read_monster_name(strip):
     """The boss name on the strip under a rally portrait. -> (name, source): source is 'OCR' when the text matched a
     monster name directly, 'OCR alias' when it matched only after an alias or a dropped troop suffix, '' when no known
     name was close (name is then the raw text)."""
+    name, src, _r, _r2 = read_monster_name_full(strip)
+    return name, src
+
+
+def read_monster_name_full(strip):
+    """read_monster_name plus the match ratio and the best ratio of a DIFFERENT monster name -> (name, src, ratio, second)."""
     import difflib
     best_raw, best = "", ("", 0.0, "")
+    per = {}
     for bright in (False, True):
         try:
             lines = ocr_lines(strip, scale=3.0, bright=bright)
@@ -1725,9 +1745,13 @@ def read_monster_name(strip):
                 nn = " ".join(nn.split())
                 for form, cut in forms:
                     r = difflib.SequenceMatcher(None, form.lower(), nn).ratio()
+                    tgt = _MONSTER_ALIASES.get(nm, nm)
+                    if r > per.get(tgt, -1.0):
+                        per[tgt] = r
                     if r > best[1]:
-                        best = (_MONSTER_ALIASES.get(nm, nm), r, "OCR alias" if (cut or nm in _MONSTER_ALIASES) else "OCR")
-    return (best[0], best[2]) if best[1] >= 0.75 else (best_raw, "")
+                        best = (tgt, r, "OCR alias" if (cut or nm in _MONSTER_ALIASES) else "OCR")
+    second = max([v for k, v in per.items() if k != best[0]] or [0.0])
+    return (best[0], best[2], best[1], second) if best[1] >= 0.75 else (best_raw, "", best[1], second)
 
 
 def read_monster_label(strip):
@@ -2001,6 +2025,49 @@ def never_join_present():
 
 
 UNKNOWN_FILTERED = "monster could not be identified while monster filters are active"
+
+# Strict allow-list (owner 29 Oct): Known + ticked = JOIN; everything else (unknown, ambiguous, partly recognised,
+# level unreadable when the level matters, not in the monster list) = SKIP. "When in doubt, do not join."
+# cfg["strict_monsters"]: "shadow" = decide as before, only log + count what strict mode would skip (24 h test on the
+# owner PC); "on" = enforce; "off" = no strict check at all.
+STRICT_MARGIN = 0.10           # best match must beat the best DIFFERENT monster by this much (picture and name)
+STRICT_REASONS = {
+    "unknown": "monster could not be identified",
+    "cut_off": "monster picture not fully on screen",
+    "ambiguous_image": "picture matches two monsters",
+    "ambiguous_ocr": "name reads like two monsters",
+    "level_unreadable": "level not readable and some levels of this monster are switched off",
+    "viking_set_unknown": "Viking set not recognised",
+    "behemoth_unsure": "Behemoth or Behemoth King - name not confirmed",
+    "not_in_catalogue": "monster is not in the monster list",
+}
+
+
+def strict_mode(cfg):
+    m = str(cfg.get("strict_monsters", "shadow") or "off").lower()
+    return m if m in ("shadow", "on") else "off"
+
+
+def catalogue_names():
+    """Every monster the monster list can tick (catalogue + Viking sets)."""
+    return {n for _c, ms in MONSTER_CATALOG for n, _l in ms}
+
+
+def strict_reason(mon, mlv, cfg, flags):
+    """-> '' when strict mode would join this (already allowed) rally, else a STRICT_REASONS key.
+    flags: set of 'ambiguous_image' / 'ambiguous_ocr' / 'behemoth_unsure' / 'viking_set_unknown' found while identifying."""
+    if mon is None:
+        return "unknown"
+    if mon == "hidden":
+        return "cut_off"
+    for k in ("ambiguous_image", "ambiguous_ocr", "behemoth_unsure", "viking_set_unknown"):
+        if k in flags:
+            return k
+    if mlv is None and monster_needs_level(mon, cfg):
+        return "level_unreadable"
+    if mon not in catalogue_names():
+        return "not_in_catalogue"
+    return ""
 
 
 def monster_filters_active(cfg):
@@ -5139,6 +5206,8 @@ def sync_monster_pack(log=print):
     for name, meta in (man.get("monsters") or {}).items():
         try:
             if not _NAME_MON.match(name) or (USER / "monsters" / name).exists():
+                continue
+            if str((meta or {}).get("sha256", "")) in _BAD_MONSTER_PICS.values():   # an older pack's placeholder picture: never fetch it again
                 continue
             data = _download(urllib.parse.urljoin(base, (meta or {}).get("url", "monsters/" + urllib.parse.quote(name))), 1_000_000)
             if hashlib.sha256(data).hexdigest() != str((meta or {}).get("sha256", "")) or not data.startswith(b"\x89PNG"):
@@ -17871,6 +17940,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     last_dn = [None]                      # monster name with its level, e.g. "Witch Lv6", of the rally find_target chose
     last_base = [None]
     last_src = [""]                       # how that monster was identified: image match / OCR / OCR alias / not identified
+    last_shadow = [""]                    # strict-mode shadow: why strict mode would have skipped the chosen rally ('' = it would join)
 
     name_cache = {}
 
@@ -17952,6 +18022,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 yield h0, True
         for hit, hard in order():
             label, mon, mlv, msrc = "", None, None, ""
+            sflags = set()                                    # strict-mode doubts found while identifying (owner 29 Oct)
             if cfg.get("save_unknown_monsters"):
                 m0, _ = identify_monster(screen, hit, cfg)
                 if m0 is None:
@@ -17962,16 +18033,20 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 if cfg["log_timers"]:
                     say(f"skip ({c_why})")
                 continue
-            if cfg["monster_mode"] != "off" or mon_presets or cfg.get("monster_skip") or never_join_present():
-                mon, _ = identify_monster(screen, hit, cfg)
+            if True:                                          # owner 29 Oct: always identify first, then decide
+                mon, msc, msc2 = identify_monster_full(screen, hit, cfg)
                 if mon and mon != "hidden":
-                    msrc = "image match"
-                if mon is None and monster_filters_active(cfg):    # no picture yet: read the name under the portrait instead
+                    msrc = f"image match {msc:.2f}"
+                    if msc - msc2 < STRICT_MARGIN:
+                        sflags.add("ambiguous_image")
+                if mon is None:                                   # no picture yet: read the name under the portrait instead
                     try:
                         nx0, ny0 = int(hit[0] - 21), int(hit[1] - 113)
-                        lab, lsrc = read_monster_name(screen[max(ny0 - 18, 0):ny0 + 18, max(nx0 - 150, 0):nx0 + 150])
+                        lab, lsrc, lr, lr2 = read_monster_name_full(screen[max(ny0 - 18, 0):ny0 + 18, max(nx0 - 150, 0):nx0 + 150])
                         if lab in MONSTER_NAMES:
-                            mon, msrc = lab, lsrc
+                            mon, msrc = lab, f"{lsrc} {lr:.2f}"
+                            if lr - lr2 < STRICT_MARGIN:
+                                sflags.add("ambiguous_ocr")
                             # a look of this monster the bot has no picture of yet (e.g. Ymir, or Pan Ranged next to
                             # Pan Mounted): keep its portrait so the next rally is recognised from the picture.
                             # learn_monster skips a look it already has and keeps at most 6 per monster.
@@ -17990,7 +18065,10 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         if str(lab).lower() in NEVER_JOIN or "king" in str(lab).lower().split():
                             say(f"[{mon}] name reads '{lab}' - world boss, never joined")
                             mon = lab if str(lab).lower() in NEVER_JOIN else f"{mon} King"
+                        elif lab != _base_monster(mon):                  # name not confirmed: could still be the King
+                            sflags.add("behemoth_unsure")
                     except Exception as _e:
+                        sflags.add("behemoth_unsure")
                         quiet_err("run_device.find_target.label", _e)
                 if mon == "Viking":                                   # which set is it? level on the card + power decide
                     nx, ny = int(hit[0] - 21), int(hit[1] - 113)
@@ -18014,6 +18092,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     if vname:
                         mon, mlv = vname, vlv
                     else:                                             # set unknown: join only if every Viking group would be allowed
+                        sflags.add("viking_set_unknown")
                         bad = [vn for vn in VIKING_SETS if not monster_allowed(vn, cfg, lv0)[0]]
                         if len(bad) >= len(VIKING_SETS):              # every group is off: nothing to join. Some on: join rather than miss it
                             act_skip("Viking", "Viking set not recognised and some groups are switched off")
@@ -18049,6 +18128,11 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     if cfg["log_timers"]:
                         say(f"{label}skip ({m_why})")
                     continue
+            s_why = strict_reason(mon, mlv, cfg, sflags) if strict_mode(cfg) != "off" else ""
+            if s_why and strict_mode(cfg) == "on":            # strict allow-list: when in doubt, do not join
+                act_skip(level_name(screen, hit, mon, mlv) if mon else "?", "strict: " + STRICT_REASONS[s_why])
+                say(f"{label or '[?] '}skip (strict: {STRICT_REASONS[s_why]})")
+                continue
             need = latency[0] if latency[0] is not None else 3.0 * pace(1.0)
             try:                                              # only slow presets left: count their general search too
                 if not any(not preset_picks(cfg, n) for n in active_presets(cfg)):
@@ -18073,6 +18157,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             if ok:                                            # owner 29 Oct: every JOIN says which monster and how it was known
                 src = msrc or ("monster not checked - no monster filters" if mon is None else "not identified - no monster filters")
                 say(f"{label}JOIN ({src}) - rally {fmt(rally)}{mtxt(march)}, bot needs ~{need:.0f}s ({why})")
+                if s_why:                                     # shadow mode: decided as before, but say what strict mode would do
+                    say(f"[shadow] {label}strict mode would SKIP ({s_why}: {STRICT_REASONS[s_why]})")
             elif cfg["log_timers"]:
                 say(f"{label}rally {fmt(rally)}{mtxt(march)}, bot needs ~{need:.0f}s -> skip ({why})")
             if not ok:
@@ -18092,16 +18178,17 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     say(f"{label}skip ({why_o})")
                 continue
             if ok:
-                picks.append((rally if rally is not None else 10 ** 6, hit, mon, mlv, march, msrc))
+                picks.append((rally if rally is not None else 10 ** 6, hit, mon, mlv, march, msrc, s_why))
         if not picks:
             return None
-        rally, hit, mon, mlv, march, msrc = min(picks, key=lambda x: x[0])   # least time left that can still be reached
+        rally, hit, mon, mlv, march, msrc, s_why = min(picks, key=lambda x: x[0])   # least time left that can still be reached
         last_march[0] = march
         if len(picks) > 1 and cfg["log_timers"]:
             say(f"{len(picks)} rallies can be joined - taking the one closing first ({fmt(rally)} left)")
         last_dn[0] = level_name(screen, hit, mon, mlv)
         last_base[0] = mon if mon and mon != "hidden" else show_name(screen, hit, mon)
         last_src[0] = msrc or "not identified"
+        last_shadow[0] = s_why
         return hit, rally, mon
 
     last_frame = [0.0]
@@ -19198,7 +19285,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 remember_rally(base_name, t_join + left, "joined")        # joined: never try this same rally again
                 speed_up()
                 log(f"[+] Joined rally #{joins}")
-                act("join", mon=mon_name, rally=left, took=round(time.time() - t_join, 1), preset=preset, n=joins, src=last_src[0])
+                act("join", mon=mon_name, rally=left, took=round(time.time() - t_join, 1), preset=preset, n=joins, src=last_src[0],
+                    shadow=last_shadow[0])
                 notify(cfg, serial, f"Joined rally #{joins}", "join")
                 if cfg["max_joins"] and joins >= cfg["max_joins"]:
                     log("[+] Reached max joins, stopping this instance.")
