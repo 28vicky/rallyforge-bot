@@ -2,7 +2,7 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
-## PC: Teach-the-Bot chat deploying fix/evidence-on-2521 (29 Oct 14:45 IST) - rally_bot.py only into app\v2.5.20
+## PC FREE (29 Oct 14:47 IST) - fix/evidence-on-2521 copied into app\v2.5.20\rally_bot.py (999,235 B, VERSION line kept 2.5.20; backup of the previous file = rally_bot_before_evidence.py, 990,145 B). Loads at the owner's next app restart. Do NOT install the 2.5.21 update on the PC - it would drop the evidence store (2.5.21 does not have it); next release must include fix/evidence-on-2521.
 
 ## READY (29 Oct 14:40 IST, Teach-the-Bot chat) - fix/evidence-on-2521 33d8c10
 - = main 2.5.21 + fix/failure-evidence ONLY (Phase 0 of claude/teach_the_bot_decisions_29oct.md). Patch identical to b6445c2's; 53 tests OK. NOT on the PC - waiting for the owner's OK. Doc: claude/fix_evidence_on_2521_29oct.md.
