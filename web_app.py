@@ -417,12 +417,13 @@ class Controller:
 
     def status_list(self):
         out = []
+        gday = rb._game_day()
         for dv in self.devices:
             s = dv["id"]
             d = self.dev.get(s)
             if not d:
                 continue
-            out.append({"id": s, "name": d["name"], "idx": d["idx"], "state": d["state"], "joins": d["joins"],
+            out.append({"id": s, "name": d["name"], "idx": d["idx"], "state": d["state"], "joins": int((self.day_rows(s).get(gday) or {}).get("joins", 0) or 0),   # today's game-day joins = the Today tile (JC 29 Oct)
                         "queued": s in self.start_queue, "paused": d["ctl"].paused, "no_stamina": getattr(d["ctl"], "no_stamina", 0) >= 3,
                         "kicked_at": (int(rb.KICKED.get(s, 0)) if d["state"] == "run" and rb.KICKED.get(s, 0) > time.time() else 0),
                         "loading": (rb.LOADING[s][0] if d["state"] == "run" and s in rb.LOADING else ""),

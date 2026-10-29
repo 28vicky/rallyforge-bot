@@ -872,7 +872,7 @@ function actStats(serial) {
   const n = (k) => list.filter((l) => l.a.k === k).length;
   const joins = list.filter((l) => l.a.k === "join" && l.a.took != null);
   const avg = joins.length ? (joins.reduce((t, l) => t + l.a.took, 0) / joins.length).toFixed(1) + "s" : "-";
-  return `Joined ${n("join")}  ·  Skipped ${list.filter((l) => l.a.k === "skip" && !isOffSkip(l.a)).length}  ·  Failed ${n("fail")}  ·  Average join time ${avg}`;
+  return `Joined ${n("join")}  ·  Skipped (all reasons) ${list.filter((l) => l.a.k === "skip" && !isOffSkip(l.a)).length}  ·  Failed ${n("fail")}  ·  Average join time ${avg}`;
 }
 function paintStats(el, serial) {
   const list = S.acts.filter((l) => serial === null || l.s === serial);
@@ -881,7 +881,7 @@ function paintStats(el, serial) {
   const avg = joins.length ? (joins.reduce((t, l) => t + l.a.took, 0) / joins.length).toFixed(1) + " s" : "-";
   el.innerHTML = "";
   // A4 (28 Oct): these count since the app started and every skip reason - the Today card counts the game day and late skips only
-  [["Joined", n("join")], ["Skipped", list.filter((l) => l.a.k === "skip" && !isOffSkip(l.a)).length], ["Failed", n("fail")], ["Average join", avg]].forEach(([l, v]) =>
+  [["Joined", n("join")], ["Skipped (all reasons)", list.filter((l) => l.a.k === "skip" && !isOffSkip(l.a)).length], ["Failed", n("fail")], ["Average join", avg]].forEach(([l, v]) =>
     el.appendChild(h("div", { class: "stile", title: "Since the app started" }, h("b", {}, String(v)), h("span", {}, l))));
   const aj = serial !== null && typeof ajIsOn === "function" && ajIsOn(serial);   // PCR2 A4: the game joins rallies itself
   if (aj && !n("join")) el.firstChild.firstChild.textContent = "By the game";
