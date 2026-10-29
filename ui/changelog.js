@@ -1,5 +1,12 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.28", date: "2026-10-30",
+    new: ["Faster screenshots on MuMu 12: the bot sees the game much faster. BlueStacks works as before."],
+    fixed: ["City map: a mapped city is locked so it is never wiped by accident, a failed mapping run puts your old map back, and Find missing only adds buildings.",
+      "Alliance pages: the bot no longer ends up in Mail on its way to the alliance rallies.",
+      "When a back arrow does nothing, the bot uses the phone's Back instead of tapping the arrow again and again.",
+      "Champions: greets once, goes back to joining rallies and returns when the timer is over - never marked done while greets are left.",
+      "Rally list: a list that stops updating is refreshed within seconds, before any game restart."] },
   { v: "2.5.27", date: "2026-10-30",
     new: [],
     fixed: ["Join rallies: joining is fast again - the monster check on the march screen reads only what it needs."] },
