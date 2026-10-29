@@ -10053,9 +10053,10 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             log(f"[i]   Activity route to {bname or tile}: {e} - using the city map instead")
             leave_to_city(dev, cfg, stop, log)
             r = None
-        if r == "complete" and task.get("no_tile"):
+        if r == "complete" and (task.get("no_tile") or "champions" in (task.get("steps") or [])):
             log(f"[i]   {tile.strip()}: daily done today - going to the {bname.strip()} building instead")
-            r = None                                       # the gems decide, not the daily quest (owner 24 Oct)
+            r = None                                       # the gems decide, not the daily quest (owner 24 Oct); Champions:
+            #                                                the daily needs 5 greets, the plan 15 taps + 10 greets (owner 30 Oct)
         elif r == "complete":
             rd_nothing()
             return None                                    # this daily is already complete today: nothing to open
@@ -11853,13 +11854,14 @@ def ch_dialogue(dev, stop):
             return
 
 
-CH_GREET_WAIT_MAX = 150                    # a greet timer up to this long is waited out on the page; longer -> come back later
+def ch_wait_text(sec):
+    return f"{sec} s" if sec < 120 else f"{sec // 60} min"
 
 
 def ch_do_greets(dev, stop, log, name, want, serial, day):
-    """Greet the champion `want` times (stops at 10 a day in total). -> greets done. Sets dev._ch_later (seconds) when
-    greetings are left but the game's timer is long - the duty comes back then instead of being 'done' (owner 30 Oct:
-    testers' greets stopped at 0-1 of 10 and the duty said Done for the whole day)."""
+    """Greet the champion `want` times (stops at 10 a day in total). -> greets done. Owner 30 Oct: after a greeting the
+    game runs a ~1 min timer - the bot does NOT wait on the page: it goes back to the rallies and comes back when the
+    timer is over (dev._ch_later = seconds). Greetings left are never 'done for the day'."""
     done = 0
     dev._ch_later = 0
     misses = 0
@@ -11873,14 +11875,9 @@ def ch_do_greets(dev, stop, log, name, want, serial, day):
             if lab["n"] is not None and lab["n"] >= CH_GREETS:
                 log("[i]   Champions: the 10 daily greetings are used up")
                 break
-            if 0 < lab["wait"] <= CH_GREET_WAIT_MAX:
-                log(f"[i]   Champions: greet timer, waiting {lab['wait']} s")
-                if stop.wait(lab["wait"] + 3):
-                    break
-                continue
-            if lab["wait"] > CH_GREET_WAIT_MAX:
+            if lab["wait"] > 0:
                 dev._ch_later = lab["wait"]
-                log(f"[i]   Champions: next greeting in {lab['wait'] // 60} min - coming back then")
+                log(f"[i]   Champions: next greeting in {ch_wait_text(lab['wait'])} - back to the rallies, greeting again then")
                 break
             misses += 1
             if misses < 3:                                 # a tap message can cover the button for a few seconds
@@ -11895,15 +11892,10 @@ def ch_do_greets(dev, stop, log, name, want, serial, day):
         if lab["n"] is not None and lab["n"] >= CH_GREETS:
             log("[i]   Champions: the 10 daily greetings are used up")
             break
-        if lab["wait"] > CH_GREET_WAIT_MAX:
-            dev._ch_later = lab["wait"]
-            log(f"[i]   Champions: next greeting in {lab['wait'] // 60} min - coming back then")
-            break
         if lab["wait"] > 0:
-            log(f"[i]   Champions: greet timer, waiting {lab['wait']} s")
-            if stop.wait(lab["wait"] + 3):
-                break
-            continue                                       # look at the page again (the button and its word are back)
+            dev._ch_later = lab["wait"]
+            log(f"[i]   Champions: next greeting in {ch_wait_text(lab['wait'])} - back to the rallies, greeting again then")
+            break
         dev.tap(*spot)
         _nap(stop, 1.6, 2.2)
         ch_dialogue(dev, stop)
@@ -11998,7 +11990,7 @@ def run_champions(dev, cfg, log, stop):
     used = ch_taps_used(shot)
     log(f"[+]  Champions done: {total_taps} tap(s), {total_greets} greet(s) this run" + (f"; taps today {used}/{CH_TAPS}" if used is not None else ""))
     if left and not stop.is_set():                         # owner 30 Oct: never 'Done' for the day with greetings / taps left
-        wait = min(max(later or 1800, 120), 4 * 3600)
+        wait = min(max(later + 5 if later else 1800, 30), 4 * 3600)   # greet timer: back as soon as it is over
         ch_save(serial, next_at=time.time() + wait, all_done_day="")
         log(f"[i]   Champions: {left} tap(s)/greet(s) still to do - trying again at {time.strftime('%H:%M', time.localtime(time.time() + wait))}")
     else:

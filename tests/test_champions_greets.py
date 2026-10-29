@@ -60,12 +60,13 @@ class Greets(unittest.TestCase):
             n = rb.ch_do_greets(dev, self.stop, self.log.append, "Ariadne", want, dev.serial, rb._game_day())
         return n, dev
 
-    def test_waits_out_the_short_timer_instead_of_stopping(self):
+    def test_after_a_greet_it_leaves_for_the_timer(self):
         lab0 = {"pack": False, "n": None, "wait": 0}
         timer = {"pack": False, "n": None, "wait": 55}
-        n, dev = self.run_greets([((10, 10), lab0), (None, timer), ((10, 10), lab0), (None, timer), ((10, 10), lab0)])
-        self.assertEqual(n, 3)
-        self.assertEqual(dev._ch_later, 0)
+        n, dev = self.run_greets([((10, 10), lab0), (None, timer)])
+        self.assertEqual(n, 1)
+        self.assertEqual(dev._ch_later, 55, "back to the rallies, return when the 1-min timer is over")
+        self.assertFalse(any("waiting" in x for x in self.log))
 
     def test_long_timer_means_come_back_later(self):
         n, dev = self.run_greets([(None, {"pack": False, "n": None, "wait": 14400})])
