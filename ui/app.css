@@ -2108,3 +2108,15 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .hodel:hover{background:color-mix(in srgb,var(--bad) 10%,transparent)}
 .hoddpanel{position:static;margin-top:6px;box-shadow:none}
 .holacts .btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* owner 29 Oct 22:41: Load order is a normal dropdown under its button (not a pop-up) */
+.hoacts .hodd{position:relative;display:inline-block}
+.hoacts .hoddpanel{position:absolute;right:0;left:auto;top:calc(100% + 6px);width:300px;z-index:20;margin:0;box-shadow:var(--appsh)}
+.hoddopt{padding:0}
+.hoddname{flex:1;min-width:0;display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border:0;background:none;color:var(--fg);font:inherit;font-size:13.5px;cursor:pointer;text-align:left}
+.hoddname span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hoddname small{color:var(--mute);white-space:nowrap}
+.hoddic{flex:none;width:28px;border:0;border-radius:6px;background:none;color:var(--mute);cursor:pointer;font-size:14px;opacity:0}
+.hoddopt:hover .hoddic,.hoddic:focus-visible{opacity:1}
+.hoddic:hover{background:var(--hu-soft);color:var(--fg)}
+.hoddic.del:hover{color:var(--bad)}

@@ -2845,47 +2845,44 @@ function monsterRallyTab(serial) {
     if (m[nm] && !(await confirmBox("Replace \u201c" + nm + "\u201d?", "A saved order with this name exists. Replace it with the current list?", "Replace"))) return;
     m[nm] = (order || []).map((r) => Object.assign({}, r)); putSaved(m); toast("Saved as \u201c" + nm + "\u201d.", "ok"); paintOrder();
   };
-  const loadOrderDlg = () => {                     // owner 29 Oct 22:34: pick from a dropdown (search inside), then Load / Rename / Delete
-    const box = h("div", { class: "hoload" });
-    let pick = "", open = false, find = "";
-    const draw = () => {
-      box.innerHTML = "";
-      const m = savedOrders(), names = Object.keys(m).sort((x, y) => x.localeCompare(y));
-      if (!names.length) { box.appendChild(h("div", { class: "huempty in" }, "No saved orders.")); return; }
-      if (pick && !m[pick]) pick = "";
-      const cnt = (nm) => m[nm].length + (m[nm].length === 1 ? " monster" : " monsters");
-      const list = h("div", { class: "hoddlist", role: "listbox" });
-      const fill = () => {
-        list.innerHTML = "";
-        const f = find.trim().toLowerCase(), shown = names.filter((nm) => !f || nm.toLowerCase().includes(f));
-        if (!shown.length) list.appendChild(h("div", { class: "mute", style: { padding: "8px 10px", fontSize: "13px" } }, "No saved order called \u201c" + find.trim() + "\u201d."));
-        for (const nm of shown) list.appendChild(h("button", { type: "button", class: "hoddopt" + (nm === pick ? " on" : ""), role: "option", "aria-selected": nm === pick ? "true" : "false",
-          onclick: () => { pick = nm; open = false; draw(); } }, h("span", {}, nm), h("small", {}, cnt(nm))));
-      };
-      const search = h("input", { type: "text", placeholder: "Search saved orders\u2026", "aria-label": "Search saved orders", value: find, oninput: (e) => { find = e.target.value; fill(); } });
-      const panel = h("div", { class: "hoddpanel", hidden: !open }, search, list);
-      box.appendChild(h("div", { class: "hodd" },
-        h("button", { type: "button", class: "hoddbtn", "aria-haspopup": "listbox", "aria-expanded": open ? "true" : "false", onclick: () => { open = !open; draw(); } },
-          pick ? h("span", {}, h("b", {}, pick), h("span", { class: "mute" }, " \u00b7 " + cnt(pick))) : h("span", { class: "mute" }, "Choose a saved order (" + names.length + ")"), "\u25be"),
-        panel));
-      fill();
-      if (open) setTimeout(() => search.focus(), 20);
-      box.appendChild(h("div", { class: "holacts" },
-        h("button", { type: "button", class: "btn pri", disabled: !pick, onclick: async () => {
-          const isSaved = !(order || []).length || Object.values(m).some((rows) => sameRows(rows, order));
-          if (!isSaved && !(await confirmBox("Replace your current list?", "Your current list is not saved. Load \u201c" + pick + "\u201d anyway?", "Load"))) return;
-          oSave(m[pick].map((r) => Object.assign({}, r))); oSel.clear(); dlg.close(); toast("Loaded \u201c" + pick + "\u201d.", "ok"); paintOrder(); } }, "Load"),
-        h("button", { type: "button", class: "btn", disabled: !pick, onclick: async () => {
-          const nn = ((await promptBox("Rename", "New name", pick)) || "").trim().slice(0, 40);
-          if (!nn || nn === pick) return;
-          if (m[nn] && !(await confirmBox("Replace \u201c" + nn + "\u201d?", "A saved order with this name exists. Replace it?", "Replace"))) return;
-          const out = {}; for (const k of Object.keys(m)) if (k !== nn) out[k === pick ? nn : k] = m[k]; putSaved(out); pick = nn; draw(); } }, "Rename"),
-        h("button", { type: "button", class: "btn danger", disabled: !pick, onclick: async () => {
-          if (!(await confirmBox("Delete \u201c" + pick + "\u201d?", "This removes the saved order only. Your current list stays.", "Delete"))) return;
-          const out = Object.assign({}, m); delete out[pick]; pick = ""; putSaved(out); draw(); paintOrder(); } }, "Delete")));
+  let ddOpen = false, ddFind = "";
+  const loadOrderDD = () => {                       // owner 29 Oct 22:41: a normal dropdown in the toolbar (search inside);
+    const m = savedOrders(), names = Object.keys(m).sort((x, y) => x.localeCompare(y));   // click a name = load it;
+    const wrap = h("span", { class: "hodd" });                                              // rename / delete icons on hover
+    const btnEl = h("button", { type: "button", class: "btn", disabled: !names.length, "aria-haspopup": "listbox", "aria-expanded": ddOpen ? "true" : "false",
+      title: names.length ? "Use one of your saved lists" : "No saved orders yet", onclick: (e) => { e.stopPropagation(); ddOpen = !ddOpen; ddFind = ""; paintOrder(); } }, "Load order \u25be");
+    wrap.appendChild(btnEl);
+    if (!ddOpen || !names.length) return wrap;
+    const list = h("div", { class: "hoddlist", role: "listbox" });
+    const cnt = (nm) => m[nm].length + (m[nm].length === 1 ? " monster" : " monsters");
+    const load = async (nm) => {
+      const isSaved = !(order || []).length || Object.values(m).some((rows) => sameRows(rows, order));
+      ddOpen = false;
+      if (!isSaved && !(await confirmBox("Replace your current list?", "Your current list is not saved. Load \u201c" + nm + "\u201d anyway?", "Load"))) { paintOrder(); return; }
+      oSave(m[nm].map((r) => Object.assign({}, r))); oSel.clear(); toast("Loaded \u201c" + nm + "\u201d.", "ok"); paintOrder();
     };
-    const dlg = modal({ title: "Load order", body: box, buttons: [{ label: "Close" }], focus: false });
-    draw();
+    const fill = () => {
+      list.innerHTML = "";
+      const f = ddFind.trim().toLowerCase(), shown = names.filter((nm) => !f || nm.toLowerCase().includes(f));
+      if (!shown.length) list.appendChild(h("div", { class: "mute", style: { padding: "8px 10px", fontSize: "13px" } }, "No saved order called \u201c" + ddFind.trim() + "\u201d."));
+      for (const nm of shown) list.appendChild(h("div", { class: "hoddopt", role: "option" },
+        h("button", { type: "button", class: "hoddname", onclick: () => load(nm) }, h("span", {}, nm), h("small", {}, cnt(nm))),
+        h("button", { type: "button", class: "hoddic", title: "Rename", "aria-label": "Rename " + nm, onclick: async () => {
+          const nn = ((await promptBox("Rename", "New name", nm)) || "").trim().slice(0, 40);
+          if (!nn || nn === nm) return;
+          if (m[nn] && !(await confirmBox("Replace \u201c" + nn + "\u201d?", "A saved order with this name exists. Replace it?", "Replace"))) return;
+          const out = {}; for (const k of Object.keys(m)) if (k !== nn) out[k === nm ? nn : k] = m[k]; putSaved(out); paintOrder(); } }, "\u270e"),
+        h("button", { type: "button", class: "hoddic del", title: "Delete", "aria-label": "Delete " + nm, onclick: async () => {
+          if (!(await confirmBox("Delete \u201c" + nm + "\u201d?", "This removes the saved order only. Your current list stays.", "Delete"))) return;
+          const out = Object.assign({}, m); delete out[nm]; putSaved(out); paintOrder(); } }, "\u00d7")));
+    };
+    const search = h("input", { type: "text", placeholder: "Search saved orders\u2026", "aria-label": "Search saved orders", value: ddFind,
+      oninput: (e) => { ddFind = e.target.value; fill(); }, onkeydown: (e) => { if (e.key === "Escape") { ddOpen = false; paintOrder(); } } });
+    const panel = h("div", { class: "hoddpanel", onclick: (e) => e.stopPropagation() }, search, list);
+    wrap.appendChild(panel);
+    fill();
+    setTimeout(() => { search.focus(); document.addEventListener("click", function off() { document.removeEventListener("click", off); if (ddOpen) { ddOpen = false; if (orderBox.isConnected) paintOrder(); } }); }, 0);
+    return wrap;
   };
   const paintOrder = () => {
     // owner 29 Oct 21:15-22:02: "Use my own hunt order" switch; its own list (never filled from the presets); switching
@@ -2910,7 +2907,7 @@ function monsterRallyTab(serial) {
       n ? h("button", { type: "button", class: "btn sm hodel", onclick: delAll }, "Delete all") : null,
       h("span", { class: "hoacts" },
         h("button", { type: "button", class: "btn", disabled: !n, title: n ? "Save this list under a name" : "Add monsters first", onclick: saveOrderAs }, "Save order"),
-        h("button", { type: "button", class: "btn", disabled: !Object.keys(savedOrders()).length, title: Object.keys(savedOrders()).length ? "Use one of your saved lists" : "No saved orders yet", onclick: loadOrderDlg }, "Load order"),
+        loadOrderDD(),
         h("button", { type: "button", class: "btn pri", onclick: () => { dTarget = "order"; openDrawer(); } }, "+ Add monster"))));
     const bulk = h("div", { class: "hobulk", hidden: !oSel.size });
     orderBox.appendChild(bulk);
