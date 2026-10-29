@@ -1752,7 +1752,8 @@ select.pick-open{border-color:var(--accent1)}
 .huvb.on{background:var(--card);color:var(--fg);box-shadow:var(--sh2)}
 .hubody{display:flex;flex-direction:column;gap:14px;min-width:0}
 .hulive{display:flex;flex-direction:column;gap:12px;min-width:0}
-.humarch{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}
+.humarch{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding-bottom:2px;font-size:13px}   /* one row always; scrolls sideways instead of adding page height (owner 29 Oct) */
+.humarch>*{flex:none}
 .humarch>b{margin-right:4px}
 .humchip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 8px;border-radius:99px;border:var(--bd);background:var(--card);color:var(--fg);font:inherit;font-size:12px;cursor:pointer;max-width:240px}
 .humchip:hover{border-color:var(--accent1)}
