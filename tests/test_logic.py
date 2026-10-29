@@ -469,3 +469,169 @@ class CrazyEggsLuckyConfirm(unittest.TestCase):
             d = self._dev([img])
             self.assertEqual(rb.ce_lucky_confirm(d, None), "no_button")
             self.assertEqual(d.taps, [])
+
+
+class HuntsService(Base):
+    """Owner 29 Oct: Monster hunts = background service; solo presets hunt while the rally preset is out."""
+    S = "127.0.0.1:16544"
+
+    def setUp(self):
+        super().setUp()
+        self.p_dec = mock.patch.object(rb, "HUNT_DEC_FILE", self.tmp / "hunt_decisions.json")
+        self.p_dec.start()
+        self.p_user = mock.patch.object(rb, "USER", self.tmp)
+        self.p_user.start()
+        self.cfg = {"duties": {"monster_rally": {
+            "rules": [{"name": "Pumpkin", "min": 1, "max": 8, "preset": "I", "time": "5"},
+                      {"name": "Cerberus", "min": 1, "max": 2, "preset": "II", "time": "5"},
+                      {"name": "Cerberus", "min": 1, "max": 2, "preset": "III", "time": "5"}],
+            "presets": {"I": {"mode": "rally"}, "II": {"mode": "solo"}, "III": {"mode": "solo"}}}}}
+        for a in ("hunt_t0", "hunt_chk", "hunt_handoff", "hunt_alive", "hunt_map_ok", "city_last"):
+            if hasattr(rb._TL, a):
+                delattr(rb._TL, a)
+
+    def tearDown(self):
+        self.p_dec.stop()
+        self.p_user.stop()
+        super().tearDown()
+
+    def test_group_until(self):
+        now = time.time()
+        self.assertEqual(rb.mr_group_until(self.cfg, self.S, "rally", now), 0)
+        rb.mr_save(self.S, busy={"I": now - 60})
+        self.assertAlmostEqual(rb.mr_group_until(self.cfg, self.S, "rally", now), now - 60 + 300, delta=1)
+        self.assertEqual(rb.mr_group_until(self.cfg, self.S, "solo", now), 0)           # II and III free
+        rb.mr_save(self.S, busy={"I": now - 60, "II": now - 10})
+        self.assertEqual(rb.mr_group_until(self.cfg, self.S, "solo", now), 0)           # III still free
+        rb.mr_save(self.S, solo_full_until=now + 50)
+        self.assertEqual(rb.mr_group_until(self.cfg, self.S, "solo", now), now + 50)     # no march for solo: held out 1 min
+
+    def test_rally_eta_march_panel_wins(self):
+        now = time.time()
+        rb.mr_save(self.S, busy={"I": now - 280}, rback=now + 200)
+        self.assertEqual(rb.mr_rally_eta(self.cfg, self.S, now), now + 200)
+        rb.mr_save(self.S, rback=0)
+        self.assertAlmostEqual(rb.mr_rally_eta(self.cfg, self.S, now), now + 20, delta=1)
+
+    def _dev(self):
+        class D:
+            serial = "127.0.0.1:16544"
+            aj_next = 0
+            _guard_busy = False
+            def screenshot(self):
+                import numpy as np
+                return np.zeros((960, 540, 3), np.uint8)
+            def tap(self, x, y):
+                pass
+        return D()
+
+    def test_handoff_reasons(self):
+        d = self._dev()
+        with mock.patch.object(rb, "city_tasks_due", return_value=[]):
+            self.assertIsNone(rb.hunt_handoff_reason(d, self.cfg, self.S, time.time()))
+            self.assertEqual(rb.hunt_handoff_reason(d, self.cfg, self.S, time.time() - 31 * 60), "check-in")
+            d.aj_next = time.time() - 1
+            self.assertEqual(rb.hunt_handoff_reason(d, self.cfg, self.S, time.time()), "Auto-Join renewal")
+        d.aj_next = 0
+        with mock.patch.object(rb, "city_tasks_due", return_value=[{"name": "duty:monster_rally"}, {"name": "duty:crazy_eggs"}]):
+            self.assertEqual(rb.hunt_handoff_reason(d, self.cfg, self.S, time.time()), "Crazy Eggs")
+
+    def test_alive_line_only_when_map_seen(self):
+        d, lines = self._dev(), []
+        rb._TL.hunt_chk = time.time()
+        with mock.patch.object(rb, "view_of", return_value="city"):
+            rb.hunt_tick(d, self.cfg, lines.append, None, self.S, "waiting on X")
+        self.assertEqual(lines, [])                                  # not the map: a dead game must not look alive
+        with mock.patch.object(rb, "view_of", return_value="world"):
+            rb.hunt_tick(d, self.cfg, lines.append, None, self.S, "waiting on X")
+            rb.hunt_tick(d, self.cfg, lines.append, None, self.S, "waiting on X")
+        self.assertEqual(len(lines), 1)                              # at most one a minute
+
+    def _run_service(self, side_effect):
+        import threading
+        d, logs = self._dev(), []
+        stop = threading.Event()
+        with mock.patch.object(rb, "_run_monster_rally", side_effect=side_effect), \
+                mock.patch.object(rb, "mr_to_map"), mock.patch.object(rb, "failure_evidence"), \
+                mock.patch.object(rb, "city_tasks_due", return_value=[]):
+            rb.run_monster_rally(d, self.cfg, logs.append, stop)
+        return logs
+
+    def test_error_is_not_a_failure(self):
+        def boom(*a):
+            raise RuntimeError("no March button (the troop page is gone)")
+        t = time.time()
+        logs = self._run_service(boom)                               # must NOT raise
+        row = rb.mr_row(self.S)
+        self.assertGreaterEqual(row["next_at"], t + 55)              # retry in 1 min
+        self.assertEqual(row["err_n"], 1)
+        self.assertTrue(any("trying again in 1 min" in l for l in logs))
+
+    def test_five_errors_pause_five_minutes(self):
+        rb.mr_save(self.S, err_streak=4)
+        def boom(*a):
+            raise RuntimeError("x")
+        t = time.time()
+        self._run_service(boom)
+        self.assertGreaterEqual(rb.mr_row(self.S)["next_at"], t + 295)
+
+    def test_lost_control_still_raises(self):
+        def boom(*a):
+            rb.TASK_ABORT.add(self.S)
+            raise RuntimeError("watchdog")
+        try:
+            with self.assertRaises(RuntimeError):
+                self._run_service(boom)
+        finally:
+            rb.TASK_ABORT.discard(self.S)
+
+    def test_handoff_comes_straight_back(self):
+        def handoff(*a):
+            rb._TL.hunt_handoff = "Crazy Eggs"
+        t = time.time()
+        logs = self._run_service(handoff)
+        self.assertLessEqual(rb.mr_row(self.S)["next_at"], time.time() + 1)
+        self.assertGreaterEqual(rb.mr_row(self.S)["next_at"], t - 1)
+        self.assertTrue(any("Crazy Eggs is due" in l for l in logs))
+
+    def _pass(self, targets, flown):
+        import threading
+        d = self._dev()
+        def search(dev, stop, x, y):
+            flown.append(f"{x},{y}")
+            return False                                             # stop right after "flying" (later)
+        with mock.patch.object(rb, "mr_targets", return_value=targets), \
+                mock.patch.object(rb, "ensure_view", return_value=True), \
+                mock.patch.object(rb, "_wait_view", return_value=d.screenshot()), \
+                mock.patch.object(rb, "mr_search", side_effect=search), \
+                mock.patch.object(rb, "mr_return_secs", return_value=200):
+            rb._run_monster_rally(d, self.cfg, lambda m: None, threading.Event())
+
+    def _tg(self, name, x, preset, mode, rank=0):
+        return {"name": name, "level": 1, "x": x, "y": 1, "km": 10, "t": time.time(), "rank": rank, "mode": mode,
+                "rule": {"name": name, "min": 1, "max": 8, "preset": preset, "time": "5"}}
+
+    def test_rally_out_solo_goes_first_and_rally_target_held(self):
+        rb.mr_save(self.S, busy={"I": time.time() - 30})            # rally preset just left (~4.5 min out)
+        flown = []
+        self._pass([self._tg("Pumpkin", 100, "I", "rally"), self._tg("Cerberus", 200, "II", "solo", 1)], flown)
+        self.assertEqual(flown, ["200,1"])                           # the rally monster was NOT flown to
+        self.assertEqual(rb.mr_row(self.S).get("hold"), "100,1")    # but it is held for the rally preset
+
+    def test_rally_free_rally_first(self):
+        flown = []
+        self._pass([self._tg("Pumpkin", 100, "I", "rally"), self._tg("Cerberus", 200, "II", "solo", 1)], flown)
+        self.assertEqual(flown, ["100,1"])
+
+    def test_no_solo_targets_parks_as_before(self):
+        rb.mr_save(self.S, busy={"I": time.time() - 30})
+        flown = []
+        self._pass([self._tg("Pumpkin", 100, "I", "rally")], flown)
+        self.assertEqual(flown, ["100,1"])                           # 25 Oct behaviour kept when there is no solo work
+
+    def test_rally_due_soon_no_new_solo(self):
+        rb.mr_save(self.S, busy={"I": time.time() - 270}, hold="100,1")   # back by the clock in ~30 s
+        flown = []
+        # held target dropped out of this pass's list order on purpose: a solo target comes first
+        self._pass([self._tg("Cerberus", 200, "II", "solo", 0), self._tg("Pumpkin", 100, "I", "rally", 1)], flown)
+        self.assertNotIn("200,1", flown[:1])                         # no solo attack started when the rally is due

@@ -15908,40 +15908,181 @@ def mr_open_monster(dev, stop, want, level=None):
     return "gone", None
 
 
+# ---- Monster hunts as a background service (owner 29 Oct, root_cause_plan P1 + hunts_service_design_29oct.md) ----
+HUNT_TICK_S = 30               # how often a wait checks for a handoff (due duty, Auto-Join, heal, check-in)
+HUNT_ALIVE_S = 60              # one "still waiting" log line a minute - only while the map was seen recently
+HUNT_MAP_FRESH_S = 90
+HUNT_RALLY_SOON_S = 60         # the rally preset back within this -> no new solo attack, go to the held rally target
+HUNT_ERR_MAX = 5               # errors in a row -> hunts pause 5 min (still not a duty failure)
+
+
+def mr_group_until(cfg, serial, mode, now=None):
+    """Every preset of this mode (rally / solo) that has monsters is out -> the time the first one is expected back
+    (start + its rally time, as before); 0 when one is free. A solo preset that had no free march is held out ~1 min
+    ('solo_full_until') so the same solo target is not flown to again and again."""
+    now = now or time.time()
+    try:
+        modes = mr_presets(cfg)
+        rules_ = [r for r in mr_rules(cfg) if (modes.get(r["preset"]) or {}).get("mode") == mode]
+        in_use = {r["preset"] for r in rules_}
+        if not in_use:
+            return 0
+        row = mr_row(serial)
+        if mode == "solo" and float(row.get("solo_full_until") or 0) > now:
+            return float(row["solo_full_until"])
+        rtime = {r["preset"]: int(r["time"]) for r in rules_}
+        busy = {p: float(t) for p, t in (row.get("busy") or {}).items() if p in in_use and now - float(t) < 1800}
+        if set(busy) >= in_use:
+            return min(t + rtime.get(p, 5) * 60 for p, t in busy.items())
+    except Exception as _e:
+        quiet_err("mr_group_until", _e)
+    return 0
+
+
+def mr_rally_eta(cfg, serial, now=None):
+    """When the rally preset is expected back: 0 = free now. A March-panel reading ('rback') later than the
+    clock estimate wins."""
+    now = now or time.time()
+    until = mr_group_until(cfg, serial, "rally", now)
+    if not until:
+        return 0
+    rb = float(mr_row(serial).get("rback") or 0)
+    return rb if rb > until else until
+
+
+def hunt_handoff_reason(dev, cfg, serial, t_start):
+    """-> why the hunts should hand over now (a normal end, never a failure), or None."""
+    if time.time() - t_start > MR_RUN_MIN * 60:
+        return "check-in"
+    if getattr(dev, "aj_next", 0) and time.time() >= dev.aj_next:
+        return "Auto-Join renewal"
+    heal_min = float(rd_opt(cfg, "monster_rally", "heal_min", 0) or 0)
+    if heal_min:
+        h = float(mr_row(serial).get("heal_at") or 0)
+        if h and time.time() - h >= heal_min * 60:
+            return "troop healing"
+    try:
+        other = [t for t in city_tasks_due(cfg, getattr(_TL, "city_last", None) or {}, serial)
+                 if t.get("name") != "duty:monster_rally"]
+    except Exception as _e:
+        quiet_err("hunt_handoff_reason", _e)
+        other = []
+    if other:
+        nm = str(other[0].get("name") or "").split(":", 1)[-1]
+        return (DUTY_BY_ID.get(nm) or {}).get("title") or nm
+    return None
+
+
+def hunt_tick(dev, cfg, log, stop, serial, what=""):
+    """Called inside every hunt wait. Writes one alive line a minute (only when a look at the screen shows the map,
+    so a dead game never looks alive to the watchdog) and checks for a handoff every HUNT_TICK_S.
+    -> handoff reason (also kept in _TL.hunt_handoff) or None."""
+    now = time.time()
+    if what and now - getattr(_TL, "hunt_alive", 0) >= HUNT_ALIVE_S:
+        if now - getattr(_TL, "hunt_map_ok", 0) > HUNT_MAP_FRESH_S:
+            try:
+                if view_of(dev.screenshot(), cfg) in ("landscape", "world"):
+                    _TL.hunt_map_ok = time.time()
+            except Exception as _e:
+                quiet_err("hunt_tick", _e)
+        if time.time() - getattr(_TL, "hunt_map_ok", 0) <= HUNT_MAP_FRESH_S:
+            _TL.hunt_alive = now
+            log(f"[*]  Monster hunts: {what}")
+    if now - getattr(_TL, "hunt_chk", 0) >= HUNT_TICK_S:
+        _TL.hunt_chk = now
+        why = hunt_handoff_reason(dev, cfg, serial, getattr(_TL, "hunt_t0", now))
+        if why:
+            _TL.hunt_handoff = why
+            return why
+    return None
+
+
+def hunt_nap(dev, cfg, log, stop, serial, secs, what=""):
+    """A hunt wait in small steps with hunt_tick between them. -> handoff reason or None (waited the full time)."""
+    end = time.time() + max(0.0, secs)
+    while not stop.is_set():
+        why = hunt_tick(dev, cfg, log, stop, serial, what)
+        if why:
+            return why
+        left = end - time.time()
+        if left <= 0:
+            return None
+        _nap(stop, min(5.0, left), min(5.5, left + 0.5))
+    return "stop"
+
+
+def hunt_error(dev, cfg, log, stop, serial, err):
+    """An error inside a hunt pass that is NOT lost game control: log, evidence (best effort), back to the map,
+    count it. -> errors in a row."""
+    log(f"[!]  Monster hunts: {err} - back to the map, trying again in 1 min")
+    failure_evidence(dev, "monster_rally", str(err)[:200])
+    row = mr_row(serial)
+    day = _game_day()
+    n_day = int(row.get("err_n", 0)) + 1 if row.get("err_day") == day else 1
+    streak = int(row.get("err_streak", 0)) + 1
+    mr_save(serial, err_day=day, err_n=n_day, err_streak=streak)
+    try:
+        mr_to_map(dev, cfg, stop)
+    except InstanceStopped:
+        raise
+    except Exception as _e:
+        quiet_err("hunt_error", _e)
+    return streak
+
+
+
 def run_monster_rally(dev, cfg, log, stop):
-    """The universal pop-up closer is held off meanwhile: it closed the rally time window by its X (Kiravik 23 Oct)."""
+    """Monster hunts = a background service (owner 29 Oct). No wall clock: it runs until Stop, a handoff (another duty
+    due, Auto-Join renewal, heal, the 30-min check-in) or nothing is left to hunt. A handoff is a NORMAL end (the duty
+    is recorded OK and comes straight back after the other task). Errors inside a pass never fail the duty: evidence,
+    back to the map, retry in 1 min. Only lost game control (Stop, the watchdog's TASK_ABORT) leaves by raising.
+    The universal pop-up closer is held off meanwhile: it closed the rally time window by its X (Kiravik 23 Oct)."""
     was = getattr(dev, "_guard_busy", False)
     dev._guard_busy = True
     serial = getattr(dev, "serial", "")
     t_start = time.time()
+    _TL.duty_deadline = None                                 # no 40-min kill any more (root_cause_plan P1)
+    _TL.hunt_t0, _TL.hunt_chk, _TL.hunt_handoff = t_start, t_start, None
     try:
-        # Owner 25 Oct: once running, monster rallies go on non-stop. Only an Auto-Join renewal or another task /
-        # routine that is due interrupts them (done in between, then the rallies carry on).
         while True:
             _TL.mr_go_on = _TL.mr_idle = False
-            _run_monster_rally(dev, cfg, log, stop)
-            if stop.is_set() or not _TL.mr_go_on:
-                return
-            if time.time() - t_start > MR_RUN_MIN * 60:
-                return
-            if getattr(dev, "aj_next", 0) and time.time() >= dev.aj_next:
-                log("[*]  Monster rally: Auto-Join needs renewing - doing that, the rallies go on after it")
-                hunt_status(serial, "running", "Renewing Auto-Join", "Back to Monster hunts after")
-                return
+            _TL.hunt_handoff = None
             try:
-                other = [t for t in city_tasks_due(cfg, getattr(_TL, "city_last", None) or {}, serial)
-                         if t.get("name") != "duty:monster_rally"]
-            except Exception as _e:
-                quiet_err("monster_rally_other_due", _e)
-                other = []
-            if other:
-                log(f"[*]  Monster rally: {len(other)} other task(s) due - doing them, the rallies go on after")
-                nm = str(other[0].get("name") or "").split(":", 1)[-1]
-                nm = (DUTY_BY_ID.get(nm) or {}).get("title") or nm
-                hunt_status(serial, "running", f"Doing {nm}", "Back to Monster hunts after")
+                _run_monster_rally(dev, cfg, log, stop)
+                if mr_row(serial).get("err_streak"):
+                    mr_save(serial, err_streak=0)
+            except InstanceStopped:
+                raise
+            except Exception as e:
+                if stop.is_set() or serial in TASK_ABORT:          # lost control: the watchdog path, unchanged
+                    raise
+                streak = hunt_error(dev, cfg, log, stop, serial, e)
+                pause = 5 if streak >= HUNT_ERR_MAX else 1
+                mr_save(serial, next_at=time.time() + pause * 60)
+                n_day = mr_row(serial).get("err_n", 0)
+                hunt_status(serial, "waiting", "Monster hunts: trying again soon",
+                            f"Something went wrong ({str(e)[:60]}) · again in {pause} min · {n_day} hunt error(s) today")
                 return
-            if _TL.mr_idle:                                  # nothing to rally right now: wait on the map for new coordinates
-                _nap(stop, 20, 25)
+            if stop.is_set():
+                return
+            why = getattr(_TL, "hunt_handoff", None) or (hunt_handoff_reason(dev, cfg, serial, t_start) if _TL.mr_go_on else None)
+            if not why and _TL.mr_go_on and _TL.mr_idle:     # nothing to hunt right now: wait on the map for new coordinates
+                why = hunt_nap(dev, cfg, log, stop, serial, random.uniform(20, 25), "waiting for new monster coordinates")
+                if stop.is_set():
+                    return
+            if why == "troop healing":                       # the next pass queues the heal duty and hands over itself
+                continue
+            if why:
+                mr_save(serial, next_at=time.time())                 # straight back after the other task
+                if why == "check-in":
+                    log("[*]  Monster hunts: 30-min check-in - back right after")
+                    return
+                log(f"[*]  Monster hunts: {why} is due - doing it, the hunts go on after")
+                hunt_status(serial, "running", f"Doing {why}" if why != "Auto-Join renewal" else "Renewing Auto-Join",
+                            "Back to Monster hunts after")
+                return
+            if not _TL.mr_go_on:
+                return
     finally:
         dev._guard_busy = was
 
@@ -15991,6 +16132,13 @@ def _run_monster_rally(dev, cfg, log, stop):
     shot = _wait_view(dev, cfg, stop, "landscape", 30)
     if shot is None:
         return later(MR_POLL_MIN, "the map did not open")
+    _TL.hunt_map_ok = time.time()
+    # Owner 29 Oct (P1 step 6): while the rally preset is out, free SOLO presets keep hunting; the top rally target is
+    # HELD (not flown to, not dropped) and rallied as soon as the rally preset is back. Only with no solo work left does
+    # the bot park on the rally monster as before (25 Oct rule).
+    solo_ready = any(t.get("mode") == "solo" and not mr_blocked(f"{t['x']},{t['y']}", serial) for t in targets)
+    held = hold if hold and any(f"{t.get('x')},{t.get('y')}" == hold and t.get("mode") != "solo" for t in targets) else None
+    said_hold = False
     started = 0
     for tgt in targets[:10]:                                # a gone / busy monster: try the next coordinate
         if stop.is_set():
@@ -16000,9 +16148,37 @@ def _run_monster_rally(dev, cfg, log, stop):
         key, label = f"{tgt['x']},{tgt['y']}", f"{('Lv' + str(tgt['level']) + ' ') if tgt.get('level') else ''}{tgt.get('name') or 'monster'} ({tgt['x']},{tgt['y']})"
         short = f"{('Lv' + str(tgt['level']) + ' ') if tgt.get('level') else ''}{tgt.get('name') or 'monster'}"
         far = f" · {tgt['km']} km" if tgt.get("km") is not None else ""
-        hunt_status(serial, "running", f"{'Attacking' if solo else 'Going to rally'} {short} with Preset {mr_pnum(preset)}", f"Flying to X {tgt['x']} Y {tgt['y']}{far}")
         if mr_blocked(key, serial):                          # another instance picked it / a rally started on it meanwhile
+            if key == held:
+                held = None
+                mr_save(serial, hold=None)                   # held target taken by a rally / another instance: let go
             continue
+        if solo:
+            eta = mr_rally_eta(cfg, serial)
+            if held and eta - time.time() <= HUNT_RALLY_SOON_S:
+                rb = float(mr_row(serial).get("rback") or 0)
+                if rb < time.time() - 5 and eta:               # the clock says back: read the March panel ONCE (no map move)
+                    secs = mr_return_secs(dev, cfg, stop, log)
+                    mr_save(serial, rback=time.time() + (secs or 0))
+                    eta = mr_rally_eta(cfg, serial)
+                if eta - time.time() <= HUNT_RALLY_SOON_S:
+                    _TL.mr_go_on = True                      # the held rally target goes first now
+                    return later(0, f"the rally preset is back - going to the held monster {held}")
+            if mr_group_until(cfg, serial, "solo"):          # every solo preset is out: never park on a solo target
+                continue
+        elif solo_ready and mr_rally_eta(cfg, serial) - time.time() > HUNT_RALLY_SOON_S:
+            if not held:
+                held = key
+                mr_save(serial, hold=key)
+            if not said_hold:
+                said_hold = True
+                eta = mr_rally_eta(cfg, serial)
+                log(f"[*]  Monster hunts: the rally preset is out (back ~{time.strftime('%H:%M', time.localtime(eta))}) - "
+                    f"holding {held} for it, solo hunting meanwhile")
+                hunt_note(serial, tgt if key == held else next((t for t in targets if f"{t['x']},{t['y']}" == held), tgt),
+                          "Waiting", "wait", f"Held for the rally preset · back ~{time.strftime('%H:%M', time.localtime(eta))} · solo meanwhile")
+            continue                                         # no rally target is flown to while its preset is out
+        hunt_status(serial, "running", f"{'Attacking' if solo else 'Going to rally'} {short} with Preset {mr_pnum(preset)}", f"Flying to X {tgt['x']} Y {tgt['y']}{far}")
         mr_block(key, serial, "picked")
         tried[key] = time.time()
         mr_save(serial, tried=tried)
@@ -16012,6 +16188,17 @@ def _run_monster_rally(dev, cfg, log, stop):
         mr_fold_panel(dev, stop, log)                        # owner 25 Oct: an open March panel hides the monster's Attack
         t0 = time.time()
         gone, checked, said = False, time.time(), False
+        _TL.hunt_map_ok = time.time()
+
+        def handoff_here():                                  # a due duty / Auto-Join / check-in during a wait: hand over
+            tried.pop(key, None)                             # normally; the monster is not lost (held for a rally)
+            mr_save(serial, tried=tried, hold=None if solo else key, next_at=time.time())
+
+        def solo_skip(why):                                  # owner 29 Oct: never park on a solo target
+            tried.pop(key, None)
+            mr_save(serial, tried=tried, solo_full_until=time.time() + 60)
+            hunt_note(serial, tgt, "Skipped", "skip", why)
+            log(f"[*]  Monster hunts: {label} - {why}, skipped for now")
         # Owner 25 Oct 21:26: every preset for monsters is out -> stay on this monster and try when the first
         # rally's time is up (no return-time maths; the troop page / March panel decide after that).
         rules_ = [r for r in mr_rules(cfg) if modes[r["preset"]]["mode"] == modes[preset]["mode"]]
@@ -16024,7 +16211,9 @@ def _run_monster_rally(dev, cfg, log, stop):
             hunt_note(serial, tgt, "Waiting", "wait", f"Every preset for it is out · tries at {time.strftime('%H:%M', time.localtime(until))}")
             hunt_status(serial, "waiting", f"Waiting on {short}", f"Every {'solo' if solo else 'rally'} preset is out · tries at {time.strftime('%H:%M', time.localtime(until))}")
             while time.time() < until and not stop.is_set():
-                _nap(stop, min(30, max(1, until - time.time())), min(31, max(1.5, until - time.time() + 1)))
+                if hunt_nap(dev, cfg, log, stop, serial, min(30, max(1, until - time.time())),
+                            f"waiting on {short} - preset back ~{time.strftime('%H:%M', time.localtime(until))}"):
+                    return handoff_here()
                 if time.time() - checked > 60 and time.time() < until - 10:
                     checked = time.time()
                     if not mr_still_there(dev, stop):
@@ -16055,6 +16244,10 @@ def _run_monster_rally(dev, cfg, log, stop):
             free = (mk[1] - mk[0]) if mk else None
             if free is None or free > keep_free:
                 break
+            if solo:                                         # all marches busy: a solo target is never waited on
+                solo_skip("No free march for a solo attack")
+                gone = True
+                break
             if not said:
                 log(f"[*]  Monster rally: {label} - all marches busy, waiting on the monster")
                 said = True
@@ -16070,7 +16263,8 @@ def _run_monster_rally(dev, cfg, log, stop):
                 tried.pop(key, None)                         # not the monster's fault: it may be tried again next time
                 return later(max(1, round(((mk[2] if mk else None) or 120) / 60)), "all marches are busy")
             wait = min(20, max(5, (mk[2] or 20) + 2))
-            _nap(stop, wait, wait + 1)
+            if hunt_nap(dev, cfg, log, stop, serial, wait, f"waiting on {short} - all marches busy"):
+                return handoff_here()
         if line or gone:
             continue
         empties = 0
@@ -16093,13 +16287,9 @@ def _run_monster_rally(dev, cfg, log, stop):
                         if view_of(shot, cfg) not in ("landscape", "world"):
                             dev.back()
                             _nap(stop, 1.0, 1.3)
-                        if not max_wait or time.time() - t0 < max_wait:
-                            log(f"[*]  Monster hunts: {label} - no troop page after Attack (no free march?), trying again in 30 s")
-                            hunt_status(serial, "waiting", f"Waiting on {short}", "No free march for a solo attack · tries again in 30 s")
-                            _nap(stop, 30, 32)
-                            continue
-                        tried.pop(key, None)
-                        return later(2, "no troop page after Attack (all marches busy?)")
+                        solo_skip("No troop page after Attack (no free march?)")    # owner 29 Oct: no waiting on solo targets
+                        got = "busy"
+                        break
                     rd_snap(shot, "hunt_solo_troops")
                     break
                 dev.tap(MR_ALLIANCE_WAR[0], mr_button_y(page))   # x fixed, height found on the page (ad row moves it) (the white-on-brown label is rarely read); window checked below
@@ -16117,7 +16307,8 @@ def _run_monster_rally(dev, cfg, log, stop):
                         _nap(stop, 1.0, 1.3)
                     if not max_wait or time.time() - t0 < max_wait:   # back on the map = no free march (or no stamina): wait here
                         log(f"[*]  Monster rally: {label} - no rally window (all marches busy?), trying again in 30 s")
-                        _nap(stop, 30, 32)
+                        if hunt_nap(dev, cfg, log, stop, serial, 30, f"waiting on {short} - no rally window yet"):
+                            return handoff_here()
                         continue
                     tried.pop(key, None)
                     return later(2, "no rally window (all marches busy or no stamina)")
@@ -16135,12 +16326,13 @@ def _run_monster_rally(dev, cfg, log, stop):
                     _nap(stop, 1.0, 1.3)
                     if (not max_wait or time.time() - t0 < max_wait) and not (skip_lines and mr_march_line(dev.screenshot())):
                         log(f"[*]  Monster rally: {label} - no free march yet, waiting on the monster")
-                        _nap(stop, 20, 22)
+                        if hunt_nap(dev, cfg, log, stop, serial, 20, f"waiting on {short} - no free march yet"):
+                            return handoff_here()
                         continue
                     tried.pop(key, None)
                     return later(2, "the troop page did not open (no free march?)")
                 break
-            if got in ("gone", "other"):
+            if got in ("gone", "other", "busy"):
                 break
             # Owner 25 Oct: never March on an empty preset (its general is still out on another rally) - try the other
             # presets that have this monster; none loaded = keep this monster first in line and come back soon.
@@ -16163,6 +16355,17 @@ def _run_monster_rally(dev, cfg, log, stop):
             if not used:                                     # every preset for it is out: stay here (owner 25 Oct 21:26)
                 rd_snap(shot, "mrally_empty_preset")
                 mr_to_map(dev, cfg, stop)
+                if solo:                                     # owner 29 Oct: a solo target is never waited on
+                    solo_skip(f"Solo preset {mr_pnum(preset)} is still out")
+                    got = "busy"
+                    break
+                if solo_ready:                               # P1 step 6: hold it, solo hunt until the rally preset is back
+                    secs = mr_return_secs(dev, cfg, stop, log)
+                    tried.pop(key, None)
+                    mr_save(serial, tried=tried, hold=key, rback=time.time() + max(HUNT_RALLY_SOON_S + 30, secs or 90))
+                    hunt_note(serial, tgt, "Waiting", "wait", f"Preset {mr_pnum(preset)} is out · held for it, solo hunting meanwhile")
+                    _TL.mr_go_on = True
+                    return later(0, f"{label} - preset {mr_pnum(preset)} still out, held for it; solo hunting meanwhile")
                 empties += 1
                 if empties > 8:
                     tried.pop(key, None)
@@ -16172,23 +16375,26 @@ def _run_monster_rally(dev, cfg, log, stop):
                 hunt_status(serial, "waiting", f"Waiting on {short}", f"Preset {mr_pnum(preset)} is still out · tries when troops are back")
                 if empties == 1:
                     log(f"[*]  Monster rally: {label} - every preset is still out, trying again in 30 s")
-                    _nap(stop, 30, 32)
+                    w = 30
                 else:
                     secs = mr_return_secs(dev, cfg, stop, log)
                     w = min(900, max(20, (secs or 30) + 5))
                     log(f"[*]  Monster rally: {label} - troops back in about {w} s (March panel), waiting on the monster")
-                    _nap(stop, w, w + 1)
+                if hunt_nap(dev, cfg, log, stop, serial, w, f"waiting on {short} - preset {mr_pnum(preset)} out"):
+                    return handoff_here()
                 if stop.is_set():
                     return
                 continue
             break
+        if got == "busy":                                    # solo: no free march / preset out - next target (no waiting)
+            continue
         if got == "gone":
             hunt_note(serial, tgt, "Skipped", "skip", "Gone before arrival")
             mr_block(key, serial, "dead")
             log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
             continue
         if got == "other":
-            hunt_note(serial, tgt, "Skipped", "skip", "Another monster stands there")
+            hunt_note(serial, tgt, "Skipped", "skip", "Spot taken by another monster")
             mr_block(key, serial, "dead")
             log(f"[*]  Monster rally: {label} - another monster stands there ({page}), skipped")
             continue
@@ -16237,7 +16443,10 @@ def _run_monster_rally(dev, cfg, log, stop):
             return later(0.5, f"{label} - not started, trying this monster again first")
         busy = dict(mr_row(serial).get("busy") or {})
         busy[preset] = time.time()
-        mr_save(serial, hold=None, busy=busy)
+        if solo:
+            mr_save(serial, busy=busy)                       # a solo attack never clears the held rally target
+        else:
+            mr_save(serial, hold=None, busy=busy, rback=0)
         mr_block(key, serial, "rallied")
         why = (f"Preset {mr_pnum(preset)} · Preset {mr_pnum(first)} also has it but was busy" if preset != first
                else f"Preset {mr_pnum(preset)} · {mr_why_rank(tgt.get('rank') or 0)}")
@@ -16258,6 +16467,13 @@ def _run_monster_rally(dev, cfg, log, stop):
     if started:
         _TL.mr_go_on = True
         return later(1, f"{started} rally(s) started, looking for the next one")
+    if held and not stop.is_set():                           # rally preset out, solo presets busy / solo targets gone this pass
+        _TL.mr_go_on = _TL.mr_idle = True
+        eta = mr_rally_eta(cfg, serial)
+        hunt_status(serial, "waiting", "Waiting for presets",
+                    f"Rally preset back ~{time.strftime('%H:%M', time.localtime(eta))} for {held} · solo presets busy or no solo target")
+        mr_save(serial, tried=tried, next_at=time.time())
+        return
     _TL.mr_go_on = _TL.mr_idle = True
     hunt_status(serial, "waiting", "Waiting for monsters", "Every coordinate tried was gone or taken · checks again in 1 min")
     later(MR_POLL_MIN, "every coordinate tried was gone or taken")
@@ -17831,7 +18047,8 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                     nav_state.clear()
                 # time budget per duty (Kiravik 24 Oct 15:14: Champions sat on a purchase page for 10+ min with no log line):
                 # 20 min, 50 for the city map; over it, the next tap aborts the duty and the attempt-2 path takes over
-                _TL.duty_deadline = time.time() + (50 if duty_id in MAP_HEAVY else MR_RUN_MIN + 10 if duty_id == "monster_rally" else DUTY_BUDGET_MIN) * 60
+                # Monster hunts: no time budget at all (owner 29 Oct: a background service; it hands over by itself)
+                _TL.duty_deadline = None if duty_id == "monster_rally" else time.time() + (50 if duty_id in MAP_HEAVY else DUTY_BUDGET_MIN) * 60
                 if not ensure_view(dev, cfg, stop, log, "world" if on_map else "city") and not stop.is_set():
                     log(f"[!] Could not get back to the {'world map' if on_map else 'city view'}")
                 clear_popups(dev, cfg, log, stop, want_city=not on_map)   # close offers / pop-ups first, then do the task
