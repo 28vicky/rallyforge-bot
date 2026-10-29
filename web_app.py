@@ -303,6 +303,7 @@ class Controller:
     def _note_status(self, d, msg):
         if "[+] Connected" in msg:
             d["connected"] = True
+            d["failed"] = False                   # a "[!]" before the first connect (emulator still starting) is not a problem once connected
         elif "Joined rally #" in msg:
             m = re.search(r"#(\d+)", msg)
             d["joins"] = int(m.group(1)) if m else d["joins"] + 1

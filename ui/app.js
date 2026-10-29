@@ -135,7 +135,7 @@ function resolvedMode() {
   return m === "auto" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : m;
 }
 const ACCENTS = [["#d9a566", "Amber"], ["#e0c25a", "Gold"], ["#e07a5a", "Coral"], ["#e58a95", "Rose"], ["#a58be0", "Violet"], ["#7aa7e0", "Sky"], ["#6fb5a6", "Sage"], ["#8fc46a", "Lime"]];
-const CUSTOM_VARS = ["--accent", "--accent1", "--accent2", "--accfg", "--bd", "--btn", "--r1", "--r2", "--rad", "--glow"];
+const CUSTOM_VARS = ["--accent", "--accent1", "--accent2", "--accfg", "--bd", "--btn", "--r1", "--r2", "--rad", "--glow", "--accbtn", "--accbtnh", "--accbtnfg"];
 function hexRgb(hx) { const n = parseInt(hx.replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 function rgbHex(r) { return "#" + r.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join(""); }
 function mix(hx, to, t) { const a = hexRgb(hx), b = hexRgb(to); return rgbHex(a.map((v, i) => v + (b[i] - v) * t)); }
@@ -153,6 +153,10 @@ function applyCustom() {
     st.setProperty("--accent2", light ? mix(hx, "#000000", 0.45) : mix(hx, "#ffffff", 0.22));
     st.setProperty("--accent", `linear-gradient(135deg, ${mix(hx, "#ffffff", 0.06)}, ${mix(hx, "#000000", 0.16)})`);
     st.setProperty("--accfg", lum(mix(hx, "#000000", 0.08)) > 0.52 ? "#14161d" : "#ffffff");
+    // main buttons (Start, Resume, Install...) use --accbtn, which the palette sets to orange - follow the picked colour too
+    const btn = light ? mix(hx, "#000000", 0.38) : hx, btnh = light ? mix(hx, "#000000", 0.5) : mix(hx, "#ffffff", 0.18);
+    st.setProperty("--accbtn", btn); st.setProperty("--accbtnh", btnh);
+    st.setProperty("--accbtnfg", lum(btn) > 0.52 ? "#14161d" : "#ffffff");
   }
   const a = hx || (cs.getPropertyValue("--accent1").trim().startsWith("#") ? cs.getPropertyValue("--accent1").trim() : "#d9a566");
   const [ar, ag, ab] = hexRgb(a);
