@@ -89,6 +89,15 @@ function ajSwitch(serial, o) {
   i.addEventListener("change", () => { ajSetOne(serial, i.checked); if (o.after) o.after(i.checked); });
   return h("label", { class: "tgl ajsw" + (o.small ? " sm" : ""), title: AJ_TIP, onclick: (e) => e.stopPropagation() }, i, h("span", { class: "sw" }), o.label === undefined ? "Auto-Join" : o.label);
 }
+// ---- Join rallies (the bot joins alliance rallies itself): its own switch per instance, next to Auto-Join and never tied to it
+// (owner 29 Oct 16:26). per_device[serial].rally_enabled - the same setting as "Join rallies" on the Tasks page.
+function jrIsOn(serial) { const o = ((S.cfg.per_device || {})[serial]) || {}; return !!(o.rally_enabled !== undefined ? o.rally_enabled : (S.cfg.rally_enabled !== undefined ? S.cfg.rally_enabled : true)); }
+function jrSwitch(serial, o) {
+  o = o || {};
+  const i = h("input", { type: "checkbox", checked: jrIsOn(serial), "aria-label": "Join rallies" });
+  i.addEventListener("change", () => { S.cfg.per_device = S.cfg.per_device || {}; (S.cfg.per_device[serial] = S.cfg.per_device[serial] || {}).rally_enabled = i.checked; if (o.after) o.after(i.checked); });
+  return h("label", { class: "tgl ajsw", title: "The bot joins alliance rallies itself with your presets. Separate from the game's Auto-Join.", onclick: (e) => e.stopPropagation() }, i, h("span", { class: "sw" }), "Join rallies");
+}
 function ajSetAll(v) { S.cfg.game_auto_join = !!v; S.devices.forEach((d) => { if (d.id) ajSetOne(d.id, v); }); paintAjAll(); }
 function paintAjAll() {
   const g = document.getElementById("ajAll");
@@ -433,7 +442,7 @@ function instancePage(serial) {
     stBtn("Start", () => collectAndRun("start", { serial }), "pri"), stBtn("Pause", () => act(api("pause", { serial })), "pri"), stBtn("Stop", () => act(api("stop", { serial })), "stopb"), moreBtn);
   const head = h("div", { class: "row insthead", style: { margin: "0 0 12px", gap: "14px", alignItems: "center" } },
     sideBtn(), h("h2", { title: serial, style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx),
-    status, ajSwitch(serial, { after: () => rerender() }), h("span", { class: "mute iserial", style: { fontSize: "13px" } }, serial), h("div", { class: "ihacts" }, saveStEl(), bar));   // owner 29 Oct: Saved stays with the buttons - the group wraps as one
+    status, jrSwitch(serial, { after: () => rerender() }), ajSwitch(serial, { after: () => rerender() }), h("span", { class: "mute iserial", style: { fontSize: "13px" } }, serial), h("div", { class: "ihacts" }, saveStEl(), bar));   // owner 29 Oct: Saved stays with the buttons - the group wraps as one
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
