@@ -18175,6 +18175,11 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     rw, rh = dev.real
     log(f"[+] Connected to {serial} (screen {rw}x{rh}, screenshots: {dev.used}, "
         f"click delay {cfg['click_delay_ms']} ms, CPU level {cfg['cpu_level']})")
+    if cfg.get("game_auto_join"):                       # remember the game's Auto-Join is on from the start (switching it off later stops it in the game)
+        try:
+            aj_note_setting(cfg, serial)
+        except Exception as _e:
+            quiet_err("aj_note_setting", _e)
     if rw > rh:
         return log("[!] Emulator is in landscape. Set it to portrait (540x960 recommended).")
     if abs(rw / rh - EXPECTED_SIZE[0] / EXPECTED_SIZE[1]) > 0.02:
