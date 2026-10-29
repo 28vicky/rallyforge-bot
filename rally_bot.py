@@ -13554,6 +13554,61 @@ def city_mapped(dev):
     return bool(mymap_info(dev).get("complete"))
 
 
+UNLOCK_MIN = 10                                             # Unlock on the City map card opens the mapping buttons this long
+
+
+def city_locked(dev):
+    """Owner 30 Oct (Rob's hand pins were wiped by runs he never pressed): once a city is mapped it is LOCKED -
+    Map my city / Map city again / Find missing refuse to run (from a button, Run now, a chat or anything else) until the
+    owner presses Unlock on the City map card. Fix pins (moving pins by hand) is never locked."""
+    m = mymap_info(dev)
+    return bool(m.get("complete")) and time.time() > float(m.get("unlocked_until", 0) or 0)
+
+
+def city_unlock(dev):
+    mymap_save(dev, unlocked_until=time.time() + UNLOCK_MIN * 60)
+
+
+def city_relock(dev):
+    if mymap_info(dev).get("unlocked_until"):
+        mymap_save(dev, unlocked_until=0)
+
+
+def restore_city_map(dev, bk):
+    """Put a city map back from its backup folder (wipe_city_map's copy): pins, picture, map state. Used when a Map my
+    city run did not finish - the old map is never lost by a run that failed or was stopped."""
+    d = _map_dir(dev)
+    if not bk or not Path(bk).is_dir():
+        return False
+    try:
+        for f in list(d.glob("*.json")):
+            if f.stem not in ("culture", "hold"):
+                m = None
+                try:
+                    m = json.loads(f.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+                if f.stem in ("real_city", "mymap", "pins_override", "map_only", "retake_photo", "map", "map_prev") or f.stem.startswith("kf"):
+                    f.unlink()
+                elif isinstance(m, dict):                  # a pin from the failed run goes; the old one comes back below
+                    m.pop("map", None)
+                    m.pop("by", None)
+                    f.write_text(json.dumps(m), encoding="utf-8")
+        for name in ("real_city.jpg", "real_city.tmp.jpg"):
+            try:
+                (d / name).unlink()
+            except Exception:
+                pass
+        for f in Path(bk).iterdir():
+            if f.is_file() and f.stem not in ("culture", "hold"):
+                shutil.copy2(f, d / f.name)
+        _CITY_MAPS.pop(str(getattr(dev, "serial", "default")), None)
+        return True
+    except Exception as _e:
+        quiet_err("restore_city_map", _e)
+        return False
+
+
 def mymap_running(dev):
     m = mymap_info(dev)
     return bool(m.get("running")) and time.time() - float(m.get("t", 0)) < 300   # a crashed run is not 'running' for ever
@@ -13605,6 +13660,7 @@ def wipe_city_map(dev, why=""):
         except Exception:
             pass
     _CITY_MAPS.pop(str(getattr(dev, "serial", "default")), None)
+    dev._wipe_backup = str(bk) if bk.is_dir() else ""
     return f"city map wiped{(' (' + why + ')') if why else ''} - backup {bk.name}"
 
 
@@ -13614,8 +13670,7 @@ class _SerialOnly:
 
 
 def migrate_city_maps_v2():
-    """One time (owner 28 Oct 03:03): every instance starts clean with 0 map - all old pictures/pins of the instances go
-    (backed up). The building picture database and the culture pins/maps stay."""
+    """App start: a mapping run cut off by the restart must not show 'Mapping now'."""
     try:                                                   # app start: no mapping can be running - a run an app restart
         for d in (LEARN_DIR.iterdir() if LEARN_DIR.exists() else []):   # cut off must not show 'Mapping now' for 5 min
             f = d / MYMAP_FILE
@@ -13626,16 +13681,9 @@ def migrate_city_maps_v2():
                     f.write_text(json.dumps(m), encoding="utf-8")
     except Exception as _e:
         quiet_err("mymap_reset_running", _e)
-    try:
-        mark = LEARN_DIR / ".mapper_v2_clean_start"
-        if mark.exists() or not LEARN_DIR.exists():
-            return
-        for d in LEARN_DIR.iterdir():
-            if d.is_dir():
-                wipe_city_map(_SerialOnly(d.name), "clean start")
-        mark.write_text(time.strftime("%Y-%m-%d %H:%M"), encoding="utf-8")
-    except Exception as _e:
-        quiet_err("migrate_city_maps_v2", _e)
+    # Owner 30 Oct: the one-time 'clean start' wipe of 28 Oct is gone. It wiped every city at an app start whenever the
+    # marker file was missing - e.g. a new tester: no city_learn at the first start (no marker written), maps the city,
+    # next app start = every map and hand pin deleted. The app never wipes a map by itself.
 
 
 class RealCityPhoto:
@@ -13728,10 +13776,16 @@ class RealCityPhoto:
             return
         self._saved = time.time()
         jp, mp = real_city_paths(self.dev)
+        img = self.img
+        base = getattr(self, "base", None)
+        if base is not None and base.shape == img.shape:   # Find missing: the old picture stays, only its dark parts fill
+            img = base.copy()
+            add = self.filled & ~self.base_ok
+            img[add] = self.img[add]
         try:
             jp.parent.mkdir(parents=True, exist_ok=True)
             tmp = jp.with_name("real_city.tmp.jpg")
-            cv2.imwrite(str(tmp), self.img, [cv2.IMWRITE_JPEG_QUALITY, 88])
+            cv2.imwrite(str(tmp), img, [cv2.IMWRITE_JPEG_QUALITY, 88])
             os.replace(tmp, jp)
             mp.write_text(json.dumps({"culture": self.culture, "at": time.strftime("%Y-%m-%d %H:%M")}), encoding="utf-8")
         except Exception as _e:
@@ -14003,6 +14057,10 @@ def run_map_missing(dev, cfg, log, stop):
     if not city_mapped(dev):
         log("[i] Find missing buildings: this city is not mapped yet - press Map my city first")
         return
+    if city_locked(dev):
+        log("[!] Find missing buildings: this city's map is locked (press Unlock on the City map card first) - skipped")
+        return
+    city_relock(dev)
     miss = [b for b in MOVABLE_BUILDINGS if not _pin_of(dev, b)]
     if not miss:
         log("[+] Find missing buildings: every movable building is pinned already")
@@ -14051,9 +14109,12 @@ def run_map_movable(dev, cfg, log, stop, only=None):
     if photo is not None and photo.img is not None and only:   # owner 28 Oct 14:05: Find missing also fills the black parts -
         try:                                                   # it builds on the existing picture instead of starting dark
             old = cv2.imread(str(real_city_paths(dev)[0]))
-            if old is not None and old.shape == photo.img.shape:
-                photo.img = old
+            if old is not None and old.shape != photo.img.shape:
+                old = cv2.resize(old, (photo.img.shape[1], photo.img.shape[0]), interpolation=cv2.INTER_LINEAR)
+            if old is not None:
+                photo.img = old.copy()
                 photo.filled = ~_canvas_mask(old)
+                photo.base, photo.base_ok = old, photo.filled.copy()   # owner 30 Oct: Find missing only ADDS to the picture
                 photo.done = 1
         except Exception as _e:
             quiet_err("photo_reuse", _e)
@@ -14501,8 +14562,15 @@ def run_map_city(dev, cfg, log, stop):
     if not map_request_fresh(dev):
         log("[!] Map my city was not asked for on this instance (no button press in the last 15 min) - skipped, the map stays")
         return
+    if city_locked(dev):
+        log("[!] Map my city: this city's map is locked (press Unlock on the City map card first) - skipped, the map stays")
+        return
+    city_relock(dev)                                       # one Unlock = one run
     # Owner spec 28 Oct: Map my city (and Map city again) starts from 0 - this instance's picture and all its pins go.
+    # Owner 30 Oct: ... but only when the new run works - a failed or stopped run puts the old map back.
+    dev._wipe_backup = ""
     log("[*] Map my city: " + (wipe_city_map(dev, "Map my city") or "starting from 0"))
+    backup = getattr(dev, "_wipe_backup", "")
     dev._mapping = True                                    # the city map + culture pins are usable while mapping
     mymap_save(dev, running=True, complete=False, stop=0, stops=0, found=0, total=len(MOVABLE_BUILDINGS), last="", missing=[])
     try:
@@ -14512,7 +14580,14 @@ def run_map_city(dev, cfg, log, stop):
             log("[+] Map my city: done - the map stays until you press Map city again")
         else:
             mymap_save(dev, running=False, complete=False)
-            log("[i] Map my city: not finished - press Map my city to start again")
+            if backup and restore_city_map(dev, backup):
+                log("[i] Map my city: not finished - the old map and its pins are back (nothing lost)")
+            else:
+                log("[i] Map my city: not finished - press Map my city to start again")
+    except Exception:
+        if backup and restore_city_map(dev, backup):
+            log("[i] Map my city: stopped by an error - the old map and its pins are back (nothing lost)")
+        raise
     finally:
         dev._mapping = False
         dev._photo = None
@@ -17723,6 +17798,9 @@ def duty_status(serial, duty_id, cfg):
     d = DUTY_BY_ID.get(duty_id)
     if not d or not conf.get("on"):
         return "off", "Off"
+    if duty_id in MAP_HEAVY:                                # owner 30 Oct: mapping is not a daily task - only a button press runs it
+        m = mymap_info(_SerialOnly(serial or "default"))
+        return ("done", "Mapped " + str(m.get("at", ""))) if m.get("complete") else ("waiting", "Not mapped - press Map my city")
     row = (load_duty_state().get(serial or "default") or {}).get(duty_id) or {}
     day, now = _game_day(), time.time()
     tries = int(row.get("tries", 0)) if row.get("day") == day else 0

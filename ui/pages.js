@@ -2030,7 +2030,7 @@ function cityMapCard(serial) {
     const r = await act(api("city_map_start", { serial }));
     if (!r) return false;
     queued = true;
-    toast(again ? "Old map deleted. Map my city runs next on this instance." : "Map my city runs next on this instance.", "ok");
+    toast(again ? "Map city again runs next on this instance. If it doesn't finish, the old map comes back." : "Map my city runs next on this instance.", "ok");
     refresh(r);
   };
   const findMissing = async (n) => {                  // owner 28 Oct: after mapping only - nothing is wiped
@@ -2040,10 +2040,14 @@ function cityMapCard(serial) {
     toast("Looking for the " + n + " missing building" + (n === 1 ? "" : "s") + " next. Pins already found stay.", "ok");
     refresh(r);
   };
+  const unlock = async () => { const r = await act(api("city_map_unlock", { serial, confirm: true })); if (r) { toast("Unlocked for " + (r.unlock_min || 10) + " min - one mapping run.", "ok"); refresh(r); } };
+  const unlockDialog = (j) => modal({ title: "Unlock this city map?", body: h("p", { style: { maxWidth: "440px" } },
+      "The map is locked so no run can change your pins. Unlock opens Find missing and Map city again for " + (j.unlock_min || 10) + " minutes, for one run. Fix pins always works."),
+    buttons: [{ label: "Cancel", cls: "pri" }, { label: "Unlock", onclick: unlock }] });
   const againDialog = (j) => { const mv = (j && j.movable) || [], nAll = mv.filter((b) => b.state !== "missing").length, nYou = mv.filter((b) => b.state === "placed").length;
     return modal({ title: "Map city again?", body: h("p", { style: { maxWidth: "440px" } },
       h("b", {}, "Deletes " + nAll + " pin" + (nAll === 1 ? "" : "s") + (nYou ? ", including " + nYou + " you placed by hand" : "") + "."), " ",
-      "The city's picture is deleted too and the city is mapped fresh (about 5-6 min). This instance doesn't join rallies while it maps. To fix one building, use Fix pins instead."),
+      "The city's picture is replaced too and the city is mapped fresh (about 5-6 min). If the run doesn't finish, the old map and pins come back. This instance doesn't join rallies while it maps. To fix one building, use Fix pins instead."),
     buttons: [{ label: "Cancel", cls: "pri" }, { label: "Delete pins and map again", cls: "bad", onclick: () => start(true) }] }); };
   const paint = (j) => {
     root.innerHTML = "";
@@ -2051,9 +2055,12 @@ function cityMapCard(serial) {
     const nFound = mv.filter((b) => b.state === "found").length, nPlaced = mv.filter((b) => b.state === "placed").length;
     const miss = mv.filter((b) => b.state === "missing"), have = nFound + nPlaced, total = mv.length;
     const sub = j.running ? "Mapping now · stop " + (pr.stop || 0) + " of " + (pr.stops || "?")
-      : j.mapped ? "Mapped " + (j.at || "") + (j.culture ? " · " + cap1(j.culture) + " culture" : "")
+      : j.mapped ? "Mapped " + (j.at || "") + (j.culture ? " · " + cap1(j.culture) + " culture" : "") + (j.locked ? " · Locked" : " · Unlocked")
       : queued ? "Map my city runs next on this instance" : "Not mapped yet";
-    const acts = j.mapped && !j.running ? [
+    const acts = j.mapped && !j.running && j.locked ? [
+        h("button", { class: "btn", type: "button", onclick: () => fixPinsDialog(serial, j, null, refresh) }, "Fix pins"),
+        h("button", { class: "btn", type: "button", title: "Locked - no mapping run can change this map", onclick: () => unlockDialog(j) }, "\u{1F512} Unlock")]
+      : j.mapped && !j.running ? [
         miss.length ? h("button", { class: "btn pri", type: "button", disabled: queued, onclick: () => findMissing(miss.length) }, "Find missing (" + miss.length + ")") : null,
         h("button", { class: "btn", type: "button", onclick: () => fixPinsDialog(serial, j, null, refresh) }, "Fix pins"),
         h("button", { class: "btn", type: "button", onclick: () => againDialog(j) }, "Map city again")]

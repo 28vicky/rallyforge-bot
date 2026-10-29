@@ -1998,6 +1998,10 @@ class Api:
             raise ApiError("Map my city runs on one instance at a time - open the instance and use Overview > City map.")
         if tid not in {c["id"] for c in self._rn_catalog()}:
             raise ApiError("Unknown task.")
+        if tid in ("duty:map_city", "duty:map_movable", "duty:map_missing"):   # owner 30 Oct: a mapped city is locked
+            locked = [s for s in self._rn_targets(p) if rb.city_locked(types.SimpleNamespace(serial=s))]
+            if locked:
+                raise ApiError("This city map is locked. Press Unlock on the City map card first.")
         for s in self._rn_targets(p):
             if tid in ("duty:map_city", "duty:map_movable"):
                 rb.map_request_set(types.SimpleNamespace(serial=s))   # Run now > Map my city is a press too
@@ -2480,6 +2484,7 @@ class Api:
         pic_file = rb.real_city_paths(dev)[0] if cult else d / "map.png"
         show = (mapped or running) and pic_file.exists()
         return {"built": mapped, "mapped": mapped, "running": running, "at": mm.get("at", ""), "size": meta.get("size"),
+                "locked": rb.city_locked(dev), "unlock_min": rb.UNLOCK_MIN,
                 "buildings": buildings, "culture": cult["culture"] if cult else None, "movable": movable,
                 "fixed": fixed if (mapped or running) else [],
                 "progress": {k: mm.get(k) for k in ("stop", "stops", "found", "total", "last")} if running else None,
@@ -2492,7 +2497,9 @@ class Api:
         dev = types.SimpleNamespace(serial=serial)
         if rb.mymap_running(dev):
             raise ApiError("This city is being mapped right now.")
-        rb.wipe_city_map(dev, "Map city again")
+        if rb.city_locked(dev):
+            raise ApiError("This city map is locked. Press Unlock on the City map card first.")
+        # Owner 30 Oct: nothing is deleted on the press - the run wipes, and puts the old map back if it does not finish
         rb.map_request_set(dev)                            # the run checks this press (never maps by itself)
         rb.run_now_set(serial, [t for t in rb.run_now_list(serial) if t not in ("duty:map_city", "duty:map_movable")] + ["duty:map_city"])
         return self.city_map_info({"serial": serial})
@@ -2506,7 +2513,26 @@ class Api:
             raise ApiError("This city is being mapped right now.")
         if not rb.city_mapped(dev):
             raise ApiError("Map my city first.")
+        if rb.city_locked(dev):
+            raise ApiError("This city map is locked. Press Unlock on the City map card first.")
         rb.run_now_set(serial, [t for t in rb.run_now_list(serial) if t != "duty:map_missing"] + ["duty:map_missing"])
+        return self.city_map_info({"serial": serial})
+
+    def city_map_unlock(self, p):
+        """Owner 30 Oct: a mapped city is locked; Unlock (with the owner's confirm on the card) opens Find missing /
+        Map city again for rb.UNLOCK_MIN minutes, for one run."""
+        if not p.get("confirm"):
+            raise ApiError("Unlock needs a confirm from the City map card.")
+        serial = p["serial"]
+        dev = types.SimpleNamespace(serial=serial)
+        if not rb.city_mapped(dev):
+            raise ApiError("This city is not mapped yet - nothing to unlock.")
+        rb.city_unlock(dev)
+        return self.city_map_info({"serial": serial})
+
+    def city_map_lock(self, p):
+        serial = p["serial"]
+        rb.city_relock(types.SimpleNamespace(serial=serial))
         return self.city_map_info({"serial": serial})
 
     def _movable_name(self, p):
