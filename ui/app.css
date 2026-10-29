@@ -1768,7 +1768,7 @@ select.pick-open{border-color:var(--accent1)}
 .hust.busy{color:var(--warn)}.hust.done,.hust.off,.hust.wait{color:var(--mute)}
 .hust.sm{margin-left:auto;display:inline-flex}
 .panel.hudec{padding:0;overflow:hidden;margin:0}
-.hudhead{display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.hudhead{display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px;padding:8px 16px;border-bottom:1px solid var(--line)}
 .hudhead h3{margin:0}
 .hutwrap{overflow:auto;overscroll-behavior:contain}   /* height set by fitTable(): only the table scrolls, never the page */
 .hurow.hd{position:sticky;top:0;z-index:1}
@@ -1781,13 +1781,15 @@ select.pick-open{border-color:var(--accent1)}
 .t-acted .hurow{grid-template-columns:70px minmax(140px,1.6fr) 140px 66px 104px minmax(0,2fr)}
 .t-nopreset .hurow{grid-template-columns:minmax(160px,2fr) 150px 90px minmax(90px,1fr)}
 .t-other .hurow{grid-template-columns:minmax(140px,1.6fr) 140px 66px 90px minmax(0,2fr)}
-.hustats{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12.5px;color:var(--mute);min-width:0}
+.hustats{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:12.5px;color:var(--mute);min-width:0}
 .hustat2{display:inline-flex;align-items:center;gap:5px;padding:0;border:0;background:transparent;color:inherit;font:inherit;white-space:nowrap}
 button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .hustat2 b{color:var(--fg);font-variant-numeric:tabular-nums}
 .hustat2 i{width:7px;height:7px;border-radius:50%;background:var(--line)}
 .hustat2.solo i{background:#3b82f6}.hustat2.go i{background:var(--hu-ok)}.hustat2.nopre i{background:var(--accent1)}
 .hudtabs{display:flex;gap:2px;margin-left:auto;padding:2px;border-radius:10px;background:var(--hu-soft)}
+.hudhead h3{white-space:nowrap}.hustats{flex:1 1 auto}
+@media (max-width:1279px){.hudtabs{order:1}.hustats{order:2;flex-basis:100%}}   /* narrow: title + tabs on one line, counts under them */
 .hudtab{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:0;border-radius:8px;background:transparent;color:var(--mute);font:inherit;font-size:12.5px;font-weight:600;white-space:nowrap;cursor:pointer}
 .hudtab small{font-weight:600;font-variant-numeric:tabular-nums;opacity:.8}
 .hudtab.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
@@ -1894,8 +1896,10 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
   .husetup{grid-template-columns:minmax(0,1fr)}
   .hurail,.huedit{position:static;max-height:none}
   .huedit{scroll-margin-top:84px}   /* PCR2 B1: clear of the sticky header when scrolled to */
-  .t-acted .hurow{grid-template-columns:62px minmax(110px,1.4fr) 132px 60px 100px minmax(0,1.4fr)}
-  .t-other .hurow{grid-template-columns:minmax(110px,1.4fr) 132px 60px 76px minmax(0,1.4fr)}
+  /* 900-1023 px (29 Oct headless check): the card is ~550 px - drop the least needed column per tab, never clip */
+  .t-acted .hurow{grid-template-columns:62px minmax(100px,1fr) 124px 58px 100px}.t-acted .c-why{display:none}
+  .t-other .hurow{grid-template-columns:minmax(100px,1fr) 124px 58px minmax(0,1.2fr)}.t-other .c-seen{display:none}
+  .t-nopreset .hurow{grid-template-columns:minmax(120px,1.4fr) 124px 66px 90px}
   .hudpanel{width:100%}
   .hustat{display:none}
 }

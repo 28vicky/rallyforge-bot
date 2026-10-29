@@ -2502,7 +2502,8 @@ function monsterRallyTab(serial) {
     // The monster list is in the tooltip; a click opens that preset in Setup.
     const marches = h("section", { class: "humarch", "aria-label": "Marches" }, h("b", {}, "Marches"));
     for (const p of us) {
-      const [txt, k, back] = presetState(p), m = mode(p) === "solo" ? "Solo" : "Rally";
+      const [full, k, back] = presetState(p), m = mode(p) === "solo" ? "Solo" : "Rally";
+      const txt = full === "Instance stopped" ? "Stopped" : full;               // the status card already says why
       marches.appendChild(h("button", { type: "button", class: "humchip " + k, title: "Preset " + pN(p) + " · " + m + "\n" + model[p].map(chipName).join(" · ") + "\nClick to edit in Setup",
         onclick: () => { sel = p; S.huSel[serial] = p; view = "setup"; S.huView[serial] = view; draw(); } },
         h("b", {}, pN(p)), h("span", { class: "humode " + mode(p) }, m),
@@ -2524,10 +2525,10 @@ function monsterRallyTab(serial) {
     };
     const tab = S.huDec[serial] || "acted";
     const setTab = (k) => { S.huDec[serial] = k; moreRows = 50; keepTop = 0; liveBox.querySelector(".hutwrap")?.scrollTo(0, 0); paintLive(); };
-    const stat = (n, l, k, go) => h(go ? "button" : "span", Object.assign({ class: "hustat2 " + k }, go ? { type: "button", onclick: () => setTab(go) } : {}), h("i", {}), h("b", {}, String(n || 0)), " " + l);
+    const stat = (n, l, k, go, tip) => h(go ? "button" : "span", Object.assign({ class: "hustat2 " + k, title: tip || l }, go ? { type: "button", onclick: () => setTab(go) } : {}), h("i", {}), h("b", {}, String(n || 0)), " " + l);
     const stats = h("div", { class: "hustats" },
       stat(cnt.solo, "Attacked", "solo", "acted"), stat(cnt.go, "Rallied", "go", "acted"), stat(cnt.nopreset, "Not in preset", "nopre", "nopreset"),
-      stat(cnt.gone, "Gone before arrival", "gone"), stat(cnt.replaced, "Replaced", "gone"));
+      stat(cnt.gone, "Gone", "gone", null, "Gone before arrival (counted, not listed)"), stat(cnt.replaced, "Replaced", "gone", null, "Spot taken by another monster (counted, not listed)"));
     const tabs = h("div", { class: "hudtabs", role: "tablist", "aria-label": "Decisions filter" },
       ...[["acted", "Acted"], ["nopreset", "Not in preset"], ["other", "Other skips"]].map(([k, l]) =>
         h("button", { type: "button", role: "tab", class: "hudtab" + (tab === k ? " on" : ""), "aria-selected": tab === k ? "true" : "false", onclick: () => setTab(k) }, l, h("small", {}, String(lists[k].length)))));
@@ -2571,11 +2572,11 @@ function monsterRallyTab(serial) {
       }
       if (c === "km") return h("span", { class: "hukm" }, d.km != null ? d.km + " km" : "\u2013");
       if (c === "seen") return d.seen ? h("span", { class: "huage", "data-ago": String(d.seen) }, ago(nowS - d.seen) + " ago") : h("span", { class: "huage" }, "\u2013");
-      if (c === "dec") return h("span", {}, pill(d.kind));
+      if (c === "dec") return h("span", { title: d.why }, pill(d.kind));   // Why sits in the tooltip when its column is hidden (narrow)
       return h("span", { class: "huwhy", title: d.why }, d.why);
     };
-    const head = h("div", { class: "hurow hd" }, ...COLS.map((c) => h("span", { class: c === "km" ? "hukm" : "" }, TITLES[c])));
-    const line = (d) => h("div", { class: "hurow" + (d.live || d.kind !== "skip" ? "" : " old") }, ...COLS.map((c) => cell(c, d)));
+    const head = h("div", { class: "hurow hd" }, ...COLS.map((c) => h("span", { class: "c-" + c + (c === "km" ? " hukm" : "") }, TITLES[c])));
+    const line = (d) => h("div", { class: "hurow" + (d.live || d.kind !== "skip" ? "" : " old") }, ...COLS.map((c) => { const el = cell(c, d); el.classList.add("c-" + c); return el; }));
     const body = h("div", { class: "hutable t-" + tab, role: "table" }, head);
     if (!list.length) body.appendChild(h("div", { class: "huempty in" }, h("span", { class: "mute" },
       tab === "nopreset" ? "No live monsters outside your presets right now. New Telegram lists show here." : tab === "acted" ? "Nothing rallied or attacked yet today." : "No other skips today.")));
@@ -2585,17 +2586,26 @@ function monsterRallyTab(serial) {
     sec.appendChild(wrap);
     liveBox.appendChild(sec);
     requestAnimationFrame(() => { fitTable(); wrap.scrollTop = keepTop; });
+    setTimeout(fitTable, 300);                                       // fonts / late layout
   };
   // fix 2 (29 Oct): only the table scrolls - it fills exactly the space left in the page. If fewer than ~4 rows
   // would fit (small laptop at 125%), the table drops its own scroll and the page scrolls instead: never two scrolls.
   const fitTable = () => {
     const wrap = liveBox.querySelector(".hutwrap"), pages = wrap && wrap.closest(".pages");
     if (!wrap || !pages) return;
+    const top0 = wrap.scrollTop, ptop = pages.scrollTop;            // measuring removes the limit for a moment - keep both scrolls
+    fitMeasure(wrap, pages);
+    wrap.scrollTop = top0; pages.scrollTop = ptop;
+  };
+  const fitMeasure = (wrap, pages) => {
     wrap.style.maxHeight = "none";
     const pr = pages.getBoundingClientRect(), pad = parseFloat(getComputedStyle(pages).paddingBottom) || 0;
     const top = wrap.getBoundingClientRect().top - pr.top + pages.scrollTop;
-    const avail = Math.floor(pages.clientHeight - top - pad - 4);
-    if (avail >= 200 && wrap.scrollHeight > avail) wrap.style.maxHeight = avail + "px";
+    let avail = Math.floor(pages.clientHeight - top - pad);
+    if (avail < 180 || wrap.scrollHeight <= avail) return;           // too little room: the page scrolls instead (one scroll only)
+    wrap.style.maxHeight = avail + "px";
+    avail -= pages.scrollHeight - pages.clientHeight;                // then trim / grow by what the page still over- or under-fills
+    wrap.style.maxHeight = Math.max(180, avail) + "px";
   };
   const onResize = () => { if (view === "live") fitTable(); };
   window.addEventListener("resize", onResize);
