@@ -1,5 +1,15 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.26", date: "2026-10-30",
+    new: ["Monster hunts: \"Use my own hunt order\" - your own list of monsters in the order to hunt them, shown in columns. Move a monster by dragging it or typing its new place, tick several to move them together, and find one by name.",
+      "Monster hunts: Save order and Load order - keep a hunt order for each event and switch between them in one click.",
+      "Monster hunts: Add monster opens one big picker with every monster grouped like in the game.",
+      "Monster hunts Live: \"On the map\" opens first - every monster Telegram lists right now, yours on top in hunt order with why each is not rallied yet, the rest under \"Not in any of your presets\". A line says which of your monsters are not on the map at all."],
+    fixed: ["Presets: the bot takes the preset used longest ago instead of always starting with preset 1, and no longer taps a preset whose troops are still out.",
+      "Monster hunts: when no march is free the bot tries again every 30 seconds, so free marches are never left waiting.",
+      "Monster hunts Live: a preset shows Busy until its troops are really home, not Ready while they still march back.",
+      "Recording a task now works on BlueStacks too.",
+      "Every screen lines up: the instance header and the cards below share the same edges, and switches between views look the same everywhere."] },
   { v: "2.5.25", date: "2026-10-29",
     new: [],
     fixed: ["Join rallies: the bot now checks the monster on the march screen before pressing March, so a monster you switched off (for example Pan) is never joined by mistake.",
