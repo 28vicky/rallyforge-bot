@@ -1769,12 +1769,17 @@ select.pick-open{border-color:var(--accent1)}
 .panel.hudec{padding:0;overflow:hidden;margin:0}
 .hudhead{display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px;padding:10px 16px;border-bottom:1px solid var(--line)}
 .hudhead h3{margin:0}
-.hutwrap{overflow:auto;max-height:max(240px,calc(100vh - 470px));overscroll-behavior:contain}   /* owner 29 Oct: only the table scrolls, never the page */
+.hutwrap{overflow:auto;overscroll-behavior:contain}   /* height set by fitTable(): only the table scrolls, never the page */
 .hurow.hd{position:sticky;top:0;z-index:1}
 .hurow.old .hunm,.hurow.old .huloc{color:var(--mute)}
 .huloc{display:inline-flex;align-items:center;gap:6px;justify-self:start;max-width:100%;padding:3px 8px;margin:-3px -8px;border:0;border-radius:8px;background:transparent;color:var(--fg);font:inherit;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer}
 .huloc:hover,.huloc:focus-visible{background:var(--hu-soft)}
 .hucopy{color:var(--mute);font-size:12px}.huloc:hover .hucopy{color:var(--accent2)}
+.huloc.done{color:var(--good)}.huloc.done .hucopy{display:none}
+/* per-tab columns (29 Oct) - Acted: Time Monster Location Dist Decision Why; Not in preset: Monster Location Dist Seen; Other: + Why */
+.t-acted .hurow{grid-template-columns:70px minmax(140px,1.6fr) 140px 66px 104px minmax(0,2fr)}
+.t-nopreset .hurow{grid-template-columns:minmax(160px,2fr) 150px 90px minmax(90px,1fr)}
+.t-other .hurow{grid-template-columns:minmax(140px,1.6fr) 140px 66px 90px minmax(0,2fr)}
 .hustats{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12.5px;color:var(--mute);min-width:0}
 .hustat2{display:inline-flex;align-items:center;gap:5px;padding:0;border:0;background:transparent;color:inherit;font:inherit;white-space:nowrap}
 button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
@@ -1786,7 +1791,7 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .hudtab small{font-weight:600;font-variant-numeric:tabular-nums;opacity:.8}
 .hudtab.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .hutable{min-width:0}
-.hurow{display:grid;grid-template-columns:70px minmax(140px,1.6fr) 136px 66px 76px 104px minmax(0,2fr);gap:12px;align-items:center;padding:9px 16px;border-top:1px solid var(--line);font-size:13px;min-width:0}
+.hurow{display:grid;gap:12px;align-items:center;padding:9px 16px;border-top:1px solid var(--line);font-size:13px;min-width:0}
 .hurow.hd{border-top:0;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);background:var(--hu-soft)}
 .hurow>span{min-width:0}
 .hut{font-family:var(--mono);font-size:12px;color:var(--mute)}
@@ -1888,8 +1893,8 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
   .husetup{grid-template-columns:minmax(0,1fr)}
   .hurail,.huedit{position:static;max-height:none}
   .huedit{scroll-margin-top:84px}   /* PCR2 B1: clear of the sticky header when scrolled to */
-  .hurow{grid-template-columns:62px minmax(120px,1.6fr) 128px 60px 100px minmax(0,1.6fr)}
-  .huage{display:none}
+  .t-acted .hurow{grid-template-columns:62px minmax(110px,1.4fr) 132px 60px 100px minmax(0,1.4fr)}
+  .t-other .hurow{grid-template-columns:minmax(110px,1.4fr) 132px 60px 76px minmax(0,1.4fr)}
   .hudpanel{width:100%}
   .hustat{display:none}
 }

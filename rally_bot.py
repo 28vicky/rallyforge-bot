@@ -15235,7 +15235,8 @@ def hunt_note(serial, it, decision, kind, why, save=True, keep_done=False):
         rows[key] = {"t": time.time(), "name": it.get("name") or "", "level": it.get("level") or 0, "km": it.get("km"),
                      "seen": float(it.get("t") or 0), "decision": decision, "kind": kind, "why": why}
         if len(rows) > HUNT_DEC_MAX:
-            for k in sorted(rows, key=lambda k: rows[k]["t"])[:len(rows) - HUNT_DEC_MAX]:
+            # skips go first, oldest first - rallies / attacks stay for the day's counts (owner 29 Oct)
+            for k in sorted(rows, key=lambda k: (rows[k].get("kind") in ("go", "solo"), rows[k]["t"]))[:len(rows) - HUNT_DEC_MAX]:
                 rows.pop(k, None)
         if save:
             hunt_dec_save()

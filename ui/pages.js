@@ -2314,7 +2314,7 @@ function monsterRallyTab(serial) {
   S.huView = S.huView || {};
   S.huSel = S.huSel || {};
   S.huDec = S.huDec || {};   // Live > Decisions tab per instance: acted | nopreset | other
-  let view = S.huView[serial] || "", sel = S.huSel[serial] || "", drawer = false, pf = "mine", q = "", openUsed = "", moreRows = 50;
+  let view = S.huView[serial] || "", sel = S.huSel[serial] || "", drawer = false, pf = "mine", q = "", openUsed = "", moreRows = 50, liveSig = "", keepTop = 0;
   let saveState = "saved", saveTimer = 0, retryTimer = 0, pending = null;
   const pN = (p) => MR_PRESETS.indexOf(p) + 1;
   const isBoss = (n) => (S.neverJoin || []).includes(String(n || "").toLowerCase().trim());
@@ -2488,6 +2488,8 @@ function monsterRallyTab(serial) {
   const liveBox = h("div", { class: "hulive" });
   const pill = (k) => h("span", { class: "hupill " + k }, kindLabel(k));
   const paintLive = () => {
+    const oldWrap = liveBox.querySelector(".hutwrap");
+    if (oldWrap) keepTop = oldWrap.scrollTop;                     // fix 1 (29 Oct): a poll never throws the table back to the top
     liveBox.innerHTML = "";
     const us = usedList();
     if (!us.length) {
@@ -2521,7 +2523,7 @@ function monsterRallyTab(serial) {
       other: rows.filter((d) => d.kind === "skip" && !isNoPre(d) && !isGone(d)),
     };
     const tab = S.huDec[serial] || "acted";
-    const setTab = (k) => { S.huDec[serial] = k; moreRows = 50; paintLive(); };
+    const setTab = (k) => { S.huDec[serial] = k; moreRows = 50; keepTop = 0; liveBox.querySelector(".hutwrap")?.scrollTo(0, 0); paintLive(); };
     const stat = (n, l, k, go) => h(go ? "button" : "span", Object.assign({ class: "hustat2 " + k }, go ? { type: "button", onclick: () => setTab(go) } : {}), h("i", {}), h("b", {}, String(n || 0)), " " + l);
     const stats = h("div", { class: "hustats" },
       stat(cnt.solo, "Attacked", "solo", "acted"), stat(cnt.go, "Rallied", "go", "acted"), stat(cnt.nopreset, "Not in preset", "nopre", "nopreset"),
@@ -2529,7 +2531,7 @@ function monsterRallyTab(serial) {
     const tabs = h("div", { class: "hudtabs", role: "tablist", "aria-label": "Decisions filter" },
       ...[["acted", "Acted"], ["nopreset", "Not in preset"], ["other", "Other skips"]].map(([k, l]) =>
         h("button", { type: "button", role: "tab", class: "hudtab" + (tab === k ? " on" : ""), "aria-selected": tab === k ? "true" : "false", onclick: () => setTab(k) }, l, h("small", {}, String(lists[k].length)))));
-    const sec = h("section", { class: "panel hudec" }, h("div", { class: "hudhead" }, h("h3", {}, "Decisions"), stats, tabs));
+    const sec = h("section", { class: "panel hudec" }, h("div", { class: "hudhead" }, h("h3", {}, "Decisions"), rows.length ? stats : null, rows.length ? tabs : null));
     if (!rows.length) {
       const linked = coords.ready || (coords.items || []).length;
       const huOn = !!(duty && duty.on), ran = !!((live.status || {}).t);
@@ -2542,29 +2544,61 @@ function monsterRallyTab(serial) {
     }
     const list = lists[tab];
     const nowS = Date.now() / 1000;
-    const copyXY = async (d) => {
-      const txt = d.x + " " + d.y;
+    const copyXY = async (d, btn) => {                              // owner 29 Oct: copy exactly what is shown
+      const txt = "X:" + d.x + " Y:" + d.y;
       try { await navigator.clipboard.writeText(txt); } catch (e) { const t = h("textarea", {}); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
-      toast("Copied X:" + d.x + " Y:" + d.y, "ok");
+      btn.classList.add("done"); btn.firstChild.textContent = "Copied \u2713";
+      setTimeout(() => { if (btn.isConnected) { btn.classList.remove("done"); btn.firstChild.textContent = txt; } }, 1500);
+      toast("Copied " + txt, "ok");
     };
-    const head = h("div", { class: "hurow hd" }, h("span", {}, "Time"), h("span", {}, "Monster"), h("span", {}, "Location"), h("span", { class: "hukm" }, "Dist"), h("span", { class: "huage" }, "Seen"), h("span", {}, "Decision"), h("span", {}, "Why"));
-    const line = (d) => h("div", { class: "hurow" + (d.live ? "" : " old") },
-      h("span", { class: "hut" }, clock(d.t)),
-      h("span", { class: "hunm", title: (d.name || "?") + (d.level ? " Lv" + d.level : "") }, (d.name || "?") + (d.level ? " Lv" + d.level : "")),   // PCR2 B2: "Pumpkin Monster Lv6"
-      d.x != null ? h("button", { type: "button", class: "huloc", title: "Copy X:" + d.x + " Y:" + d.y, "aria-label": "Copy coordinates X " + d.x + " Y " + d.y, onclick: () => copyXY(d) },
-        "X:" + d.x + " Y:" + d.y, h("span", { class: "hucopy", "aria-hidden": "true" }, "⧉")) : h("span", { class: "mute" }, "–"),
-      h("span", { class: "hukm" }, d.km != null ? d.km + " km" : "–"),
-      h("span", { class: "huage" }, d.seen ? ago(nowS - d.seen) + " ago" : "–"),
-      h("span", {}, pill(d.kind)),
-      h("span", { class: "huwhy", title: d.why }, d.why));
-    const body = h("div", { class: "hutable", role: "table" }, head);
+    // fix 5 (29 Oct): each tab shows only the columns that differ between its rows
+    const COLS = {
+      acted: ["time", "name", "loc", "km", "dec", "why"],
+      nopreset: ["name", "loc", "km", "seen"],
+      other: ["name", "loc", "km", "seen", "why"],
+    }[tab];
+    const TITLES = { time: "Time", name: "Monster", loc: "Location", km: "Dist", seen: "Seen", dec: "Decision", why: "Why" };
+    const cell = (c, d) => {
+      if (c === "time") return h("span", { class: "hut" }, clock(d.t));
+      if (c === "name") return h("span", { class: "hunm", title: (d.name || "?") + (d.level ? " Lv" + d.level : "") }, (d.name || "?") + (d.level ? " Lv" + d.level : ""));   // PCR2 B2
+      if (c === "loc") {
+        if (d.x == null) return h("span", { class: "mute" }, "\u2013");
+        const txt = "X:" + d.x + " Y:" + d.y;
+        const btn = h("button", { type: "button", class: "huloc", title: "Copy " + txt, "aria-label": "Copy coordinates " + txt },
+          txt, h("span", { class: "hucopy", "aria-hidden": "true" }, "\u29c9"));
+        btn.onclick = () => copyXY(d, btn);
+        return btn;
+      }
+      if (c === "km") return h("span", { class: "hukm" }, d.km != null ? d.km + " km" : "\u2013");
+      if (c === "seen") return d.seen ? h("span", { class: "huage", "data-ago": String(d.seen) }, ago(nowS - d.seen) + " ago") : h("span", { class: "huage" }, "\u2013");
+      if (c === "dec") return h("span", {}, pill(d.kind));
+      return h("span", { class: "huwhy", title: d.why }, d.why);
+    };
+    const head = h("div", { class: "hurow hd" }, ...COLS.map((c) => h("span", { class: c === "km" ? "hukm" : "" }, TITLES[c])));
+    const line = (d) => h("div", { class: "hurow" + (d.live || d.kind !== "skip" ? "" : " old") }, ...COLS.map((c) => cell(c, d)));
+    const body = h("div", { class: "hutable t-" + tab, role: "table" }, head);
     if (!list.length) body.appendChild(h("div", { class: "huempty in" }, h("span", { class: "mute" },
       tab === "nopreset" ? "No live monsters outside your presets right now. New Telegram lists show here." : tab === "acted" ? "Nothing rallied or attacked yet today." : "No other skips today.")));
     list.slice(0, moreRows).forEach((d) => body.appendChild(line(d)));
     if (list.length > moreRows) body.appendChild(h("button", { type: "button", class: "btn sm humore", onclick: () => { moreRows += 50; paintLive(); } }, "Show " + Math.min(50, list.length - moreRows) + " more"));
-    sec.appendChild(h("div", { class: "hutwrap" }, body));
+    const wrap = h("div", { class: "hutwrap" }, body);
+    sec.appendChild(wrap);
     liveBox.appendChild(sec);
+    requestAnimationFrame(() => { fitTable(); wrap.scrollTop = keepTop; });
   };
+  // fix 2 (29 Oct): only the table scrolls - it fills exactly the space left in the page. If fewer than ~4 rows
+  // would fit (small laptop at 125%), the table drops its own scroll and the page scrolls instead: never two scrolls.
+  const fitTable = () => {
+    const wrap = liveBox.querySelector(".hutwrap"), pages = wrap && wrap.closest(".pages");
+    if (!wrap || !pages) return;
+    wrap.style.maxHeight = "none";
+    const pr = pages.getBoundingClientRect(), pad = parseFloat(getComputedStyle(pages).paddingBottom) || 0;
+    const top = wrap.getBoundingClientRect().top - pr.top + pages.scrollTop;
+    const avail = Math.floor(pages.clientHeight - top - pad - 4);
+    if (avail >= 200 && wrap.scrollHeight > avail) wrap.style.maxHeight = avail + "px";
+  };
+  const onResize = () => { if (view === "live") fitTable(); };
+  window.addEventListener("resize", onResize);
 
   // ---- Setup: rules strip
   const strip = h("section", { class: "panel hurules", "aria-label": "Hunt rules" });
@@ -2836,7 +2870,10 @@ function monsterRallyTab(serial) {
   const loadCoords = async () => { const j = await api("coords", {}, { quiet: true }).catch(() => null); if (j) coords = j; };
   const refresh = () => {                                          // poll: live parts only - never redraw what the user is editing
     paintStatus();
-    if (view === "live") paintLive();
+    if (view === "live") {
+      const sig = JSON.stringify([live.decisions, live.counts, live.busy, live.status, live.running, live.solo_done, duty && duty.on]);
+      if (sig !== liveSig) { liveSig = sig; paintLive(); }          // fix 1: same data = no rebuild (tooltips stay open, scroll stays)
+    }
     else { paintRail(); if (used(sel)) paintWhy(); }
   };
   (async () => {
@@ -2848,7 +2885,7 @@ function monsterRallyTab(serial) {
   })();
   let n = 0;
   const tick = setInterval(async () => {
-    if (!root.isConnected) { clearInterval(tick); clearInterval(sec); drawerEl.remove(); flush(); return; }
+    if (!root.isConnected) { clearInterval(tick); clearInterval(sec); window.removeEventListener("resize", onResize); drawerEl.remove(); flush(); return; }
     n++;
     await loadLive();
     if (n % 4 === 0) await loadCoords();
@@ -2856,6 +2893,7 @@ function monsterRallyTab(serial) {
   }, 5000);
   const sec = setInterval(() => {                                // countdowns tick in place (fixed width), no layout jumps
     root.querySelectorAll("[data-back]").forEach((el) => { const at = +el.dataset.back; el.textContent = at > Date.now() / 1000 ? el.dataset.pre + left(at) : "Ready"; });
+    root.querySelectorAll("[data-ago]").forEach((el) => { el.textContent = ago(Date.now() / 1000 - +el.dataset.ago) + " ago"; });   // Seen keeps counting between repaints
   }, 1000);
   return root;
 }

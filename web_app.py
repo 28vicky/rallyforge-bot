@@ -2859,7 +2859,7 @@ class Api:
         # time, so "Not in preset" only lists monsters a user can still go and hit by hand
         cache_s = float(rb.rd_opt(cfg, "monster_rally", "max_age", 10) or 10) * 60
         feed, _ = rb.feed_get(int(self.c.cfg.get("tg_keep_min", 60) or 0))
-        alive = {f"{f.get('x')},{f.get('y')}" for f in feed if now - float(f.get("t") or 0) <= cache_s}
+        alive = {f"{f.get('x')},{f.get('y')}": float(f.get("t") or 0) for f in feed if now - float(f.get("t") or 0) <= cache_s}
         decs = rb.hunt_decisions(serial)
         counts = {"solo": 0, "go": 0, "nopreset": 0, "gone": 0, "replaced": 0}
         for d in decs:
@@ -2869,6 +2869,8 @@ class Api:
             except ValueError:
                 pass
             d["live"] = d.get("key") in alive
+            if d["live"]:                       # Seen = the latest Telegram listing (a re-listed monster refreshes it)
+                d["seen"] = max(float(d.get("seen") or 0), alive[d["key"]])
             if k in ("go", "solo"):
                 counts[k] += 1
             elif why.startswith("Gone"):
