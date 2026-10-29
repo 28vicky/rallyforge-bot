@@ -2,7 +2,7 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
-## READY (29 Oct 17:15 IST, one chat) - fix/citymap-buttons 1c55c04 (on main 2.5.23): City map card buttons wrap inside the card (owner screenshot 17:09: 'Map city again' ran past the edge). CSS only (ui/app.css 154,563 B). NOT on the PC yet (PC bridge offline 17:15) - copy when it is back (no restart, page reload), or ship in the next release.
+## READY (29 Oct 17:30 IST, one chat) - fix/citymap-buttons 820de6d (on main 2.5.23), UI only (ui/app.js 95,716, ui/pages.js 256,221, ui/app.css 155,865): City map buttons wrap inside the card; instance header = two fixed rows (name+status+actions / Join rallies + Auto-Join + Take back) fitting the 900 px minimum (owner 17:18); header moved out of the scroll area into #pagehead (no sticky jerk, scrollbar below it, #pages still the scroller so jump buttons / keep-scroll / Hunts fitTable unchanged); 'Take back' button while kicked + short 'Kicked · m:ss' chip; 'Take game back now' removed from More. Headless checked 900/1127/1366/1920. NOT on the PC (bridge offline 17:15-17:30) - copy when back (page reload, no restart) or ship in the next release.
 
 ## RELEASED (29 Oct ~16:38 IST, one chat) - 2.5.23 = 2.5.22 + hunts stack (hunts-service + duty-stall-budget + hunts-pair-select) + wheel-zero + start-up loop guard + Auto-Join renew in duty batches + separate Join rallies switch. Signed, check_release OK. Owner PC installed it through the app (app\v2.5.23, 8 running). PC = main. feat/join-rallies-switch DROPPED. Owner starts hunts on testers for logs. Doc claude/release_2523_29oct.md.
 
