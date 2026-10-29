@@ -2345,7 +2345,11 @@ function monsterRallyTab(serial) {
   const huntsFor = (p) => (p in huntsLocal ? huntsLocal[p] : huntsOf(p));
 
   // ---- catalogue: [group, [[name, [[lv, power]...]]]] -> levels per monster
-  const catRows = () => (S.catalog || []).flatMap(([g, list]) => list.map(([n, lv]) => ({ name: n, group: g, levels: lv.map((x) => +x[0]).filter(Boolean) })));
+  // v2 (owner 29 Oct): Hunts split Pan in three - a preset says which Pan it takes (a plain Telegram "Pan" fits all three)
+  const catRows = () => (S.catalog || []).flatMap(([g, list]) => list.flatMap(([n, lv]) => {
+    const levels = lv.map((x) => +x[0]).filter(Boolean);
+    return n === "Pan" ? ["Ground Pan", "Ranged Pan", "Mounted Pan"].map((k) => ({ name: k, group: g, levels })) : [{ name: n, group: g, levels }];
+  }));
   const levelsOf = (name) => {
     const low = String(name || "").toLowerCase();
     const c = catRows().find((r) => r.name.toLowerCase() === low);
@@ -2834,7 +2838,7 @@ function monsterRallyTab(serial) {
     const m = mode(sel), rec = recent();
     const known = new Map();
     catRows().forEach((r) => known.set(r.name.toLowerCase(), r));
-    for (const n of [...(S.monsters || []), ...(coords.items || []).map((c) => c.name).filter(Boolean)]) if (!known.has(n.toLowerCase())) known.set(n.toLowerCase(), { name: n, group: "Other", levels: [] });
+    for (const n of [...(S.monsters || []), ...(coords.items || []).map((c) => c.name).filter(Boolean)]) if (!known.has(n.toLowerCase()) && (!/^pan\b/i.test(n) || usedIn(n).length)) known.set(n.toLowerCase(), { name: n, group: "Other", levels: [] });
     let list = [...known.values()].filter((r) => !isBoss(r.name));
     if (q) list = list.filter((r) => r.name.toLowerCase().includes(q.toLowerCase()));
     else if (pf === "mine") list = list.filter((r) => usedIn(r.name).length);

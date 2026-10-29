@@ -6954,7 +6954,7 @@ def force_restart_game(dev, cfg, log, stop, must=False, reason="reason not given
 # ------------------------------------------------------- Telegram account link (boss coordinates)
 TG_SESSION = USER / "tg_session"         # Telethon adds ".session"; this file IS your Telegram login - keep it private
 BOSS_FILE = USER / "bosses.json"
-_BOSS_RE = re.compile(r"(?:Lv\.?\s*(\d+)\s+)?([A-Za-z][A-Za-z' \-]{1,30}?)\s*\(\s*xy:?\s*(\d{1,4})\s*[ ,]\s*(\d{1,4})\s*\)\s*(?:(\d+(?:\.\d+)?)\s*km)?",
+_BOSS_RE = re.compile(r"(?:Lv\.?\s*(\d+)\s+)?([A-Za-z][A-Za-z' \-]{1,30}?(?:\s*\([A-Za-z ]{1,20}\))?)\s*\(\s*xy:?\s*(\d{1,4})\s*[ ,]\s*(\d{1,4})\s*\)\s*(?:(\d+(?:\.\d+)?)\s*km)?",
                       re.I)
 _bosses = []
 _boss_lock = threading.Lock()
@@ -15835,6 +15835,26 @@ def mr_march_look(dev, cfg, stop, log, shot=None):
     return None
 
 
+MR_PAN_KINDS = ("ground", "ranged", "mounted")
+
+
+def mr_pan_kind(low):
+    """'ground pan' / 'pan (ranged troop)' -> ('pan', 'ranged'); plain 'pan' -> ('pan', None); other names -> (None, None)."""
+    words = re.findall(r"[a-z]+", low)
+    if "pan" not in words:
+        return None, None
+    return "pan", next((k for k in MR_PAN_KINDS if k in words), None)
+
+
+def mr_name_fits(rn, low):
+    """owner 29 Oct (v2): presets may hold Ground / Ranged / Mounted Pan. A Telegram 'Pan' without a kind fits any of
+    them (the preset order decides); a named kind only fits that kind or a plain 'Pan' row."""
+    a, b = mr_pan_kind(rn), mr_pan_kind(low)
+    if a[0] and b[0]:
+        return not a[1] or not b[1] or a[1] == b[1]
+    return rn in low or low in rn
+
+
 def mr_rule_for(rules, name, level):
     """-> (index, rule) of the first row that fits this monster, or (None, None)."""
     low = str(name or "").lower().strip()
@@ -15842,7 +15862,7 @@ def mr_rule_for(rules, name, level):
         return None, None
     for i, r in enumerate(rules):
         rn = r["name"].lower()
-        if (rn in low or low in rn) and (not level or r["min"] <= level <= r["max"]):
+        if mr_name_fits(rn, low) and (not level or r["min"] <= level <= r["max"]):
             return i, r
     return None, None
 
@@ -16084,7 +16104,7 @@ def mr_open_monster(dev, stop, want, level=None):
         head = " ".join(t for t, _ in ocr_lines(page[120:300, 0:540], 2.5, bright=True))   # plain OCR garbled the name
         import difflib
         toks = re.findall(r"[a-z]+", head.lower())
-        words = [w for w in want.lower().split() if len(w) > 2]
+        words = [w for w in strip_troop_suffix(want).lower().split() if len(w) > 2]   # 'Pan (Ranged Troop)' -> check 'pan
         missing = [w for w in words if not any(w == t or difflib.SequenceMatcher(None, w, t).ratio() >= (0.75 if len(w) <= 5 else 0.8) for t in toks)]
         lv = re.search(r"(?:lv|level)\.?\s*(\d{1,2})\b", head.lower())
         wrong_lv = bool(level and lv and int(lv.group(1)) != int(level))
