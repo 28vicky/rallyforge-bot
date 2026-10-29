@@ -12049,29 +12049,15 @@ def as_snap(img, tag):
 def run_alliance_science(dev, cfg, log, stop):
     """From the city: Alliance button -> Alliance Science row -> tap Donate on the recommended science until the day's
     donations are used up. Only the free daily donations; nothing that costs gems is pressed."""
-    rd_alliance_page(dev, cfg, stop)
-    row = None
-    words = ["Alliance Science", "Science", "Alliance Tech", "Technology", "Research"]
-    moves = [(316, 778, 303, 548)] * 5 + [(303, 400, 316, 760)] * 7      # up past the fold first, then back down
-    for i in range(len(moves) + 1):
-        shot = dev.screenshot()
-        if i == 0:
-            as_snap(shot, "1_alliance")
-        row = find_text(shot, words, region=(40, 200, 460, 740), cutoff=0.72)
-        if not row:
-            r = rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.72)
-            row = (r[0], r[1]) if r else None
-        if row or stop.is_set() or i == len(moves):
-            break
-        dev.swipe(*moves[i], 450)
-        _nap(stop, 1.0, 1.4)
-    if not row:
+    as_snap(rd_alliance_page(dev, cfg, stop), "1_alliance")
+    words = ["Alliance Science"]
+    # Owner 30 Oct: the row sits under the bottom bar until scrolled; tap it only fully visible on a settled list, and
+    # the page that opens must be Alliance Science (another page -> Back, look again)
+    if not rd_alliance_row(dev, stop, words, title=["Alliance Science", "Science"]):
         as_snap(dev.screenshot(), "2_failed")
-        raise RuntimeError("the Alliance Science row was not found on the Alliance page")
-    dev.tap(*row)
+        raise RuntimeError("the Alliance Science page did not open (row not found or another page opened)")
     t0 = time.time()                                       # Kiravik 28 Oct 'page did not open': wait for the page (slow load),
-    rem = btn = None                                       # tap the row once more if it still has not opened
-    retapped = False
+    rem = btn = None
     while not stop.is_set():
         _nap(stop, 0.7, 0.9)
         shot = dev.screenshot()
@@ -12081,10 +12067,7 @@ def run_alliance_science(dev, cfg, log, stop):
             break
         if time.time() - t0 > 7:
             break
-        if not retapped and time.time() - t0 > 3.5 and (find_text(shot, words, region=(40, 200, 460, 740), cutoff=0.72) or rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.72)):
-            r2 = find_text(shot, words, region=(40, 200, 460, 740), cutoff=0.72) or rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.72)
-            dev.tap(r2[0], r2[1])
-            retapped = True
+
     as_snap(shot, "3_science")
     if rem is None and not (btn and find_text(shot, ["Alliance Science", "Science"], region=(0, 0, 540, 340), cutoff=0.7)):
         raise RuntimeError("the Alliance Science page did not open")
@@ -12293,16 +12276,56 @@ def rd_keyboard_ok(dev, stop):
     _nap(stop, 1.0, 1.4)
 
 
+ICON_STEP = 80                             # right column: Alliance word -> Mail word (70-85 px on the owner PC)
+
+
+def alliance_button_pos(shot, cfg):
+    """Owner 30 Oct (Alliance help kept opening Mail): the Alliance button moves up and down with the event icons above
+    it, and Mail is always right below it. Read the word 'Alliance' under the button - or, when that is not readable,
+    the word 'Mail' and take the button above it. The rally-list picture next. -> (x, y) or None (never a blind spot)."""
+    try:
+        ab = find_text(shot, ["Alliance"], region=(400, 200, 140, 740), cutoff=0.8)
+        if ab:
+            return int(ab[0]), max(int(ab[1]) - 38, 0)
+        mw = find_text(shot, ["Mail"], region=(400, 300, 140, 660), cutoff=0.8)
+        if mw:
+            return int(mw[0]), max(int(mw[1]) - 38 - ICON_STEP, 0)
+        if has_template("rally_icon"):
+            h = find(shot, "rally_icon", 0.8)
+            if h:
+                return int(h[0]), int(h[1])
+    except Exception as _e:
+        quiet_err("alliance_button_pos", _e)
+    return None
+
+
+def on_mail_page(shot):
+    """Mail list or an opened mail: 'Mail' title, its tabs, or an opened message's star / translate / delete row."""
+    try:
+        if rd_seen(shot, ["Mail", "Inbox", "System", "Reports", "Announcement"], region=(0, 0, 540, 140)):
+            return True
+        return bool(rd_seen(shot, ["Read All", "Claim All", "Announcement", "Congratulations"], region=(0, 100, 540, 860)) and
+                    rd_seen(shot, ["Mail", "Announcement", "Rewards", "Report"], region=(0, 0, 540, 360)))
+    except Exception:
+        return False
+
+
 def rd_alliance_page(dev, cfg, stop):
     """From the city: open the Alliance page (same way as Alliance Science)."""
     shot = dev.screenshot()
-    ab = find_text(shot, ["Alliance"], region=(400, 200, 140, 740), cutoff=0.7)   # the word under the button: its place moves with the icons above
-    h = find(shot, "rally_icon", 0.8) if not ab and has_template("rally_icon") else None
-    pos = (int(ab[0]), max(int(ab[1]) - 38, 0)) if ab else (h[0], h[1]) if h else tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
+    pos = alliance_button_pos(shot, cfg) or tuple({**DEFAULT_CITY_ICONS, **(cfg.get("city_icons") or {})}.get("Alliance"))
     for attempt in range(2):
-        if attempt and rd_seen(shot, ["Mail"], region=(0, 0, 540, 140)):    # the fixed spot hit Mail (owner 23 Oct): back out first
-            dev.back()
-            _nap(stop, 1.0, 1.3)
+        if attempt and on_mail_page(shot):                 # the tap hit Mail (owner 23 + 30 Oct): back out, take the button above Mail
+            for _ in range(3):
+                dev.back()
+                _nap(stop, 1.0, 1.3)
+                shot = dev.screenshot()
+                if not on_mail_page(shot):
+                    break
+            cancel_quit_dialog(dev, shot, lambda *_: None)
+            shot = dev.screenshot()
+            p2 = alliance_button_pos(shot, cfg)
+            pos = p2 if p2 else (pos[0], max(pos[1] - ICON_STEP, 0))
         dev.tap(*pos)
         _nap(stop, 1.8, 2.4)
         shot = dev.screenshot()
@@ -12321,21 +12344,67 @@ def rd_alliance_page(dev, cfg, stop):
     raise RuntimeError("the Alliance page did not open (screen not found)")
 
 
-def rd_alliance_row(dev, stop, words):
+ALLIANCE_ROWS_Y = (215, 840)               # Alliance page rows that can be tapped: below the banner, above the bottom bar
+#                                           (Mail / Invite / Members / Manage covers the last row - Alliance Science, 30 Oct)
+
+
+def _settled_shot(dev, stop, tries=6):
+    """A screenshot taken once the list stopped gliding (two shots in a row nearly the same) - a tap read from a moving
+    list lands on the row that slid into its place (owner 30 Oct: Alliance Science opened Alliance War)."""
+    prev = dev.screenshot()
+    for _ in range(tries):
+        _nap(stop, 0.35, 0.45)
+        cur = dev.screenshot()
+        try:
+            if float(np.mean(cv2.absdiff(prev[200:860:6, ::6], cur[200:860:6, ::6]))) < 1.2:
+                return cur
+        except Exception:
+            return cur
+        prev = cur
+    return prev
+
+
+def find_alliance_row(shot, words):
+    """The row named `words[0]` on the Alliance page, only when it is fully above the bottom bar. The name must match
+    closely: 'Alliance Help' / 'Alliance Shop' and 'Alliance War' / 'Alliance Treasure' are close for a loose match."""
+    y0, y1 = ALLIANCE_ROWS_Y
+    r = rd_find(shot, words, region=(40, y0, 460, y1 - y0), cutoff=0.86)
+    if r and y0 + 12 <= r[1] <= y1 - 12:
+        return int(r[0]), int(r[1])
+    return None
+
+
+def rd_alliance_row(dev, stop, words, title=None):
     """On the Alliance page: tap the row with this name - owner 28 Oct: read every screen while scrolling all the way
-    down, then all the way back up."""
+    down, then all the way back up. Owner 30 Oct: only a settled screen and a row fully above the bottom bar is tapped,
+    and when `title` is given the page that opened must show it - another page -> Back and look again (twice)."""
     moves = [(316, 778, 303, 548)] * 5 + [(303, 400, 316, 760)] * 7
-    for i in range(len(moves) + 1):
-        shot = dev.screenshot()
-        row = rd_find(shot, words, region=(40, 200, 460, 740), cutoff=0.75)
+    wrong = 0
+    i = 0
+    while i <= len(moves):
+        shot = _settled_shot(dev, stop)
+        row = find_alliance_row(shot, words)
         if row:
-            dev.tap(row[0], row[1])
+            dev.tap(*row)
             _nap(stop, 1.8, 2.4)
-            return True
+            if not title:
+                return True
+            for _ in range(4):                             # a slow page: look a few times before calling it wrong
+                sh = dev.screenshot()
+                if rd_seen(sh, title, region=(0, 0, 540, 120)):
+                    return True
+                _nap(stop, 0.8, 1.0)
+            wrong += 1
+            rd_snap(sh, "alliance_row_wrong_" + words[0].replace(" ", "_"))
+            if wrong > 2:
+                return False
+            dev.back()                                     # a sub-page: Back goes up to the Alliance page
+            _nap(stop, 1.2, 1.6)
+            continue
         if stop.is_set() or i == len(moves):
             break
         dev.swipe(*moves[i], 450)
-        _nap(stop, 0.8, 1.1)
+        i += 1
     rd_snap(dev.screenshot(), "alliance_row_" + words[0].replace(" ", "_"))
     return False
 
@@ -15157,7 +15226,7 @@ def run_alliance_gift(dev, cfg, log, stop):
     """Alliance > Alliance Gift > Open All. Gifts keep coming all day: this runs every hour, and 'nothing to open'
     counts only when the gift page itself was seen (owner 23 Oct: never Done without checking the screen)."""
     rd_alliance_page(dev, cfg, stop)
-    if not rd_alliance_row(dev, stop, ["Alliance Gift"]):
+    if not rd_alliance_row(dev, stop, ["Alliance Gift"], title=["Alliance Gift"]):
         raise RuntimeError("no Alliance Gift row on the Alliance page (screen not found)")
     shot = dev.screenshot()
     if not rd_tap(dev, stop, ["Open All"], region=(130, 860, 280, 100), wait=(2.2, 2.8), shot=shot):
@@ -15174,8 +15243,8 @@ def run_alliance_help(dev, cfg, log, stop):
     """Alliance > Help > Help All. Help requests come and go all day: runs every hour; 'nothing to help' counts only when
     the help page itself was seen."""
     rd_alliance_page(dev, cfg, stop)
-    if not rd_alliance_row(dev, stop, ["Alliance Help", "Help"]):
-        raise RuntimeError("no Help row on the Alliance page (screen not found)")
+    if not rd_alliance_row(dev, stop, ["Alliance Help"], title=["Alliance Help"]):
+        raise RuntimeError("the Alliance Help page did not open (row not found or another page opened)")
     shot = dev.screenshot()
     rd_snap(shot, "ahelp_1")
     if rd_tap(dev, stop, ["Help All", "Help all"], region=(0, 760, 540, 200), wait=(1.8, 2.3), shot=shot):
@@ -15189,7 +15258,7 @@ def run_alliance_help(dev, cfg, log, stop):
 def run_alliance_treasure(dev, cfg, log, stop):
     """Alliance > Alliance Treasure > Open All (chests still on a timer stay closed)."""
     rd_alliance_page(dev, cfg, stop)
-    if not rd_alliance_row(dev, stop, ["Alliance Treasure"]):
+    if not rd_alliance_row(dev, stop, ["Alliance Treasure"], title=["Alliance Treasure"]):
         raise RuntimeError("no Alliance Treasure row on the Alliance page")
     shot = dev.screenshot()
     rd_snap(shot, "atreasure_1")
@@ -19310,6 +19379,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         outside_taps = [0]
         city_back = [0]                       # owner 28 Oct: Back once when the rally button is hidden on the city (an ad)
         back_taps = [0]
+        phone_backs = [0]
         mail_backs = [0]
         hidden_taps = [0]
         war_row_taps = [0]
@@ -19372,8 +19442,9 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     nap(1.5, 2.2)
                     continue
             if st == "unknown" and mail_backs[0] < 4:
-                try:
-                    in_mail = find_text(screen, ["Mail", "Inbox", "System", "Reports"], region=(60, 0, 420, 130), cutoff=0.8)
+                try:                                          # owner 30 Oct (Arthur, 15 min on a reward mail): an OPENED mail shows
+                    in_mail = find_text(screen, ["Mail", "Inbox", "System", "Reports"], region=(60, 0, 420, 130), cutoff=0.8) \
+                        or on_mail_page(screen)               # its own subject as the title, not 'Mail'
                 except Exception:
                     in_mail = None
                 if in_mail:                                   # Mail (or a mail opened from it): device Back, not taps that open more mails (owner 23 Oct)
@@ -19394,6 +19465,16 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     log("[*] Unknown page with a Back arrow - tapped the Back arrow")
                     nap(1.2, 1.8)
                     continue
+            if st == "unknown" and phone_backs[0] < 2:        # owner 30 Oct: never sit on a page it does not know - the phone's Back
+                phone_backs[0] += 1                           # closes pages, mails and most pop-ups; on the bare city / map it only
+                dev.back()                                    # asks 'exit the game?' -> Cancel
+                nap(1.0, 1.4)
+                try:
+                    cancel_quit_dialog(dev, dev.screenshot(), log)
+                except Exception as _e:
+                    quiet_err("phone back", _e)
+                log("[*] Screen it does not know - pressed the phone's Back button")
+                continue
             if st == "unknown" and hidden_taps[0] < 2 and buttons_hidden(screen):   # bare city/map: the game's buttons are hidden
                 hidden_taps[0] += 1
                 dev.tap(*GROUND_TAP)
@@ -19436,13 +19517,10 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             log(f"[i] '{step}' found with a weaker match")
                             break
                 if not nav:                                          # last try: read the word 'Alliance' under the button on the right side
-                    try:
-                        ab = find_text(screen, ["Alliance"], region=(270, 200, 270, 740), cutoff=0.7)
-                    except Exception:
-                        ab = None
+                    ab = alliance_button_pos(screen, cfg)     # the word 'Alliance' (or 'Mail' below it) in the right column
                     if ab:
-                        dev.tap(int(ab[0]), max(int(ab[1]) - 38, 0))
-                        log(f"[*] Read the word 'Alliance' and tapped the button above it ({int(ab[0])},{int(ab[1]) - 38})")
+                        dev.tap(*ab)
+                        log(f"[*] Read the Alliance button's place and tapped it ({ab[0]},{ab[1]})")
                         nap(1.5, 2.2)
                         continue
                 if not nav:
