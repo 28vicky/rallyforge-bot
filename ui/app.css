@@ -1792,7 +1792,7 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .hustat2 i{width:7px;height:7px;border-radius:50%;background:var(--line)}
 .hustat2.solo i{background:#3b82f6}.hustat2.go i{background:var(--hu-ok)}.hustat2.nopre i{background:var(--accent1)}
 .hudtabs{display:flex;gap:2px;margin-left:auto;padding:2px;border-radius:10px;background:var(--hu-soft)}
-.hudhead h3{white-space:nowrap}.hustats{flex:1 1 auto}
+.hudhead h3{white-space:nowrap;margin:0!important}.hustats{flex:1 1 auto}
 @media (max-width:1279px){.hudtabs{order:1}.hustats{order:2;flex-basis:100%}}   /* narrow: title + tabs on one line, counts under them */
 .hudtab{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:0;border-radius:8px;background:transparent;color:var(--mute);font:inherit;font-size:12.5px;font-weight:600;white-space:nowrap;cursor:pointer}
 .hudtab small{font-weight:600;font-variant-numeric:tabular-nums;opacity:.8}
