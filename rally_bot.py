@@ -15609,6 +15609,44 @@ def mr_presets(cfg):
     return out
 
 
+def mr_order(cfg, rules=None):
+    """Hunts v2 (owner 29 Oct): ONE hunt order per instance, top = hunted first; each row = monster + levels + its own
+    max km (0 = any). No saved order yet -> built from the presets as before (place in its box, then lower preset)."""
+    raw = rd_opt(cfg, "monster_rally", "order", None)
+    if isinstance(raw, list):
+        out = []
+        for r in raw:
+            if isinstance(r, dict) and str(r.get("name") or "").strip():
+                try:
+                    out.append({"name": str(r["name"]).strip(), "min": int(r.get("min") or 1), "max": int(r.get("max") or 99),
+                                "km": float(r.get("km") or 0)})
+                except (TypeError, ValueError):
+                    continue
+        return out
+    rules = rules if rules is not None else mr_rules(cfg)
+    seen, rows, rank_of = set(), [], {}
+    for i, r in enumerate(rules):
+        rank = sum(1 for x in rules[:i] if x["preset"] == r["preset"])
+        rank_of[id(r)] = rank                  # no saved order: the old priority (place in its box) stays exactly as it was
+        rows.append((rank, mr_pnum(r["preset"]), i, r))
+    out = []
+    for _, _, _, r in sorted(rows):
+        k = (r["name"].lower(), r["min"], r["max"])
+        if k not in seen:
+            seen.add(k)
+            out.append({"name": r["name"], "min": r["min"], "max": r["max"], "km": 0, "rank": rank_of[id(r)]})
+    return out
+
+
+def mr_order_index(order, name, level):
+    """-> (index, row) of the first hunt-order row that fits this monster, or (None, None)."""
+    low = str(name or "").lower().strip()
+    for i, r in enumerate(order):
+        if mr_name_fits(r["name"].lower(), low) and (not level or r["min"] <= level <= r["max"]):
+            return i, r
+    return None, None
+
+
 def mr_solo_done(serial):
     """-> {preset: solo hunts done today}."""
     row = mr_row(serial)
@@ -15616,7 +15654,7 @@ def mr_solo_done(serial):
 
 
 def mr_why_rank(rank):
-    return "top of its list" if rank == 0 else f"#{rank + 1} on its list"
+    return "#1 in the hunt order" if rank == 0 else f"#{rank + 1} in the hunt order"
 
 
 HUNT_DEC_FILE = USER / "hunt_decisions.json"
@@ -15897,6 +15935,14 @@ def mr_targets(cfg, tried, serial=None):
     Every coordinate gets a line in the Decisions list (why it is hunted or skipped). -> [{name, level, x, y, km, t, rule, rank, mode}]"""
     modes = mr_presets(cfg)
     rules = [r for r in mr_rules(cfg) if modes[r["preset"]]["on"]]     # a switched-off preset hunts nothing
+    order = mr_order(cfg, mr_rules(cfg))
+    # v2: when two presets can kill a monster, the one that can take FEWER other hunt-order rows goes - the strong one
+    # stays free for the rest (owner 29 Oct Pan 7 example)
+    cover = {}
+    for oi, o in enumerate(order):
+        for r in rules:
+            if mr_name_fits(r["name"].lower(), o["name"].lower()) and r["min"] <= o["max"] and o["min"] <= r["max"]:
+                cover.setdefault(r["preset"], set()).add(oi)
     done = mr_solo_done(serial)
     age_min = float(rd_opt(cfg, "monster_rally", "max_age", 10) or 10)
     _feed_cache_min[0] = age_min
@@ -15945,6 +15991,14 @@ def mr_targets(cfg, tried, serial=None):
             else:
                 skip(it, "Not in any preset", "not in a preset")
             continue
+        oi, orow = mr_order_index(order, it.get("name"), it.get("level") or 0)
+        if oi is None:
+            skip(it, "Not in the hunt order", "not in the order")
+            continue
+        if orow["km"] and it.get("km") is not None and float(it["km"]) > orow["km"]:
+            skip(it, f"Too far · its rule is up to {orow['km']:g} km", "too far")
+            continue
+        oi = orow.get("rank", oi)
         pairs, why_not, seen_p = [], "", set()
         for i, r in fits:                                # owner 29 Oct 13:31: EVERY preset whose box holds it may take it
             m, p = modes[r["preset"]]["mode"], r["preset"]
@@ -15961,8 +16015,7 @@ def mr_targets(cfg, tried, serial=None):
                 why_not = why_not or f"Preset {mr_pnum(p)} did its {lim} hunts today"
                 continue
             seen_p.add(p)
-            rank = sum(1 for x in rules[:i] if x["preset"] == p)          # place inside its preset box = priority
-            pairs.append({"preset": p, "mode": m, "rank": rank, "rule": r})
+            pairs.append({"preset": p, "mode": m, "rank": oi, "top": len(cover.get(p, set()) - {oi}), "rule": r})   # v2: rank = hunt-order place
         if not pairs:
             skip(it, why_not, "wrong mode" if why_not.startswith(("Rally only", "Solo only")) else "at the hunt limit")
             continue
@@ -15974,8 +16027,7 @@ def mr_targets(cfg, tried, serial=None):
         with _hunt_dec_lock:
             hunt_dec_save()
     km = lambda it: it.get("km") if it.get("km") is not None else 1e9
-    # owner 28 Oct: priority first (top of each preset box); owner 29 Oct 03:43: inside a row the HIGHER level goes first
-    # (Pumpkin Lv8 before a nearer Lv6), then the closest
+    # v2: the hunt-order place first; inside one row (e.g. Pumpkin all levels) the HIGHER level goes first, then the closest
     out.sort(key=lambda it: (it["rank"], -int(it.get("level") or 0), km(it)))
     return out
 
@@ -16292,8 +16344,9 @@ HUNT_ROUNDS = 12               # targets tried in one pass
 
 
 def mr_pair_order(e):
-    """Owner 29 Oct: the higher place in its preset box wins; a tie -> the lower preset number."""
-    return (int(e.get("rank") or 0), mr_pnum(e.get("preset")))
+    """Hunts v2 (owner 29 Oct): the preset that can take fewer other hunt-order rows goes first (the strong one stays
+    free); a tie -> the lower preset number."""
+    return (int(e.get("rank") or 0), int(e.get("top") or 0), mr_pnum(e.get("preset")))
 
 
 MR_MARCH_BACK_MIN = 1          # extra minutes after the rally time before a preset counts as back (the march home)
@@ -17317,6 +17370,7 @@ DUTY_LIBRARY = [
      "target": "self:", "steps": ["monster_rally"],
      "opts": [{"k": "rules", "label": "Monsters", "type": "rules", "def": None},
               {"k": "presets", "label": "Preset modes", "type": "presets", "def": None},
+              {"k": "order", "label": "Hunt order", "type": "order", "def": None},
               {"k": "max_wait", "label": "Give up on a monster after (min, 0 = wait until it is hunted)", "type": "number", "min": 0, "max": 120, "def": 0},
               {"k": "max_age", "label": "Refresh coordinates every (min)", "type": "number", "min": 1, "max": 600, "def": 10},
               {"k": "max_km", "label": "Only monsters within (km, 0 = any distance)", "type": "number", "min": 0, "max": 99999, "def": 0},

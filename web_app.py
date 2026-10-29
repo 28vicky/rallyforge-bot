@@ -1876,7 +1876,22 @@ class Api:
                         hunts = max(0, min(int(float(r.get("hunts") or 0)), 999))
                     except (TypeError, ValueError):
                         raise ApiError("Hunts a day: enter a number.")
-                    clean[k] = {"mode": r.get("mode") if r.get("mode") in rb.MR_MODES else "rally", "hunts": hunts}
+                    clean[k] = {"mode": r.get("mode") if r.get("mode") in rb.MR_MODES else "rally", "hunts": hunts,
+                                "on": r.get("on") is not False}       # hunts v2: Off = the preset is not used for hunts
+                v = clean
+            elif o["type"] == "order":                     # hunts v2: one hunt order per instance, top = first; km 0 = any
+                if not isinstance(v, list):
+                    raise ApiError("Hunt order: wrong format.")
+                clean = []
+                for r in v[:400]:
+                    if not isinstance(r, dict) or not str(r.get("name") or "").strip():
+                        continue
+                    try:
+                        lo, hi = max(1, min(int(r.get("min") or 1), 99)), max(1, min(int(r.get("max") or 99), 99))
+                        km = max(0, min(int(float(r.get("km") or 0)), 99999))
+                    except (TypeError, ValueError):
+                        raise ApiError("Hunt order: levels and km must be numbers.")
+                    clean.append({"name": str(r["name"]).strip()[:40], "min": min(lo, hi), "max": max(lo, hi), "km": km})
                 v = clean
             row[o["k"]] = v
         self._save_scoped(scope, "duties", duties)

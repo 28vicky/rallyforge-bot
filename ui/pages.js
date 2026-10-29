@@ -1794,7 +1794,7 @@ PAGES.duties = function (fixed) {
     r.opts.map((o) => {
       if (o.type === "rules") return h("div", { class: "wide" }, h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); closeSide(); if (S.gotoInstTab && serial) S.gotoInstTab("mrally"); } },
         serial ? "Monsters, presets and rules: Monster hunts tab →" : "Monsters, presets and rules are set on each instance's Monster hunts tab."));
-      if (o.type === "presets") return null;
+      if (o.type === "presets" || o.type === "order") return null;
       const save = async (v) => take(await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } })));
       if (o.type === "bool") return h("div", { class: "wide" }, h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label)));
       if (o.type === "select") return h("label", {}, h("span", { class: "lab" }, o.label), ((st) => sel(st, "v", o.choices, { label: o.label, after: () => save(st.v) }))({ v: o.val }));
