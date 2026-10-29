@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## READY (29 Oct 15:30 IST, one chat) - fix/accent-buttons-stop-state 2d35033 (on fix/join-count-today): picked accent colour also colours the main buttons; no false 'Problem - see the log' after Stop. NOT on the PC - next release (merge only this tip: it contains fix/join-count-today + fix/lucky-on-2521). Doc claude/accent_buttons_stop_state_29oct.md.
+
 ## READY (29 Oct 15:15 IST, one chat) - fix/join-count-today ae22f22 (on fix/lucky-on-2521): sidebar/header join chip = today's game-day joins (same as Today tile); Activity 'Skipped (all reasons)'. Display only, NOT on the PC - next release. Doc claude/join_count_mismatch_29oct.md.
 
 ## PC FREE (29 Oct 15:00 IST) - fix/lucky-on-2521 ddecd3e (= fix/evidence-on-2521 + Crazy Eggs Lucky Hammer confirm ec9b488, patch unchanged, 58 tests OK) copied into app\v2.5.20\rally_bot.py (1,002,551 B, VERSION line kept 2.5.20; backup rally_bot.py.bak_before_lucky29oct = the evidence-only file 999,235 B). App RESTARTED 14:58 (restart_update_now -> all 8 instances resumed) - evidence store + Lucky Hammer fix are LOADED. Still: do NOT install 2.5.21 on the PC; next release must include fix/lucky-on-2521. Check: log '[+] Crazy Eggs: Lucky Hammer used (1 -> 0)' or failures\crazy_eggs.
