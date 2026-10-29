@@ -6944,6 +6944,31 @@ QUIET_RESTART_MIN = 30    # alone on its server: no rally on the list this long 
 GROUP_RESTART_GAP = 600   # in a group: at most one 'misses the group's rallies' restart per 10 min per instance
 
 
+def _list_has_rallies(shot):
+    """Rally cards on the list = their green countdown bars."""
+    try:
+        g = cv2.inRange(cv2.cvtColor(shot[150:800:3, ::3], cv2.COLOR_BGR2HSV), (40, 140, 90), (85, 255, 255))
+        return cv2.countNonZero(g) > 150
+    except Exception:
+        return False
+
+
+def quick_list_refresh(dev, log, stop, why):
+    """Owner 30 Oct: before a game restart (5-8 min lost), try a ~10 s refresh - Event War tab, back to PvP War. The log
+    says each time whether it brought rallies back, so a day of logs shows if it is worth keeping. -> True = rallies now."""
+    try:
+        dev.tap(400, 105)                                   # Event War tab
+        _nap(stop, 1.5, 2.0)
+        dev.tap(140, 105)                                   # back to PvP War
+        _nap(stop, 2.0, 2.5)
+        ok = _list_has_rallies(dev.screenshot())
+    except Exception as _e:
+        quiet_err("quick_list_refresh", _e)
+        ok = False
+    log(f"[i] Quick refresh ({why}): " + ("rallies came back - no restart" if ok else "the list is still empty - did not help"))
+    return ok
+
+
 def note_rally(serial, mon, left, level=None):
     """Remember a rally this instance read; two instances that read the same rally (monster + end time) share an alliance."""
     try:
@@ -19939,6 +19964,9 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             nap(1.5, 2.0)
                             recover()
                             continue
+                        if qs["miss"] == 2:                        # owner 30 Oct: a 10 s refresh before a 5-8 min restart
+                            quick_list_refresh(dev, log, stop, f"the alliance sees {names}")
+                            continue                               # read the list again: still missing -> chat + restart
                         qs["miss"] = 0
                         v = chat_war_check(dev, cfg, log, stop, serial)   # the chat first (owner)
                         if v != "ok" and now - qs["restart"] > GROUP_RESTART_GAP:
@@ -19949,6 +19977,9 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 quiet_since = max(_RALLY_SEEN.get(serial, 0), t_started[0], qs["quiet_at"])
                 if not group and now - quiet_since > QUIET_RESTART_MIN * 60:   # B. alone on its server: 30 min without a rally
                     qs["quiet_at"] = now
+                    if quick_list_refresh(dev, log, stop, f"no rally for {QUIET_RESTART_MIN} min"):
+                        _RALLY_SEEN[serial] = time.time()
+                        continue
                     ck0 = CHAT_STATE.get(serial) or {}
                     v = "quiet" if ck0.get("off") else chat_war_check(dev, cfg, log, stop, serial)
                     if v == "ok":
@@ -19971,6 +20002,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             notify(cfg, serial, "Chat check: still broken after 5 restarts (" +
                                    ("not in an alliance" if ck.get("noally") else "rallies in chat never reach the list") + ") - please check this instance.")
                             log("[!] Chat check: 5 restarts did not help - not restarting for this any more, alert sent")
+                    elif not ck.get("noally") and quick_list_refresh(dev, log, stop, "the chat shows rallies this list missed"):
+                        ck["broken"] = 0
                     else:
                         log(f"[!] Chat check: restarting Evony (try {ck['broken']} of 5)")
                         force_restart_game(dev, cfg, log, stop, must=True, reason="chat check failed")
