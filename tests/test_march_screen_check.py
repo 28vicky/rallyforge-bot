@@ -29,3 +29,24 @@ def test_hunt_prefers_preset_used_longest_ago():
     last["I"] = 4000.0                                    # preset 1 just marched -> preset 3 (oldest) goes next
     assert min(pairs, key=lambda e: r.mr_pair_order(e, last))["preset"] == "III"
     assert min(pairs, key=lambda e: r.mr_pair_order(e, {}))["preset"] == "I"
+
+
+def test_recorder_reads_bluestacks_style_events():
+    """owner 30 Oct: recording did not work on BlueStacks - read every touch device, plain ABS_X/ABS_Y too."""
+    rec = r.FlowRecorder.__new__(r.FlowRecorder)
+    rec.devs = {"/dev/input/event2": (1080, 1920), "/dev/input/event5": (32767, 32767)}
+    rec.maxx, rec.maxy = 1080, 1920
+    rec.stop_ev = r.threading.Event()
+    got = []
+    rec._step = lambda a, b, dev=None: got.append((rec._to_screen(a[1], a[2], dev), dev))
+    lines = ["[ 1.0] /dev/input/event5: EV_KEY BTN_TOUCH DOWN\n",
+             "[ 1.0] /dev/input/event5: EV_ABS ABS_X 00004000\n",
+             "[ 1.0] /dev/input/event5: EV_ABS ABS_Y 00004000\n",
+             "[ 1.0] /dev/input/event5: EV_SYN SYN_REPORT 00000000\n",
+             "[ 1.1] /dev/input/event5: EV_KEY BTN_TOUCH UP\n",
+             "[ 1.1] /dev/input/event5: EV_SYN SYN_REPORT 00000000\n"]
+    rec.proc = type("P", (), {"stdout": iter(lines)})()
+    rec._events_loop()
+    assert len(got) == 1 and got[0][1] == "/dev/input/event5"
+    x, y = got[0][0]
+    assert abs(x - r.EXPECTED_SIZE[0] // 2) <= 2 and abs(y - r.EXPECTED_SIZE[1] // 2) <= 2

@@ -8031,27 +8031,36 @@ class FlowRecorder:
         self.t0 = time.time()
 
     def _touch_device(self):
+        """Every input device that reports a position -> {node: (max x, max y)}. MuMu has one multi-touch screen;
+        BlueStacks (owner 30 Oct: recording did not work there) sends mouse clicks through other devices, some with
+        plain ABS_X / ABS_Y instead of ABS_MT_POSITION - so all of them are listened to."""
         out = subprocess.run([self.adb, "-s", self.serial, "shell", "getevent", "-pl"], capture_output=True,
                              text=True, timeout=15, creationflags=NOWIN).stdout
-        best = None
+        self.devinfo = out
+        devs = {}
         for block in re.split(r"\nadd device \d+: ", "\n" + out):
             m = re.match(r"\s*(\S+)", block)
-            mx = re.search(r"ABS_MT_POSITION_X\s*:.*?max (\d+)", block)
-            my = re.search(r"ABS_MT_POSITION_Y\s*:.*?max (\d+)", block)
-            if m and mx and my:
-                best = (m.group(1), int(mx.group(1)), int(my.group(1)))
-                break
-        if not best:
-            raise RuntimeError("No touch screen found on this emulator (getevent shows no ABS_MT_POSITION).")
-        return best
+            mx = re.search(r"ABS_MT_POSITION_X\s*:.*?max (\d+)", block) or re.search(r"\bABS_X\s*:.*?max (\d+)", block)
+            my = re.search(r"ABS_MT_POSITION_Y\s*:.*?max (\d+)", block) or re.search(r"\bABS_Y\s*:.*?max (\d+)", block)
+            if m and mx and my and int(mx.group(1)) > 0 and int(my.group(1)) > 0:
+                devs[m.group(1)] = (int(mx.group(1)), int(my.group(1)))
+        if not devs:
+            raise RuntimeError("No touch screen found on this emulator (getevent shows no touch position).")
+        return devs
 
     def start(self):
         self.dev = Device(self.serial, self.adb)
         self.dev.connect()
         self.dev._lag_busy = True            # record the screen as it is: no lag waiting, no pop-up closing
-        node, self.maxx, self.maxy = self._touch_device()
+        self.devs = self._touch_device()
+        self.maxx, self.maxy = next(iter(self.devs.values()))
         self.dir.mkdir(parents=True, exist_ok=True)
-        self.proc = subprocess.Popen([self.adb, "-s", self.serial, "shell", "getevent", "-lt", node],
+        try:                                 # kept with the flow: which input devices this emulator has (for support)
+            (self.dir / "input_devices.txt").write_text(getattr(self, "devinfo", ""), encoding="utf-8")
+        except Exception as _e:
+            quiet_err("FlowRecorder.devinfo", _e)
+        node = next(iter(self.devs)) if len(self.devs) == 1 else None
+        self.proc = subprocess.Popen([self.adb, "-s", self.serial, "shell", "getevent", "-lt"] + ([node] if node else []),
                                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
                                      creationflags=NOWIN, bufsize=1)
         threading.Thread(target=self._frames_loop, daemon=True).start()
@@ -8069,50 +8078,56 @@ class FlowRecorder:
                 self.error = f"screenshot: {e}"
             self.stop_ev.wait(0.6)
 
-    def _to_screen(self, rx, ry):
+    def _to_screen(self, rx, ry, dev=None):
         w, h = EXPECTED_SIZE
-        if self.maxx > self.maxy:            # touch panel reported in landscape: swap to the portrait screen
-            rx, ry, mx, my = ry, rx, self.maxy, self.maxx
+        mx0, my0 = (self.devs.get(dev) if dev and getattr(self, "devs", None) and dev in self.devs else (self.maxx, self.maxy))
+        if mx0 > my0:                        # touch panel reported in landscape: swap to the portrait screen
+            rx, ry, mx, my = ry, rx, my0, mx0
         else:
-            mx, my = self.maxx, self.maxy
+            mx, my = mx0, my0
         return round(rx * w / max(mx, 1)), round(ry * h / max(my, 1))
 
     def _events_loop(self):
-        x = y = None                         # latest raw finger position
-        touching, start, ended = False, None, False
+        # one finger state per input device (BlueStacks: all devices are read at once; lines start "/dev/input/eventN:")
+        st = {}
         for line in self.proc.stdout:
             if self.stop_ev.is_set():
                 break
+            m = re.search(r"(/dev/input/\S+?):", line)
+            dev = m.group(1) if m else (next(iter(self.devs)) if getattr(self, "devs", None) else None)
+            if getattr(self, "devs", None) and dev not in self.devs:
+                continue
             parts = line.replace("[", " ").replace("]", " ").split()
             if len(parts) < 3:
                 continue
             code, val = parts[-2], parts[-1]
+            s = st.setdefault(dev, {"x": None, "y": None, "touching": False, "start": None, "ended": False})
             try:
-                if code == "ABS_MT_POSITION_X":
-                    x = int(val, 16)
-                elif code == "ABS_MT_POSITION_Y":
-                    y = int(val, 16)
-                elif code in ("BTN_TOUCH", "ABS_MT_TRACKING_ID"):
-                    up = val == "UP" or val.lower() == "ffffffff"
-                    if up and touching:
-                        ended = True
+                if code in ("ABS_MT_POSITION_X", "ABS_X"):
+                    s["x"] = int(val, 16)
+                elif code in ("ABS_MT_POSITION_Y", "ABS_Y"):
+                    s["y"] = int(val, 16)
+                elif code in ("BTN_TOUCH", "BTN_LEFT", "ABS_MT_TRACKING_ID"):
+                    up = val == "UP" or val.lower() == "ffffffff" or val == "00000000" and code != "ABS_MT_TRACKING_ID"
+                    if up and s["touching"]:
+                        s["ended"] = True
                     elif not up:
-                        touching = True
+                        s["touching"] = True
                 elif code == "SYN_REPORT":
-                    if touching and start is None and x is not None and y is not None:
-                        start = (time.time(), x, y)
-                    if ended:
-                        if start is not None:
-                            self._step(start, (time.time(), x, y))
-                        touching, start, ended = False, None, False
+                    if s["touching"] and s["start"] is None and s["x"] is not None and s["y"] is not None:
+                        s["start"] = (time.time(), s["x"], s["y"])
+                    if s["ended"]:
+                        if s["start"] is not None:
+                            self._step(s["start"], (time.time(), s["x"], s["y"]), dev)
+                        s.update(touching=False, start=None, ended=False)
             except ValueError:
                 continue
 
-    def _step(self, down, up):
+    def _step(self, down, up, dev=None):
         t1, rx1, ry1 = down
         t2, rx2, ry2 = up
-        x1, y1 = self._to_screen(rx1, ry1)
-        x2, y2 = self._to_screen(rx2, ry2)
+        x1, y1 = self._to_screen(rx1, ry1, dev)
+        x2, y2 = self._to_screen(rx2, ry2, dev)
         dist, held = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5, t2 - t1
         kind = "swipe" if dist > 25 else ("long_press" if held > 0.8 else "tap")
         n = len(self.steps) + 1
