@@ -6931,6 +6931,70 @@ def _restart_emulator(dev, cfg, log, stop, why=""):
 
 _RALLY_SEEN = {}          # serial -> last time that instance saw rally cards (green countdown bars) on its list
 
+# ---- Same-alliance groups (owner 30 Oct, replaces the 28 Oct "every list on its own"): instances that keep reading the
+# SAME rallies (monster + end time) are in the same alliance on the same server - learned by the bot, no setup. In a
+# group, a list that misses rallies the others read is broken -> chat check -> restart at once. An instance with no
+# group (alone on its server, e.g. Rory, GK-P) gets restarted after QUIET_RESTART_MIN without any rally (chat first).
+_RALLY_ENDS = {}          # serial -> [(monster, end time, seen at)] rallies read on its list (last hour)
+_ALLIES = {}              # frozenset({serial, serial}) -> [(monster, end time, confirmed at)]
+_ALLY_MIN_RALLIES = 3     # one shared rally can be a coincidence: a group needs this many separate ones...
+_ALLY_WINDOW = 3600       # ...within the last hour (a link that is not re-confirmed expires)
+_RALLY_LEVEL = {}         # (monster, end time // 15) -> level read on the card (missed rallies respect level rules)
+QUIET_RESTART_MIN = 30    # alone on its server: no rally on the list this long -> chat check, then restart anyway
+GROUP_RESTART_GAP = 600   # in a group: at most one 'misses the group's rallies' restart per 10 min per instance
+
+
+def note_rally(serial, mon, left, level=None):
+    """Remember a rally this instance read; two instances that read the same rally (monster + end time) share an alliance."""
+    try:
+        now = time.time()
+        end = now + float(left)
+    except Exception:
+        return
+    mine = [r for r in _RALLY_ENDS.get(serial, []) if now - r[2] < 3600][-60:]
+    mine.append((mon, end, now))
+    if level:
+        _RALLY_LEVEL[(mon, round(end / 15))] = level
+        if len(_RALLY_LEVEL) > 500:
+            _RALLY_LEVEL.clear()
+    _RALLY_ENDS[serial] = mine
+    for other, rows in list(_RALLY_ENDS.items()):
+        if other != serial and any(m == mon and abs(e - end) <= 12 and now - t < 3600 for m, e, t in rows):
+            links = _ALLIES.setdefault(frozenset((serial, other)), [])
+            links[:] = [l for l in links if now - l[2] < _ALLY_WINDOW]
+            if not any(l[0] == mon and abs(l[1] - end) <= 12 for l in links):     # the same rally read again is not a new match
+                links.append((mon, end, now))
+
+
+def allies_of(serial):
+    """Instances matched with `serial` by enough separate rallies in the last hour."""
+    now = time.time()
+    return {s for pair, links in list(_ALLIES.items()) if serial in pair for s in pair if s != serial
+            and sum(1 for l in list(links) if now - l[2] < _ALLY_WINDOW) >= _ALLY_MIN_RALLIES}
+
+
+def missed_rallies(serial, cfg):
+    """Rallies (monster, seconds left) that instances in the same group read in the last 90 s, still open for more than
+    45 s, which this instance never read. Monsters this instance does not join are left out."""
+    now = time.time()
+    mine = _RALLY_ENDS.get(serial, [])
+    out, seen = [], set()
+    for other in allies_of(serial):
+        for m, e, t in list(_RALLY_ENDS.get(other, [])):
+            if now - t > 90 or e - now < 45 or (m, round(e / 15)) in seen:
+                continue
+            if any(mm == m and abs(ee - e) <= 12 for mm, ee, _ in mine):
+                continue
+            try:
+                lv = _RALLY_LEVEL.get((m, round(e / 15))) or _RALLY_LEVEL.get((m, round(e / 15) - 1)) or _RALLY_LEVEL.get((m, round(e / 15) + 1))
+                if not monster_allowed(m, cfg, lv)[0]:
+                    continue
+            except Exception as _e:
+                quiet_err("missed_rallies", _e)
+            seen.add((m, round(e / 15)))
+            out.append((m, int(e - now)))
+    return out
+
 
 # ------------------------------------------------------------ alliance chat check (owner 25 Oct)
 # A rally list can stop updating while the game looks fine. Every rally posts "<name> started an Alliance War: LvN
@@ -18919,7 +18983,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
     last_ok = [time.time()]               # last time ADB gave us a screenshot
     t_started = [time.time()]             # this run of the instance began (no chat check in the first minutes)
     still = {"sig": None, "since": None}  # screen that should be moving but is not
-    empty_list = {"checks": 0, "reopens": 0, "last": 0.0}   # empty rally list: looks, reopens, last reopen (never a restart - owner 28 Oct)
+    empty_list = {"checks": 0, "reopens": 0, "last": 0.0}   # empty rally list: looks, reopens, last reopen
+    qs = {"miss": 0, "miss_at": 0.0, "restart": 0.0, "quiet_at": 0.0}   # owner 30 Oct: group / quiet-server checks
 
     lost_since = [None]                   # since when we have been off the rally list (kept across game restarts)
     restarts = []                         # when the emulator was restarted (to stop restart loops)
@@ -19213,6 +19278,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             last_march[0] = march
             if mon and mon != "hidden" and rally:
                 mr_card_block(screen, hit, serial, mon, rally)
+                note_rally(serial, mon, rally, mlv)
             if not label:
                 label = f"[{show_name(screen, hit, mon)}] "
             if ok and not rotator_for(mon).available():
@@ -19857,6 +19923,41 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         _RALLY_SEEN[serial] = now
                 except Exception as _e:
                     quiet_err("run_device", _e)
+            if st == "rally_list" and now - t_started[0] > 180:
+                group = allies_of(serial)
+                if group and now - qs["miss_at"] > 60:          # A. same alliance + server: rallies the others read, missing here
+                    qs["miss_at"] = now
+                    miss = missed_rallies(serial, cfg)
+                    if not miss:
+                        qs["miss"] = 0
+                    else:
+                        qs["miss"] += 1
+                        names = ", ".join(sorted({m for m, _ in miss}))
+                        if qs["miss"] == 1:
+                            log(f"[!] The other instances of this alliance see {names} - this list does not: reopening Alliance War")
+                            dev.back()
+                            nap(1.5, 2.0)
+                            recover()
+                            continue
+                        qs["miss"] = 0
+                        v = chat_war_check(dev, cfg, log, stop, serial)   # the chat first (owner)
+                        if v != "ok" and now - qs["restart"] > GROUP_RESTART_GAP:
+                            qs["restart"] = now
+                            log(f"[!] The rally list still misses {names} that the other instances of this alliance see - restarting Evony")
+                            force_restart_game(dev, cfg, log, stop, must=True, reason="rally list misses the alliance's rallies")
+                        continue
+                quiet_since = max(_RALLY_SEEN.get(serial, 0), t_started[0], qs["quiet_at"])
+                if not group and now - quiet_since > QUIET_RESTART_MIN * 60:   # B. alone on its server: 30 min without a rally
+                    qs["quiet_at"] = now
+                    ck0 = CHAT_STATE.get(serial) or {}
+                    v = "quiet" if ck0.get("off") else chat_war_check(dev, cfg, log, stop, serial)
+                    if v == "ok":
+                        log("[i] No rally on this list for 30 min, but the Alliance chat shows the list is working - no restart")
+                    else:
+                        log(f"[!] No rally on this list for {QUIET_RESTART_MIN} min (alone on its server) and the chat does not show "
+                            "the list working - restarting Evony once (a quiet server costs a few minutes, a stuck list costs rallies)")
+                        force_restart_game(dev, cfg, log, stop, must=True, reason=f"no rally for {QUIET_RESTART_MIN} min")
+                    continue
             ck = CHAT_STATE.get(serial) or {}
             ck_every = int(cfg.get("chat_check_minutes", 10) or 0) * 60
             if ck_every and st == "rally_list" and not ck.get("off") and now - _RALLY_SEEN.get(serial, 0) > ck_every \
