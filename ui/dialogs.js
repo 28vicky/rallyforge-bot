@@ -41,7 +41,7 @@ function promptBox(title, label, def, multiline) {
   return new Promise((res) => {
     const inp = multiline ? h("textarea", { value: def || "" }) : h("input", { type: "text", value: def || "" });
     const done = () => res(inp.value.trim());
-    if (!multiline) inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { done(); document.querySelector(".ov")?.remove(); } });
+    if (!multiline) inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { done(); [...document.querySelectorAll(".ov")].pop()?.remove(); } });
     modal({ title, body: h("div", { class: "field", style: { minWidth: "380px" } }, h("label", { style: { whiteSpace: "pre-line" } }, label), inp),
       buttons: [{ label: "Cancel", onclick: () => res(null) }, { label: "OK", cls: "pri", onclick: done }], oncancel: () => res(null) });
   });

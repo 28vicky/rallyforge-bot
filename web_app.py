@@ -1893,6 +1893,26 @@ class Api:
                         raise ApiError("Hunt order: levels and km must be numbers.")
                     clean.append({"name": str(r["name"]).strip()[:40], "min": min(lo, hi), "max": max(lo, hi), "km": km})
                 v = clean
+            elif o["type"] == "saved_orders":              # owner 29 Oct 22:28: Save order / Load order - {name: [rows]}
+                if not isinstance(v, dict):
+                    raise ApiError("Saved orders: wrong format.")
+                clean = {}
+                for nm, rows in list(v.items())[:50]:
+                    nm = str(nm or "").strip()[:40]
+                    if not nm or not isinstance(rows, list):
+                        continue
+                    keep = []
+                    for r in rows[:400]:
+                        if not isinstance(r, dict) or not str(r.get("name") or "").strip():
+                            continue
+                        try:
+                            lo, hi = max(1, min(int(r.get("min") or 1), 99)), max(1, min(int(r.get("max") or 99), 99))
+                            km = max(0, min(int(float(r.get("km") or 0)), 99999))
+                        except (TypeError, ValueError):
+                            continue
+                        keep.append({"name": str(r["name"]).strip()[:40], "min": min(lo, hi), "max": max(lo, hi), "km": km})
+                    clean[nm] = keep
+                v = clean
             row[o["k"]] = v
         self._save_scoped(scope, "duties", duties)
         return self.duties(p)

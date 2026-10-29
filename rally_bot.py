@@ -17449,6 +17449,7 @@ DUTY_LIBRARY = [
               {"k": "presets", "label": "Preset modes", "type": "presets", "def": None},
               {"k": "order", "label": "Hunt order", "type": "order", "def": None},
               {"k": "own_order", "label": "Use my own hunt order", "type": "bool", "def": None},
+              {"k": "saved_orders", "label": "Saved hunt orders", "type": "saved_orders", "def": None},
               {"k": "max_wait", "label": "Give up on a monster after (min, 0 = wait until it is hunted)", "type": "number", "min": 0, "max": 120, "def": 0},
               {"k": "max_age", "label": "Refresh coordinates every (min)", "type": "number", "min": 1, "max": 600, "def": 10},
               {"k": "max_km", "label": "Only monsters within (km, 0 = any distance)", "type": "number", "min": 0, "max": 99999, "def": 0},
