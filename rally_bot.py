@@ -526,10 +526,16 @@ def build_report(path, include_debug=True, description="", devices=None):
             for img in sorted(dbg.glob("*.png"), key=lambda f: f.stat().st_mtime)[-8:]:      # the newest ones
                 z.write(img, f"debug/{img.name}")
         fdir = USER / "failures"
-        if include_debug and fdir.exists():                 # failure evidence of the last 24 h (max 60 files)
-            cut = time.time() - 86400
-            for f in sorted((f for f in fdir.rglob("*") if f.is_file() and f.stat().st_mtime >= cut), key=lambda f: f.stat().st_mtime)[-60:]:
-                z.write(f, "failures/" + f.relative_to(fdir).as_posix())
+        if include_debug and fdir.exists():                 # failure evidence of the last 24 h (max 60 files); best effort
+            try:
+                cut = time.time() - 86400
+                for f in sorted((f for f in fdir.rglob("*") if f.is_file() and f.stat().st_mtime >= cut), key=lambda f: f.stat().st_mtime)[-60:]:
+                    try:
+                        z.write(f, "failures/" + f.relative_to(fdir).as_posix())
+                    except OSError:
+                        pass
+            except Exception as _e:
+                quiet_err("build_report", _e)
 
 
 def migrate_cfg(cfg):
@@ -2643,7 +2649,35 @@ def ev_note_ocr(lines):
 
 def ev_step(text):
     """Name the step a duty is on (shown in the evidence file if it fails there)."""
-    _TL.ev_step = str(text)[:160]
+    try:
+        _TL.ev_step = str(text)[:160]
+    except Exception:
+        pass
+
+
+EV_MIN_FREE_MB = 500           # below this much free disk: no pictures (the small .json is still tried)
+EV_MAX_SECONDS = 4.0           # evidence never holds the bot longer than this: extra pictures are dropped after it
+
+
+def _ev_grab(dev):
+    """A RAW screen grab for evidence: no pop-up guard taps, no red-wifi lag wait (Device.screenshot can wait up to
+    2 min), no Pause check. -> 540x960 image or None. Never raises."""
+    try:
+        img = dev._grab() if hasattr(dev, "_grab") else dev.screenshot()
+        if img is None:
+            return None
+        if img.shape[1::-1] != EXPECTED_SIZE:
+            img = cv2.resize(img, EXPECTED_SIZE, interpolation=cv2.INTER_AREA)
+        return img
+    except BaseException:                                # even a Stop raised in here must not come from evidence
+        return None
+
+
+def _ev_disk_ok(path):
+    try:
+        return shutil.disk_usage(str(path)).free >= EV_MIN_FREE_MB * 1024 * 1024
+    except Exception:
+        return False
 
 
 def _ev_prune(folder, serial_safe):
@@ -2673,49 +2707,67 @@ def ev_prune_all():
 
 
 def failure_evidence(dev, duty, reason, shot=None, pics=None, extra=None, every_s=0, key=""):
-    """Save one failure's proof to USER/failures/<duty>/<instance>_<time>.png/.json. shot = the failing screen
-    (taken now when None); pics = more named pictures (e.g. each Activities scroll step); every_s = at most one save
-    per this many seconds for (duty, instance, key). Never raises. -> json path or None."""
+    """BEST EFFORT (owner 29 Oct): save one failure's proof to USER/failures/<duty>/<instance>_<time>.png/.json.
+    shot = the failing screen (a raw grab is taken when None); pics = more named pictures; every_s = at most one save
+    per this many seconds for (duty, instance, key). Every step has its own guard: a failed screenshot, a folder
+    without permission, a full disk or a failed write only means less evidence - it NEVER raises, never taps, never
+    waits for lag, and stops adding pictures after EV_MAX_SECONDS. -> json path or None."""
+    t0 = time.time()
     try:
         serial = str(getattr(dev, "serial", "") or "")
-        now = time.time()
         if every_s:
             k = (duty, serial, key)
             with _ev_lock:
-                if now - _EV_LAST.get(k, 0) < every_s:
+                if t0 - _EV_LAST.get(k, 0) < every_s:
                     return None
-                _EV_LAST[k] = now
-        if shot is None and dev is not None:
-            try:
-                shot = dev.screenshot()
-            except Exception:
-                shot = None
+                _EV_LAST[k] = t0
         folder = USER / "failures" / _ev_safe(duty)
         folder.mkdir(parents=True, exist_ok=True)
-        ss = _ev_safe(serial)
-        stem = f"{ss}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(now))}_{int(now * 1000) % 1000:03d}"
-        files = []
-        if shot is not None:
-            cv2.imwrite(str(folder / f"{stem}.png"), shot)
-            files.append(f"{stem}.png")
-        for name, img in (pics or {}).items():
-            if img is not None:
-                fn = f"{stem}_{_ev_safe(name)}.png"
-                cv2.imwrite(str(folder / fn), img)
+    except BaseException as _e:
+        quiet_err("failure_evidence", _e)
+        return None
+    ss = _ev_safe(serial)
+    stem = f"{ss}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(t0))}_{int(t0 * 1000) % 1000:03d}"
+    files, notes = [], []
+    pics_ok = _ev_disk_ok(folder)
+    if not pics_ok:
+        notes.append(f"pictures skipped: less than {EV_MIN_FREE_MB} MB free (or disk unreadable)")
+
+    def put(fn, img):
+        if img is None or time.time() - t0 > EV_MAX_SECONDS:
+            return
+        try:
+            if cv2.imwrite(str(folder / fn), img):
                 files.append(fn)
-        info = {"time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)), "duty": duty, "instance": serial,
+            else:
+                notes.append(f"{fn}: write failed")
+        except BaseException as _e:
+            notes.append(f"{fn}: {type(_e).__name__}")
+    if pics_ok:
+        if shot is None and dev is not None:
+            shot = _ev_grab(dev)
+            if shot is None:
+                notes.append("screenshot failed")
+        put(f"{stem}.png", shot)
+        for name, img in list((pics or {}).items()):
+            put(f"{stem}_{_ev_safe(name)}.png", img)
+    try:
+        info = {"time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t0)), "duty": duty, "instance": serial,
                 "reason": str(reason)[:300], "key": key, "step": getattr(_TL, "ev_step", ""),
                 "taps": list(getattr(dev, "ev_taps", None) or []),
                 "ocr": list(getattr(_TL, "ev_ocr", None) or []),
-                "log": list(EV_LOG.get(serial) or []), "pictures": files, "extra": extra or {}}
+                "log": list(EV_LOG.get(serial) or []), "pictures": files, "extra": extra or {}, "notes": notes,
+                "took_ms": int((time.time() - t0) * 1000)}
         p = folder / f"{stem}.json"
         p.write_text(json.dumps(info, indent=1, default=str), encoding="utf-8")
-        _ev_prune(folder, ss)
-        return p
-    except Exception as _e:
+    except BaseException as _e:
         quiet_err("failure_evidence", _e)
-        return None
-
+        p = None
+    try:
+        _ev_prune(folder, ss)
+    except BaseException:
+        pass
+    return p
 
 
 def _ev_tap(dev, what):
@@ -2733,7 +2785,10 @@ def housekeeping(log=None):
     debug pictures: only the newest 60 and nothing older than 3 days; old program versions: only the current and the
     previous one (also after a hand-made install); the log files clean themselves (5 days)."""
     freed, n = 0, 0
-    ev_prune_all()                                       # failure evidence: own 7-day retention (not the 60 debug pictures)
+    try:
+        ev_prune_all()                                   # failure evidence: own 7-day retention (not the 60 debug pictures)
+    except Exception as _e:
+        quiet_err("housekeeping", _e)
     d = USER / "debug"
     if d.exists():
         files = sorted((f for f in d.iterdir() if f.is_file()), key=lambda f: f.stat().st_mtime, reverse=True)
@@ -10735,11 +10790,11 @@ def run_crazy_eggs(dev, cfg, log, stop):
                 if ce_on_screen(dev.screenshot()):
                     break
         else:
-            fail = dev.screenshot()
-            ce_snap(fail, "2_failed_" + re.sub(r"\W", "_", str(serial)))   # one picture per instance
+            fail = _ev_grab(dev)
+            if fail is not None:
+                ce_snap(fail, "2_failed_" + re.sub(r"\W", "_", str(serial)))   # one picture per instance
             pics = {"start": first, **{f"activities_scroll_{i}": im for i, im in enumerate((getattr(_TL, "ce_scrolls", None) or [])[:16])}}
-            failure_evidence(dev, "crazy_eggs", "the Crazy Eggs screen did not open", shot=fail, pics=pics,
-                             extra={"tabs_read": [t for t, _ in ocr_lines(fail[60:150, 0:540])]})
+            failure_evidence(dev, "crazy_eggs", "the Crazy Eggs screen did not open", shot=fail, pics=pics)
             raise RuntimeError("the Crazy Eggs screen did not open")
     row = ce_row(serial)
     smashes = dict(row.get("smashes") or {}) if row.get("smash_day") == day else {}
@@ -17752,10 +17807,7 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
             finally:
                 _TL.duty_deadline = None
             if result and not result[0] and not stop.is_set():
-                try:
-                    fail_shot = dev.screenshot()             # before leave_to_city closes the failing screen
-                except Exception:
-                    fail_shot = None
+                fail_shot = _ev_grab(dev)                    # raw grab before leave_to_city closes it (never waits / taps)
             if stop.is_set() or (result and result[0]):
                 break
             dev.expect_city = False

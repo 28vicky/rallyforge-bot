@@ -353,11 +353,46 @@ class FailureEvidence(unittest.TestCase):
         rb.ev_prune_all()
         self.assertFalse(p.exists())
 
-    def test_never_raises(self):
+    def _bad(self):
         class Bad:
             serial = "x"
-            def screenshot(self):
+            def _grab(self):
                 raise RuntimeError("adb gone")
-        p = rb.failure_evidence(Bad(), "duty", "why")
-        self.assertIsNotNone(p)                      # json still written, no picture
+            def screenshot(self):
+                raise AssertionError("evidence must never use the waiting/tapping screenshot()")
+        return Bad()
+
+    def test_screenshot_fails(self):
+        p = rb.failure_evidence(self._bad(), "duty", "why")
+        info = json.loads(p.read_text())             # json still written, no picture
+        self.assertEqual(info["pictures"], [])
+        self.assertIn("screenshot failed", info["notes"])
+
+    def test_picture_write_fails(self):
+        with mock.patch.object(rb.cv2, "imwrite", side_effect=OSError("denied")):
+            p = rb.failure_evidence(self._dev(), "duty", "why")
+        self.assertEqual(json.loads(p.read_text())["pictures"], [])
+
+    def test_json_write_fails(self):
+        with mock.patch.object(rb.Path, "write_text", side_effect=OSError("disk full")):
+            self.assertIsNone(rb.failure_evidence(self._dev(), "duty", "why"))
+
+    def test_folder_permission_fails(self):
+        with mock.patch.object(rb.Path, "mkdir", side_effect=PermissionError("no")):
+            self.assertIsNone(rb.failure_evidence(self._dev(), "duty", "why"))
+
+    def test_disk_almost_full(self):
+        from collections import namedtuple
+        du = namedtuple("du", "total used free")(100, 99, 10 * 1024 * 1024)
+        with mock.patch.object(rb.shutil, "disk_usage", return_value=du):
+            p = rb.failure_evidence(self._dev(), "duty", "why")
+        info = json.loads(p.read_text())
+        self.assertEqual(info["pictures"], [])
+        self.assertTrue(any("pictures skipped" in n for n in info["notes"]))
+
+    def test_time_cap_drops_extra_pictures(self):
+        d = self._dev()
+        clock = iter([0.0] + [100.0] * 50)            # start, then far past EV_MAX_SECONDS
+        with mock.patch.object(rb.time, "time", side_effect=lambda: next(clock)):
+            p = rb.failure_evidence(d, "duty", "why", shot=d.screenshot(), pics={"a": d.screenshot()})
         self.assertEqual(json.loads(p.read_text())["pictures"], [])
