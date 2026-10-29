@@ -2845,25 +2845,44 @@ function monsterRallyTab(serial) {
     if (m[nm] && !(await confirmBox("Replace \u201c" + nm + "\u201d?", "A saved order with this name exists. Replace it with the current list?", "Replace"))) return;
     m[nm] = (order || []).map((r) => Object.assign({}, r)); putSaved(m); toast("Saved as \u201c" + nm + "\u201d.", "ok"); paintOrder();
   };
-  const loadOrderDlg = () => {
+  const loadOrderDlg = () => {                     // owner 29 Oct 22:34: pick from a dropdown (search inside), then Load / Rename / Delete
     const box = h("div", { class: "hoload" });
+    let pick = "", open = false, find = "";
     const draw = () => {
       box.innerHTML = "";
-      const m = savedOrders(), names = Object.keys(m);
+      const m = savedOrders(), names = Object.keys(m).sort((x, y) => x.localeCompare(y));
       if (!names.length) { box.appendChild(h("div", { class: "huempty in" }, "No saved orders.")); return; }
-      for (const nm of names) box.appendChild(h("div", { class: "holrow" },
-        h("div", { class: "holname" }, h("b", {}, nm), h("small", { class: "mute" }, m[nm].length + (m[nm].length === 1 ? " monster" : " monsters"))),
-        h("button", { type: "button", class: "btn sm pri", onclick: async () => {
+      if (pick && !m[pick]) pick = "";
+      const cnt = (nm) => m[nm].length + (m[nm].length === 1 ? " monster" : " monsters");
+      const list = h("div", { class: "hoddlist", role: "listbox" });
+      const fill = () => {
+        list.innerHTML = "";
+        const f = find.trim().toLowerCase(), shown = names.filter((nm) => !f || nm.toLowerCase().includes(f));
+        if (!shown.length) list.appendChild(h("div", { class: "mute", style: { padding: "8px 10px", fontSize: "13px" } }, "No saved order called \u201c" + find.trim() + "\u201d."));
+        for (const nm of shown) list.appendChild(h("button", { type: "button", class: "hoddopt" + (nm === pick ? " on" : ""), role: "option", "aria-selected": nm === pick ? "true" : "false",
+          onclick: () => { pick = nm; open = false; draw(); } }, h("span", {}, nm), h("small", {}, cnt(nm))));
+      };
+      const search = h("input", { type: "text", placeholder: "Search saved orders\u2026", "aria-label": "Search saved orders", value: find, oninput: (e) => { find = e.target.value; fill(); } });
+      const panel = h("div", { class: "hoddpanel", hidden: !open }, search, list);
+      box.appendChild(h("div", { class: "hodd" },
+        h("button", { type: "button", class: "hoddbtn", "aria-haspopup": "listbox", "aria-expanded": open ? "true" : "false", onclick: () => { open = !open; draw(); } },
+          pick ? h("span", {}, h("b", {}, pick), h("span", { class: "mute" }, " \u00b7 " + cnt(pick))) : h("span", { class: "mute" }, "Choose a saved order (" + names.length + ")"), "\u25be"),
+        panel));
+      fill();
+      if (open) setTimeout(() => search.focus(), 20);
+      box.appendChild(h("div", { class: "holacts" },
+        h("button", { type: "button", class: "btn pri", disabled: !pick, onclick: async () => {
           const isSaved = !(order || []).length || Object.values(m).some((rows) => sameRows(rows, order));
-          if (!isSaved && !(await confirmBox("Replace your current list?", "Your current list is not saved. Load \u201c" + nm + "\u201d anyway?", "Load"))) return;
-          oSave(m[nm].map((r) => Object.assign({}, r))); oSel.clear(); dlg.close(); toast("Loaded \u201c" + nm + "\u201d.", "ok"); paintOrder(); } }, "Load"),
-        h("button", { type: "button", class: "btn sm", onclick: async () => {
-          const nn = ((await promptBox("Rename", "New name", nm)) || "").trim().slice(0, 40);
-          if (!nn || nn === nm) return;
-          const out = {}; for (const k of Object.keys(m)) out[k === nm ? nn : k] = m[k]; putSaved(out); draw(); } }, "Rename"),
-        h("button", { type: "button", class: "btn sm danger", onclick: async () => {
-          if (!(await confirmBox("Delete \u201c" + nm + "\u201d?", "This removes the saved order only. Your current list stays.", "Delete"))) return;
-          const out = Object.assign({}, m); delete out[nm]; putSaved(out); draw(); paintOrder(); } }, "Delete")));
+          if (!isSaved && !(await confirmBox("Replace your current list?", "Your current list is not saved. Load \u201c" + pick + "\u201d anyway?", "Load"))) return;
+          oSave(m[pick].map((r) => Object.assign({}, r))); oSel.clear(); dlg.close(); toast("Loaded \u201c" + pick + "\u201d.", "ok"); paintOrder(); } }, "Load"),
+        h("button", { type: "button", class: "btn", disabled: !pick, onclick: async () => {
+          const nn = ((await promptBox("Rename", "New name", pick)) || "").trim().slice(0, 40);
+          if (!nn || nn === pick) return;
+          if (m[nn] && !(await confirmBox("Replace \u201c" + nn + "\u201d?", "A saved order with this name exists. Replace it?", "Replace"))) return;
+          const out = {}; for (const k of Object.keys(m)) if (k !== nn) out[k === pick ? nn : k] = m[k]; putSaved(out); pick = nn; draw(); } }, "Rename"),
+        h("button", { type: "button", class: "btn danger", disabled: !pick, onclick: async () => {
+          if (!(await confirmBox("Delete \u201c" + pick + "\u201d?", "This removes the saved order only. Your current list stays.", "Delete"))) return;
+          const out = Object.assign({}, m); delete out[pick]; pick = ""; putSaved(out); draw(); paintOrder(); } }, "Delete")));
     };
     const dlg = modal({ title: "Load order", body: box, buttons: [{ label: "Close" }], focus: false });
     draw();
@@ -2886,7 +2905,9 @@ function monsterRallyTab(serial) {
     if (!own && !n) return;
     const find = h("input", { type: "text", class: "hofind", placeholder: "Find in order…", "aria-label": "Find in the hunt order", value: oFind,
       oninput: (e) => { oFind = e.target.value; paintList(); } });
+    const delAll = async () => { if (await confirmBox("Delete all?", "Remove all " + n + " monsters from your hunt order? Your presets and saved orders stay as they are.", "Delete all")) { oSave([]); oSel.clear(); paintOrder(); } };
     orderBox.appendChild(h("div", { class: "hotool" }, n > 8 ? find : null, h("span", { class: "mute" }, n + (n === 1 ? " monster" : " monsters")),
+      n ? h("button", { type: "button", class: "btn sm hodel", onclick: delAll }, "Delete all") : null,
       h("span", { class: "hoacts" },
         h("button", { type: "button", class: "btn", disabled: !n, title: n ? "Save this list under a name" : "Add monsters first", onclick: saveOrderAs }, "Save order"),
         h("button", { type: "button", class: "btn", disabled: !Object.keys(savedOrders()).length, title: Object.keys(savedOrders()).length ? "Use one of your saved lists" : "No saved orders yet", onclick: loadOrderDlg }, "Load order"),
@@ -2967,8 +2988,10 @@ function monsterRallyTab(serial) {
       if (miss.length) orderBox.appendChild(h("div", { class: "hoafter" }, h("span", { class: "mute" }, "Then, from your presets (not in this list):"),
         ...miss.map((r) => h("span", { class: "hotag" }, oName(r)))));
     }
-    if (n) orderBox.appendChild(h("div", { class: "hofoot" }, h("button", { type: "button", class: "btn sm danger", onclick: async () => {
-      if (await confirmBox("Delete all?", "Remove all " + n + " monsters from your hunt order? Your presets stay as they are.", "Delete all")) { oSave([]); oSel.clear(); paintOrder(); } } }, "Delete all")));
+    requestAnimationFrame(() => {                     // the toolbar sticks under the hunts status card while the list scrolls
+      const stk = root.querySelector(".hustatus");
+      orderBox.style.setProperty("--hostick", (stk && getComputedStyle(stk).position === "sticky" ? stk.offsetHeight + 8 : 0) + "px");
+    });
   };
   document.addEventListener("dragover", (e) => {            // drag near the top / bottom edge: the page scrolls by itself
     if (oDrag < 0 || !orderBox.isConnected) return;

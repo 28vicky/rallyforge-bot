@@ -2063,7 +2063,7 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .hudpanel .huempty{grid-column:1/-1}
 @media (max-width:1023px){.hudpanel{width:96vw;grid-template-columns:minmax(0,1fr);grid-template-areas:"h" "s" "f" "l" "d"}
   .hudpanel .hufil{flex-direction:row;flex-wrap:wrap;border-right:0;padding:0}.hudpanel .hupl{grid-template-columns:minmax(0,1fr)}}
-/* hidden km / x take no room until the row is hovered, so the monster name gets the space */
+/* owner 29 Oct 22:35: km shows only when set; "+ km" and x take no room until the row is hovered */
 .horow .hokm:not(.set),.horow .hox{max-width:0;padding:0;border-width:0;overflow:hidden;transition:none}
 .horow:hover .hokm:not(.set){max-width:60px;padding:0 8px;border-width:1px}
 .horow:hover .hox,.horow .hox:focus-visible{max-width:22px}
@@ -2088,3 +2088,23 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .holrow{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
 .holname{flex:1;min-width:0;display:flex;flex-direction:column}
 .holname b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Load order: a dropdown with a search box inside */
+.hodd{position:relative}
+.hoddbtn{width:100%;height:40px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 12px;border:var(--bd);border-radius:10px;background:var(--field);color:var(--fg);font:inherit;font-size:14px;cursor:pointer;text-align:left}
+.hoddbtn .mute{font-size:13px}
+.hoddpanel{position:absolute;left:0;right:0;top:44px;z-index:5;border:var(--bd);border-radius:12px;background:var(--card);box-shadow:var(--appsh);padding:8px}
+.hoddpanel[hidden]{display:none}
+.hoddpanel input{width:100%;height:34px;box-sizing:border-box;border:var(--bd);border-radius:8px;background:var(--field);color:var(--fg);font:inherit;font-size:13px;padding:0 10px;margin-bottom:6px}
+.hoddlist{max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.hoddopt{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border:0;border-radius:8px;background:none;color:var(--fg);font:inherit;font-size:13.5px;cursor:pointer;text-align:left}
+.hoddopt:hover,.hoddopt.on{background:color-mix(in srgb,var(--accent1) 12%,var(--card))}
+.hoddopt small{color:var(--mute)}
+.holacts{display:flex;gap:8px;margin-top:12px}
+/* owner 29 Oct 22:35-22:37: the Hunt order toolbar (Find, Delete all, Save, Load, + Add monster) stays on screen while
+   the list scrolls; Delete all sits away from + Add monster and asks first */
+.huorder .hotool{position:sticky;top:var(--hostick,0px);z-index:4;background:var(--card);margin:0 -20px 10px;padding:8px 20px;border-bottom:1px solid transparent}
+.hodel{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line));background:transparent}
+.hodel:hover{background:color-mix(in srgb,var(--bad) 10%,transparent)}
+.hoddpanel{position:static;margin-top:6px;box-shadow:none}
+.holacts .btn:disabled{opacity:.45;cursor:not-allowed}
