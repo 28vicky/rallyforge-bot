@@ -1952,3 +1952,19 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .citymap .cmhead>div:first-child{min-width:0}
 .citymap .cmacts{flex-wrap:wrap;justify-content:flex-end;max-width:100%;min-width:0}
 .citymap .cmacts .btn{white-space:nowrap}
+/* Instance header: two fixed rows at every window size, fits the 900 px minimum (owner 29 Oct 17:18) */
+.insthead.ih2{display:grid!important;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:10px;align-items:center;margin:0 0 12px}
+.ih2 .ihtitle{display:flex;align-items:center;gap:10px;min-width:0}
+.ih2 .ihtitle h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ih2 .ihtitle .state-pill{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+.ih2 .ihacts{display:flex;align-items:center;gap:8px;margin-left:0;flex-wrap:nowrap}
+.ih2 .ihctl{grid-column:1/-1;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.ih2 .tgl.ajsw{white-space:nowrap}
+.ih2 .takeback{white-space:nowrap}
+@media (max-width:1100px){.ih2 .savest .stxt{display:none}}
+/* Instance header outside the scroll area (owner 29 Oct 17:19: the scrollbar ran up beside the header and the sticky bar jerked) */
+.pages.pagehead{flex:none!important;overflow:visible!important;min-height:0;padding-bottom:0!important;animation:none}
+.pages.pagehead[hidden]{display:none!important}
+.pagehead .stickyhead{position:static;margin-bottom:0!important;box-shadow:none!important}
+.pagehead .stickyhead.stuck{box-shadow:none!important}
+#app.inst-mode #pages{padding-top:16px}

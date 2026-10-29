@@ -235,7 +235,7 @@ function layout() {
         h("span", { class: "sum", id: "sum" })),
       h("div", { class: "ribbon", id: "ribbon" }),
       h("div", { class: "tabs", id: "tabs" }),
-      h("div", { class: "pages", id: "pages" })),
+      h("div", { class: "pages pagehead", id: "pagehead" }), h("div", { class: "pages", id: "pages" })),   // owner 29 Oct: the instance header sits above the scroll area (no sticky jerk)
     // status bar: live facts on the left (running, memory, Telegram, account), update + credit on the right
     h("div", { class: "status" },
       h("div", { class: "sbl" }, h("span", { class: "sbrun" }, h("span", { class: "sbdot", id: "sbDot" }), h("span", { id: "sbRun" }, "0 running")),
@@ -721,6 +721,8 @@ function renderPage() {
   } else {
     p.appendChild(instancePage(S.sel));
   }
+  const ph = $("#pagehead");                                  // the instance header (name, buttons, tabs) lives outside the scroll area
+  if (ph) { ph.innerHTML = ""; const sh = p.querySelector(".stickyhead"); if (sh) ph.appendChild(sh); ph.hidden = !sh; }
   paintAjAll();
   lastPageSel = S.sel;
   if (keep) { p.scrollTop = keep; requestAnimationFrame(() => { p.scrollTop = keep; }); setTimeout(() => { p.scrollTop = keep; }, 250); }
@@ -1143,7 +1145,7 @@ function paintSave(el) {
   if (st === "saving") { el.append(h("span", { class: "sdot" }), "Saving\u2026"); return; }
   if (st === "err") { el.append(h("span", { class: "sdot" }), "Not saved: " + msg); el.title = "Fix this setting - nothing else is lost; it saves as soon as the value is valid."; return; }
   el.title = "Your changes save by themselves. Ctrl+S saves now.";
-  el.append(ico("check", "sok"), "Saved");
+  el.append(ico("check", "sok"), h("span", { class: "stxt" }, "Saved"));   // the word hides in a narrow instance header (the tick stays)
   if (UNDO.length) el.append(h("button", { class: "lnkb undob", type: "button", title: "Put back the last change (Ctrl+Z)", onclick: undoLast }, "Undo"));
 }
 function undoLast() {

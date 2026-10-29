@@ -437,13 +437,15 @@ function instancePage(serial) {
   };
   const stBtn = (t, fn, cls) => h("button", { class: "btn" + (cls ? " " + cls : ""), "data-act": t.toLowerCase(), onclick: fn }, t);
   const moreBtn = btn("More \u25BE", (e) => menu(e.currentTarget, [
-    { label: "Take game back now", run: () => act(api("takeback", { serial })) },
     { label: "Save profile\u2026", run: saveInstProfile }, { label: "Load profile\u2026", run: loadInstProfile }]), "");
   const bar = h("div", { class: "row instbar" },
     stBtn("Start", () => collectAndRun("start", { serial }), "pri"), stBtn("Pause", () => act(api("pause", { serial })), "pri"), stBtn("Stop", () => act(api("stop", { serial })), "stopb"), moreBtn);
-  const head = h("div", { class: "row insthead", style: { margin: "0 0 12px", gap: "14px", alignItems: "center" } },
-    sideBtn(), h("h2", { title: serial, style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx),
-    status, jrSwitch(serial, { after: () => rerender() }), ajSwitch(serial, { after: () => rerender() }), h("span", { class: "mute iserial", style: { fontSize: "13px" } }, serial), h("div", { class: "ihacts" }, saveStEl(), bar));   // owner 29 Oct: Saved stays with the buttons - the group wraps as one
+  // owner 29 Oct 17:18 (900 px rule): two fixed rows at every window size - name + status + actions, then the switches
+  const head = h("div", { class: "insthead ih2" },
+    h("div", { class: "ihtitle" }, sideBtn(), h("h2", { title: dev.name + " \u00b7 " + serial, style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx), status),
+    h("div", { class: "ihacts" }, saveStEl(), bar),
+    h("div", { class: "ihctl" }, jrSwitch(serial, { after: () => rerender() }), ajSwitch(serial, { after: () => rerender() }),
+      h("button", { id: "instTakeBack", class: "btn sm takeback", type: "button", style: { display: "none" }, title: "The game was opened on another device. Take it back now instead of waiting.", onclick: () => act(api("takeback", { serial })) }, "Take back")));
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
@@ -710,9 +712,11 @@ function refreshInstanceControls() {
     const kk = d.state === "run" && d.kicked_at;
     const ns = d.state === "run" && d.no_stamina && !kk;
     s.className = "state-pill st-" + ((ns || kk) ? "pause" : d.state);
-    s.textContent = kk ? "\u26A0 Kicked \u00b7 game opened on another device" : ns ? "\u26A0 No stamina" + (d.joins ? ` \u00b7 joins ${d.joins}` : "") : (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? ` \u00b7 joins ${d.joins}` : "");
+    s.textContent = kk ? "\u26A0 Kicked" : ns ? "\u26A0 No stamina" + (d.joins ? ` \u00b7 joins ${d.joins}` : "") : (G[d.state] || "") + STATE_TXT[d.state] + (d.queued ? " (queued)" : "") + (d.joins ? ` \u00b7 joins ${d.joins}` : "");
     const w = $("#instWarn"); if (w) w.style.display = ns ? "" : "none";
-    if (kk) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at), "data-pre": " \u00b7 taking it back in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
+    s.title = kk ? "The game was opened on another device - the bot takes it back when the wait is over" : "";
+    const tb = $("#instTakeBack"); if (tb) tb.style.display = kk ? "" : "none";
+    if (kk) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.kicked_at), "data-pre": " \u00b7 " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
     if (d.state === "pause" && d.resume_at) { s.appendChild(h("span", { class: "ptimer", "data-at": String(d.resume_at), "data-pre": " - runs again in " })); if (typeof tickPauseTimers === "function") tickPauseTimers(); }
   }
   if (typeof paintRunState === "function") paintRunState();
