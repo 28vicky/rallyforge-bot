@@ -10681,49 +10681,83 @@ def ce_on_screen(img):
     return bool(find_text(img, ["Reset Countdown", "Scout Cost", "Activate all"], cutoff=0.8))
 
 
-CE_CONFIRM = (360, 720)          # the green Confirm button of the Lucky Hammer dialog (fallback tap point)
-
-
 def ce_lucky_dialog(img):
     return bool(find_text(img, ["Confirm use?", "cooldown, but it can only"], cutoff=0.6))
 
 
-def ce_confirm_button(img):
-    """The green Confirm BUTTON of the Lucky Hammer dialog: a line that is only the word 'Confirm' (the question
-    '... Confirm use?' has the same word - 28 Oct all 8 instances tapped the question text and the hammer stayed 1).
-    The lowest such line wins. -> (x, y) or None."""
-    import difflib
-    x0, y0 = 150, 520
-    best = None
+CE_Q_WORDS = ("lucky hammer", "cooldown", "confirm use", "once per day", "smash an egg")
+
+
+def ce_lucky_geom(img):
+    """Where the Lucky Hammer question sits: -> (top_y, bottom_y) of its text lines, or None (dialog not open).
+    Owner screenshot 29 Oct: lines at y 446 / 471 / 496 on a 540x960 screen."""
+    ys = []
     try:
-        for text, ws in ocr_lines(img[y0:900, x0:540]):
-            t = text.lower().strip(" .,:;!?")
-            if len(ws) <= 2 and difflib.SequenceMatcher(None, t, "confirm").ratio() >= 0.75:
-                cx = int(sum(w[1] for w in ws) / len(ws)) + x0
-                cy = int(sum(w[2] for w in ws) / len(ws)) + y0
-                if best is None or cy > best[1]:
-                    best = (cx, cy)
+        for text, ws in ocr_lines(img[200:820, 0:540]):
+            low = text.lower()
+            if ws and any(k in low for k in CE_Q_WORDS):
+                ys += [w[2] + 200 for w in ws]
+    except Exception as _e:
+        quiet_err("ce_lucky_geom", _e)
+    return (int(min(ys)), int(max(ys))) if ys else None
+
+
+def ce_confirm_button(img, geom=None):
+    """The green Confirm BUTTON of the Lucky Hammer dialog, found by colour (OCR cannot read the button labels -
+    owner screenshot 29 Oct: neither 'Confirm' nor 'Cancel' is read). Searched ONLY inside the active dialog:
+    below the question text (lower half of the dialog) and on its right side. Exactly ONE button-sized green blob
+    must be there, otherwise nothing is tapped. -> ((x, y), info) or (None, info)."""
+    geom = geom or ce_lucky_geom(img)
+    if not geom:
+        return None, {"why": "dialog text not found"}
+    top, bottom = geom
+    x0, x1, y0, y1 = 270, 520, bottom + 15, min(img.shape[0], bottom + 150)
+    info = {"question_y": [top, bottom], "search_box": [x0, y0, x1, y1], "blobs": []}
+    try:
+        hsv = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+        m = cv2.inRange(hsv, (35, 60, 50), (90, 255, 255))
+        m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((15, 9), np.uint8))    # the label splits the button in two bands
+        n, _lab, st, cen = cv2.connectedComponentsWithStats(m)
+        blobs = []
+        for i in range(1, n):
+            x, y, w, h, area = (int(v) for v in st[i])
+            if area >= 1500 and 90 <= w <= 230 and 25 <= h <= 75:
+                blobs.append((int(cen[i][0]) + x0, int(cen[i][1]) + y0, w, h, area))
+        info["blobs"] = blobs
+        if len(blobs) != 1:
+            info["why"] = f"{len(blobs)} green buttons in the dialog (need exactly 1)"
+            return None, info
+        return (blobs[0][0], blobs[0][1]), info
     except Exception as _e:
         quiet_err("ce_confirm_button", _e)
-    return best
+        info["why"] = f"colour check failed: {type(_e).__name__}"
+        return None, info
 
 
-def ce_lucky_confirm(dev, stop, force=False, fallback=False):
-    """Tap Confirm on the Lucky Hammer dialog if it is open. True when it was tapped.
-    fallback=True (a try that did not use the hammer) taps the fixed button point instead of the read one."""
+def ce_lucky_confirm(dev, stop):
+    """Tap Confirm on the Lucky Hammer dialog if it is open. -> "no_dialog" | "confirmed" (the dialog is gone after
+    the tap) | "no_button" (not exactly one green button inside the dialog: nothing tapped) | "still_open".
+    A tap alone is never success; the caller also checks that the Lucky Hammer count went down.
+    29 Oct: the old fixed point (360, 720) was ~150 px BELOW the button (owner screenshot: button at ~358, 566)."""
     img = dev.screenshot()
-    if not (force or ce_lucky_dialog(img)):
-        return False
+    if not ce_lucky_dialog(img):
+        return "no_dialog"
     ce_snap(img, "5_lucky_dialog")
-    p = CE_CONFIRM if fallback else (ce_confirm_button(img) or CE_CONFIRM)
+    p, info = ce_confirm_button(img)
+    if not p:
+        failure_evidence(dev, "crazy_eggs", "Lucky Hammer dialog: Confirm button not found - nothing tapped",
+                         shot=img, extra=info)
+        return "no_button"
     dev.tap(*p)
     _nap(stop, 1.8, 2.4)
     img2 = dev.screenshot()
     ce_snap(img2, "6_after_confirm")
-    if ce_lucky_dialog(img2) and p != CE_CONFIRM:          # still open: the read point missed - the fixed button point
-        dev.tap(*CE_CONFIRM)
-        _nap(stop, 1.8, 2.4)
-    return True
+    if ce_lucky_dialog(img2):
+        failure_evidence(dev, "crazy_eggs", "Lucky Hammer dialog still open after tapping Confirm", shot=img2,
+                         pics={"before": img}, extra=dict(info, tap=list(p)))
+        return "still_open"
+    _TL.ce_lucky_tap = (img, img2, p, info)              # the caller adds these to the evidence if the count did not drop
+    return "confirmed"
 
 
 def ce_close_panel(dev, stop):
@@ -10761,9 +10795,14 @@ def ce_find_in_list(dev, stop, img):
 
 def run_crazy_eggs(dev, cfg, log, stop):
     """On the Crazy Eggs screen: smash the ready eggs, use the Lucky Hammer, then note when to come back."""
-    if ce_lucky_confirm(dev, stop):
+    r0 = ce_lucky_confirm(dev, stop)
+    if r0 == "confirmed":
         log("[i]   Crazy Eggs: a Lucky Hammer dialog was left open - confirmed it")
         ce_close_panel(dev, stop)
+    elif r0 != "no_dialog":
+        log(f"[i]   Crazy Eggs: a Lucky Hammer dialog was left open - could not confirm it ({r0}), closing it")
+        dev.tap(*CE_CLOSE)
+        _nap(stop, 0.8, 1.2)
     serial = getattr(dev, "serial", "default")
     conf = ce_conf(cfg)
     day = _game_day()
@@ -10876,17 +10915,29 @@ def run_crazy_eggs(dev, cfg, log, stop):
                 act(f"Crazy Eggs: Lucky Hammer on the {want}-hammer egg")
                 dev.tap(*CE_EGG[slot])
                 _nap(stop, 1.2, 1.7)
-                if ce_lucky_confirm(dev, stop, fallback=lucky_tries >= 2):
+                r_ = ce_lucky_confirm(dev, stop)
+                if r_ == "confirmed":
                     ce_close_panel(dev, stop)
                     _nap(stop, 0.8, 1.2)
-                    left_n = ce_read_count(dev.screenshot(), CE_LUCKY)
-                    if left_n is None or lucky_n is None or left_n < lucky_n:      # the counter went down = really used
+                    after = dev.screenshot()
+                    left_n = ce_read_count(after, CE_LUCKY)
+                    # success = dialog gone AND the counter went down (owner 29 Oct: a tap alone is not success)
+                    if left_n is not None and lucky_n is not None and left_n < lucky_n:
                         lucky_used = True
                         ce_save(serial, lucky_day=day)
+                        log(f"[+]  Crazy Eggs: Lucky Hammer used ({lucky_n} -> {left_n})")
                     else:
-                        log(f"[i]   Crazy Eggs: Lucky Hammer still shows {left_n} after Confirm - trying again")
-                else:
+                        b_, a_, p_, info_ = getattr(_TL, "ce_lucky_tap", None) or (None, None, None, {})
+                        failure_evidence(dev, "crazy_eggs", f"Lucky Hammer count did not go down after Confirm ({lucky_n} -> {left_n})",
+                                         shot=after, pics={"before": b_, "after_tap": a_},
+                                         extra=dict(info_ or {}, tap=list(p_) if p_ else None, count_before=lucky_n, count_after=left_n))
+                        log(f"[i]   Crazy Eggs: Lucky Hammer count {lucky_n} -> {left_n} after Confirm - not counted as used, trying again")
+                elif r_ == "no_dialog":
                     log("[i]   Crazy Eggs: no Lucky Hammer dialog appeared")
+                    dev.tap(*CE_CLOSE)
+                    _nap(stop, 0.8, 1.2)
+                else:                                       # no_button / still_open: evidence saved, nothing blind tapped
+                    log(f"[i]   Crazy Eggs: Lucky Hammer Confirm not done ({'no single green Confirm button in the dialog' if r_ == 'no_button' else 'the dialog stayed open'}) - closing it, trying again later")
                     dev.tap(*CE_CLOSE)
                     _nap(stop, 0.8, 1.2)
                 continue

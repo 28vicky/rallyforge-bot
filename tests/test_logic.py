@@ -396,3 +396,76 @@ class FailureEvidence(unittest.TestCase):
         with mock.patch.object(rb.time, "time", side_effect=lambda: next(clock)):
             p = rb.failure_evidence(d, "duty", "why", shot=d.screenshot(), pics={"a": d.screenshot()})
         self.assertEqual(json.loads(p.read_text())["pictures"], [])
+
+
+class CrazyEggsLuckyConfirm(unittest.TestCase):
+    """Owner screenshot 29 Oct: the Confirm label is not readable; the button is found by colour inside the dialog."""
+    SHOT = Path(__file__).parent / "screens" / "ce_lucky_dialog_29oct.png"
+
+    def setUp(self):
+        import cv2
+        if not self.SHOT.exists():
+            self.skipTest("screenshot missing")
+        self.img = cv2.imread(str(self.SHOT))
+        self.tmp = Path(tempfile.mkdtemp())
+        self.p_user = mock.patch.object(rb, "USER", self.tmp)
+        self.p_user.start()
+
+    def tearDown(self):
+        self.p_user.stop()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_button_found_in_dialog(self):
+        p, info = rb.ce_confirm_button(self.img)
+        self.assertIsNotNone(p, info)
+        self.assertLess(abs(p[0] - 358), 15)
+        self.assertLess(abs(p[1] - 566), 15)
+
+    def test_second_green_button_in_dialog_means_no_tap(self):
+        import cv2
+        img = self.img.copy()
+        cv2.rectangle(img, (300, 606), (420, 640), (40, 160, 40), -1)     # another green button inside the search box
+        p, info = rb.ce_confirm_button(img)
+        self.assertIsNone(p)
+        self.assertIn("need exactly 1", info["why"])
+
+    def test_green_outside_dialog_ignored(self):
+        import cv2
+        img = self.img.copy()
+        cv2.rectangle(img, (300, 840), (430, 880), (40, 160, 40), -1)     # green under the dialog (View Rewards row)
+        cv2.rectangle(img, (110, 545), (250, 585), (40, 160, 40), -1)     # green on the LEFT side of the dialog
+        p, _ = rb.ce_confirm_button(img)
+        self.assertIsNotNone(p)
+        self.assertLess(abs(p[1] - 566), 15)
+
+    def _dev(self, shots):
+        class D:
+            serial = "test"
+            taps = []
+            def __init__(s):
+                s.q = list(shots)
+            def screenshot(s):
+                return s.q.pop(0) if len(s.q) > 1 else s.q[0]
+            def tap(s, x, y):
+                s.taps.append((x, y))
+        return D()
+
+    def test_confirmed_only_when_dialog_gone(self):
+        import numpy as np
+        gone = np.zeros_like(self.img)
+        with mock.patch.object(rb, "_nap"), mock.patch.object(rb, "ce_snap"):
+            d = self._dev([self.img, gone])
+            self.assertEqual(rb.ce_lucky_confirm(d, None), "confirmed")
+            self.assertEqual(len(d.taps), 1)
+            d = self._dev([self.img, self.img])
+            self.assertEqual(rb.ce_lucky_confirm(d, None), "still_open")
+        self.assertTrue(list((self.tmp / "failures" / "crazy_eggs").glob("*.json")))
+
+    def test_no_button_no_tap(self):
+        import cv2
+        img = self.img.copy()
+        cv2.rectangle(img, (280, 540), (440, 590), (30, 30, 30), -1)      # button hidden
+        with mock.patch.object(rb, "_nap"), mock.patch.object(rb, "ce_snap"):
+            d = self._dev([img])
+            self.assertEqual(rb.ce_lucky_confirm(d, None), "no_button")
+            self.assertEqual(d.taps, [])
