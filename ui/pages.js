@@ -94,9 +94,10 @@ function ajSwitch(serial, o) {
 function jrIsOn(serial) { const o = ((S.cfg.per_device || {})[serial]) || {}; return !!(o.rally_enabled !== undefined ? o.rally_enabled : (S.cfg.rally_enabled !== undefined ? S.cfg.rally_enabled : true)); }
 function jrSwitch(serial, o) {
   o = o || {};
-  const i = h("input", { type: "checkbox", checked: jrIsOn(serial), "aria-label": "Join rallies" });
+  const aj = ajIsOn(serial);                         // owner 29 Oct 16:29: Auto-Join on = this instance never joins rallies itself
+  const i = h("input", { type: "checkbox", checked: jrIsOn(serial) && !aj, disabled: aj, "aria-label": "Join rallies" });
   i.addEventListener("change", () => { S.cfg.per_device = S.cfg.per_device || {}; (S.cfg.per_device[serial] = S.cfg.per_device[serial] || {}).rally_enabled = i.checked; if (o.after) o.after(i.checked); });
-  return h("label", { class: "tgl ajsw", title: "The bot joins alliance rallies itself with your presets. Separate from the game's Auto-Join.", onclick: (e) => e.stopPropagation() }, i, h("span", { class: "sw" }), "Join rallies");
+  return h("label", { class: "tgl ajsw" + (aj ? " greyed" : ""), title: aj ? "Auto-Join is on: the game joins rallies, the bot never joins on this instance." : "The bot joins alliance rallies itself with your presets.", onclick: (e) => e.stopPropagation() }, i, h("span", { class: "sw" }), "Join rallies");
 }
 function ajSetAll(v) { S.cfg.game_auto_join = !!v; S.devices.forEach((d) => { if (d.id) ajSetOne(d.id, v); }); paintAjAll(); }
 function paintAjAll() {
