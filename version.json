@@ -1,24 +1,24 @@
 {
-  "version": "2.5.21",
-  "notes": "Pan rallies are now recognised, so unticking Pan really skips them",
+  "version": "2.5.22",
+  "notes": "Crazy Eggs uses the Lucky Hammer again; join count shows today's joins; picked colour on main buttons; no false Problem after Stop; failure pictures for duties; Overview fits small windows.",
   "files": {
     "rally_bot.py": {
-      "sha256": "10eeee1e149b7222fa13d83b07d3283746d2d779f1142c957a56ee33d7f2ce96"
+      "sha256": "2c272e7d39bb04336d8d6039748475a6d43d3d94c245c0cb389025d643302163"
     },
     "web_app.py": {
-      "sha256": "82664484d37361d91be91ce40f90be7edf436a23e66dbc1dd2ce585958d91262"
+      "sha256": "fb94b6d6aaef7ae2b0affd07a99f0a66a1dd6749eebe8e3f70a4b4cc4ddf575c"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "ffea9a5e9775506c1efa65142c05915cf6942d81fd1bb4cffcc485b6d9e2b9ae"
+      "sha256": "56b66d3c3edf47e7e7ce3287c1992fe5bf6b4bc775e78b1e6216fc7f35744575"
     },
     "ui/app.js": {
-      "sha256": "ee96a2d802437ef6ce47a798c533ad96ef9d80eb7db22837820b0beb5971dfb9"
+      "sha256": "f7b6e2dc994c394931acf37566feea1eb7762d64063eeb94a963a1f7c090fde9"
     },
     "ui/changelog.js": {
-      "sha256": "5bd452b8570fd99f1b5312f5974595efb40603527754a793a2f5f617ee6ed5a5"
+      "sha256": "3a8dd898d95b506bde00594f653710c532bcc11a48c84530cff3540ba2787d07"
     },
     "ui/dialogs.js": {
       "sha256": "5a4e14faf9eb34d622f1cda72833ed5bf815da402ddd485a8277dac39053a162"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "6f8f3d5c43a01b8a8f1c01be0a6836472b63227a2c83eb950b49b36ae9691342"
+      "sha256": "0a1161b81ee22a89b8041115449d5f2686e9537bbe013ebcd416b97ced7f1060"
     },
     "ui/tour.js": {
       "sha256": "13f3caea4e097cb210531c175e34809ead00eb7fca86570faa51a1929c787b32"
@@ -3413,5 +3413,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "20bfedb857248e8fd01acf99add3b22dcc8db3b49e1c676c56d8562ba8f8a5f4"
+  "sig": "51dde1140fc4970e809b698fbfa3583797441263bd320bea6a8d4088f6e6bd6c"
 }
