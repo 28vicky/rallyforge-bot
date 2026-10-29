@@ -1,24 +1,24 @@
 {
-  "version": "2.5.20",
-  "notes": "Monster hunts hunt order chips, Black Market gold goods and new pictures, joining and hunting fixes, cleaner layout",
+  "version": "2.5.21",
+  "notes": "Pan rallies are now recognised, so unticking Pan really skips them",
   "files": {
     "rally_bot.py": {
-      "sha256": "78791d7a01d870e38cf39431205b756e711a4a6c847a54154aba1209e9122d56"
+      "sha256": "10eeee1e149b7222fa13d83b07d3283746d2d779f1142c957a56ee33d7f2ce96"
     },
     "web_app.py": {
-      "sha256": "cf4a3e50e5de51a458d49c28033a409f7ff1330b89706aaeb9d3a5e5a78a9688"
+      "sha256": "82664484d37361d91be91ce40f90be7edf436a23e66dbc1dd2ce585958d91262"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "8bcf55046f8b9a44c3d0560770ce990e71bdd1046231c97fa4e6b4f4059d7a52"
+      "sha256": "ffea9a5e9775506c1efa65142c05915cf6942d81fd1bb4cffcc485b6d9e2b9ae"
     },
     "ui/app.js": {
       "sha256": "ee96a2d802437ef6ce47a798c533ad96ef9d80eb7db22837820b0beb5971dfb9"
     },
     "ui/changelog.js": {
-      "sha256": "e6c510f06ff25be89ff6ffd333b1ced9755022055723877e4ccbb8075839025d"
+      "sha256": "5bd452b8570fd99f1b5312f5974595efb40603527754a793a2f5f617ee6ed5a5"
     },
     "ui/dialogs.js": {
       "sha256": "5a4e14faf9eb34d622f1cda72833ed5bf815da402ddd485a8277dac39053a162"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "fdeaa8f08122faf1f49f1f7536c8bed67d609c49c0b5b2415cd0ce4e2fdfa0db"
+      "sha256": "6f8f3d5c43a01b8a8f1c01be0a6836472b63227a2c83eb950b49b36ae9691342"
     },
     "ui/tour.js": {
       "sha256": "13f3caea4e097cb210531c175e34809ead00eb7fca86570faa51a1929c787b32"
@@ -3040,7 +3040,7 @@
       "url": "monsters/Leviathan.png"
     },
     "Pan.png": {
-      "sha256": "8094140c2b9f0fc6e924b4bea4683efe8fa25d1e4c4a4f47be2c7fbc9d27b97a",
+      "sha256": "88fcc982ca5d78149d12220f8a856cce0bdc24f8e76534f65f6c281388d3380e",
       "url": "monsters/Pan.png"
     },
     "Phoenix.png": {
@@ -3412,6 +3412,5 @@
     "world_map_btn.png": {
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
-  },
-  "sig": "c20753897ed1d2276c333da2b67125db28bae1a617793c93f245025a1e063bcd"
+  }
 }

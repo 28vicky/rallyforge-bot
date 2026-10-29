@@ -1,5 +1,8 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.21", date: "2026-10-29",
+    new: [],
+    fixed: ["Pan rallies (Ranged, Ground and Mounted Troop) are now recognised, so unticking Pan really skips them."] },
   { v: "2.5.20", date: "2026-10-29",
     new: ["Monster hunts: each preset is one list of monster + level chips, e.g. Pumpkin 8, Turtle 7, Cerberus 5. The bot hunts the first one it finds in Telegram, left to right. Drag a chip to change the order, x removes it.",
       "Monster hunts: Rally or Solo per preset, a live status with the reason when it waits, and a Decisions list that shows why each monster was hunted or skipped.",
