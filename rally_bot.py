@@ -15798,6 +15798,42 @@ def mr_return_secs(dev, cfg, stop, log):
     return mk[2] if mk else None
 
 
+def mr_march_look(dev, cfg, stop, log, shot=None):
+    """Owner 29 Oct 18:29-18:39: before every hunt one quick look at the March panel (open it if folded, read
+    "March n/6" + the soonest return, fold it again; ~1-2 s). -> (busy, total, soonest_s) or None.
+    Never blocks the hunt: not readable 3 times in a row -> no more looks for 30 min (the bot's own timers decide)."""
+    now = time.time()
+    if now < float(getattr(dev, "mr_look_off_until", 0) or 0):
+        return None
+    try:
+        shot = shot if shot is not None else dev.screenshot()
+        mk = rt_marches(shot)
+        opened = False
+        if not mk:
+            dev.tap(*MR_PANEL_TAP)
+            _nap(stop, 0.7, 0.9)
+            shot = dev.screenshot()
+            mk = rt_marches(shot)
+            opened = True
+        if opened:                                         # fold it again (owner: keep it minimised)
+            for spot in (MR_PANEL_TAP, (150, 147)):
+                if not rt_marches(dev.screenshot()):
+                    break
+                dev.tap(*spot)
+                _nap(stop, 0.5, 0.7)
+        if mk:
+            dev.mr_look_fails = 0
+            return mk
+        dev.mr_look_fails = int(getattr(dev, "mr_look_fails", 0) or 0) + 1
+        if dev.mr_look_fails >= 3:
+            dev.mr_look_fails = 0
+            dev.mr_look_off_until = now + 1800
+            log("[i]  Monster hunts: the March panel could not be read 3 times - using the bot's own march timers for 30 min")
+    except Exception as _e:
+        quiet_err("mr_march_look", _e)
+    return None
+
+
 def mr_rule_for(rules, name, level):
     """-> (index, rule) of the first row that fits this monster, or (None, None)."""
     low = str(name or "").lower().strip()
@@ -16435,9 +16471,7 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
         mr_block(key, serial, "rallied")
         log(f"[*]  Monster rally: {label} - a march line is already going to it, skipped")
         return "taken"
-    mk = None if getattr(dev, "mr_no_march_count", False) else rt_marches(shot)
-    if not mk:
-        dev.mr_no_march_count = True                         # the March panel is folded on the map: not read again
+    mk = mr_march_look(dev, cfg, stop, log, shot)          # quick look at the March panel before every hunt (owner 29 Oct)
     if mk and mk[1] - mk[0] <= keep_free:                    # every march is out: no waiting on the monster
         release(slots=time.time() + min(HUNT_WAIT_CAP_S, max(10, (mk[2] or 60) + 2)), hold_it=not solo)
         hunt_note(serial, tgt, "Waiting", "wait", "Every march is out · tries again when one is back")
