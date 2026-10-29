@@ -2536,6 +2536,7 @@ function monsterRallyTab(serial) {
       acted: rows.filter((d) => d.kind !== "skip"),
       nopreset: rows.filter((d) => isNoPre(d) && d.live).sort((a, b) => (a.km ?? 1e9) - (b.km ?? 1e9)),   // closest first: what a user would run next
       other: rows.filter((d) => d.kind === "skip" && !isNoPre(d) && !isGone(d)),
+      all: (live.all || []).filter((d) => !isBoss(d.name)),          // owner 29 Oct 17:24: the whole live list in hunt order
     };
     const tab = S.huDec[serial] || "acted";
     const setTab = (k) => { S.huDec[serial] = k; moreRows = 50; keepTop = 0; liveBox.querySelector(".hutwrap")?.scrollTo(0, 0); paintLive(); };
@@ -2544,10 +2545,10 @@ function monsterRallyTab(serial) {
       stat(cnt.solo, "Attacked", "solo", "acted"), stat(cnt.go, "Rallied", "go", "acted"), stat(cnt.nopreset, "Not in preset", "nopre", "nopreset"),
       stat(cnt.gone, "Gone", "gone", null, "Gone before arrival (counted, not listed)"), stat(cnt.replaced, "Replaced", "gone", null, "Spot taken by another monster (counted, not listed)"));
     const tabs = h("div", { class: "hudtabs", role: "tablist", "aria-label": "Decisions filter" },
-      ...[["acted", "Acted"], ["nopreset", "Not in preset"], ["other", "Other skips"]].map(([k, l]) =>
+      ...[["acted", "Acted"], ["all", "All monsters"], ["nopreset", "Not in preset"], ["other", "Other skips"]].map(([k, l]) =>
         h("button", { type: "button", role: "tab", class: "hudtab" + (tab === k ? " on" : ""), "aria-selected": tab === k ? "true" : "false", onclick: () => setTab(k) }, l, h("small", {}, String(lists[k].length)))));
-    const sec = h("section", { class: "panel hudec" }, h("div", { class: "hudhead" }, h("h3", {}, "Decisions"), rows.length ? stats : null, rows.length ? tabs : null));
-    if (!rows.length) {
+    const sec = h("section", { class: "panel hudec" }, h("div", { class: "hudhead" }, h("h3", {}, "Decisions"), rows.length ? stats : null, rows.length || lists.all.length ? tabs : null));
+    if (!rows.length && !lists.all.length) {
       const linked = coords.ready || (coords.items || []).length;
       const huOn = !!(duty && duty.on), ran = !!((live.status || {}).t);
       // QA 28 Oct: say why the list is empty - switched off, or switched on but not run yet (was "No decisions yet today" in both cases)
@@ -2557,7 +2558,7 @@ function monsterRallyTab(serial) {
       liveBox.appendChild(sec);
       return;
     }
-    const list = lists[tab];
+    const list = lists[tab] || lists.acted;
     const nowS = Date.now() / 1000;
     const copyXY = async (d, btn) => {                              // owner 29 Oct: copy exactly what is shown
       const txt = "X:" + d.x + " Y:" + d.y;
@@ -2571,8 +2572,10 @@ function monsterRallyTab(serial) {
       acted: ["time", "name", "loc", "km", "dec", "why"],
       nopreset: ["name", "loc", "km", "seen"],
       other: ["name", "loc", "km", "seen", "why"],
+      all: ["name", "plan", "loc", "km", "seen", "state"],
     }[tab];
-    const TITLES = { time: "Time", name: "Monster", loc: "Location", km: "Dist", seen: "Seen", dec: "Decision", why: "Why" };
+    const TITLES = { time: "Time", name: "Monster", loc: "Location", km: "Dist", seen: "Seen", dec: "Decision", why: "Why", plan: "Hunted by", state: "Now" };
+    const ord = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th");
     const cell = (c, d) => {
       if (c === "time") return h("span", { class: "hut" }, clock(d.t));
       if (c === "name") return h("span", { class: "hunm", title: (d.name || "?") + (d.level ? " Lv" + d.level : "") }, (d.name || "?") + (d.level ? " Lv" + d.level : ""));   // PCR2 B2
@@ -2586,15 +2589,20 @@ function monsterRallyTab(serial) {
       }
       if (c === "km") return h("span", { class: "hukm" }, d.km != null ? d.km + " km" : "\u2013");
       if (c === "seen") return d.seen ? h("span", { class: "huage", "data-ago": String(d.seen) }, ago(nowS - d.seen) + " ago") : h("span", { class: "huage" }, "\u2013");
+      if (c === "plan") return d.group === "preset" ? h("span", { class: "huplan", title: "Place " + ((d.rank || 0) + 1) + " in Preset " + d.preset + "'s list" }, "Preset " + d.preset + " \u00b7 " + ord((d.rank || 0) + 1) + " \u00b7 " + (d.mode === "solo" ? "Solo" : "Rally")) : h("span", { class: "mute" }, "No preset");
+      if (c === "state") return d.kind ? h("span", { title: d.why || "" }, pill(d.kind)) : h("span", { class: "huwhy", title: d.note || "" }, d.note || (d.group === "preset" ? "In line" : "\u2013"));
       if (c === "dec") return h("span", { title: d.why }, pill(d.kind));   // Why sits in the tooltip when its column is hidden (narrow)
       return h("span", { class: "huwhy", title: d.why }, d.why);
     };
     const head = h("div", { class: "hurow hd" }, ...COLS.map((c) => h("span", { class: "c-" + c + (c === "km" ? " hukm" : "") }, TITLES[c])));
-    const line = (d) => h("div", { class: "hurow" + (d.live || d.kind !== "skip" ? "" : " old") }, ...COLS.map((c) => { const el = cell(c, d); el.classList.add("c-" + c); return el; }));
+    const line = (d) => h("div", { class: "hurow" + (tab === "all" ? (d.group === "none" || d.note ? " old" : "") : d.live || d.kind !== "skip" ? "" : " old") }, ...COLS.map((c) => { const el = cell(c, d); el.classList.add("c-" + c); return el; }));
     const body = h("div", { class: "hutable t-" + tab, role: "table" }, head);
     if (!list.length) body.appendChild(h("div", { class: "huempty in" }, h("span", { class: "mute" },
-      tab === "nopreset" ? "No live monsters outside your presets right now. New Telegram lists show here." : tab === "acted" ? "Nothing rallied or attacked yet today." : "No other skips today.")));
-    list.slice(0, moreRows).forEach((d) => body.appendChild(line(d)));
+      tab === "nopreset" ? "No live monsters outside your presets right now. New Telegram lists show here." : tab === "all" ? "No live monsters in the Telegram list right now." : tab === "acted" ? "Nothing rallied or attacked yet today." : "No other skips today.")));
+    list.slice(0, moreRows).forEach((d, i) => {
+      if (tab === "all" && d.group === "none" && (i === 0 || list[i - 1].group !== "none")) body.appendChild(h("div", { class: "hurow husep" }, h("span", {}, "Not hunted by any preset")));
+      body.appendChild(line(d));
+    });
     if (list.length > moreRows) body.appendChild(h("button", { type: "button", class: "btn sm humore", onclick: () => { moreRows += 50; paintLive(); } }, "Show " + Math.min(50, list.length - moreRows) + " more"));
     const wrap = h("div", { class: "hutwrap" }, body);
     sec.appendChild(wrap);

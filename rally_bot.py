@@ -15895,6 +15895,72 @@ def mr_targets(cfg, tried, serial=None):
     return out
 
 
+def mr_overview(cfg, serial=None):
+    """Hunts > Live "All monsters" (owner 29 Oct 17:24): every live monster in the Telegram cache for this instance, in
+    hunt order - first the ones a preset hunts (box place, then higher level, then nearest = the same order the hunt
+    uses), then the ones no preset hunts (nearest first). Read only: writes no decision, changes nothing.
+    -> [{name, level, x, y, km, t, group: "preset"|"none", preset, rank, mode, note}]"""
+    rules = mr_rules(cfg)
+    modes = mr_presets(cfg)
+    done = mr_solo_done(serial)
+    age = float(rd_opt(cfg, "monster_rally", "max_age", 10) or 10) * 60
+    max_km = float(rd_opt(cfg, "monster_rally", "max_km", 0) or 0)
+    now = time.time()
+    feed, _ = feed_get(_feed_keep[0] if _feed_keep[0] is not None else int(cfg.get("tg_keep_min", 60) or 0))
+    try:
+        upd = json.loads(BOSS_FILE.read_text(encoding="utf-8")).get("updated", 0) if BOSS_FILE.exists() else 0
+    except Exception:
+        upd = 0
+    pool = list(feed) + [dict(b, t=upd) for b in get_bosses()]
+    hunt, held, none, seen = [], [], [], set()
+    for it in pool:
+        key = f"{it.get('x')},{it.get('y')}"
+        if key in seen:
+            continue
+        seen.add(key)
+        low = str(it.get("name") or "").lower().strip()
+        if low in NEVER_JOIN or now - float(it.get("t") or 0) > age:
+            continue
+        row = {k: it.get(k) for k in ("name", "level", "x", "y", "km", "t")}
+        fits = [(i, r) for i, r in enumerate(rules) if mr_rule_for([r], it.get("name"), it.get("level") or 0)[1]]
+        if not fits:
+            none.append(dict(row, group="none", note="Not in any preset"))
+            continue
+        pairs, note, seen_p = [], "", set()
+        for i, r in fits:
+            m, p = modes[r["preset"]]["mode"], r["preset"]
+            if p in seen_p:
+                continue
+            if m == "solo" and low in RALLY_ONLY:
+                note = note or f"Rally only · Preset {mr_pnum(p)} is Solo"
+                continue
+            if m == "rally" and low in SOLO_ONLY:
+                note = note or f"Solo only · Preset {mr_pnum(p)} is Rally"
+                continue
+            lim = modes[p]["hunts"]
+            if m == "solo" and lim and int(done.get(p, 0)) >= lim:
+                note = note or f"Preset {mr_pnum(p)} did its {lim} hunts today"
+                continue
+            seen_p.add(p)
+            pairs.append({"preset": p, "mode": m, "rank": sum(1 for x in rules[:i] if x["preset"] == p)})
+        if mr_blocked(key, serial):
+            note = {"rallied": "Taken by another rally", "dead": "Gone (not on the map any more)"}.get(mr_block_why(key), "Picked by another instance")
+            pairs = []
+        elif max_km and it.get("km") is not None and float(it["km"]) > max_km:
+            note, pairs = f"Too far · max distance is {max_km:g} km", []
+        if pairs:
+            pairs.sort(key=mr_pair_order)
+            b = pairs[0]
+            hunt.append(dict(row, group="preset", preset=mr_pnum(b["preset"]), rank=b["rank"], mode=b["mode"], note=""))
+        else:
+            r0 = fits[0][1]
+            held.append(dict(row, group="preset", preset=mr_pnum(r0["preset"]), rank=sum(1 for x in rules[:fits[0][0]] if x["preset"] == r0["preset"]),
+                             mode=modes[r0["preset"]]["mode"], note=note or "Not huntable now"))
+    km = lambda it: it.get("km") if it.get("km") is not None else 1e9
+    order = lambda it: (it["rank"], -int(it.get("level") or 0), km(it))
+    return sorted(hunt, key=order) + sorted(held, key=order) + sorted(none, key=km)
+
+
 def mr_march_line(img, center=MR_CENTER):
     """True when a march line (white = another player, green = an alliance march) ends at the monster in the middle.
     First guess, not checked on a real line yet: long straight bright strokes whose line passes the centre."""

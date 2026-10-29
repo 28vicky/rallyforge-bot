@@ -1968,3 +1968,8 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .pagehead .stickyhead{position:static;margin-bottom:0!important;box-shadow:none!important}
 .pagehead .stickyhead.stuck{box-shadow:none!important}
 #app.inst-mode #pages{padding-top:16px}
+/* Decisions > All monsters (owner 29 Oct 17:24): hunt order, then the ones no preset hunts */
+.t-all .hurow{grid-template-columns:minmax(130px,1.4fr) minmax(130px,1.2fr) 140px 66px 80px minmax(90px,1.2fr)}
+.t-all .hurow.husep{display:block;padding:10px 12px 6px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);border-top:1px solid var(--line)}
+.t-all .huplan{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:1280px){.t-all .hurow{grid-template-columns:minmax(110px,1.2fr) minmax(120px,1.2fr) 124px 58px minmax(70px,1fr)}.t-all .c-seen{display:none}}

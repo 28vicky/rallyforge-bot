@@ -2881,8 +2881,18 @@ class Api:
                 counts["replaced"] += 1
             elif why == "Not in any preset" and d["live"]:
                 counts["nopreset"] += 1
+        try:                                    # "All monsters" (owner 29 Oct 17:24): the whole live list in hunt order
+            allm = rb.mr_overview(cfg, serial)
+        except Exception as _e:
+            rb.quiet_err("Api.hunts all", _e)
+            allm = []
+        bykey = {d.get("key"): d for d in decs}
+        for m in allm:
+            d = bykey.get(f"{m.get('x')},{m.get('y')}")
+            if d:
+                m["decision"], m["kind"], m["why"] = d.get("decision"), d.get("kind"), d.get("why")
         return {"on": on, "running": self.c.running(serial), "status": row.get("status") or {}, "busy": busy,
-                "solo_done": rb.mr_solo_done(serial), "decisions": decs[:400], "counts": counts,
+                "solo_done": rb.mr_solo_done(serial), "decisions": decs[:400], "counts": counts, "all": allm[:400],
                 "rally_only": sorted(rb.RALLY_ONLY), "solo_only": sorted(rb.SOLO_ONLY), "now": now}
 
     def coords_watch(self, p):
