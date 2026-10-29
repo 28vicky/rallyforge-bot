@@ -1,27 +1,27 @@
 {
-  "version": "2.5.25",
-  "notes": "Join rallies: the monster is checked on the march screen before March; full monster names.",
+  "version": "2.5.26",
+  "notes": "Hunt order lists, presets used in turn, Live On the map, every screen lined up, BlueStacks recording.",
   "files": {
     "rally_bot.py": {
-      "sha256": "2289457a069bf5cdd0732add21f028a86a15a69a448c589a13d36ccd5edb4157"
+      "sha256": "b0d464512158308195bccb824ecc8f268f20d7571a7ac0edfb7a18e6c9429454"
     },
     "web_app.py": {
-      "sha256": "f681badcfd17b9de86a6ca1cf605414cb24d3522ca4da43f9b389a3114399a17"
+      "sha256": "d73f5be2be492e07d640c65c12e87bb9f87d1b11bbab95e248a1930e9607de5b"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "90b97aa062cd737eb9e94915af731b0fb27dc322031b64ab012b8f67796b178d"
+      "sha256": "d400a2970ac7b215a5ad968e9eebd317a19bb23e2a8f8bae629e66e958a09e96"
     },
     "ui/app.js": {
       "sha256": "6a29e0f54b57968017b892eaef6750d236bf1bdd021316aa38ad93ea7b2d8420"
     },
     "ui/changelog.js": {
-      "sha256": "0d85aa984183a0bf741d575dd83df699534fb19599213a6f00af5c6f89973e37"
+      "sha256": "73c098d3ecb7a5aa545d18012925c412d24abcf579c92239fb8296839739f2b1"
     },
     "ui/dialogs.js": {
-      "sha256": "5a4e14faf9eb34d622f1cda72833ed5bf815da402ddd485a8277dac39053a162"
+      "sha256": "f9222b8cf22cb7d06737e48bee98a1a431b919b44397560cc92e8ad16c113252"
     },
     "ui/fonts.css": {
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "86369258ca0577fac1c309c5051262b2b1a72128da006fa22e26efb82187df04"
+      "sha256": "d6dc34ddb77a86fdfabc07ffb2f5e18b5996305567130484a8f2b549ef1158b5"
     },
     "ui/tour.js": {
       "sha256": "13f3caea4e097cb210531c175e34809ead00eb7fca86570faa51a1929c787b32"
@@ -3413,5 +3413,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "83bbb356958cffc770f46a42b01e88b66e599d574b7cc6b1deaba93b7e5549c7"
+  "sig": "85f70ff428ff3efc57b3b99d115609276ed091bb390b41564f9aaa0631bdbc5c"
 }
