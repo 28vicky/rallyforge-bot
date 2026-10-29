@@ -639,9 +639,9 @@ function instancePage(serial) {
     try { localStorage.setItem("rf_inst_tab", k); } catch (e) {}
     [...tabRow.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
     body.innerHTML = "";
-    if (k !== "ov" && k !== "mrally") {   // Monster hunts: its status card already says what runs now (owner 29 Oct)
-      const nv = h("span", { class: "nowtxt" }, actNow(serial));
-      const running = ((S.devStatus.find((x) => x.id === serial) || {}).state) === "run";
+    const running = ((S.devStatus.find((x) => x.id === serial) || {}).state) === "run";
+    if (k !== "ov" && k !== "mrally" && running) {   // Monster hunts: its status card says what runs now (owner 29 Oct);
+      const nv = h("span", { class: "nowtxt" }, actNow(serial));    // stopped: the header status chip already says it (UX pass 29 Oct)
       body.appendChild(h("div", { class: "nowstrip" }, h("span", { class: "actlab" }, running ? "Now" : "Last"), nv));
       const iv = setInterval(() => { if (!nv.isConnected) clearInterval(iv); else nv.textContent = actNow(serial); }, 2000);
     }
@@ -673,7 +673,7 @@ function instItinerary(serial) {
     const parts = [grp("Due now", mk((x) => x.status === "due" || x.status === "retry"), true), grp("Retrying - failed today, tried again every hour", mk((x) => x.status === "gaveup")),
       grp("Coming up", mk((x) => x.status === "waiting")), grp("Done today", mk((x) => x.status === "done")), grp("Latest things the bot did here", mine)].filter(Boolean);
     root.appendChild(panel("Itinerary",
-      h("small", { class: "sub" }, "What this instance has to do today" + (row && row.count && row.count.on ? " \u00b7 " + row.count.done + " / " + row.count.on + " done" : "") + ". Changes in Duties are picked up without stopping it."),
+      h("small", { class: "hint", style: { display: "block", margin: "2px 0 10px" } }, "What this instance has to do today" + (row && row.count && row.count.on ? " \u00b7 " + row.count.done + " / " + row.count.on + " done" : "") + ". Changes in Duties are picked up without stopping it."),
       ...(parts.length ? parts : [h("div", { class: "empty" }, "No duty is switched on for this instance. ", h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("routines"); } }, "Switch some on in Duties"))])));
   };
   root.appendChild(note("Loading\u2026"));
@@ -792,7 +792,7 @@ const PRESET_KEYS = ["bot_presets", "preset_mode", "general_main", "general_assi
   "general_assistant_fav", "general_on_fail", "general_idle_only", "general_assistant_optional", "general_view", "max_troops"];
 PAGES.presets = function () {
   const sc = scopeBar("presets", PRESET_KEYS, "presets and generals");
-  return h("div", {}, panel(null, sc.bar), ...presetPanels(S.cfg, false));
+  return h("div", {}, sc.bar, ...presetPanels(S.cfg, false));
 };
 async function captureTemplate() {
   const shot = await pickScreenshot("Screenshot containing the button");
@@ -902,7 +902,7 @@ PAGES.settings0 = function () {
       btn("Open recordings folder", () => act(api("flow_open")), "sm")));
   setTimeout(updateSummary, 0);
   const sc = scopeBar("settings", [...IF_KEYS], "settings");
-  return h("div", {}, panel(null, sc.bar), pillSections("ctlset", [
+  return h("div", {}, sc.bar, pillSections("ctlset", [
     ["join", "Joining rallies", joinSec], ["speed", "Speed & starting up", speedSec], ["stamina", "Stamina", () => staminaPanel(c, c)],
     ["many", "Many instances", () => lr], ["adv", "Advanced", advSec], ["rec", "Record a task", () => [rec, panel("Tour", note("A short walkthrough of where to click and how to set up your presets and start the bot."), h("div", { class: "row" }, btn("Take the tour", () => startTour())))]]]));
 };
@@ -1327,7 +1327,7 @@ PAGES.market = function (fixed, redraw) {
   if (S.dev) api("market_new_list", {}, { quiet: true }).then((j) => { newItems = (j && j.items) || []; if (newItems.length) add.open = true; drawNew(); }).catch(() => {});
   draw();
   const body = h("div", {}, sum, spend, picks, panel(null, add));
-  return h("div", { class: "bmpage" }, panel(null, sc.bar), lockedWrap(body, sc.locked));
+  return h("div", { class: "bmpage" }, sc.bar, lockedWrap(body, sc.locked));
 };
 
 // ====================================================================== telegram
@@ -1794,7 +1794,7 @@ PAGES.duties = function (fixed) {
     r.opts.map((o) => {
       if (o.type === "rules") return h("div", { class: "wide" }, h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); closeSide(); if (S.gotoInstTab && serial) S.gotoInstTab("mrally"); } },
         serial ? "Monsters, presets and rules: Monster hunts tab →" : "Monsters, presets and rules are set on each instance's Monster hunts tab."));
-      if (o.type === "presets" || o.type === "order") return null;
+      if (o.type === "presets" || o.type === "order" || o.type === "saved_orders" || o.k === "own_order") return null;
       const save = async (v) => take(await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } })));
       if (o.type === "bool") return h("div", { class: "wide" }, h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label)));
       if (o.type === "select") return h("label", {}, h("span", { class: "lab" }, o.label), ((st) => sel(st, "v", o.choices, { label: o.label, after: () => save(st.v) }))({ v: o.val }));
@@ -2328,7 +2328,7 @@ const MR_TIMES = ["5", "10", "30", "60"];                    // the game's Allia
 const HU_HUNTS = [0, 10, 25, 50];                            // solo hunts a day (0 = no limit)
 function monsterRallyTab(serial) {
   const root = h("div", { class: "hu" });
-  let duty = null, model = null, off = [], times = {}, modes = {}, ons = {}, copyMode = "", delArm = 0, order = null, knownChips = null, oSel = new Set(), oEdit = -1, oDrag = -1, coords = { items: [], now: Date.now() / 1000, ready: true };
+  let duty = null, model = null, off = [], times = {}, modes = {}, ons = {}, copyMode = "", delArm = 0, order = null, own = false, oFind = "", oNum = -1, dTarget = "preset", knownChips = null, oSel = new Set(), oEdit = -1, oDrag = -1, coords = { items: [], now: Date.now() / 1000, ready: true };
   let live = { status: {}, busy: {}, decisions: [], solo_done: {}, rally_only: [], now: Date.now() / 1000, running: false }, liveOk = Date.now(), liveFail = false;
   S.huView = S.huView || {};
   S.huSel = S.huSel || {};
@@ -2442,16 +2442,6 @@ function monsterRallyTab(serial) {
   const chipKeys = () => new Set(MR_PRESETS.flatMap((p) => model[p].map((c) => c.name.toLowerCase() + "|" + (c.l || 0))));
   const saveRules = () => {
     const now = chipKeys();
-    if (order && knownChips) {                                       // v2: a monster newly added to a preset joins the
-      let add = false;                                                // bottom of the hunt order (nothing silently unhunted)
-      for (const k of now) if (!knownChips.has(k)) {
-        const [n, l] = k.split("|"), c = MR_PRESETS.flatMap((p) => model[p]).find((x) => x.name.toLowerCase() === n && (x.l || 0) === +l);
-        if (c && !order.some((r) => oFits(r.name, c.name) && (c.l ? r.min <= c.l && c.l <= r.max : r.min <= 1 && r.max >= 99))) {
-          order.push({ name: c.name, min: c.l || 1, max: c.l || 99, km: 0 }); add = true;
-        }
-      }
-      if (add) queue({ order });
-    }
     knownChips = now;
     queue({ rules: toRules() });
   };
@@ -2655,7 +2645,7 @@ function monsterRallyTab(serial) {
     avail -= pages.scrollHeight - pages.clientHeight;                // then trim / grow by what the page still over- or under-fills
     wrap.style.maxHeight = Math.max(180, avail) + "px";
   };
-  const onResize = () => { if (view === "live") fitTable(); };
+  const onResize = () => { if (view === "live") fitTable(); else if (view === "order") paintOrder(); };
   window.addEventListener("resize", onResize);
 
   // ---- Setup: rules strip
@@ -2842,15 +2832,7 @@ function monsterRallyTab(serial) {
   const panK = (n) => { const w = String(n || "").toLowerCase().match(/[a-z]+/g) || []; return w.includes("pan") ? (["ground", "ranged", "mounted"].find((k) => w.includes(k)) || "") : null; };
   const oFits = (a, b) => { const x = panK(a), y = panK(b); if (x !== null && y !== null) return !x || !y || x === y;
     a = String(a || "").toLowerCase(); b = String(b || "").toLowerCase(); return a.includes(b) || b.includes(a); };
-  const derivedOrder = () => {                                       // no saved order: the old priority (place in its box, then preset)
-    const rows = [], seen = new Set();
-    MR_PRESETS.forEach((p, pi) => model[p].forEach((c, i) => rows.push([i, pi, c])));
-    rows.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-    const out = [];
-    for (const [, , c] of rows) { const k = c.name.toLowerCase() + "|" + (c.l || 0); if (seen.has(k)) continue; seen.add(k); out.push({ name: c.name, min: c.l || 1, max: c.l || 99, km: 0 }); }
-    return out;
-  };
-  const oRows = () => order || derivedOrder();
+  const oRows = () => order || [];
   const oSave = (rows) => { order = rows; queue({ order: rows }); };
   const oKey = (r) => r.name.toLowerCase() + "|" + r.min + "|" + r.max;
   const oName = (r) => r.name + (r.min <= 1 && r.max >= 99 ? " · all levels" : r.min === r.max ? " " + r.min : " " + r.min + "\u2013" + r.max);
@@ -2862,54 +2844,169 @@ function monsterRallyTab(serial) {
     return out; };
   const kmTxt = (km) => km ? "\u2264 " + km + " km" : "Any";
   const orderBox = h("section", { class: "panel huorder", "aria-label": "Hunt order" });
-  const paintOrder = () => {
-    orderBox.innerHTML = "";
-    const rows = oRows();
-    const list = h("div", { class: "huolist", role: "list", "aria-label": "Hunt order" });
-    orderBox.appendChild(h("div", { class: "huohead" }, h("div", {}, h("h3", {}, "Hunt order"),
-      h("span", { class: "mute" }, "Top = hunted first. Drag \u22ee\u22ee to change the order. Each row has its own max distance.")),
-      h("span", { class: "mute" }, rows.length + (rows.length === 1 ? " monster" : " monsters"))));
-    if (oSel.size) {
-      const inp = h("input", { type: "text", inputmode: "numeric", class: "huokm", placeholder: "Any", "aria-label": "Max km for selected" });
-      const apply = () => { const v = Math.max(0, Math.round(+inp.value || 0)); oSave(rows.map((r) => oSel.has(oKey(r)) ? Object.assign({}, r, { km: v }) : r)); oSel.clear(); paintOrder(); };
-      inp.onkeydown = (e) => { if (e.key === "Enter") apply(); };
-      orderBox.appendChild(h("div", { class: "huobulk" }, h("b", {}, oSel.size + " selected"), h("span", { class: "hurh" }, "Max km"), inp,
-        h("button", { type: "button", class: "btn sm pri", onclick: apply }, "Apply"),
-        h("button", { type: "button", class: "btn sm danger", onclick: () => { oSave(rows.filter((r) => !oSel.has(oKey(r)))); oSel.clear(); paintOrder(); } }, "Remove"),
-        h("button", { type: "button", class: "lnkb", onclick: () => { oSel.clear(); paintOrder(); } }, "Clear")));
-    }
-    if (!rows.length) list.appendChild(h("div", { class: "huempty in" }, h("b", {}, "No monsters yet."),
-      h("span", { class: "mute" }, " Add monsters to a preset on the Presets tab - they show up here.")));
-    rows.forEach((r, i) => {
-      const ps = oPresets(r), k = oKey(r);
-      const kmEl = oEdit === i
-        ? h("input", { type: "text", inputmode: "numeric", class: "huokm", value: r.km ? String(r.km) : "", placeholder: "Any", "aria-label": "Max km for " + oName(r),
-            onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { oEdit = -1; paintOrder(); } },
-            onblur: (e) => { const v = Math.max(0, Math.round(+e.target.value || 0)); oEdit = -1; if (v !== r.km) { const n = rows.slice(); n[i] = Object.assign({}, r, { km: v }); oSave(n); } paintOrder(); } })
-        : h("button", { type: "button", class: "huorule" + (r.km ? " set" : ""), title: "Click to set the max distance for this monster (empty = any distance)", onclick: () => { oEdit = i; paintOrder(); } }, kmTxt(r.km));
-      const el = h("div", { class: "huorow" + (oSel.has(k) ? " sel" : "") + (ps.length ? "" : " nop"), role: "listitem", draggable: "true", "data-i": String(i) },
-        h("span", { class: "huodrag", "aria-hidden": "true", title: "Drag to change the order" }, "\u22ee\u22ee"),
-        h("input", { type: "checkbox", checked: oSel.has(k), "aria-label": "Select " + oName(r), onchange: (e) => { if (e.target.checked) oSel.add(k); else oSel.delete(k); paintOrder(); } }),
-        h("b", { class: "huonum" }, String(i + 1)),
-        h("span", { class: "huoname", title: oName(r) }, oName(r)),
-        kmEl,
-        h("span", { class: "huops" }, ...(ps.length ? ps.map((p) => h("span", { class: "huop" + (isOn(p) ? "" : " off"), title: "Preset " + pN(p) + (isOn(p) ? "" : " (off)") }, "P" + pN(p)))
-          : [h("span", { class: "huop none", title: "No preset can kill it - add it on the Presets tab" }, "no preset")])),
-        h("button", { type: "button", class: "hucx", "aria-label": "Remove " + oName(r) + " from the hunt order", title: "Remove from the hunt order (stays in its presets)",
-          onclick: () => { oSave(rows.filter((_, j) => j !== i)); oSel.delete(k); paintOrder(); } }, "\u00d7"));
-      el.addEventListener("dragstart", (e) => { oDrag = i; el.classList.add("dragging"); try { e.dataTransfer.setData("text/plain", oName(r)); } catch (x) {} });
-      el.addEventListener("dragend", () => { oDrag = -1; el.classList.remove("dragging"); });
-      el.addEventListener("dragover", (e) => { if (oDrag < 0) return; e.preventDefault(); el.classList.add("over"); });
-      el.addEventListener("dragleave", () => el.classList.remove("over"));
-      el.addEventListener("drop", (e) => { e.preventDefault(); el.classList.remove("over"); if (oDrag < 0 || oDrag === i) return;
-        const n = rows.slice(), [m] = n.splice(oDrag, 1); n.splice(i, 0, m); oDrag = -1; oSave(n); paintOrder(); });
-      list.appendChild(el);
-    });
-    orderBox.appendChild(list);
-    const miss = oMissing();
-    if (miss.length) orderBox.appendChild(h("div", { class: "huomiss" }, h("span", { class: "hurh" }, "In your presets, not in the order (not hunted) \u00b7 click to add:"),
-      ...miss.map((r) => h("button", { type: "button", class: "hqchip add", onclick: () => { oSave(oRows().concat([r])); paintOrder(); } }, "+ " + oName(r)))));
+  // owner 29 Oct 22:28: Save order (any name) + Load order (pop-up: Load / Rename / Delete per saved list)
+  let saved = null;
+  const savedOrders = () => saved || optVal("saved_orders", {}) || {};
+  const putSaved = (m) => { saved = m; queue({ saved_orders: m }); };
+  const sameRows = (a, b) => JSON.stringify(a || []) === JSON.stringify(b || []);
+  const saveOrderAs = async () => {
+    const nm = ((await promptBox("Save order", "Name for this list (e.g. Pan event)", "")) || "").trim().slice(0, 40);
+    if (!nm) return;
+    const m = Object.assign({}, savedOrders());
+    if (m[nm] && !(await confirmBox("Replace \u201c" + nm + "\u201d?", "A saved order with this name exists. Replace it with the current list?", "Replace"))) return;
+    m[nm] = (order || []).map((r) => Object.assign({}, r)); putSaved(m); toast("Saved as \u201c" + nm + "\u201d.", "ok"); paintOrder();
   };
+  let ddOpen = false, ddFind = "";
+  const loadOrderDD = () => {                       // owner 29 Oct 22:41: a normal dropdown in the toolbar (search inside);
+    const m = savedOrders(), names = Object.keys(m).sort((x, y) => x.localeCompare(y));   // click a name = load it;
+    const wrap = h("span", { class: "hodd" });                                              // rename / delete icons on hover
+    const btnEl = h("button", { type: "button", class: "btn", disabled: !names.length, "aria-haspopup": "listbox", "aria-expanded": ddOpen ? "true" : "false",
+      title: names.length ? "Use one of your saved lists" : "No saved orders yet", onclick: (e) => { e.stopPropagation(); ddOpen = !ddOpen; ddFind = ""; paintOrder(); } }, "Load order \u25be");
+    wrap.appendChild(btnEl);
+    if (!ddOpen || !names.length) return wrap;
+    const list = h("div", { class: "hoddlist", role: "listbox" });
+    const cnt = (nm) => m[nm].length + (m[nm].length === 1 ? " monster" : " monsters");
+    const load = async (nm) => {
+      const isSaved = !(order || []).length || Object.values(m).some((rows) => sameRows(rows, order));
+      ddOpen = false;
+      if (!isSaved && !(await confirmBox("Replace your current list?", "Your current list is not saved. Load \u201c" + nm + "\u201d anyway?", "Load"))) { paintOrder(); return; }
+      oSave(m[nm].map((r) => Object.assign({}, r))); oSel.clear(); toast("Loaded \u201c" + nm + "\u201d.", "ok"); paintOrder();
+    };
+    const fill = () => {
+      list.innerHTML = "";
+      const f = ddFind.trim().toLowerCase(), shown = names.filter((nm) => !f || nm.toLowerCase().includes(f));
+      if (!shown.length) list.appendChild(h("div", { class: "mute", style: { padding: "8px 10px", fontSize: "13px" } }, "No saved order called \u201c" + ddFind.trim() + "\u201d."));
+      for (const nm of shown) list.appendChild(h("div", { class: "hoddopt", role: "option" },
+        h("button", { type: "button", class: "hoddname", onclick: () => load(nm) }, h("span", {}, nm), h("small", {}, cnt(nm))),
+        h("button", { type: "button", class: "hoddic", title: "Rename", "aria-label": "Rename " + nm, onclick: async () => {
+          const nn = ((await promptBox("Rename", "New name", nm)) || "").trim().slice(0, 40);
+          if (!nn || nn === nm) return;
+          if (m[nn] && !(await confirmBox("Replace \u201c" + nn + "\u201d?", "A saved order with this name exists. Replace it?", "Replace"))) return;
+          const out = {}; for (const k of Object.keys(m)) if (k !== nn) out[k === nm ? nn : k] = m[k]; putSaved(out); paintOrder(); } }, "\u270e"),
+        h("button", { type: "button", class: "hoddic del", title: "Delete", "aria-label": "Delete " + nm, onclick: async () => {
+          if (!(await confirmBox("Delete \u201c" + nm + "\u201d?", "This removes the saved order only. Your current list stays.", "Delete"))) return;
+          const out = Object.assign({}, m); delete out[nm]; putSaved(out); paintOrder(); } }, "\u00d7")));
+    };
+    const search = h("input", { type: "text", placeholder: "Search saved orders\u2026", "aria-label": "Search saved orders", value: ddFind,
+      oninput: (e) => { ddFind = e.target.value; fill(); }, onkeydown: (e) => { if (e.key === "Escape") { ddOpen = false; paintOrder(); } } });
+    const panel = h("div", { class: "hoddpanel", onclick: (e) => e.stopPropagation() }, search, list);
+    wrap.appendChild(panel);
+    fill();
+    setTimeout(() => { search.focus(); document.addEventListener("click", function off() { document.removeEventListener("click", off); if (ddOpen) { ddOpen = false; if (orderBox.isConnected) paintOrder(); } }); }, 0);
+    return wrap;
+  };
+  const paintOrder = () => {
+    // owner 29 Oct 21:15-22:02: "Use my own hunt order" switch; its own list (never filled from the presets); switching
+    // off keeps the list; columns (numbers run down, then across); tap a number to type a new place; tick rows -> Move to
+    // top / place, Max km, Remove; Find in order; monsters only in a preset are hunted after the list
+    orderBox.innerHTML = "";
+    const rows = order || [];
+    const n = rows.length;
+    const sw = h("button", { type: "button", class: "husw" + (own ? " on" : ""), "aria-pressed": own ? "true" : "false", "aria-label": "Use my own hunt order",
+      onclick: () => { own = !own; const o = { own_order: own }; if (own && !order) { order = []; o.order = []; } queue(o); oSel.clear(); paintOrder(); } },
+      h("span", { class: "hutrack" }, h("span", { class: "huknob" })), own ? "On" : "Off");
+    orderBox.appendChild(h("div", { class: "hotop" }, h("h3", {}, "Hunt order"), h("label", { class: "hotgl" }, h("b", {}, "Use my own hunt order"), sw)));
+    orderBox.appendChild(h("p", { class: "hoinfo" }, own
+      ? "Top = hunted first. Every preset that has the monster hunts it in this order. Tap a number to type a new place, or drag ⋮⋮."
+      : "Off: each preset hunts its own monsters, left chip first (Presets tab)."));
+    if (!own && n) orderBox.appendChild(h("div", { class: "hooffnote" }, h("b", {}, "Your list is kept."), h("span", {}, " Switch on to use it again. Nothing is deleted when you switch off.")));
+    if (!own && !n) return;
+    const find = h("input", { type: "text", class: "hofind", placeholder: "Find in order…", "aria-label": "Find in the hunt order", value: oFind,
+      oninput: (e) => { oFind = e.target.value; paintList(); } });
+    const delAll = async () => { if (await confirmBox("Delete all?", "Remove all " + n + " monsters from your hunt order? Your presets and saved orders stay as they are.", "Delete all")) { oSave([]); oSel.clear(); paintOrder(); } };
+    orderBox.appendChild(h("div", { class: "hotool" }, n > 8 ? find : null, h("span", { class: "mute" }, n + (n === 1 ? " monster" : " monsters")),
+      n ? h("button", { type: "button", class: "btn sm hodel", onclick: delAll }, "Delete all") : null,
+      h("span", { class: "hoacts" },
+        h("button", { type: "button", class: "btn", disabled: !n, title: n ? "Save this list under a name" : "Add monsters first", onclick: saveOrderAs }, "Save order"),
+        loadOrderDD(),
+        h("button", { type: "button", class: "btn pri", onclick: () => { dTarget = "order"; openDrawer(); } }, "+ Add monster"))));
+    const bulk = h("div", { class: "hobulk", hidden: !oSel.size });
+    orderBox.appendChild(bulk);
+    const grid = h("div", { class: "hocols" + (own ? "" : " off"), role: "list", "aria-label": "Hunt order" });
+    orderBox.appendChild(grid);
+    const moveTo = (idx, place) => {                     // idx[] (current places) -> starting at place (1-based), order kept
+      const pick = idx.slice().sort((a, b) => a - b).map((i) => rows[i]);
+      const rest = rows.filter((_, i) => !idx.includes(i));
+      const at = Math.max(0, Math.min(rest.length, place - 1));
+      rest.splice(at, 0, ...pick); oSave(rest); oSel.clear(); paintOrder();
+    };
+    const paintBulk = () => {
+      bulk.hidden = !oSel.size; bulk.innerHTML = "";
+      if (!oSel.size) return;
+      const idx = rows.map((r, i) => oSel.has(oKey(r)) ? i : -1).filter((i) => i >= 0);
+      const pl = h("input", { type: "text", inputmode: "numeric", placeholder: "#", "aria-label": "Move to place" });
+      const km = h("input", { type: "text", inputmode: "numeric", placeholder: "Any", "aria-label": "Max km for selected" });
+      const goPlace = () => { const v = Math.round(+pl.value); if (v >= 1) moveTo(idx, v); };
+      const goKm = () => { const v = Math.max(0, Math.round(+km.value || 0)); oSave(rows.map((r) => oSel.has(oKey(r)) ? Object.assign({}, r, { km: v }) : r)); oSel.clear(); paintOrder(); };
+      pl.onkeydown = (e) => { if (e.key === "Enter") goPlace(); };
+      km.onkeydown = (e) => { if (e.key === "Enter") goKm(); };
+      bulk.append(h("b", {}, oSel.size + " selected"),
+        h("button", { type: "button", class: "btn sm pri", onclick: () => moveTo(idx, 1) }, "Move to top"),
+        h("span", { class: "hosep" }), h("span", {}, "To place"), pl, h("button", { type: "button", class: "btn sm", onclick: goPlace }, "Move"),
+        h("span", { class: "hosep" }), h("span", {}, "Max km"), km, h("button", { type: "button", class: "btn sm", onclick: goKm }, "Set"),
+        h("button", { type: "button", class: "btn sm danger", onclick: () => { oSave(rows.filter((r) => !oSel.has(oKey(r)))); oSel.clear(); paintOrder(); } }, "Remove"),
+        h("button", { type: "button", class: "lnkb hoclr", onclick: () => { oSel.clear(); paintOrder(); } }, "Clear"));
+    };
+    const paintList = () => {
+      grid.innerHTML = "";
+      const f = oFind.trim().toLowerCase();
+      const show = rows.map((r, i) => [r, i]).filter(([r]) => !f || oName(r).toLowerCase().includes(f));
+      if (!n) { grid.appendChild(h("div", { class: "huempty in hoempty" }, h("b", {}, "No monsters in your order yet."),
+        h("span", { class: "mute" }, " Add the monsters you want - the top one is hunted first."))); grid.style.cssText = ""; return; }
+      if (!show.length) { grid.appendChild(h("div", { class: "huempty in hoempty" }, h("b", {}, "Nothing called “" + oFind.trim() + "” in your order."))); grid.style.cssText = ""; return; }
+      const W = orderBox.clientWidth || 1000;
+      const cols = Math.max(1, Math.min(W >= 1300 ? 4 : W >= 940 ? 3 : W >= 600 ? 2 : 1, show.length));
+      const per = Math.ceil(show.length / cols);
+      grid.style.gridTemplateColumns = "repeat(" + cols + ",minmax(0,1fr))";
+      grid.style.gridTemplateRows = "repeat(" + per + ",auto)";
+      show.forEach(([r, i], j) => {
+        const k = oKey(r);
+        const num = oNum === i
+          ? h("input", { type: "text", inputmode: "numeric", class: "honum edit", value: String(i + 1), "aria-label": "New place for " + oName(r),
+              onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { oNum = -1; paintList(); } },
+              onblur: (e) => { const v = Math.round(+e.target.value); oNum = -1; if (v >= 1 && v !== i + 1) moveTo([i], v); else paintList(); } })
+          : h("button", { type: "button", class: "honum" + (i < 3 ? " first" : ""), title: "Tap to type a new place", "aria-label": "Place " + (i + 1) + " - tap to move " + oName(r),
+              onclick: () => { oNum = i; paintList(); const x = grid.querySelector(".honum.edit"); if (x) { x.focus(); x.select(); } } }, String(i + 1));
+        const kmEl = oEdit === i
+          ? h("input", { type: "text", inputmode: "numeric", class: "hokmin", value: r.km ? String(r.km) : "", placeholder: "Any", "aria-label": "Max km for " + oName(r),
+              onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { oEdit = -1; paintList(); } },
+              onblur: (e) => { const v = Math.max(0, Math.round(+e.target.value || 0)); oEdit = -1; if (v !== r.km) { const m = rows.slice(); m[i] = Object.assign({}, r, { km: v }); oSave(m); } paintList(); } })
+          : h("button", { type: "button", class: "hokm" + (r.km ? " set" : ""), title: r.km ? "Max distance for this monster - tap to change" : "Set a max distance for this monster (any distance now)",
+              onclick: () => { oEdit = i; paintList(); const x = grid.querySelector(".hokmin"); if (x) x.focus(); } }, r.km ? "≤ " + r.km + " km" : "+ km");
+        const el = h("div", { class: "horow" + (oSel.has(k) ? " sel" : "") + ((j + 1) % per === 0 || j === show.length - 1 ? " cend" : "") + (j >= per * (cols - 1) ? " clast" : ""),
+            role: "listitem", draggable: f ? "false" : "true" },
+          f ? null : h("span", { class: "hodr", "aria-hidden": "true", title: "Drag to move" }, "⋮⋮"),
+          h("input", { type: "checkbox", checked: oSel.has(k), "aria-label": "Select " + oName(r), onchange: (e) => { if (e.target.checked) oSel.add(k); else oSel.delete(k); paintList(); paintBulk(); } }),
+          num, h("span", { class: "honame", title: oName(r) }, oName(r)), kmEl,
+          h("button", { type: "button", class: "hox", "aria-label": "Remove " + oName(r), title: "Remove from the hunt order",
+            onclick: () => { oSave(rows.filter((_, x) => x !== i)); oSel.delete(k); paintOrder(); } }, "×"));
+        if (!f) {
+          el.addEventListener("dragstart", (e) => { oDrag = i; el.classList.add("dragging"); try { e.dataTransfer.setData("text/plain", oName(r)); } catch (x) {} });
+          el.addEventListener("dragend", () => { oDrag = -1; el.classList.remove("dragging"); });
+          el.addEventListener("dragover", (e) => { if (oDrag < 0) return; e.preventDefault(); el.classList.add("over"); });
+          el.addEventListener("dragleave", () => el.classList.remove("over"));
+          el.addEventListener("drop", (e) => { e.preventDefault(); el.classList.remove("over"); if (oDrag < 0 || oDrag === i) return; const d = oDrag; oDrag = -1; moveTo([d], i + 1); });
+        }
+        grid.appendChild(el);
+      });
+    };
+    paintBulk(); paintList();
+    if (own) {
+      const miss = oMissing();
+      if (miss.length) orderBox.appendChild(h("div", { class: "hoafter" }, h("span", { class: "mute" }, "Then, from your presets (not in this list):"),
+        ...miss.map((r) => h("span", { class: "hotag" }, oName(r)))));
+    }
+    requestAnimationFrame(() => {                     // the toolbar sticks under the hunts status card while the list scrolls
+      const stk = root.querySelector(".hustatus");
+      orderBox.style.setProperty("--hostick", (stk && getComputedStyle(stk).position === "sticky" ? stk.offsetHeight + 8 : 0) + "px");
+    });
+  };
+  document.addEventListener("dragover", (e) => {            // drag near the top / bottom edge: the page scrolls by itself
+    if (oDrag < 0 || !orderBox.isConnected) return;
+    const sc = orderBox.closest(".pages"); if (!sc) return;
+    const b = sc.getBoundingClientRect();
+    if (e.clientY < b.top + 60) sc.scrollTop -= 14; else if (e.clientY > b.bottom - 60) sc.scrollTop += 14;
+  });
 
   // ---- picker drawer (over the page): search, filters, level chips per monster (tap = add / remove that level)
   const drawerEl = h("div", { class: "hudrw", hidden: true });
@@ -2932,12 +3029,27 @@ function monsterRallyTab(serial) {
     for (let l = Math.max(lo, hi); l >= Math.min(lo, hi); l--) addChip(sel, name, l);
     touch(name); saveRules();
   };
+  // the same picker adds to the hunt order (dTarget "order"): tap a level = add / remove that row, at the bottom
+  const ordRow = (name) => { const rs = (order || []).filter((r) => same(r.name, name)); if (!rs.length) return null;
+    return { all: rs.some((r) => r.min <= 1 && r.max >= 99), lv: new Set(rs.filter((r) => r.min === r.max).map((r) => r.min)) }; };
+  const ordAdd = (rows) => oSave((order || []).concat(rows));
+  const toggleOrd = (name, l) => {
+    const all = levelsOf(name), has = (x) => (order || []).some((r) => same(r.name, name) && r.min === x && r.max === x);
+    if (l === 0) {
+      if (!all.length) { if ((order || []).some((r) => same(r.name, name))) oSave(order.filter((r) => !same(r.name, name))); else ordAdd([{ name, min: 1, max: 99, km: 0 }]); }
+      else if (all.every(has)) oSave(order.filter((r) => !same(r.name, name)));
+      else ordAdd([...all].sort((a, b) => b - a).filter((x) => !has(x)).map((x) => ({ name, min: x, max: x, km: 0 })));
+    } else if (has(l)) oSave(order.filter((r) => !(same(r.name, name) && r.min === l && r.max === l)));
+    else ordAdd([{ name, min: l, max: l, km: 0 }]);
+    touch(name);
+  };
+  const setOrdRange = (name, lo, hi) => { oSave((order || []).filter((r) => !same(r.name, name)).concat([{ name, min: Math.min(lo, hi), max: Math.max(lo, hi), km: 0 }])); touch(name); };
   const openDrawer = () => { drawer = true; paintDrawer(); setTimeout(() => { const i = drawerEl.querySelector(".husearch"); if (i) { i.focus(); i.select(); } }, 30); };
-  const closeDrawer = () => { drawer = false; q = ""; drawerEl.hidden = true; paintEditor(); paintRail(); };
+  const closeDrawer = () => { const o = dTarget === "order"; drawer = false; q = ""; dTarget = "preset"; drawerEl.hidden = true; if (o) paintOrder(); else { paintEditor(); paintRail(); } };
   const pickList = h("div", { class: "hupl" });
   const paintPick = () => {
     pickList.innerHTML = "";
-    const m = mode(sel), rec = recent();
+    const ord = dTarget === "order", m = ord ? "" : mode(sel), rec = recent();
     const known = new Map();
     catRows().forEach((r) => known.set(r.name.toLowerCase(), r));
     for (const n of [...(S.monsters || []), ...(coords.items || []).map((c) => c.name).filter(Boolean)]) if (!known.has(n.toLowerCase()) && (!/^pan\b/i.test(n) || usedIn(n).length)) known.set(n.toLowerCase(), { name: n, group: "Other", levels: [] });
@@ -2953,7 +3065,7 @@ function monsterRallyTab(serial) {
       return;
     }
     list.forEach((r, i) => {
-      const u = usedIn(r.name), mine = rowOf(sel, r.name), ro = rallyOnly(r.name), so = soloOnly(r.name), dis = wrongMode(r.name, m);
+      const u = usedIn(r.name), mine = ord ? ordRow(r.name) : rowOf(sel, r.name), ro = rallyOnly(r.name), so = soloOnly(r.name), dis = !ord && wrongMode(r.name, m);
       const isRec = ri(r.name) < 99, prevRec = i > 0 && ri(list[i - 1].name) < 99;
       const head = !q && (i === 0 ? (isRec ? "Recently used" : "") : (!isRec && prevRec ? "Other monsters" : ""));
       const lvs = r.levels.length ? r.levels : levelsOf(r.name);
@@ -2962,7 +3074,7 @@ function monsterRallyTab(serial) {
         h("div", { class: "huprh" }, h("b", { title: r.name }, r.name),
           u.length ? h("button", { type: "button", class: "hucnt", "aria-expanded": openUsed === r.name ? "true" : "false", onclick: () => { openUsed = openUsed === r.name ? "" : r.name; paintPick(); } }, u.length + (u.length === 1 ? " preset" : " presets")) : null,
           ro ? h("span", { class: "huro" }, "Rally only") : so ? h("span", { class: "huro" }, "Solo only") : null,
-          mine ? h("span", { class: "hupicked" }, lvText(mine) + " in Preset " + pN(sel)) : null),
+          mine && !ord ? h("span", { class: "hupicked" }, lvText(mine) + " in Preset " + pN(sel)) : null),
         openUsed === r.name ? h("small", { class: "hurh" }, "Used by " + u.map((p) => "Preset " + pN(p)).join(u.length > 2 ? ", " : " and ")) : null);
       if (lvs.length > 12) {                                    // Vikings Lv 1-50: a range, not 50 chips
         const lo = mine && !mine.all && mine.lv.size ? Math.min(...mine.lv) : lvs[0], hi = mine && !mine.all && mine.lv.size ? Math.max(...mine.lv) : lvs[lvs.length - 1];
@@ -2970,15 +3082,15 @@ function monsterRallyTab(serial) {
         const b = h("input", { type: "number", min: lvs[0], max: lvs[lvs.length - 1], value: hi, "aria-label": r.name + " highest level", disabled: dis });
         const lim = (v) => Math.max(lvs[0], Math.min(lvs[lvs.length - 1], Math.round(+v) || lvs[0]));
         box.appendChild(h("div", { class: "hurange" }, "Lv", a, "to", b,
-          h("button", { type: "button", class: "btn sm", disabled: dis, onclick: () => { setRange(r.name, lim(a.value), lim(b.value)); paintDrawer(); } }, mine ? "Update" : "Add"),
-          mine ? h("button", { type: "button", class: "btn sm ghost", onclick: () => { dropName(sel, r.name); saveRules(); paintDrawer(); } }, "Remove") : null));
+          h("button", { type: "button", class: "btn sm", disabled: dis, onclick: () => { if (ord) setOrdRange(r.name, lim(a.value), lim(b.value)); else setRange(r.name, lim(a.value), lim(b.value)); paintDrawer(); } }, mine ? "Update" : "Add"),
+          mine ? h("button", { type: "button", class: "btn sm ghost", onclick: () => { if (ord) oSave(order.filter((x) => !same(x.name, r.name))); else { dropName(sel, r.name); saveRules(); } paintDrawer(); } }, "Remove") : null));
       } else {
         const grid = h("div", { class: "huchips" });
         const chips = lvs.length ? lvs : [0];
         for (const l of chips) {
           const on = mine && (l === 0 ? mine.all : hasLv(mine, l));
           grid.appendChild(h("button", { type: "button", class: "hulc" + (on ? " on" : ""), disabled: dis, "aria-pressed": on ? "true" : "false", "aria-label": r.name + (l ? " level " + l : " all levels"),
-            title: dis ? (ro ? "Rally only - this preset is Solo" : "Solo only - this preset is Rally") : "", onclick: () => { toggleLv(r.name, l); paintDrawer(); } }, l ? "Lv" + l : "All"));
+            title: dis ? (ro ? "Rally only - this preset is Solo" : "Solo only - this preset is Rally") : "", onclick: () => { if (ord) toggleOrd(r.name, l); else toggleLv(r.name, l); paintDrawer(); } }, l ? "Lv" + l : "All"));
         }
         box.appendChild(grid);
       }
@@ -2990,17 +3102,21 @@ function monsterRallyTab(serial) {
     drawerEl.innerHTML = "";
     if (!drawer) return;
     const groupsAvail = [...new Set(catRows().map((r) => r.group))];
+    const ord = dTarget === "order";
+    if (ord && pf === "mine" && !usedList().length) pf = "all";
     const fil = [["mine", "In my presets"], ["all", "All monsters"], ...groupsAvail.map((g) => [g, g])];
-    const n = model[sel].length;
+    const n = ord ? (order || []).length : model[sel].length;
+    const ttl = ord ? "Add monsters to the hunt order" : "Add monsters to Preset " + pN(sel);
     const search = h("input", { type: "text", class: "husearch", placeholder: "Search monsters", "aria-label": "Search monsters", value: q,
       oninput: (e) => { q = e.target.value; paintPick(); } });
-    const panelEl = h("aside", { class: "hudpanel", role: "dialog", "aria-label": "Add monsters to Preset " + pN(sel) },
-      h("div", { class: "hudh" }, h("h2", {}, "Add monsters to Preset " + pN(sel)), h("span", { class: "humode " + mode(sel) }, mode(sel) === "solo" ? "Solo" : "Rally"),
+    const panelEl = h("aside", { class: "hudpanel", role: "dialog", "aria-modal": "true", "aria-label": ttl },
+      h("div", { class: "hudh" }, h("h2", {}, ttl), ord ? null : h("span", { class: "humode " + mode(sel) }, mode(sel) === "solo" ? "Solo" : "Rally"),
         h("button", { type: "button", class: "hux", "aria-label": "Close", onclick: closeDrawer }, "✕")),
       search,
       h("div", { class: "hufil" }, ...fil.map(([k, l]) => h("button", { type: "button", class: pf === k && !q ? "on" : "", "aria-pressed": pf === k ? "true" : "false", onclick: () => { pf = k; q = ""; search.value = ""; paintPick(); paintFil(); } }, l))),
       pickList,
-      h("div", { class: "hudf" }, h("span", {}, n ? n + (n === 1 ? " level" : " levels") + " in Preset " + pN(sel) + " · saved" : "Tap levels to add them to Preset " + pN(sel)),
+      h("div", { class: "hudf" }, h("span", {}, ord ? (n ? n + (n === 1 ? " monster" : " monsters") + " in the order · new ones go to the bottom · saved" : "Tap levels to add them to the order")
+          : n ? n + (n === 1 ? " level" : " levels") + " in Preset " + pN(sel) + " · saved" : "Tap levels to add them to Preset " + pN(sel)),
         h("button", { type: "button", class: "btn pri", onclick: closeDrawer }, "Done")));
     const paintFil = () => panelEl.querySelectorAll(".hufil button").forEach((b, i) => b.classList.toggle("on", fil[i][0] === pf && !q));
     drawerEl.append(h("div", { class: "hudbg", onclick: closeDrawer }), panelEl);
@@ -3033,6 +3149,9 @@ function monsterRallyTab(serial) {
     MR_PRESETS.forEach((p) => { modes[p] = (pr[p] && pr[p].mode) || "rally"; ons[p] = !(pr[p] && pr[p].on === false); });
     const o = optVal("order", null);
     order = Array.isArray(o) ? o.map((r) => ({ name: r.name, min: +r.min || 1, max: +r.max || 99, km: +r.km || 0 })) : null;
+    saved = null;
+    const ow = optVal("own_order", null);
+    own = ow === null || ow === undefined ? Array.isArray(o) : !!ow;      // never set: on only for a 2.5.24 saved order
     knownChips = chipKeys();
   };
   const loadLive = async () => {

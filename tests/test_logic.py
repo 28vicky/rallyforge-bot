@@ -680,6 +680,43 @@ class HuntsService(Base):
         self.assertEqual(out[2]["pairs"][0]["preset"], "III")                          # 1st in boxes III + VIII (2nd in I): tie -> lower number
 
 
+    def _own_cfg(self, own, order):
+        mr = {"rules": [{"name": "Pumpkin", "min": 7, "max": 7, "preset": "I", "time": "5"},
+                        {"name": "Turtle", "min": 6, "max": 6, "preset": "I", "time": "5"},
+                        {"name": "Cerberus", "min": 5, "max": 5, "preset": "II", "time": "5"}],
+              "presets": {"I": {"mode": "rally"}, "II": {"mode": "rally"}}}
+        if order is not None:
+            mr["order"] = order
+        if own is not None:
+            mr["own_order"] = own
+        return {"duties": {"monster_rally": mr}}
+
+    def _own_targets(self, cfg):
+        feed = [{"name": "Pumpkin Monster", "level": 7, "x": 1, "y": 1, "t": time.time(), "km": 50},
+                {"name": "Turtle", "level": 6, "x": 2, "y": 2, "t": time.time(), "km": 5},
+                {"name": "Cerberus", "level": 5, "x": 3, "y": 3, "t": time.time(), "km": 5}]
+        with mock.patch.object(rb, "feed_get", return_value=(feed, 0)), mock.patch.object(rb, "get_bosses", return_value=[]):
+            return rb.mr_targets(cfg, {}, self.S)
+
+    def test_own_order_on_ranks_by_list_then_preset_only(self):
+        order = [{"name": "Cerberus", "min": 5, "max": 5, "km": 0}, {"name": "Pumpkin", "min": 7, "max": 7, "km": 0}]
+        out = self._own_targets(self._own_cfg(True, order))
+        self.assertEqual([t["x"] for t in out], [3, 1, 2])          # list order, then Turtle (only in a preset) last
+        self.assertTrue(out[2]["pairs"][0].get("after"))
+
+    def test_own_order_off_keeps_list_and_uses_presets(self):
+        order = [{"name": "Cerberus", "min": 5, "max": 5, "km": 0}]
+        cfg = self._own_cfg(False, order)
+        self.assertEqual(rb.mr_order(cfg)[0].get("rank"), 0)        # derived from the presets
+        self.assertEqual(cfg["duties"]["monster_rally"]["order"], order)    # the saved list is untouched
+        self.assertEqual(len(self._own_targets(cfg)), 3)
+
+    def test_own_order_unset_follows_2524_setup(self):
+        order = [{"name": "Pumpkin", "min": 7, "max": 7, "km": 0}]
+        self.assertTrue(rb.mr_own_order(self._own_cfg(None, order)))    # saved in 2.5.24 -> stays as it was
+        self.assertFalse(rb.mr_own_order(self._own_cfg(None, None)))    # new instance -> off
+
+
 class DutyStallBudget(unittest.TestCase):
     """Owner 29 Oct: duty limit = stall timer (activity extends it), hard ceiling, same-line loops still time out."""
     def tearDown(self):
