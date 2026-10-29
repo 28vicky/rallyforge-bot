@@ -2,6 +2,10 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## RELEASED 2.5.28 (30 Oct ~03:30 IST, owner 03:15) - main 0472183 (version.json signed, check_release origin/main: tests OK, every file matches)
+= pc/ship4-plus-fastcap 92685ce: map safety + map lock, Alliance page / Mail fix, phone Back fix, Champions greets, rally list checks + 10 s refresh, MuMu fast capture. Nothing else.
+Owner PC: app\v2.5.27 already runs this code (labelled 2.5.27); installing 2.5.28 is safe (same code). PC free. Doc claude/release_2528_30oct.md.
+
 ## PC (30 Oct 02:55 IST, Teach-the-Bot chat): feat/mumu-fast-capture b75f399 copied into app\v2.5.27\rally_bot.py (= 2.5.27 + MuMu fast capture only; backup rally_bot_before_fastcap.py). Loads at the owner's next app restart. Doc claude/mumu_fast_capture_30oct.md. PC free after the copy.
 
 ## RELEASED (29 Oct ~20:40 IST, one chat) - 2.5.24 = 2.5.23 + header/citymap UI + closed-game detection + hunts fixes (March panel look, march-home minute, still-out guard, freshness reset) + Telegram Pan lines read + hunts v2 steps 1-2 (preset On/Off/Copy/Delete, Pan split Ground/Ranged/Mounted, Hunt order tab with km per row) + Join rallies Pan split + unclear cards read from the name / the rally page (rally_pages/ pictures). Signed, check_release OK. Owner PC installing through the app. NOT live tested: rally page tap (RALLY_PAGE_DY estimated), Pan type on cards, Hunt order in the real app. Next chat: read claude/release_2524_29oct.md first.
