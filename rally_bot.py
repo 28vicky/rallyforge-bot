@@ -6457,6 +6457,7 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
     good, last_note, last_fg = 0, 0.0, time.time()
     not_ready_since, last_clear, last_kick = None, 0.0, 0.0
     loading_since, app_restarted = None, False                 # stuck on the loading / "Connecting" screen -> close and reopen Evony once
+    way_back = []                                              # times the way back to the city was tried (loop guard, 29 Oct)
     black_since, black_restart = None, False                   # black picture after a start: wait (and restart the emulator once if it stays)
     end = time.time() + cfg["game_load_timeout"]
     while time.time() < end and not stop.is_set():
@@ -6541,6 +6542,24 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
                     _nap(stop, 1.5)
                     continue
                 if game_screen_shown(dev.screenshot()):          # 25 Oct: Rob sat 3 min on an open Alliance page "waiting for loading"
+                    # 29 Oct (Rob, GK-P, Manhattan, Kiravik, Stalds 15:52-16:05): the way back can go round in circles
+                    # (Alliance War list -> the view toggle hits Auto-Join -> Back -> ...) and each round reset the
+                    # loading timer, so Evony was never reopened. 3 rounds in 5 min -> reopen Evony (lands on the city).
+                    way_back = [t for t in way_back if now - t < 300] + [now]
+                    if len(way_back) >= 3:
+                        way_back = []
+                        try:
+                            pkg = pkg or evony_package(dev.adb, dev.serial, cfg)
+                            log("[!] Could not find the way back to the city 3 times - closing and opening Evony again")
+                            _adb(dev.adb, dev.serial, "shell", "am", "force-stop", pkg)
+                            _nap(stop, 3, 4)
+                            start_app(dev.adb, dev.serial, pkg)
+                            _nap(stop, 8)
+                        except Exception as e:
+                            log(f"[!] Could not reopen Evony: {e}")
+                        good, not_ready_since, loading_since = 0, None, None
+                        end = time.time() + cfg["game_load_timeout"]
+                        continue
                     log("[*] The game is already open on another screen - finding the way back")
                     if _ensure_view(dev, cfg, stop, log, "city"):
                         not_ready_since = loading_since = None
