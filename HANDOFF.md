@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## RELEASED (29 Oct ~15:25 IST, one chat) - 2.5.22 = 2.5.21 + failure-evidence + Lucky Hammer confirm + join count today + accent buttons / no false Problem on Stop + Overview layout. Signed, check_release OK. Owner PC installed it through the app (app\v2.5.22, 8 instances resumed). Lines below about the v2.5.20 dev copy are history. Next candidate: fix/duty-stall-budget rebased onto 2.5.22 (8-min duty stops). Doc claude/release_2522_29oct.md.
+
 ## READY (29 Oct 15:30 IST, one chat) - fix/accent-buttons-stop-state 2d35033 (on fix/join-count-today): picked accent colour also colours the main buttons; no false 'Problem - see the log' after Stop. NOT on the PC - next release (merge only this tip: it contains fix/join-count-today + fix/lucky-on-2521). Doc claude/accent_buttons_stop_state_29oct.md.
 
 ## READY (29 Oct 15:15 IST, one chat) - fix/join-count-today ae22f22 (on fix/lucky-on-2521): sidebar/header join chip = today's game-day joins (same as Today tile); Activity 'Skipped (all reasons)'. Display only, NOT on the PC - next release. Doc claude/join_count_mismatch_29oct.md.
