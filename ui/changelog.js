@@ -1,5 +1,12 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.23", date: "2026-10-29",
+    new: ["Monster hunts run in the background: they keep going between other duties instead of waiting at the end of the list, and solo presets keep hunting while a rally preset is out.",
+      "Join rallies has its own switch at the top of each instance, next to Auto-Join. With Auto-Join on, the bot never joins rallies on that instance."],
+    fixed: ["A slow duty is no longer stopped after 8 minutes while it is still working - only when nothing happens for 8 minutes.",
+      "The game's Auto-Join is renewed on time even during a long list of duties.",
+      "Instances no longer get stuck after the app restarts when the game was left on the alliance pages.",
+      "Wheel of Fortune finishes normally when you have no wheel coins left (it no longer counts as a failure)."] },
   { v: "2.5.22", date: "2026-10-29",
     new: ["When a duty fails, the bot keeps a picture of the screen and what it saw, so problems can be found and fixed faster."],
     fixed: ["Crazy Eggs uses the Lucky Hammer again - it now presses the real Confirm button.",
