@@ -17927,8 +17927,11 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
     nav_state = {}
     _TL.city_last = last_run                                 # the Black Market keep-going run looks at what else is due
     dev.arm_guard(cfg, log, stop)
-    for t in tasks:
+    for i_t, t in enumerate(tasks):
         if stop.is_set():
+            break
+        if i_t and aj_renew_due(cfg, getattr(dev, "serial", "")):   # the game's Auto-Join needs renewing (or was just switched
+            log("[*] The game's Auto-Join needs a look - back to the rally list first, the other tasks follow")   # back on): rallies first
             break
         name = t.get("name", "task")
         duty_id = name[5:] if name.startswith("duty:") else ""
