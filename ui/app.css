@@ -1948,3 +1948,7 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .insthead{flex-wrap:wrap}
 .ihacts{display:flex;align-items:center;gap:14px;margin-left:auto;flex-wrap:nowrap}
 @media (max-width:1023px){.tdres .stile{padding:10px 8px}.tdres .stile span{font-size:11.5px}}
+/* City map card: the buttons wrap inside the card instead of running past its edge (owner 29 Oct 17:09) */
+.citymap .cmhead>div:first-child{min-width:0}
+.citymap .cmacts{flex-wrap:wrap;justify-content:flex-end;max-width:100%;min-width:0}
+.citymap .cmacts .btn{white-space:nowrap}
