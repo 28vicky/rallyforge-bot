@@ -96,7 +96,7 @@ function rjMode(serial) { return rjEff(serial, "game_auto_join", false) ? "game"
 function rjSet(serial, m) {
   S.cfg.per_device = S.cfg.per_device || {};
   const o = (S.cfg.per_device[serial] = S.cfg.per_device[serial] || {});
-  o.game_auto_join = m === "game"; o.rally_enabled = m !== "off";
+  o.game_auto_join = m === "game"; if (m !== "game") o.rally_enabled = m === "bot";   // Auto-Join keeps the bot-joining choice as it was
   paintAjAll();
 }
 const RJ_TIPS = { off: "The bot does not join alliance rallies. If the game's Auto-Join was running, the bot presses Stop in it once.",
