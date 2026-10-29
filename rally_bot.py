@@ -13554,7 +13554,7 @@ def city_mapped(dev):
     return bool(mymap_info(dev).get("complete"))
 
 
-UNLOCK_MIN = 10                                             # Unlock on the City map card opens the mapping buttons this long
+UNLOCK_MIN = 60                                             # Unlock = one run; locks again by itself if no run starts this long
 
 
 def city_locked(dev):
@@ -14544,7 +14544,7 @@ def map_request_fresh(dev, take=True):
     from the last 15 min; the request is used up when the run starts."""
     f = _map_dir(dev) / MAP_REQUEST
     try:
-        ok = time.time() - float(json.loads(f.read_text(encoding="utf-8")).get("t", 0)) < 900
+        ok = time.time() - float(json.loads(f.read_text(encoding="utf-8")).get("t", 0)) < UNLOCK_MIN * 60   # owner 30 Oct: busy instances start later
     except Exception:
         ok = False
     if take:
@@ -14560,7 +14560,7 @@ def run_map_city(dev, cfg, log, stop):
     view, one measured drag per step), keep every view that shows buildings and is new ground, then solve all the
     views' places from their picture links at once and save them as keyframes. The finger only chooses the next drag."""
     if not map_request_fresh(dev):
-        log("[!] Map my city was not asked for on this instance (no button press in the last 15 min) - skipped, the map stays")
+        log("[!] Map my city was not asked for on this instance (no button press in the last hour) - skipped, the map stays")
         return
     if city_locked(dev):
         log("[!] Map my city: this city's map is locked (press Unlock on the City map card first) - skipped, the map stays")

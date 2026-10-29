@@ -2040,9 +2040,9 @@ function cityMapCard(serial) {
     toast("Looking for the " + n + " missing building" + (n === 1 ? "" : "s") + " next. Pins already found stay.", "ok");
     refresh(r);
   };
-  const unlock = async () => { const r = await act(api("city_map_unlock", { serial, confirm: true })); if (r) { toast("Unlocked for " + (r.unlock_min || 10) + " min - one mapping run.", "ok"); refresh(r); } };
+  const unlock = async () => { const r = await act(api("city_map_unlock", { serial, confirm: true })); if (r) { toast("Unlocked for one mapping run. It locks again by itself if no run starts within " + (r.unlock_min || 60) + " min.", "ok"); refresh(r); } };
   const unlockDialog = (j) => modal({ title: "Unlock this city map?", body: h("p", { style: { maxWidth: "440px" } },
-      "The map is locked so no run can change your pins. Unlock opens Find missing and Map city again for " + (j.unlock_min || 10) + " minutes, for one run. Fix pins always works."),
+      "The map is locked so no run can change your pins. Unlock opens Find missing and Map city again for one run. If no run starts within " + (j.unlock_min || 60) + " minutes, it locks again by itself. Fix pins always works."),
     buttons: [{ label: "Cancel", cls: "pri" }, { label: "Unlock", onclick: unlock }] });
   const againDialog = (j) => { const mv = (j && j.movable) || [], nAll = mv.filter((b) => b.state !== "missing").length, nYou = mv.filter((b) => b.state === "placed").length;
     return modal({ title: "Map city again?", body: h("p", { style: { maxWidth: "440px" } },
