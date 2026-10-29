@@ -1,9 +1,9 @@
 {
-  "version": "2.5.22",
-  "notes": "Crazy Eggs uses the Lucky Hammer again; join count shows today's joins; picked colour on main buttons; no false Problem after Stop; failure pictures for duties; Overview fits small windows.",
+  "version": "2.5.23",
+  "notes": "Monster hunts in the background; duties no longer stopped while still working; Auto-Join renewed on time; no stuck start-up; Join rallies switch; Wheel with 0 coins.",
   "files": {
     "rally_bot.py": {
-      "sha256": "2c272e7d39bb04336d8d6039748475a6d43d3d94c245c0cb389025d643302163"
+      "sha256": "7924906eaaaadb03cad390400b04d4344b38c6a113eccee25e0e255f576b8f67"
     },
     "web_app.py": {
       "sha256": "fb94b6d6aaef7ae2b0affd07a99f0a66a1dd6749eebe8e3f70a4b4cc4ddf575c"
@@ -18,7 +18,7 @@
       "sha256": "f7b6e2dc994c394931acf37566feea1eb7762d64063eeb94a963a1f7c090fde9"
     },
     "ui/changelog.js": {
-      "sha256": "3a8dd898d95b506bde00594f653710c532bcc11a48c84530cff3540ba2787d07"
+      "sha256": "b4374eb17738fe0ed963926c8e37f54e855a1386f9b6997572170945367de164"
     },
     "ui/dialogs.js": {
       "sha256": "5a4e14faf9eb34d622f1cda72833ed5bf815da402ddd485a8277dac39053a162"
@@ -30,7 +30,7 @@
       "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
     },
     "ui/pages.js": {
-      "sha256": "0a1161b81ee22a89b8041115449d5f2686e9537bbe013ebcd416b97ced7f1060"
+      "sha256": "6b04d13ce7db43b5069f2f30ec88413c8ea028e507f664cc1e167eaa7f5ad3d7"
     },
     "ui/tour.js": {
       "sha256": "13f3caea4e097cb210531c175e34809ead00eb7fca86570faa51a1929c787b32"
@@ -3413,5 +3413,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "51dde1140fc4970e809b698fbfa3583797441263bd320bea6a8d4088f6e6bd6c"
+  "sig": "7ce98f6cd1c512c02becee6f8caf0de3a0de3435f11de13a05c215fc84320b2c"
 }
