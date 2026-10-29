@@ -1477,6 +1477,8 @@ def _base_monster(stem):
     """'Kraken #2' (another look of the same monster) counts as 'Kraken'."""
     n = re.sub(r"\s#\d+$", "", stem)
     n = {"Bayar Knight": "Knight Bayard", "Bayard Knight": "Knight Bayard"}.get(n, n)
+    if re.search(r"troops?\)?\s*$", n, re.I):                                  # 'Pan (Ranged Troop)' is Pan (owner 29 Oct)
+        n = strip_troop_suffix(n)
     if n in ("Epic Hydra", "Mythical Hydra"):                                   # the two extra Hydra names in the rally list
         return "Hydra"
     m = re.fullmatch(r"(?:Junior|Medium|Senior|Legendary)\s+(.+)", n)       # 'Senior Hydra' is a level of 'Hydra'
@@ -1487,7 +1489,28 @@ def _base_monster(stem):
     return n
 
 
+# Monster pictures shipped by mistake that match nothing useful. A copy in your own monsters folder that is byte-for-byte
+# this file is removed once, so the fixed picture from the update is used instead (owner 29 Oct: the old Pan.png was a
+# blurred square, so real Pan rallies were not recognised). Pictures the bot learned or you added are never touched.
+_BAD_MONSTER_PICS = {"Pan.png": "8094140c2b9f0fc6e924b4bea4683efe8fa25d1e4c4a4f47be2c7fbc9d27b97a"}
+_bad_pics_checked = [False]
+
+
+def _drop_bad_monster_pics():
+    if _bad_pics_checked[0]:
+        return
+    _bad_pics_checked[0] = True
+    for name, sha in _BAD_MONSTER_PICS.items():
+        p = USER / "monsters" / name
+        try:
+            if p.exists() and hashlib.sha256(p.read_bytes()).hexdigest() == sha:
+                p.unlink()
+        except Exception as _e:
+            quiet_err("drop_bad_monster_pics", _e)
+
+
 def _raw_monsters():
+    _drop_bad_monster_pics()
     names = set()
     for d in monster_dirs():
         if d.exists():
@@ -1660,13 +1683,30 @@ def auto_join_renew(dev, cfg, log, stop, act):
 
 _MONSTER_ALIASES = {"Bayar Knight": "Knight Bayard", "Bayard Knight": "Knight Bayard", "Bayar": "Knight Bayard", "Bayard": "Knight Bayard",
                     **{f"{g} {m}": m for g in ("Junior", "Medium", "Senior") for m in ("Hydra", "Cerberus", "Nian")},
-                    "Junior Knight Bayard": "Knight Bayard", "Senior Bayar Knight": "Knight Bayard", "Senior Knight Bayard": "Knight Bayard"}
+                    "Junior Knight Bayard": "Knight Bayard", "Senior Bayar Knight": "Knight Bayard", "Senior Knight Bayard": "Knight Bayard",
+                    # owner 29 Oct: the three Pan looks are one monster in the monster list
+                    "Pan Ranged Troop": "Pan", "Pan Ground Troop": "Pan", "Pan Mounted Troop": "Pan"}
+
+# owner 29 Oct: a troop-type suffix such as "(Ranged Troop)" is not part of the monster's name - "Pan (Ranged Troop)" is Pan.
+# Works on the cleaned text too (OCR often drops the brackets): "Pan Ranged Troop" -> "Pan".
+_TROOP_SUFFIX = re.compile(r"\s*\(?\s*(?:[A-Za-z]+\s+)?troops?\s*\)?\s*$", re.I)
 
 
-def read_monster_label(strip):
-    """The boss name on the strip under a rally portrait, matched to the known monster names when it is close."""
+def strip_troop_suffix(name):
+    """'Pan (Ranged Troop)' / 'Pan Ranged Troop' -> 'Pan'. Anything else is returned unchanged."""
+    s = str(name or "").strip()
+    out = _TROOP_SUFFIX.sub("", s).strip()
+    if not out:                                          # 'Pan Troop': the word before 'Troop' is the name itself
+        out = re.sub(r"\s*\(?\s*troops?\s*\)?\s*$", "", s, flags=re.I).strip()
+    return out or s
+
+
+def read_monster_name(strip):
+    """The boss name on the strip under a rally portrait. -> (name, source): source is 'OCR' when the text matched a
+    monster name directly, 'OCR alias' when it matched only after an alias or a dropped troop suffix, '' when no known
+    name was close (name is then the raw text)."""
     import difflib
-    best_raw, best = "", ("", 0.0)
+    best_raw, best = "", ("", 0.0, "")
     for bright in (False, True):
         try:
             lines = ocr_lines(strip, scale=3.0, bright=bright)
@@ -1678,19 +1718,29 @@ def read_monster_label(strip):
             t = " ".join(t.split())
             if len(t) > len(best_raw):
                 best_raw = t
+            short = strip_troop_suffix(t)
+            forms = [(t, False)] + ([(short, True)] if short and short.lower() != t.lower() else [])
             for nm in MONSTER_NAMES + list(_MONSTER_ALIASES) + WORLD_BOSS_NAMES:   # world bosses too: "Behemoth King" must not read as "Behemoth"
                 nn = re.sub(r"[^a-z ]", " ", nm.lower())
                 nn = " ".join(nn.split())
-                r = difflib.SequenceMatcher(None, t.lower(), nn).ratio()
-                if r > best[1]:
-                    best = (_MONSTER_ALIASES.get(nm, nm), r)
-    return best[0] if best[1] >= 0.75 else best_raw
+                for form, cut in forms:
+                    r = difflib.SequenceMatcher(None, form.lower(), nn).ratio()
+                    if r > best[1]:
+                        best = (_MONSTER_ALIASES.get(nm, nm), r, "OCR alias" if (cut or nm in _MONSTER_ALIASES) else "OCR")
+    return (best[0], best[2]) if best[1] >= 0.75 else (best_raw, "")
+
+
+def read_monster_label(strip):
+    """The boss name on the strip under a rally portrait, matched to the known monster names when it is close."""
+    return read_monster_name(strip)[0]
 
 
 def learn_monster(label, port, cfg, log=None):
     """The name under the portrait was read with confidence: keep the portrait as a monster picture of that name
     (another look of an already known monster becomes 'Name #2', 'Name #3', ...), so the bot knows it from now on."""
     label = label.replace("_", " ").strip()
+    if label not in MONSTER_NAMES:                       # e.g. an unknown_monsters picture saved as 'Pan_Ranged_Troop'
+        label = _MONSTER_ALIASES.get(label, strip_troop_suffix(label))
     if label not in MONSTER_NAMES:
         return False
     d = USER / "monsters"
@@ -1950,6 +2000,20 @@ def never_join_present():
     return any(n.lower() in NEVER_JOIN for n in list_monsters())
 
 
+UNKNOWN_FILTERED = "monster could not be identified while monster filters are active"
+
+
+def monster_filters_active(cfg):
+    """True when this instance switches any monster (or level) off: a skip entry with levels, a skip list, or a
+    join-only list. Then a rally whose monster cannot be identified is never joined (owner 29 Oct)."""
+    if any(v for v in (cfg.get("monster_skip") or {}).values()):
+        return True
+    mode = cfg.get("monster_mode", "off")
+    if mode == "only":
+        return True
+    return mode == "skip" and bool(cfg.get("monster_list"))
+
+
 def monster_allowed(name, cfg, level=None):
     """Apply the skip / only rule. -> (allowed, reason)."""
     if name and str(name).lower() in NEVER_JOIN:
@@ -1960,6 +2024,8 @@ def monster_allowed(name, cfg, level=None):
     mode = cfg["monster_mode"]
     if name == "hidden" and cfg.get("monster_skip"):          # name not readable yet: never join blind when some monsters/levels are switched off
         return False, "monster picture not fully on screen"
+    if name is None and monster_filters_active(cfg):         # owner 29 Oct: a switched-off monster must never join just because
+        return False, UNKNOWN_FILTERED                        # it was not recognised (Pan Ranged was joined this way)
     if mode == "off":
         return True, ""
     if name == "hidden":
@@ -17804,6 +17870,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
     last_dn = [None]                      # monster name with its level, e.g. "Witch Lv6", of the rally find_target chose
     last_base = [None]
+    last_src = [""]                       # how that monster was identified: image match / OCR / OCR alias / not identified
 
     name_cache = {}
 
@@ -17884,7 +17951,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             for h0 in list(deferred):
                 yield h0, True
         for hit, hard in order():
-            label, mon, mlv = "", None, None
+            label, mon, mlv, msrc = "", None, None, ""
             if cfg.get("save_unknown_monsters"):
                 m0, _ = identify_monster(screen, hit, cfg)
                 if m0 is None:
@@ -17897,15 +17964,19 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 continue
             if cfg["monster_mode"] != "off" or mon_presets or cfg.get("monster_skip") or never_join_present():
                 mon, _ = identify_monster(screen, hit, cfg)
-                if mon is None and cfg.get("monster_skip"):        # no picture yet: read the name under the portrait instead
+                if mon and mon != "hidden":
+                    msrc = "image match"
+                if mon is None and monster_filters_active(cfg):    # no picture yet: read the name under the portrait instead
                     try:
                         nx0, ny0 = int(hit[0] - 21), int(hit[1] - 113)
-                        lab = read_monster_label(screen[max(ny0 - 18, 0):ny0 + 18, max(nx0 - 150, 0):nx0 + 150])
+                        lab, lsrc = read_monster_name(screen[max(ny0 - 18, 0):ny0 + 18, max(nx0 - 150, 0):nx0 + 150])
                         if lab in MONSTER_NAMES:
-                            mon = lab
-                            # first picture of a monster known only by name (e.g. Ymir): keep its portrait so the next
-                            # rally is recognised from the picture. Only a fully visible card - never a cut-off one.
-                            if lab != "Viking" and not cut_off(hit) and not any(_base_monster(n) == lab for n in _raw_monsters()):
+                            mon, msrc = lab, lsrc
+                            # a look of this monster the bot has no picture of yet (e.g. Ymir, or Pan Ranged next to
+                            # Pan Mounted): keep its portrait so the next rally is recognised from the picture.
+                            # learn_monster skips a look it already has and keeps at most 6 per monster.
+                            # Only a fully visible card - never a cut-off one.
+                            if lab != "Viking" and not cut_off(hit):
                                 mdx, mdy = cfg["monster_offset"]
                                 mcx, mcy, mh = int(hit[0] + mdx), int(hit[1] + mdy), MON_SIZE // 2
                                 if mcy - mh >= MON_TOP + 10 and mcx - mh >= 0 and mcx + mh <= screen.shape[1] and mcy + mh <= screen.shape[0]:
@@ -17972,7 +18043,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 m_ok, m_why = monster_allowed(mon, cfg, mlv)
                 if mon == "hidden" and mon_presets:
                     m_ok, m_why = False, "monster picture not fully on screen"
-                label = f"[{mon or '?'}] "
+                label = f"[{mon} Lv{mlv}] " if mon and mon != "hidden" and mlv else f"[{mon or '?'}] "
                 if not m_ok:
                     act_skip(level_name(screen, hit, mon, mlv), m_why)
                     if cfg["log_timers"]:
@@ -17999,9 +18070,11 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 if cfg["log_timers"]:
                     say(f"{label}rally {fmt(rally)}{mtxt(march)} -> skip ({why_b})")
                 continue
-            if cfg["log_timers"]:
-                say(f"{label}rally {fmt(rally)}{mtxt(march)}, bot needs ~{need:.0f}s -> "
-                    f"{'JOIN' if ok else 'skip'} ({why})")
+            if ok:                                            # owner 29 Oct: every JOIN says which monster and how it was known
+                src = msrc or ("monster not checked - no monster filters" if mon is None else "not identified - no monster filters")
+                say(f"{label}JOIN ({src}) - rally {fmt(rally)}{mtxt(march)}, bot needs ~{need:.0f}s ({why})")
+            elif cfg["log_timers"]:
+                say(f"{label}rally {fmt(rally)}{mtxt(march)}, bot needs ~{need:.0f}s -> skip ({why})")
             if not ok:
                 act_skip(level_name(screen, hit, mon, mlv), why, rally, march)
             now_t = time.time()
@@ -18019,15 +18092,16 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     say(f"{label}skip ({why_o})")
                 continue
             if ok:
-                picks.append((rally if rally is not None else 10 ** 6, hit, mon, mlv, march))
+                picks.append((rally if rally is not None else 10 ** 6, hit, mon, mlv, march, msrc))
         if not picks:
             return None
-        rally, hit, mon, mlv, march = min(picks, key=lambda x: x[0])   # least time left that can still be reached
+        rally, hit, mon, mlv, march, msrc = min(picks, key=lambda x: x[0])   # least time left that can still be reached
         last_march[0] = march
         if len(picks) > 1 and cfg["log_timers"]:
             say(f"{len(picks)} rallies can be joined - taking the one closing first ({fmt(rally)} left)")
         last_dn[0] = level_name(screen, hit, mon, mlv)
         last_base[0] = mon if mon and mon != "hidden" else show_name(screen, hit, mon)
+        last_src[0] = msrc or "not identified"
         return hit, rally, mon
 
     last_frame = [0.0]
@@ -18891,7 +18965,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
             shown = last_base[0] if last_base[0] and last_base[0] != "?" else (mon if mon and mon != "hidden" else "")
             vs = f" vs {shown}" if shown else ""
-            log(f"[*] Rally{vs} with {left}s left -> joining")
+            log(f"[*] Rally{vs} with {left}s left -> joining ({last_src[0]})")
             t_join = time.time()
             t_march = None
             walk = last_march[0] if last_march[0] is not None else int(cfg.get("march_guess", 10) or 0)
@@ -19124,7 +19198,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 remember_rally(base_name, t_join + left, "joined")        # joined: never try this same rally again
                 speed_up()
                 log(f"[+] Joined rally #{joins}")
-                act("join", mon=mon_name, rally=left, took=round(time.time() - t_join, 1), preset=preset, n=joins)
+                act("join", mon=mon_name, rally=left, took=round(time.time() - t_join, 1), preset=preset, n=joins, src=last_src[0])
                 notify(cfg, serial, f"Joined rally #{joins}", "join")
                 if cfg["max_joins"] and joins >= cfg["max_joins"]:
                     log("[+] Reached max joins, stopping this instance.")
