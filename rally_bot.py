@@ -5118,6 +5118,7 @@ def sync_monster_pack(log=print):
     man, base = got
     n = 0
     (USER / "monsters").mkdir(exist_ok=True)
+    _drop_bad_monster_pics()                         # remove the old blurred Pan.png first, so the fixed one is fetched now
     for name, meta in (man.get("monsters") or {}).items():
         try:
             if not _NAME_MON.match(name) or (USER / "monsters" / name).exists():
