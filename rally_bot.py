@@ -16015,7 +16015,9 @@ def mr_targets(cfg, tried, serial=None):
                 why_not = why_not or f"Preset {mr_pnum(p)} did its {lim} hunts today"
                 continue
             seen_p.add(p)
-            pairs.append({"preset": p, "mode": m, "rank": oi, "top": len(cover.get(p, set()) - {oi}), "rule": r})   # v2: rank = hunt-order place
+            pairs.append({"preset": p, "mode": m, "rule": r,
+                          **({"rank": sum(1 for x in rules[:i] if x["preset"] == p), "top": 0} if "rank" in orow    # no saved order: old rule
+                             else {"rank": oi, "top": len(cover.get(p, set()) - {oi})})})   # v2: rank = hunt-order place
         if not pairs:
             skip(it, why_not, "wrong mode" if why_not.startswith(("Rally only", "Solo only")) else "at the hunt limit")
             continue
