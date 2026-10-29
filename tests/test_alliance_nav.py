@@ -47,6 +47,11 @@ class AllianceNav(unittest.TestCase):
         self.assertLess(y, m[1] - 60, "never the Mail button")
         self.assertLess(abs(y - 719), 25)
 
+    def test_war_row_only_on_the_alliance_main_page(self):
+        self.assertTrue(rb.is_alliance_page(self.img("alliance_page_science_hidden.png")))
+        for f in ("alliance_war_page.png", "alliance_help_page.png", "city_right_column.png"):
+            self.assertFalse(rb.is_alliance_page(self.img(f)), f)
+
     def test_alliance_pages_are_not_mail(self):
         for f in ("alliance_page_science_hidden.png", "alliance_war_page.png", "alliance_help_page.png"):
             self.assertFalse(rb.on_mail_page(self.img(f)), f)

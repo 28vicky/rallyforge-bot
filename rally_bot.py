@@ -7679,11 +7679,25 @@ def find_text(img, options, region=None, cutoff=0.8):
     return None
 
 
+def is_alliance_page(shot):
+    """Owner 30 Oct (tester Kat lost 23 min): the 'Alliance War' row may be tapped only on the real Alliance page - its
+    title says 'Alliance' and it is not Mail. On the Mail list the war_button picture matched a mail row (151,364), the
+    tap opened a reward mail, Back went to the list, and round again until the game was restarted."""
+    try:
+        if on_mail_page(shot):
+            return False
+        return bool(rd_find(shot, ["Alliance"], region=(60, 0, 420, 90), cutoff=0.85, whole=True))   # 'Alliance', not 'Alliance Help'...
+    except Exception:
+        return False
+
+
 def tap_alliance_war_row(dev, shot, log):
     """On the Alliance main page (rows: Alliance War / Gift / Treasure / Building / Help): tap the 'Alliance War' row.
     -> True if tapped."""
     try:
         row = None
+        if not is_alliance_page(shot):
+            return False
         reg = (60, 330, 420, 440)
         t = find_text(shot, ["Alliance War"], region=reg, cutoff=0.8)
         if t and find_text(shot, ["Alliance Gift", "Alliance Treasure", "Alliance Help", "Alliance Building"], region=reg, cutoff=0.75):
@@ -19417,7 +19431,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 log("[*] Unknown screen after switching view - tapped the city/landscape switch again")
                 nap(2.5, 3.5)
                 continue
-            if st == "unknown" and war_row_taps[0] < 3:       # the Alliance main page (list: Alliance War / Gift / Treasure ...): tap the 'Alliance War' row
+            if st == "unknown" and war_row_taps[0] < 3 and is_alliance_page(screen):   # the Alliance main page (list: Alliance War / Gift / Treasure ...): tap the 'Alliance War' row
                 _row = None
                 try:                                           # the words first: the war_button picture can match the wrong spot when the page layout shifts
                     _t = find_text(screen, ["Alliance War"], region=(60, 330, 420, 440), cutoff=0.8)
