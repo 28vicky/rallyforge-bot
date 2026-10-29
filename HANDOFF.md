@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## PC TEST (29 Oct 16:25 IST, one chat) - feat/join-rallies-switch aabf838 ON THE PC (app\v2.5.22: rally_bot.py 1,013,552, ui/pages.js 256,545, ui/app.css 154,471; backups *.bak_before_rj29oct / *.bak_before_stall29oct). Contains fix/stall-budget-on-2522 + Rallies Off/Bot/Auto-Join + Stop in the game's Auto-Join (live-tested on Stalds: stopped 16:09, renewed 16:20) + duty batches give way to a due Auto-Join renew + start-up way-back loop guard. Next: calm period, then 2.5.23. Do NOT reinstall 2.5.22 on the PC. Doc claude/join_rallies_switch_build_29oct.md.
+
 ## READY (29 Oct 15:55 IST, one chat) - feat/join-rallies-switch 147b366 (on fix/stall-budget-on-2522): per-instance Rallies Off / Bot joins / Auto-Join; leaving Auto-Join presses Stop in the game once (verified by OCR + timer). Step 1 only. NOT on the PC - needs a live test on Kiravik or Stalds. Doc claude/join_rallies_switch_build_29oct.md.
 
 ## PC TEST (29 Oct 15:40 IST, one chat) - fix/stall-budget-on-2522 ac99717 copied into app\v2.5.22\rally_bot.py (1,005,899 B; backup rally_bot.py.bak_before_stall29oct = 2.5.22 file). App restarted via restart_update_now, 8 instances resumed, no errors. Test a few hours, then release as 2.5.23 (owner OK). Until then do NOT reinstall 2.5.22 on the PC. Doc claude/stall_budget_on_2522_29oct.md.
