@@ -1948,3 +1948,7 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .insthead{flex-wrap:wrap}
 .ihacts{display:flex;align-items:center;gap:14px;margin-left:auto;flex-wrap:nowrap}
 @media (max-width:1023px){.tdres .stile{padding:10px 8px}.tdres .stile span{font-size:11.5px}}
+
+/* Join alliance rallies 3-way (29 Oct) */
+.rjwrap{display:inline-flex;align-items:center;gap:8px}.rjlbl{font-size:13px;color:var(--mute);font-weight:600}
+.rjseg .segb{white-space:nowrap}

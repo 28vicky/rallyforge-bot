@@ -89,6 +89,31 @@ function ajSwitch(serial, o) {
   i.addEventListener("change", () => { ajSetOne(serial, i.checked); if (o.after) o.after(i.checked); });
   return h("label", { class: "tgl ajsw" + (o.small ? " sm" : ""), title: AJ_TIP, onclick: (e) => e.stopPropagation() }, i, h("span", { class: "sw" }), o.label === undefined ? "Auto-Join" : o.label);
 }
+// ---- Join alliance rallies: Off / Bot joins / Game Auto-Join per instance (owner 29 Oct 14:39). Writes the two existing
+// settings (rally_enabled + game_auto_join), so nothing is migrated. Leaving "Game Auto-Join" makes the bot press Stop in the game.
+function rjEff(serial, key, def) { const o = ((S.cfg.per_device || {})[serial]) || {}; return o[key] !== undefined ? o[key] : (S.cfg[key] !== undefined ? S.cfg[key] : def); }
+function rjMode(serial) { return rjEff(serial, "game_auto_join", false) ? "game" : rjEff(serial, "rally_enabled", true) ? "bot" : "off"; }
+function rjSet(serial, m) {
+  S.cfg.per_device = S.cfg.per_device || {};
+  const o = (S.cfg.per_device[serial] = S.cfg.per_device[serial] || {});
+  o.game_auto_join = m === "game"; o.rally_enabled = m !== "off";
+  paintAjAll();
+}
+const RJ_TIPS = { off: "The bot does not join alliance rallies. If the game's Auto-Join was running, the bot presses Stop in it once.",
+  bot: "The bot joins alliance rallies itself with your presets.",
+  game: "The game's own Auto-Join joins (needs the Rally Monthly Card); the bot keeps it running." };
+function rjSeg(serial, o) {
+  o = o || {};
+  const g = h("div", { class: "seg small rjseg", role: "radiogroup", "aria-label": "Join alliance rallies", onclick: (e) => e.stopPropagation() });
+  const draw = () => {
+    g.innerHTML = ""; const cur = rjMode(serial);
+    [["off", "Off"], ["bot", "Bot joins"], ["game", "Auto-Join"]].forEach(([m, l]) => g.appendChild(h("button", {
+      class: "segb" + (cur === m ? " on" : ""), role: "radio", "aria-checked": String(cur === m), title: RJ_TIPS[m],
+      onclick: () => { if (rjMode(serial) === m) return; rjSet(serial, m); draw(); if (o.after) o.after(m); } }, l)));
+  };
+  draw();
+  return h("div", { class: "rjwrap", title: "Join alliance rallies" }, o.label === "" ? null : h("span", { class: "rjlbl" }, o.label || "Rallies"), g);
+}
 function ajSetAll(v) { S.cfg.game_auto_join = !!v; S.devices.forEach((d) => { if (d.id) ajSetOne(d.id, v); }); paintAjAll(); }
 function paintAjAll() {
   const g = document.getElementById("ajAll");
@@ -268,7 +293,7 @@ PAGES.dashboard = function () {
       step(1, "Find your emulators", "Open them with Evony on screen.", h("div", { class: "row", style: { gap: "12px" } },
         h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); S.devices.push({ id: "", name: "" }); rerender(); } }, "Add by address"),
         btn("Detect emulators", detectDevices, "pri sm")), false),
-      step(2, "Auto-Join", "Have the Rally Monthly Card? Switch Auto-Join on at the top of each instance - no presets needed. Otherwise the bot joins with your presets.", null, false),
+      step(2, "Auto-Join", "Have the Rally Monthly Card? Pick Auto-Join under Rallies at the top of each instance - no presets needed. Otherwise the bot joins with your presets.", null, false),
       step(3, "Start", "The bot joins rallies and does your duties.", h("button", { class: "btn sm", disabled: true, title: "Add an instance first" }, "Start all"), false)),
     S.devices.length ? firstRows : null) : null;
   if (none && S.devices.length) instRows(firstRows);       // an address row the user just added: typed in place, under the steps
@@ -433,7 +458,7 @@ function instancePage(serial) {
     stBtn("Start", () => collectAndRun("start", { serial }), "pri"), stBtn("Pause", () => act(api("pause", { serial })), "pri"), stBtn("Stop", () => act(api("stop", { serial })), "stopb"), moreBtn);
   const head = h("div", { class: "row insthead", style: { margin: "0 0 12px", gap: "14px", alignItems: "center" } },
     sideBtn(), h("h2", { title: serial, style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx),
-    status, ajSwitch(serial, { after: () => rerender() }), h("span", { class: "mute iserial", style: { fontSize: "13px" } }, serial), h("div", { class: "ihacts" }, saveStEl(), bar));   // owner 29 Oct: Saved stays with the buttons - the group wraps as one
+    status, rjSeg(serial, { after: () => rerender() }), h("span", { class: "mute iserial", style: { fontSize: "13px" } }, serial), h("div", { class: "ihacts" }, saveStEl(), bar));   // owner 29 Oct: Saved stays with the buttons - the group wraps as one
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
@@ -1650,7 +1675,7 @@ function renderTodayAll() {
     }
     // Shield / Buff appear only once the bot reads them from the game (a row carries shield / buff)
     const sb = j.rows.some((r) => r.shield != null || r.buff != null);
-    const want = ["Instance"].concat(sb ? ["Shield", "Buff"] : [], ["Auto-Join", "Duties", "Joins", "Skipped (too late)"]);
+    const want = ["Instance"].concat(sb ? ["Shield", "Buff"] : [], ["Rallies", "Duties", "Joins", "Skipped (too late)"]);
     if (cols !== want.join()) { cols = want.join(); hrow.innerHTML = ""; want.forEach((c) => hrow.appendChild(h("th", {}, c))); }
     body.innerHTML = "";
     if (!j.rows.length) body.appendChild(h("tr", {}, h("td", { colspan: String(want.length), class: "mute" }, "No instances in your list yet.")));
@@ -1662,7 +1687,7 @@ function renderTodayAll() {
       body.appendChild(h("tr", { class: off ? "off" : "", title: "Open " + r.name, onclick: () => open(r.serial) },
         h("td", {}, h("b", {}, r.name), off ? h("small", { class: st[r.serial] === "error" ? "bad" : "" }, " " + (WORD[st[r.serial]] || "stopped")) : null),
         sb ? h("td", {}, tx(r.shield)) : null, sb ? h("td", {}, tx(r.buff)) : null,
-        h("td", {}, ajSwitch(r.serial, { label: "", small: true, after: () => { last = ""; paint(); } })),
+        h("td", {}, rjSeg(r.serial, { label: "", after: () => { last = ""; paint(); } })),
         h("td", { class: all ? "ok" : "" }, r.duties_total ? `${r.duties_done}/${r.duties_total}` + (all ? " \u2713" : "") : "-"),
         h("td", ajIsOn(r.serial) ? { class: "mute", title: "The game's Auto-Join is on, so the game joins rallies itself" } : {}, ajIsOn(r.serial) && !r.joins ? "By the game" : String(r.joins)), h("td", {}, String(r.late))));   // PCR2 A4
     });

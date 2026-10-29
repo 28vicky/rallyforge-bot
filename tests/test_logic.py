@@ -518,3 +518,94 @@ class DutyStallBudget(unittest.TestCase):
             with self.assertRaises(RuntimeError) as cm:
                 D()._run("shell", "input", "tap", "1", "1")
         self.assertIn("no progress for 8 min", str(cm.exception))
+
+
+class JoinRalliesSwitch(Base):
+    """Off / Bot joins / Game Auto-Join (owner 29 Oct): leaving Game Auto-Join presses Stop in the game once, never blind."""
+    S = "127.0.0.1:1"
+
+    def setUp(self):
+        super().setUp()
+        rb._AJ_MEMO.clear()
+        rb._AJ_GOING.clear()
+
+    class Dev:
+        def __init__(self):
+            self.taps, self.backs, self.serial = [], 0, "127.0.0.1:1"
+
+        def tap(self, x, y):
+            self.taps.append((x, y))
+
+        def back(self):
+            self.backs += 1
+
+        def screenshot(self):
+            return np.zeros((960, 540, 3), np.uint8)
+
+    def _run(self, times, stop_at=(130, 939), confirm=None):
+        dev, cfg, logs = self.Dev(), {"auto_join_tap": [405, 934]}, []
+        seq = iter(times)
+        with mock.patch.object(rb, "read_auto_join_time", lambda img: next(seq)), \
+             mock.patch.object(rb, "find_text", lambda img, opts, region=None, cutoff=0.8: stop_at if "Stop" in opts else confirm), \
+             mock.patch.object(rb, "failure_evidence", lambda *a, **k: None), mock.patch.object(rb.time, "sleep", lambda s: None):
+            ok = rb.auto_join_stop(dev, cfg, logs.append, None, lambda *a, **k: None)
+        return ok, dev, logs
+
+    def test_never_on_never_stops(self):
+        self.assertFalse(rb.aj_note_setting({"game_auto_join": False}, self.S))
+        self.assertFalse(rb.aj_note_setting({"game_auto_join": False}, self.S))
+
+    def test_on_then_off_asks_for_stop_once(self):
+        self.assertFalse(rb.aj_note_setting({"game_auto_join": True}, self.S))
+        self.assertTrue(rb.aj_note_setting({"game_auto_join": False}, self.S))
+        rb._AJ_MEMO.clear(); self._clear_cache()              # survives a restart (duty state file)
+        self.assertTrue(rb.aj_note_setting({"game_auto_join": False}, self.S))
+        self.assertTrue(rb.aj_state(self.S).get("stop_pending"))
+
+    def test_back_on_cancels_pending_stop(self):
+        rb.aj_note_setting({"game_auto_join": True}, self.S)
+        rb.aj_note_setting({"game_auto_join": False}, self.S)
+        self.assertFalse(rb.aj_note_setting({"game_auto_join": True}, self.S))
+        self.assertFalse(rb.aj_note_setting({"game_auto_join": True}, self.S))
+        self.assertFalse(rb.aj_state(self.S).get("stop_pending"))
+
+    def test_stop_pressed_and_verified(self):
+        ok, dev, _ = self._run([7000, 6997, 6990, 6990])     # counting down -> Stop -> no longer counting
+        self.assertTrue(ok)
+        self.assertEqual(dev.taps, [(405, 934), (130, 939)])
+
+    def test_already_stopped_taps_nothing_more(self):
+        ok, dev, _ = self._run([5000, 5000])
+        self.assertTrue(ok)
+        self.assertEqual(dev.taps, [(405, 934)])
+
+    def test_no_stop_word_no_tap(self):
+        ok, dev, logs = self._run([7000, 6997], stop_at=None)
+        self.assertFalse(ok)
+        self.assertEqual(dev.taps, [(405, 934)])
+        self.assertTrue(any("nothing tapped" in l for l in logs))
+
+    def test_stop_word_on_the_right_is_not_tapped(self):    # the right button is Start
+        ok, dev, _ = self._run([7000, 6997], stop_at=(409, 939))
+        self.assertFalse(ok)
+        self.assertEqual(dev.taps, [(405, 934)])
+
+    def test_still_counting_after_stop_is_not_done(self):
+        ok, _, logs = self._run([7000, 6997, 6990, 6987])
+        self.assertFalse(ok)
+        self.assertTrue(any("still counting" in l for l in logs))
+
+    def test_page_not_open_no_tap(self):
+        ok, dev, _ = self._run([None, None])
+        self.assertFalse(ok)
+        self.assertEqual(dev.taps, [(405, 934)])
+
+    def test_three_failures_give_up_and_ask_user(self):
+        rb.aj_note_setting({"game_auto_join": True}, self.S)
+        rb.aj_note_setting({"game_auto_join": False}, self.S)
+        logs = []
+        with mock.patch.object(rb, "auto_join_stop", lambda *a: False):
+            for _ in range(3):
+                rb.aj_stop_tick(None, {}, logs.append, None, None, self.S)
+        self.assertFalse(rb.aj_state(self.S).get("stop_pending"))
+        self.assertTrue(any("yourself" in l for l in logs))

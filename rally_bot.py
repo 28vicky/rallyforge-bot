@@ -1694,6 +1694,119 @@ def auto_join_renew(dev, cfg, log, stop, act):
     return every
 
 
+# ---- Join alliance rallies: Off / Bot joins / Game Auto-Join per instance (owner 29 Oct 14:39). When an instance leaves
+# "Game Auto-Join" (the game's Auto-Join switched off in the app) the bot presses Stop in the game's Auto-Join ONCE, so no
+# rally marches keep leaving for up to 8 h. Remembered in the duty state ("auto_join": {"on": ..}) so it survives restarts.
+AJ_STOP_RETRY_S = 600
+AJ_STOP_MAX_TRIES = 3
+
+
+def aj_state(serial):
+    return (load_duty_state().get(serial or "default") or {}).get("auto_join") or {}
+
+
+def aj_state_save(serial, **kw):
+    with _DUTY_LOCK:
+        data = load_duty_state()
+        data.setdefault(serial or "default", {}).setdefault("auto_join", {}).update(kw)
+        save_duty_state(data)
+
+
+_AJ_MEMO = {}            # serial -> last saved auto_join state (read from the duty state once per run)
+_AJ_GOING = {}           # serial -> time the bot last left the city to stop Auto-Join (one trip per 5 min)
+
+
+def _aj_mem(serial):
+    if serial not in _AJ_MEMO:
+        _AJ_MEMO[serial] = dict(aj_state(serial))
+    return _AJ_MEMO[serial]
+
+
+def _aj_put(serial, **kw):
+    _aj_mem(serial).update(kw)
+    aj_state_save(serial, **kw)
+
+
+def aj_note_setting(cfg, serial):
+    """Called on every loop on the rally list / in the city. -> True when the game's Auto-Join should be stopped now."""
+    on = bool(cfg.get("game_auto_join"))
+    st = _aj_mem(serial)
+    if on:
+        if not st.get("on") or st.get("stop_pending"):
+            _aj_put(serial, on=True, stop_pending=False, stop_tries=0)
+        return False
+    if st.get("on"):                                         # it was on, now off -> stop it in the game once
+        _aj_put(serial, on=False, stop_pending=True, stop_tries=0, stop_next=0)
+        return True
+    return bool(st.get("stop_pending")) and time.time() >= float(st.get("stop_next", 0) or 0)
+
+
+def _aj_ticking(dev, wait=3.0):
+    """Two reads of 'Remaining Auto-Join time' a few seconds apart -> (first, second); None when not on the page."""
+    a = read_auto_join_time(dev.screenshot())
+    time.sleep(wait)
+    b = read_auto_join_time(dev.screenshot())
+    return a, b
+
+
+def auto_join_stop(dev, cfg, log, stop, act):
+    """On the Alliance War list: open the game's Auto-Join and press Stop - only after reading the word 'Stop' on the
+    button, and only counted as done when the timer has stopped counting down. -> True (stopped / already stopped)."""
+    act("step", text="Stopping the game's Auto-Join")
+    dev.tap(*cfg["auto_join_tap"])
+    time.sleep(2.0)
+    a, b = _aj_ticking(dev)
+    if a is None or b is None:
+        log("[!] Auto-Join: could not open the Auto-Join page to stop it - trying again in 10 min")
+        failure_evidence(dev, "auto_join_stop", "Auto-Join page not recognised", every_s=600)
+        dev.back()
+        return False
+    if b >= a:                                               # not counting down: already stopped
+        log(f"[+] Auto-Join is already stopped in the game ({fmt_hms(b)} left on it)")
+        dev.back()
+        return True
+    sh = dev.screenshot()
+    p = find_text(sh, ["Stop"], region=(0, 860, 540, 100), cutoff=0.8)
+    if not p or p[0] > 300:                                  # Stop is the left one of the two bottom buttons (Start is right)
+        log("[!] Auto-Join: no Stop button found on the page - nothing tapped, trying again in 10 min")
+        failure_evidence(dev, "auto_join_stop", "Stop button not found", shot=sh, every_s=600)
+        dev.back()
+        return False
+    dev.tap(*p)
+    time.sleep(2.0)
+    sh2 = dev.screenshot()
+    q = find_text(sh2, ["Confirm", "OK", "Yes"], region=(0, 300, 540, 500), cutoff=0.85)
+    if q:                                                    # a confirm box, if the game asks
+        dev.tap(*q)
+        time.sleep(2.0)
+    c, d = _aj_ticking(dev)
+    if c is not None and d is not None and d < c:
+        log("[!] Auto-Join: pressed Stop but the timer is still counting down - trying again in 10 min")
+        failure_evidence(dev, "auto_join_stop", "timer still counting after Stop", shot=sh2, extra={"tap": list(p)}, every_s=600)
+        dev.back()
+        return False
+    log("[+] Auto-Join stopped in the game (joining rallies is not set to Game Auto-Join any more)")
+    act("renew", left="stopped")
+    dev.back()
+    time.sleep(1.0)
+    return True
+
+
+def aj_stop_tick(dev, cfg, log, stop, act, serial):
+    """Run the stop once when it is pending; give up after a few failed tries (logged, asks the user)."""
+    ok = auto_join_stop(dev, cfg, log, stop, act)
+    if ok:
+        _aj_put(serial, stop_pending=False, stop_tries=0)
+        AJ_LEFT.pop(serial, None)
+        return
+    n = int(_aj_mem(serial).get("stop_tries", 0) or 0) + 1
+    if n >= AJ_STOP_MAX_TRIES:
+        log("[!] Auto-Join: could not stop the game's Auto-Join after 3 tries - please press Stop in the game's Auto-Join yourself")
+        _aj_put(serial, stop_pending=False, stop_tries=n)
+    else:
+        _aj_put(serial, stop_tries=n, stop_next=time.time() + AJ_STOP_RETRY_S)
+
+
 _MONSTER_ALIASES = {"Bayar Knight": "Knight Bayard", "Bayard Knight": "Knight Bayard", "Bayar": "Knight Bayard", "Bayard": "Knight Bayard",
                     **{f"{g} {m}": m for g in ("Junior", "Medium", "Senior") for m in ("Hydra", "Cerberus", "Nian")},
                     "Junior Knight Bayard": "Knight Bayard", "Senior Bayar Knight": "Knight Bayard", "Senior Knight Bayard": "Knight Bayard",
@@ -19124,6 +19237,15 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     log("[*] The Event War tab is open - switching back to PvP War")
                     dev.tap(140, 105)
                     nap(1.0, 1.5)
+                    continue
+            if st in ("rally_list", "city") and aj_note_setting(cfg, serial):   # Auto-Join switched off in the app: stop it in the game once
+                if st == "rally_list":
+                    aj_stop_tick(dev, cfg, log, stop, act, serial)
+                    continue
+                if now - _AJ_GOING.get(serial, 0) > 300:         # rallies off = the bot stays in the city: one trip to the list
+                    _AJ_GOING[serial] = now
+                    log("[*] Auto-Join was switched off - going to the rally list once to press Stop in the game")
+                    recover()
                     continue
             if cfg.get("game_auto_join") and rallies_on:          # the game joins by itself; we only keep it switched on
                 if st == "rally_list":
