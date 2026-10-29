@@ -11215,19 +11215,20 @@ WHEEL_ICON = (141, 328)                                              # "Wheel of
 WHEEL_COINS_TIGHT = (225, 132, 155, 40)                  # the number only (the '+' button left out)
 
 
-def wheel_coins(img):
+def wheel_coins(img, min_digits=1):
     """The coin total. Rob 27 Oct 20:12: the PC's OCR dropped a clear '27,337,900' (low confidence) -> several reads:
-    the usual one, the tight box at two zooms, then a digits-only line read that ignores confidence."""
+    the usual one, the tight box at two zooms, then a digits-only line read that ignores confidence.
+    29 Oct: 1 digit is accepted (0 coins = '0' was never accepted -> 'could not read the Wheel coins' failures)."""
     tries = [(WHEEL_COINS_BOX, 3.0), (WHEEL_COINS_TIGHT, 3.0), (WHEEL_COINS_TIGHT, 2.0)]
     for (x, y, w, h), sc in tries:
         d = re.sub(r"[^0-9]", "", " ".join(t for t, _ in ocr_lines(img[y:y + h, x:x + w], sc)))
-        if len(d) >= 2:
+        if len(d) >= min_digits:
             return int(d)
     try:
         x, y, w, h = WHEEL_COINS_TIGHT
         g = cv2.resize(cv2.cvtColor(img[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY), None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
         d = re.sub(r"[^0-9]", "", pytesseract.image_to_string(g, config="--psm 7 -c tessedit_char_whitelist=0123456789,"))
-        return int(d) if len(d) >= 2 else None
+        return int(d) if len(d) >= min_digits else None
     except Exception:
         return None
 
@@ -11420,7 +11421,7 @@ def run_wheel(dev, cfg, log, stop):
                 "the Wheel page did not show (picture: debug/wheel_after_ring_tap.png)")
             raise RuntimeError("the Wheel of Fortune page did not open")
     if conf.get("chips", "off") != "off":
-        c0 = wheel_coins(shot)
+        c0 = wheel_coins(shot, min_digits=2)                 # unchanged: chips only from a clear multi-digit total
         if c0 is not None:
             wheel_add_chips(dev, conf, c0, log, stop)
             if not wheel_on_page(dev.screenshot()):
@@ -11458,6 +11459,17 @@ def run_wheel(dev, cfg, log, stop):
             if c is None and coins is None:
                 rd_snap(shot, "wheel_coins_unread")
                 raise RuntimeError(f"could not read the Wheel coins (after {done} spin(s))")
+            if c is not None and c < 10:                   # a tiny total (e.g. 0): read twice more, all must agree
+                for _ in range(2):                         # (a lost digit must not end the run)
+                    stop.wait(0.8)
+                    s_ = dev.screenshot()
+                    c_ = wheel_coins(s_) if wheel_on_page(s_) and not wheel_reward_panel(s_) else None
+                    if c_ != c:
+                        c = None if coins is None else coins
+                        break
+                if c is None:
+                    rd_snap(shot, "wheel_coins_unread")
+                    raise RuntimeError(f"could not read the Wheel coins (after {done} spin(s))")
             coins, since_read = (c if c is not None else coins), 0
         ready = False
         left = (target - done) if target else None
@@ -11469,7 +11481,10 @@ def run_wheel(dev, cfg, log, stop):
             if since_read:                                 # counted down, not read: read once before stopping
                 since_read = 10
                 continue
-            log(f"[+]  Wheel: stopped after {done} spin(s) - {coins:,} coins left (cost/keep-at-least {reserve:,})")
+            if not done and coins == 0:                    # owner 29 Oct: 0 coins is normal, not a failure
+                log("[i]   Wheel: No wheel coins available.")
+            else:
+                log(f"[+]  Wheel: stopped after {done} spin(s) - {coins:,} coins left (cost/keep-at-least {reserve:,})")
             break
         dev.tap(*WHEEL_BTN[pick])
         last_pick = pick

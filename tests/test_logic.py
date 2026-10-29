@@ -729,3 +729,53 @@ class DutyStallBudget(unittest.TestCase):
             with self.assertRaises(RuntimeError) as cm:
                 D()._run("shell", "input", "tap", "1", "1")
         self.assertIn("no progress for 8 min", str(cm.exception))
+
+
+class WheelZero(unittest.TestCase):
+    """Owner 29 Oct: 0 wheel coins = 'No wheel coins available.', a normal end, not a failure."""
+    def _lines(self, txt):
+        return mock.patch.object(rb, "ocr_lines", return_value=[(txt, [])])
+
+    def test_reads_zero_and_one_digit(self):
+        import numpy as np
+        img = np.zeros((960, 540, 3), np.uint8)
+        with self._lines("0"):
+            self.assertEqual(rb.wheel_coins(img), 0)
+        with self._lines("7"):
+            self.assertEqual(rb.wheel_coins(img), 7)
+        with self._lines("27,337,900"):
+            self.assertEqual(rb.wheel_coins(img), 27337900)
+
+    def test_chips_still_need_two_digits(self):
+        import numpy as np
+        img = np.zeros((960, 540, 3), np.uint8)
+        with self._lines("0"), mock.patch.object(rb.pytesseract, "image_to_string", return_value=""):
+            self.assertIsNone(rb.wheel_coins(img, min_digits=2))
+
+    def _run(self, reads):
+        import threading, numpy as np
+        class D:
+            serial = "w"
+            taps = []
+            def screenshot(self):
+                return np.zeros((960, 540, 3), np.uint8)
+            def tap(self, x, y):
+                self.taps.append((x, y))
+        d, logs, it = D(), [], iter(reads)
+        with mock.patch.object(rb, "wheel_on_page", return_value=True), \
+                mock.patch.object(rb, "wheel_reward_panel", return_value=False), \
+                mock.patch.object(rb, "wheel_coins", side_effect=lambda *a, **k: next(it)), \
+                mock.patch.object(rb, "wheel_conf", return_value={"button": 100, "spins": 0, "reserve": 0, "chips": "off"}), \
+                mock.patch.object(rb, "wheel_spun_today", return_value=0), mock.patch.object(rb, "rd_snap"):
+            r = rb.run_wheel(d, {}, logs.append, threading.Event())
+        return r, logs, d.taps
+
+    def test_zero_coins_normal_end(self):
+        r, logs, taps = self._run([0, 0, 0])
+        self.assertEqual(r, 0)
+        self.assertIn("[i]   Wheel: No wheel coins available.", logs)
+        self.assertEqual(taps, [])                                  # never pressed a spin button
+
+    def test_zero_not_confirmed_is_not_trusted(self):
+        with self.assertRaises(RuntimeError):                        # 0 then 5: reads disagree -> no decision on a bad read
+            self._run([0, 5, 0])
