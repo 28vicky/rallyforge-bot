@@ -18838,6 +18838,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         ally_taps = [0]
         view_toggles = [0]
         last_toggle = [0.0]
+        fg_checked = [False]
         for _ in range(8):
             if stop.is_set():
                 return False
@@ -18846,6 +18847,16 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             if st == "rally_list":
                 war_streak[0] = 0
                 return True
+            if st in ("unknown", "city") and not fg_checked[0] and cfg.get("auto_launch_game", True):
+                fg_checked[0] = True                           # owner 29 Oct 18:11 (Rob): the game was closed and the bot tapped the
+                try:                                           # emulator home for 3.5 min first - look whether Evony is on screen at once
+                    pkg = evony_package(dev.adb, dev.serial, cfg)
+                    if app_foreground(dev.adb, dev.serial, pkg) is False:
+                        log("[!] Evony is not on the screen (closed?) - starting it")
+                        bring_online(dev, cfg, log, stop)       # starts the game and waits for it to load
+                        return False
+                except Exception as _e:
+                    quiet_err("recover foreground", _e)
             if reclaim_if_kicked(dev, cfg, log, stop, screen):
                 return False
             if dismiss_popup(screen, st in ("unknown", "city"), st):
