@@ -19464,6 +19464,13 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     dev.tap(*cfg.get("city_to_tap", (35, 35)))
                     log("[*] Unknown page with a Back arrow - tapped the Back arrow")
                     nap(1.2, 1.8)
+                    try:                                      # owner 30 Oct (testers: 150-200 arrow taps a day each): the gold
+                        after = dev.screenshot()              # spot is not always a Back arrow - when the tap changed nothing,
+                        if float(np.mean(cv2.absdiff(screen[40:920:8, ::8], after[40:920:8, ::8]))) < 2.0:
+                            back_taps[0] = 2                  # no more arrow taps this round: the phone's Back is next
+                            log("[i] The Back arrow tap changed nothing - using the phone's Back instead")
+                    except Exception as _e:
+                        quiet_err("arrow check", _e)
                     continue
             if st == "unknown" and phone_backs[0] < 2:        # owner 30 Oct: never sit on a page it does not know - the phone's Back
                 phone_backs[0] += 1                           # closes pages, mails and most pop-ups; on the bare city / map it only
