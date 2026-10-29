@@ -1845,6 +1845,11 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .huseg button{height:30px;padding:0 14px;border:0;border-radius:7px;background:transparent;color:var(--mute);font:inherit;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
 .huseg button.on{background:var(--card);color:var(--fg);box-shadow:var(--sh2)}
 .hueopts{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+/* hunts v2 (29 Oct): preset on/off, copy, delete - one row under the preset header */
+.hueacts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+.hueacts .hueflex{flex:1 1 auto}
+.hueacts .btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+.hurc.poff{opacity:.6}
 .hupb{height:28px;padding:0 11px;border-radius:99px;border:var(--bd);background:var(--card);color:var(--fg);font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
 .hupb.on{background:var(--accent1);border-color:var(--accent1);color:var(--accfg)}
 .huwhyb{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--hu-ok) 9%,transparent)}

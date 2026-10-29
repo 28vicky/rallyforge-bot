@@ -2323,7 +2323,7 @@ const MR_TIMES = ["5", "10", "30", "60"];                    // the game's Allia
 const HU_HUNTS = [0, 10, 25, 50];                            // solo hunts a day (0 = no limit)
 function monsterRallyTab(serial) {
   const root = h("div", { class: "hu" });
-  let duty = null, model = null, off = [], times = {}, modes = {}, coords = { items: [], now: Date.now() / 1000, ready: true };
+  let duty = null, model = null, off = [], times = {}, modes = {}, ons = {}, copyMode = "", delArm = 0, coords = { items: [], now: Date.now() / 1000, ready: true };
   let live = { status: {}, busy: {}, decisions: [], solo_done: {}, rally_only: [], now: Date.now() / 1000, running: false }, liveOk = Date.now(), liveFail = false;
   S.huView = S.huView || {};
   S.huSel = S.huSel || {};
@@ -2339,6 +2339,7 @@ function monsterRallyTab(serial) {
   const used = (p) => !!(model && model[p] && model[p].length);   // sel can be "" before a preset is picked
   const usedList = () => MR_PRESETS.filter(used);
   const mode = (p) => modes[p] || "rally";
+  const isOn = (p) => ons[p] !== false;                         // v2 (owner 29 Oct): Off = monsters stay, preset not used
   const huntsOf = (p) => +(((optVal("presets", {}) || {})[p] || {}).hunts || 0);
   let huntsLocal = {};
   const huntsFor = (p) => (p in huntsLocal ? huntsLocal[p] : huntsOf(p));
@@ -2435,7 +2436,7 @@ function monsterRallyTab(serial) {
   const saveRules = () => queue({ rules: toRules() });
   const savePresets = () => {
     const pr = {};
-    MR_PRESETS.forEach((p) => (pr[p] = { mode: mode(p), hunts: huntsFor(p) }));
+    MR_PRESETS.forEach((p) => (pr[p] = { mode: mode(p), hunts: huntsFor(p), on: isOn(p) }));
     queue({ presets: pr });
   };
   const setOn = async (v) => {
@@ -2452,6 +2453,7 @@ function monsterRallyTab(serial) {
     && (!name || String(d.name || "").toLowerCase() === name.toLowerCase())).length;
   const presetState = (p) => {
     if (!used(p)) return ["Free for joining rallies", "off"];
+    if (!isOn(p)) return ["Preset off", "off"];
     if (!(duty && duty.on)) return ["Off", "off"];                           // A1 (28 Oct): Monster hunts switched off - never show green Ready
     const back = (live.busy || {})[p];
     if (back && back > Date.now() / 1000) return [(mode(p) === "solo" ? "Attacking · back " : "Busy · back ") + left(back), "busy", back];
@@ -2674,7 +2676,7 @@ function monsterRallyTab(serial) {
       h("span", {}, st.filter((x) => x === "busy").length + " busy · " + st.filter((x) => x === "ok").length + " ready")));
     for (const p of us) {
       const [txt, k, back] = presetState(p), top = model[p][0];
-      rail.appendChild(h("button", { type: "button", class: "hurc" + (sel === p ? " sel" : ""), "aria-pressed": sel === p ? "true" : "false", onclick: () => pick(p) },
+      rail.appendChild(h("button", { type: "button", class: "hurc" + (sel === p ? " sel" : "") + (isOn(p) ? "" : " poff"), "aria-pressed": sel === p ? "true" : "false", onclick: () => pick(p) },
         h("div", { class: "hucrow" }, h("b", {}, "Preset " + pN(p)), h("span", { class: "humode " + mode(p) }, mode(p) === "solo" ? "Solo" : "Rally"),
           h("span", Object.assign({ class: "hust sm " + k }, back ? { "data-back": String(back), "data-pre": mode(p) === "solo" ? "Attacking · back " : "Busy · back " } : {}), txt)),
         h("span", { class: "hutop", title: model[p].map(chipName).join(", then ") }, chipName(top) + (model[p].length > 1 ? " · +" + (model[p].length - 1) + " more" : "")),
@@ -2737,6 +2739,43 @@ function monsterRallyTab(serial) {
       listBox.appendChild(el);
     });
   };
+  // v2 (owner 29 Oct): preset on/off, copy from / to another preset, delete (clears its monsters)
+  const copyPreset = (from, to) => {
+    model[to] = model[from].map((c) => ({ name: c.name, l: c.l }));
+    modes[to] = mode(from); times[to] = times[from] || "5"; huntsLocal[to] = huntsFor(from); ons[to] = true;
+    saveRules(); savePresets();
+  };
+  const presetActs = () => {
+    const bar = h("div", { class: "hueacts" });
+    if (used(sel)) bar.appendChild(h("button", { type: "button", class: "husw sm" + (isOn(sel) ? " on" : ""), "aria-pressed": isOn(sel) ? "true" : "false",
+      "aria-label": "Preset " + pN(sel) + " on", title: isOn(sel) ? "Switch off: the monsters stay, this preset is not used for hunts" : "Switch on to hunt with this preset again",
+      onclick: () => { ons[sel] = !isOn(sel); savePresets(); paintEditor(); paintRail(); } },
+      h("span", { class: "hutrack" }, h("span", { class: "huknob" })), isOn(sel) ? "On" : "Off"));
+    bar.appendChild(h("span", { class: "hueflex" }));
+    const fromList = MR_PRESETS.filter((p) => p !== sel && used(p));
+    if (copyMode) {
+      const targets = copyMode === "to" ? MR_PRESETS.filter((p) => p !== sel) : fromList;
+      bar.append(h("span", { class: "hurh" }, copyMode === "to" ? "Copy to" : "Copy from"),
+        ...targets.map((p) => h("button", { type: "button", class: "hupb",
+          title: copyMode === "to" ? (used(p) ? "Replaces Preset " + pN(p) + "'s monsters" : "Preset " + pN(p) + " is empty") : "Replaces this preset's monsters with Preset " + pN(p) + "'s",
+          onclick: () => { const [a, b] = copyMode === "to" ? [sel, p] : [p, sel]; copyMode = ""; copyPreset(a, b);
+            toast("Copied Preset " + pN(a) + " to Preset " + pN(b), "ok"); paintEditor(); paintRail(); } }, String(pN(p)))),
+        h("button", { type: "button", class: "lnkb", onclick: () => { copyMode = ""; paintEditor(); } }, "Cancel"));
+      return bar;
+    }
+    bar.appendChild(h("button", { type: "button", class: "btn sm", disabled: !fromList.length, title: fromList.length ? "" : "No other preset has monsters yet",
+      onclick: () => { copyMode = "from"; paintEditor(); } }, "Copy from\u2026"));
+    if (used(sel)) {
+      bar.appendChild(h("button", { type: "button", class: "btn sm", onclick: () => { copyMode = "to"; paintEditor(); } }, "Copy to\u2026"));
+      const armed = Date.now() - delArm < 4000;
+      bar.appendChild(h("button", { type: "button", class: "btn sm danger", onclick: () => {
+        if (!armed) { delArm = Date.now(); paintEditor(); setTimeout(() => { if (Date.now() - delArm >= 4000) paintEditor(); }, 4100); return; }
+        delArm = 0; model[sel] = []; ons[sel] = true; modes[sel] = "rally"; huntsLocal[sel] = 0;
+        saveRules(); savePresets(); toast("Preset " + pN(sel) + " cleared - free for joining rallies", "ok"); paintEditor(); paintRail(); } },
+        armed ? "Click again to delete" : "Delete preset"));
+    }
+    return bar;
+  };
   const paintEditor = () => {
     editor.innerHTML = "";
     if (!model) return;
@@ -2753,6 +2792,7 @@ function monsterRallyTab(serial) {
     editor.appendChild(h("div", { class: "huehead" },
       h("div", { class: "huetitle" }, h("h2", {}, "Preset " + pN(sel)), h("span", { class: "hust sm " + k }, txt)),
       seg, h("div", { class: "hueopts" }, h("span", { class: "hurh" }, m === "solo" ? "Hunts a day" : "Rally time"), ...opts)));
+    editor.appendChild(presetActs());
     if (!used(sel)) {
       editor.appendChild(h("div", { class: "huempty" }, h("b", {}, "Preset " + pN(sel) + " is free for joining rallies."),
         h("span", {}, "Add monsters to hunt with it."), h("button", { type: "button", class: "btn pri", onclick: openDrawer }, "+ Add monsters")));
@@ -2883,7 +2923,7 @@ function monsterRallyTab(serial) {
     const v = optVal("rules", null), pr = optVal("presets", {}) || {};
     if (pending || saveState === "saving") return;               // never overwrite edits that are on their way
     model = toModel(Array.isArray(v) ? v : [{ name: "Ymir", min: 1, max: 99, preset: "I", time: "5", on: true }]);
-    MR_PRESETS.forEach((p) => (modes[p] = (pr[p] && pr[p].mode) || "rally"));
+    MR_PRESETS.forEach((p) => { modes[p] = (pr[p] && pr[p].mode) || "rally"; ons[p] = !(pr[p] && pr[p].on === false); });
   };
   const loadLive = async () => {
     try {

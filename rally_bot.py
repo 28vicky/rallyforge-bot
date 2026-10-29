@@ -15579,7 +15579,8 @@ def mr_presets(cfg):
     for p in RT_PRESETS:
         r = raw.get(p) if isinstance(raw.get(p), dict) else {}
         out[p] = {"mode": r.get("mode") if r.get("mode") in MR_MODES else "rally",
-                  "hunts": max(0, int(float(r.get("hunts") or 0)))}
+                  "hunts": max(0, int(float(r.get("hunts") or 0))),
+                  "on": r.get("on") is not False}          # owner 29 Oct (v2): Off = its monsters stay, the preset is not used
     return out
 
 
@@ -15849,8 +15850,8 @@ def mr_rule_for(rules, name, level):
 def mr_targets(cfg, tried, serial=None):
     """Telegram coordinates of monsters that sit on a preset (Hunts tab), best first (top of a preset, then nearest).
     Every coordinate gets a line in the Decisions list (why it is hunted or skipped). -> [{name, level, x, y, km, t, rule, rank, mode}]"""
-    rules = mr_rules(cfg)
     modes = mr_presets(cfg)
+    rules = [r for r in mr_rules(cfg) if modes[r["preset"]]["on"]]     # a switched-off preset hunts nothing
     done = mr_solo_done(serial)
     age_min = float(rd_opt(cfg, "monster_rally", "max_age", 10) or 10)
     _feed_cache_min[0] = age_min
@@ -15892,7 +15893,12 @@ def mr_targets(cfg, tried, serial=None):
         low = str(it.get("name") or "").lower().strip()
         fits = [(i, r) for i, r in enumerate(rules) if mr_rule_for([r], it.get("name"), it.get("level") or 0)[1]]
         if not fits:
-            skip(it, "Not in any preset", "not in a preset")
+            offp = sorted({mr_pnum(r["preset"]) for r in mr_rules(cfg) if not modes[r["preset"]]["on"]
+                           and mr_rule_for([r], it.get("name"), it.get("level") or 0)[1]})
+            if offp:
+                skip(it, "Preset " + ", ".join(map(str, offp)) + (" is" if len(offp) == 1 else " are") + " switched off", "preset off")
+            else:
+                skip(it, "Not in any preset", "not in a preset")
             continue
         pairs, why_not, seen_p = [], "", set()
         for i, r in fits:                                # owner 29 Oct 13:31: EVERY preset whose box holds it may take it
