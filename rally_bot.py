@@ -19627,21 +19627,42 @@ def eq_row_state(dev, stop, name):
     return None, None
 
 
+def eq_green_buttons(shot, region=(330, 370, 210, 585)):
+    """Green buttons (Claim / Claim All) found by colour, no text read (owner 31 Oct 03:48: make it faster).
+    -> [(x, y, w)] widest first. Go is gold, Claimed is grey: only Claim is green."""
+    x0, y0, w, h = region
+    hsv = cv2.cvtColor(shot[y0:y0 + h, x0:x0 + w], cv2.COLOR_BGR2HSV)
+    m = cv2.inRange(hsv, (38, 90, 90), (85, 255, 255))
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (9, 5)))
+    n, _, st, _ = cv2.connectedComponentsWithStats(m)
+    out = [(int(st[i][0] + st[i][2] / 2) + x0, int(st[i][1] + st[i][3] / 2) + y0, int(st[i][2]))
+           for i in range(1, n) if st[i][2] >= 55 and 18 <= st[i][3] <= 70 and st[i][4] >= 0.45 * st[i][2] * st[i][3]]
+    return sorted(out, key=lambda b: (-b[2], b[1]))
+
+
 def eq_claim_here(dev, stop):
-    """Claim All (green) else every green Claim on the open day / sub-tab. -> presses."""
-    n = 0
-    for _ in range(4):
+    """Every green Claim (and a green Claim All) on the open day / sub-tab, by colour. -> presses."""
+    n = swipes = 0
+    for _ in range(25):
         if stop.is_set():
             break
-        p = ev_find_btn(dev.screenshot(), ["Claim All"], (0, 560, 540, 400))
-        if not p:
+        shot = dev.screenshot()
+        btn = eq_green_buttons(shot) or eq_green_buttons(shot, (0, 820, 540, 135))   # rows, else a Claim All bar at the bottom
+        if btn:
+            x, y, w = btn[0]
+            dev.tap(x, y)
+            n += 1
+            _nap(stop, 0.9, 1.2)
+            if w > 200:                                  # Claim All may show a reward panel
+                ev_close(dev, stop)
+            continue
+        ev_close(dev, stop)                              # nothing green: a reward panel may be in the way
+        if swipes:
             break
-        dev.tap(*p)
-        n += 1
-        _nap(stop, 1.4, 1.8)
-        ev_close(dev, stop)
-        rd_close_reward(dev, stop, EV_CLOSE_SPOT)
-    return n + ev_claims(dev, stop, region=(300, 260, 240, 680), scrolls=2, limit=20)
+        swipes += 1
+        dev.swipe(270, 880, 270, 520, 600)               # the rest of the list (claimable rows usually sit on top)
+        _nap(stop, 0.8, 1.0)
+    return n
 
 
 def eq_chests(dev, stop, region=(0, 95, 540, 140)):     # chest row ~y115, above Progress; day tabs (~y287) stay out
@@ -19678,31 +19699,38 @@ def eq_days(shot):
 
 
 def eq_quest_page(dev, stop, log, name):
-    """King's Path / Gather Troops page in quest time: every day with a red dot, every sub-tab with a red dot."""
+    """King's Path / Gather Troops page in quest time: every day and sub-tab with a red dot - two rounds, because
+    claiming can finish more quests (owner 31 Oct 03:48)."""
     n = eq_chests(dev, stop)
-    days = eq_days(dev.screenshot())
-    todo = [d for d in days if d[2]] or days[:0]
+    days = eq_days(dev.screenshot())                     # the only text read on this page
     if not days:
         rd_snap(dev.screenshot(), "event_quests_no_days_" + name.replace(" ", "_").replace("'", ""))
-        n += eq_claim_here(dev, stop)
-    for x, y, _ in todo:
-        if stop.is_set():
+        return n + eq_claim_here(dev, stop)
+    for rnd in range(2):
+        shot = dev.screenshot()
+        todo = [(x, y) for x, y, _ in days if ev_red_spots(shot, (max(0, x - 20), max(0, y - 45), 120, 55))]
+        if rnd == 0:
+            x0, y0 = days[0][0], days[0][1]              # the open day may hold claims without a dot of its own
+            todo = [(x0, y0)] + [d for d in todo if d != (x0, y0)]
+        if not todo:
             break
-        dev.tap(x + 10, y)
-        _nap(stop, 1.3, 1.7)
-        n += eq_claim_here(dev, stop)
-        done = set()
-        for _ in range(4):                               # sub-tabs (2-3 a day) with a red dot, in the band under the days
-            spots = [s for s in ev_red_spots(dev.screenshot(), (0, y + 25, 540, 75)) if (s[0] // 30) not in done]
-            if not spots or stop.is_set():
-                break
-            sx, sy = spots[0]
-            done.add(sx // 30)
-            dev.tap(max(20, sx - 40), sy + 14)
-            _nap(stop, 1.2, 1.6)
+        for x, y in todo:
+            if stop.is_set():
+                return n
+            dev.tap(x + 10, y)
+            _nap(stop, 0.9, 1.2)
             n += eq_claim_here(dev, stop)
-    n += eq_chests(dev, stop)
-    return n
+            done = set()
+            for _ in range(4):                           # sub-tabs (2-3 a day) with a red dot, in the band under the days
+                spots = [sp for sp in ev_red_spots(dev.screenshot(), (0, y + 25, 540, 75)) if (sp[0] // 30) not in done]
+                if not spots or stop.is_set():
+                    break
+                sx, sy = spots[0]
+                done.add(sx // 30)
+                dev.tap(max(20, sx - 40), sy + 14)
+                _nap(stop, 0.9, 1.2)
+                n += eq_claim_here(dev, stop)
+    return n + eq_chests(dev, stop)
 
 
 def run_event_quests(dev, cfg, log, stop):
