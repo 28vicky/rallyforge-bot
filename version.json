@@ -1,24 +1,24 @@
 {
-  "version": "2.5.29",
-  "notes": "Black Market items show their real names. New: Alliance donation. Tasks that are not ready yet show faded. No more stray Back presses on the city.",
+  "version": "2.5.30",
+  "notes": "Troop training: Repeat choice and Train until a goal. My tasks removed.",
   "files": {
     "rally_bot.py": {
-      "sha256": "21afbc1cde1dca3d72927d3b359a8cdeab3824b2f7ea24257d63d1264cd92e8c"
+      "sha256": "1a6609e3dd52223fd7b8b7552a2339b0e9de79a80c779c92c7e5ee26dc747711"
     },
     "web_app.py": {
-      "sha256": "cdea21199e663e3ac758f866ef78e2c4267fcfcf25bae7811efb16bb3889e294"
+      "sha256": "131ef972918e1688649fa78f5758fbd109493d8cb7984a83d86d7e4643a710dd"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "32d13331e7bf20f598db8f6deb285f9e3a43945d5014dbe33f67b6e39f582f68"
+      "sha256": "04c77fe9096de63e0d1d42c3305c3ab02c36b8a0cd055dd754baeb033d026285"
     },
     "ui/app.js": {
-      "sha256": "af34feed71851a7877825e5160b14e17b69c39c62ac0b3634120211406c33319"
+      "sha256": "0505f73b9cae36fcfa8a3e611d41c4b22e1d7a49273b6f2d0ec4dcdfa46af171"
     },
     "ui/changelog.js": {
-      "sha256": "e8b5b1b54640e67c34db678a8611b16fadf3a548472e9480716750a2540cb851"
+      "sha256": "958d8e3f27035385e930fdf1711976572513ec96a0c998ebd22664e511c98af2"
     },
     "ui/dialogs.js": {
       "sha256": "f9222b8cf22cb7d06737e48bee98a1a431b919b44397560cc92e8ad16c113252"
@@ -30,7 +30,7 @@
       "sha256": "c8bb06b64f72952473a35d3864d820553e79c0154866bb9aac3e8c445fa6329d"
     },
     "ui/pages.js": {
-      "sha256": "a5870d5b53e04d64530841d5dbce05cfd582aa121b0538e8152c0af6d46bd911"
+      "sha256": "ac57b062dee37181991c2fd94fc8b3fec4b8090614da3039d915ac929296d522"
     },
     "ui/tour.js": {
       "sha256": "13f3caea4e097cb210531c175e34809ead00eb7fca86570faa51a1929c787b32"
@@ -3455,5 +3455,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "01986b7f64a03943fabe1c4df595f03521b5c6485a2c842b696991d49e1ae7c9"
+  "sig": "087665c152efd75437014ad60ea7eff4187d213bcefd772a10ffeca544d654ea"
 }

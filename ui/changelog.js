@@ -1,5 +1,9 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.30", date: "2026-10-30",
+    new: ["Troop training: choose Repeat (once a day, or every few hours / minutes) and \"Train until\" a number of runs or a total of troops for each building you tick. The bot keeps going until the goal is reached, then stops."],
+    fixed: ["My tasks removed - the built-in duties do the work.",
+      "The up / down arrows no longer show over a settings panel."] },
   { v: "2.5.29", date: "2026-10-30",
     new: ["Alliance donation: donates the free Alliance Science donations and comes back as they refill. Never uses gems.",
       "Tasks that are not ready yet show faded with \"Not ready yet\" - a screen recording of one helps us finish it."],
