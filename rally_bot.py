@@ -19567,8 +19567,8 @@ def eq_column_icons(shot):
             continue
         x = int(sum(s[1] for s in ws) / len(ws))
         y = int(sum(s[2] for s in ws) / len(ws))
-        if all(abs(y - 38 - oy) > 30 for _, oy in out):
-            out.append((x, y - 38))                      # the icon sits just above its countdown
+        if all(abs(y - 34 - oy) > 30 for _, oy in out):
+            out.append((x, y - 34))                      # the icon sits just above its countdown (phone 31 Oct: ~55 px of 2000)
     return sorted(out, key=lambda p: p[1])
 
 
@@ -19667,7 +19667,7 @@ def eq_claim_here(dev, stop):
     return n + ev_claims(dev, stop, region=(300, 260, 240, 680), scrolls=2, limit=20)
 
 
-def eq_chests(dev, stop, region=(0, 95, 540, 175)):
+def eq_chests(dev, stop, region=(0, 95, 540, 140)):     # chest row ~y115, above Progress; day tabs (~y287) stay out
     """Progress chests at the top of the quest page: a reached chest carries a red badge. -> taps."""
     n = 0
     for _ in range(6):
@@ -19693,7 +19693,7 @@ def eq_days(shot):
             if re.fullmatch(r"day", s[0].lower().strip(".,:")) or re.fullmatch(r"day\d", s[0].lower()):
                 x, y = int(s[1]), int(s[2])
                 if all(abs(x - ox) > 25 for ox, _, _ in out):
-                    red = bool(ev_red_spots(shot, (max(0, x - 40), max(0, y - 40), 100, 60)))
+                    red = bool(ev_red_spots(shot, (max(0, x - 20), max(0, y - 45), 120, 55)))   # dot = tab's top-right
                     out.append((x, y, red))
     return sorted(out)
 
@@ -19714,7 +19714,7 @@ def eq_quest_page(dev, stop, log, name):
         n += eq_claim_here(dev, stop)
         done = set()
         for _ in range(4):                               # sub-tabs (2-3 a day) with a red dot, in the band under the days
-            spots = [s for s in ev_red_spots(dev.screenshot(), (0, y + 25, 540, 130)) if (s[0] // 30) not in done]
+            spots = [s for s in ev_red_spots(dev.screenshot(), (0, y + 25, 540, 75)) if (s[0] // 30) not in done]
             if not spots or stop.is_set():
                 break
             sx, sy = spots[0]
