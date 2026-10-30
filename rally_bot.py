@@ -18208,6 +18208,15 @@ DUTY_RETRY_MIN = 60                     # minutes between two tries of a duty th
 # group, id, title, what it does, schedule text, every_min (0 = once per game day), target, steps.
 # verified=False means the steps are a first guess from the game's menu text and have not been watched on a real
 # emulator yet - the interface shows them as "untested" until they are recorded.
+EVERY_H_CHOICES = ["1 hour", "2 hours", "4 hours", "6 hours", "8 hours", "12 hours", "24 hours"]   # owner 30 Oct 12:20: user picks, default 12 h
+
+
+def every_h_minutes(v, default_min):
+    """'8 hours' -> 480 (a duty's own 'Collect every' choice); anything unreadable -> the duty's default."""
+    m = re.match(r"\s*(\d+)", str(v or ""))
+    return int(m.group(1)) * 60 if m else default_min
+
+
 DUTY_LIBRARY = [
     {"id": "login_gifts", "group": "Reward claims", "title": "Login gifts", "every_min": 0, "verified": False,
      "note": "Opens Login Gifts and claims what is free.",
@@ -18235,9 +18244,10 @@ DUTY_LIBRARY = [
      "note": "Smashes the ready eggs, closes the reward panel, comes back when each timer ends; Lucky Hammer once a day on the egg you pick.",
      "target": "tpl:event_center_icon|Center",
      "steps": ["wait 2", "crazy_eggs"]},
-    {"id": "collect_resources", "group": "Common tasks", "title": "Collect resources", "every_min": 180, "verified": False,
-     "note": "Zooms out, goes to the Warehouse and taps the floating hand above it: the game collects every field at once.",
-     "target": "self:", "steps": ["collect_resources"]},
+    {"id": "collect_resources", "group": "Common tasks", "title": "Collect resources", "every_min": 720, "verified": False,
+     "note": "Goes to the Warehouse and taps the floating hand above it: the game collects every field at once.",
+     "target": "self:", "steps": ["collect_resources"],
+     "opts": [{"k": "every_h", "label": "Collect every", "type": "select", "choices": EVERY_H_CHOICES, "def": "12 hours"}]},
     {"id": "reach_keep_tavern", "group": "Common tasks", "title": "Test: Keep, then Tavern", "every_min": 60, "verified": False,
      "note": "Walks to the Keep, opens its menu, then walks to the Tavern and opens its menu (nothing is pressed).",
      "target": "building:Keep+Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name"]},
@@ -18549,6 +18559,8 @@ def duty_status(serial, duty_id, cfg):
             return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"]))
         return "due", "Due"
     every = int(conf.get("every_min", d["every_min"]) or 0)
+    if any(o.get("k") == "every_h" for o in d.get("opts") or []):   # the user's own 'every N hours' choice wins
+        every = every_h_minutes(conf.get("every_h", "12 hours"), d["every_min"])
     last_ok = row.get("last_ok", 0)
     if every == 0:                                          # once per game day
         # 28 Oct: compare the GAME day of last_ok (was its UTC date: everything done between UTC midnight, 05:30 IST, and

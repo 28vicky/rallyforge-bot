@@ -1705,7 +1705,10 @@ class Api:
                          "status": st, "status_text": txt, "today": today,
                          "opts": [dict(o, val=conf.get(o["k"], o.get("def"))) for o in (d.get("opts") or [])],
                          "gems": bool(d.get("gems")),
-                         "schedule": ("When the next egg is ready" if d["id"] == "crazy_eggs" else "Once per game day" if not d["every_min"] else "Every " + rb.fmt_mins(d["every_min"]))})   # PCR2 B3: "Every 6 h", not "360 min"
+                         "schedule": ("When the next egg is ready" if d["id"] == "crazy_eggs"
+                                      else "Every " + str(conf.get("every_h", "12 hours")).replace(" hours", " h").replace(" hour", " h")
+                                      if any(o.get("k") == "every_h" for o in d.get("opts") or [])
+                                      else "Once per game day" if not d["every_min"] else "Every " + rb.fmt_mins(d["every_min"]))})   # PCR2 B3: "Every 6 h", not "360 min"
         return rows
 
     # test duties: never shown to users and never counted (C8 / C12)
