@@ -19551,7 +19551,7 @@ def run_ev_super_value(dev, cfg, log, stop):
 # remembered for the rest of the event. Row timer: "Event Quest Countdown" = claim the quests, "Chest Claiming Countdown"
 # = only the reached progress chests, row missing = event not on (not a failure). Go is never pressed.
 EQ_NAMES = ["King's Path", "Gather Troops"]
-EQ_COLUMN = (410, 55, 130, 720)                         # right-hand icon column of the city screen (540x960)
+EQ_COLUMN = (410, 55, 130, 790)                         # right-hand icon column of the city screen (540x960)
 EQ_COUNTDOWN = re.compile(r"(\d+\s*d\s*\d{1,2}\s*[:.]\s*\d{2})|(\d{1,2}\s*[:.]\s*\d{2}\s*[:.]\s*\d{2})", re.I)
 
 
