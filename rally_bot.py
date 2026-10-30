@@ -19551,8 +19551,8 @@ def run_ev_super_value(dev, cfg, log, stop):
 # remembered for the rest of the event. Row timer: "Event Quest Countdown" = claim the quests, "Chest Claiming Countdown"
 # = only the reached progress chests, row missing = event not on (not a failure). Go is never pressed.
 EQ_NAMES = ["King's Path", "Gather Troops"]
-EQ_COLUMN = (410, 55, 130, 790)                         # right-hand icon column of the city screen (540x960)
-EQ_COUNTDOWN = re.compile(r"(\d+\s*d\s*\d{1,2}\s*[:.]\s*\d{2})|(\d{1,2}\s*[:.]\s*\d{2}\s*[:.]\s*\d{2})", re.I)
+EQ_COLUMN = (0, 55, 540, 850)                           # owner 31 Oct: event icons sit anywhere (K: top row, Kiravik: right column, bottom row)
+EQ_COUNTDOWN = re.compile(r"\d+\s*d\s*\d{1,2}\s*[:.]\s*\d{2}", re.I)   # a DAY countdown ("3d 10:38"): event icons only, not building / buff timers
 
 
 def eq_icon_file(dev):
@@ -19560,14 +19560,15 @@ def eq_icon_file(dev):
 
 
 def eq_column_icons(shot):
-    """-> [(x, y)] centres of the right-column icons that carry a countdown under them, top to bottom."""
+    """-> [(x, y)] centres of the icons that carry a day countdown under them (anywhere on the city screen; the place and
+    the picture change every event), top to bottom."""
     out = []
     for text, ws in rd_lines(shot, EQ_COLUMN):
         if "follow" in text.lower() or not EQ_COUNTDOWN.search(text.replace("O", "0").replace("o", "0")):
             continue
         x = int(sum(s[1] for s in ws) / len(ws))
         y = int(sum(s[2] for s in ws) / len(ws))
-        if all(abs(y - 34 - oy) > 30 for _, oy in out):
+        if all(abs(y - 34 - oy) > 30 or abs(x - ox) > 40 for ox, oy in out):
             out.append((x, y - 34))                      # the icon sits just above its countdown (phone 31 Oct: ~55 px of 2000)
     return sorted(out, key=lambda p: p[1])
 
