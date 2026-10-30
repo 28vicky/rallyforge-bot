@@ -19544,6 +19544,226 @@ def run_ev_super_value(dev, cfg, log, stop):
     log(f"[+]  Super Value Return: {n} reward(s) claimed")
 
 
+# --- Event quests: claim (owner 31 Oct 02:22-02:39; doc claude/flow_kings_path_gather_troops_31oct.md) ---------------
+# King's Path / Gather Troops live on the page of the CURRENT event icon in the city's right column (now Halloween), not in
+# the Event Center. That icon's picture and place change every event, so: every right-column icon with a countdown under
+# it is tried in turn (Follow Us has none) until one opens a page listing an event-quest row; that icon's picture is
+# remembered for the rest of the event. Row timer: "Event Quest Countdown" = claim the quests, "Chest Claiming Countdown"
+# = only the reached progress chests, row missing = event not on (not a failure). Go is never pressed.
+EQ_NAMES = ["King's Path", "Gather Troops"]
+EQ_COLUMN = (410, 55, 130, 720)                         # right-hand icon column of the city screen (540x960)
+EQ_COUNTDOWN = re.compile(r"(\d+\s*d\s*\d{1,2}\s*[:.]\s*\d{2})|(\d{1,2}\s*[:.]\s*\d{2}\s*[:.]\s*\d{2})", re.I)
+
+
+def eq_icon_file(dev):
+    return USER / f"event_quest_icon_{re.sub(r'[^A-Za-z0-9]+', '_', str(getattr(dev, 'serial', 'dev')))}.png"
+
+
+def eq_column_icons(shot):
+    """-> [(x, y)] centres of the right-column icons that carry a countdown under them, top to bottom."""
+    out = []
+    for text, ws in rd_lines(shot, EQ_COLUMN):
+        if "follow" in text.lower() or not EQ_COUNTDOWN.search(text.replace("O", "0").replace("o", "0")):
+            continue
+        x = int(sum(s[1] for s in ws) / len(ws))
+        y = int(sum(s[2] for s in ws) / len(ws))
+        if all(abs(y - 38 - oy) > 30 for _, oy in out):
+            out.append((x, y - 38))                      # the icon sits just above its countdown
+    return sorted(out, key=lambda p: p[1])
+
+
+def eq_list_names(dev, stop, scrolls=3):
+    """On an event page: -> the EQ_NAMES rows seen (scrolls the list down a little when none shows yet)."""
+    for i in range(scrolls + 1):
+        shot = dev.screenshot()
+        found = [n for n in EQ_NAMES if rd_find(shot, [n], region=(0, 90, 540, 830), cutoff=0.78)]
+        if found or stop.is_set():
+            return found
+        if i < scrolls:
+            dev.swipe(270, 780, 270, 420, 600)
+            _nap(stop, 1.0, 1.3)
+    return []
+
+
+def eq_open_event_page(dev, cfg, log, stop):
+    """From the city: open the event page that lists King's Path / Gather Troops. -> True when it shows."""
+    f = eq_icon_file(dev)
+    if f.exists():                                       # the icon that worked earlier in this event
+        try:
+            tpl = cv2.imread(str(f))
+            x0, y0, w, h = EQ_COLUMN
+            shot = dev.screenshot()
+            r = cv2.matchTemplate(shot[y0:y0 + h, x0:x0 + w], tpl, cv2.TM_CCOEFF_NORMED)
+            _, best, _, loc = cv2.minMaxLoc(r)
+            if best >= 0.8:
+                dev.tap(x0 + loc[0] + tpl.shape[1] // 2, y0 + loc[1] + tpl.shape[0] // 2)
+                _nap(stop, 2.2, 2.8)
+                if eq_list_names(dev, stop):
+                    return True
+                leave_to_city(dev, cfg, stop, log)
+        except Exception as e:
+            quiet_err("eq_icon", e)
+        log("[i]   Event quests: the remembered event icon is gone (new event?) - looking again")
+        try:
+            f.unlink()
+        except OSError:
+            pass
+    icons = eq_column_icons(dev.screenshot())
+    if not icons:
+        rd_snap(dev.screenshot(), "event_quests_no_icons")
+    for n, (x, y) in enumerate(icons[:6]):
+        if stop.is_set():
+            return False
+        shot = dev.screenshot()
+        crop = shot[max(0, y - 30):y + 30, max(0, x - 30):x + 30].copy()
+        dev.tap(x, y)
+        _nap(stop, 2.2, 2.8)
+        if eq_list_names(dev, stop):
+            try:
+                cv2.imwrite(str(f), crop)
+            except Exception as e:
+                quiet_err("eq_icon_save", e)
+            log(f"[i]   Event quests: event icon {n + 1} in the right column opens it - remembered for this event")
+            return True
+        leave_to_city(dev, cfg, stop, log)
+    return False
+
+
+def eq_row_state(dev, stop, name):
+    """On the event page: find the row of `name`. -> (state, (x, y)) with state 'quests' | 'chests' | None."""
+    dev.swipe(270, 300, 270, 800, 500)                   # back to the top of the list
+    _nap(stop, 0.9, 1.2)
+    for i in range(4):
+        shot = dev.screenshot()
+        p = rd_find(shot, [name], region=(0, 90, 540, 830), cutoff=0.78)
+        if p:
+            near = " ".join(t for t, _ in rd_lines(shot, (0, max(0, p[1] - 20), 540, 110))).lower()
+            if "claiming" in near or "chest" in near:
+                return "chests", (p[0], p[1])
+            if "quest" in near:
+                return "quests", (p[0], p[1])
+            return "quests", (p[0], p[1])                # timer not read: claiming is harmless either way
+        if stop.is_set():
+            break
+        dev.swipe(270, 780, 270, 420, 600)
+        _nap(stop, 1.0, 1.3)
+    return None, None
+
+
+def eq_claim_here(dev, stop):
+    """Claim All (green) else every green Claim on the open day / sub-tab. -> presses."""
+    n = 0
+    for _ in range(4):
+        if stop.is_set():
+            break
+        p = ev_find_btn(dev.screenshot(), ["Claim All"], (0, 560, 540, 400))
+        if not p:
+            break
+        dev.tap(*p)
+        n += 1
+        _nap(stop, 1.4, 1.8)
+        ev_close(dev, stop)
+        rd_close_reward(dev, stop, EV_CLOSE_SPOT)
+    return n + ev_claims(dev, stop, region=(300, 260, 240, 680), scrolls=2, limit=20)
+
+
+def eq_chests(dev, stop, region=(0, 95, 540, 175)):
+    """Progress chests at the top of the quest page: a reached chest carries a red badge. -> taps."""
+    n = 0
+    for _ in range(6):
+        if stop.is_set():
+            break
+        dots = [d for d in ev_red_spots(dev.screenshot(), region) if not (d[0] > 420 and d[1] < 200)]   # never the red X
+        if not dots:
+            break
+        x, y = dots[0]
+        dev.tap(x - 12, y + 14)                          # badge = top-right corner of the chest
+        n += 1
+        _nap(stop, 1.3, 1.7)
+        ev_close(dev, stop)
+        rd_close_reward(dev, stop, EV_CLOSE_SPOT)
+    return n
+
+
+def eq_days(shot):
+    """-> [(x, y, has_red_dot)] of the 'Day N' tabs, left to right."""
+    out = []
+    for text, ws in rd_lines(shot, (0, 90, 540, 420)):
+        for s in ws:
+            if re.fullmatch(r"day", s[0].lower().strip(".,:")) or re.fullmatch(r"day\d", s[0].lower()):
+                x, y = int(s[1]), int(s[2])
+                if all(abs(x - ox) > 25 for ox, _, _ in out):
+                    red = bool(ev_red_spots(shot, (max(0, x - 40), max(0, y - 40), 100, 60)))
+                    out.append((x, y, red))
+    return sorted(out)
+
+
+def eq_quest_page(dev, stop, log, name):
+    """King's Path / Gather Troops page in quest time: every day with a red dot, every sub-tab with a red dot."""
+    n = eq_chests(dev, stop)
+    days = eq_days(dev.screenshot())
+    todo = [d for d in days if d[2]] or days[:0]
+    if not days:
+        rd_snap(dev.screenshot(), "event_quests_no_days_" + name.replace(" ", "_").replace("'", ""))
+        n += eq_claim_here(dev, stop)
+    for x, y, _ in todo:
+        if stop.is_set():
+            break
+        dev.tap(x + 10, y)
+        _nap(stop, 1.3, 1.7)
+        n += eq_claim_here(dev, stop)
+        done = set()
+        for _ in range(4):                               # sub-tabs (2-3 a day) with a red dot, in the band under the days
+            spots = [s for s in ev_red_spots(dev.screenshot(), (0, y + 25, 540, 130)) if (s[0] // 30) not in done]
+            if not spots or stop.is_set():
+                break
+            sx, sy = spots[0]
+            done.add(sx // 30)
+            dev.tap(max(20, sx - 40), sy + 14)
+            _nap(stop, 1.2, 1.6)
+            n += eq_claim_here(dev, stop)
+    n += eq_chests(dev, stop)
+    return n
+
+
+def run_event_quests(dev, cfg, log, stop):
+    """Event quests (King's Path, Gather Troops...): claims the finished quests and reached progress chests."""
+    if not eq_open_event_page(dev, cfg, log, stop):
+        if stop.is_set():
+            return
+        log("[i]   Event quests: no event page with King's Path / Gather Troops now (event not running) - done for today")
+        rd_nothing()
+        return
+    total, seen = 0, 0
+    for name in EQ_NAMES:
+        if stop.is_set():
+            break
+        state, p = eq_row_state(dev, stop, name)
+        if not state:
+            log(f"[i]   {name}: not on the event page now (runs only on some days)")
+            continue
+        seen += 1
+        dev.tap(*p)
+        _nap(stop, 2.2, 2.8)
+        if not rd_seen(dev.screenshot(), [name, "Progress"], region=(0, 0, 540, 200)):
+            rd_snap(dev.screenshot(), "event_quests_open_" + name.replace(" ", "_").replace("'", ""))
+            log(f"[!]   {name}: its page did not open")
+            continue
+        if state == "chests":
+            got = eq_chests(dev, stop)
+            log(f"[+]  {name}: chest claiming time - {got} progress chest(s) claimed")
+        else:
+            got = eq_quest_page(dev, stop, log, name)
+            log(f"[+]  {name}: {got} reward(s) claimed")
+        total += got
+        dev.back()                                       # back to the event page for the next row
+        _nap(stop, 1.4, 1.8)
+    if not seen:
+        log("[i]   Event quests: King's Path / Gather Troops not running today - done for today")
+        rd_nothing()
+    leave_to_city(dev, cfg, stop, log)
+
+
 RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
             "general_chest": run_general_chest, "vip_claim": run_vip_claim, "recruit_citizens": run_recruit_citizens,
             "civilization_card": run_civilization_card, "empire_depot": run_empire_depot, "lucky_raffle": run_lucky_raffle,
@@ -19554,7 +19774,7 @@ RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor
             "wisdom_dome_tokens": run_wisdom_dome_tokens, "royal_thief": run_royal_thief,
             "ev_legion": run_ev_legion, "ev_garuda": run_ev_garuda, "ev_windmill": run_ev_windmill, "ev_eagle": run_ev_eagle,
             "ev_star_trail": run_ev_star_trail, "collect_resources": run_collect_resources, "ev_divination": run_ev_divination, "alliance_shop": run_alliance_shop, "ev_duel": run_ev_duel, "ev_taotie": run_ev_taotie,
-            "ev_expedition": run_ev_expedition, "ev_valuable": run_ev_valuable, "ev_super_value": run_ev_super_value,
+            "ev_expedition": run_ev_expedition, "ev_valuable": run_ev_valuable, "ev_super_value": run_ev_super_value, "event_quests": run_event_quests,
             "monster_rally": run_monster_rally}
 
 
@@ -19805,6 +20025,10 @@ DUTY_LIBRARY = [
     {"id": "ev_valuable", "group": "Events", "title": "Valuable Event free claims", "every_min": 240, "verified": False,
      "note": "Opens every Valuable Event tab with a red badge and takes only what is free (daily Free package, free Blazon chest, Active Monthly Card claims, daily free chests). Never buys.",
      "target": "self:", "steps": ["ev_valuable"]},
+    {"id": "event_quests", "group": "Events", "title": "Event quests: claim", "every_min": 0, "verified": False, "late_hours": 18,
+     "note": "King's Path, Gather Troops...: opens the current event's icon (right column), claims finished quests (Claim All) on every day with a red dot and the reached progress chests. Never presses Go. Once a day by default, late in the game day so most quests are finished.",
+     "target": "self:", "steps": ["event_quests"],
+     "opts": repeat_opts("Every", 6, "once a day")},
     {"id": "ev_super_value", "group": "Events", "title": "Super Value Return rewards", "every_min": 240, "verified": False,
      "note": "Super Value Return (Hall of Historic Generals, Soul of Spiritual Beast...): daily quest claims and free level rewards on every tab with a red badge. Never buys.",
      "target": "self:", "steps": ["ev_super_value"]},
@@ -20016,6 +20240,10 @@ def duty_status(serial, duty_id, cfg):
             return "done", "Done " + time.strftime("%H:%M", time.localtime(last_ok))
     elif last_ok and now - last_ok < every * 60:
         return "done", "Done " + time.strftime("%H:%M", time.localtime(last_ok))
+    if every == 0 and not tries and d.get("late_hours"):   # owner 31 Oct: runs late in the game day (quests fill up first)
+        into = (int(now // 60) - reset_min()) % 1440
+        if into < d["late_hours"] * 60:
+            return "waiting", "Runs after " + time.strftime("%H:%M", time.localtime(now + (d["late_hours"] * 60 - into) * 60))
     fs = _duty_fail_state(row, tries, now)
     if fs:
         return fs

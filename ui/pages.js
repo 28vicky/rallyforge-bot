@@ -1706,7 +1706,7 @@ const DUTY_UI = {
   ev_legion: ["Events", "Legion Hunting", 0], ev_garuda: ["Events", "Garuda Trial", 0], ev_windmill: ["Events", "Wishful Windmill", 0],
   ev_eagle: ["Events", "Eagle of Freedom", 0], ev_star_trail: ["Events", "Grace of Star Trail", 0], ev_divination: ["Events", "Divination of Fate", 0],ev_duel: ["Events", "Alliance Duel", 0],
   ev_taotie: ["Events", "Taotie's Challenge", 0], ev_expedition: ["Events", "Great Expedition", 0],
-  ev_valuable: ["Events", "Valuable Event free claims", 0], ev_super_value: ["Events", "Super Value Return", 0],
+  ev_valuable: ["Events", "Valuable Event free claims", 0], ev_super_value: ["Events", "Super Value Return", 0], event_quests: ["Events", "Event quests: claim", 0],
   login_gifts: ["Reward claims", "Login gifts", 0], mail: ["Reward claims", "Mail rewards", 0], alliance_gift: ["Reward claims", "Alliance gift", 0],
   alliance_treasure: ["Reward claims", "Alliance treasure", 0], general_chest: ["Reward claims", "Great General chest", 0], vip_claim: ["Reward claims", "VIP daily chest", 0],
   recruit_citizens: ["Reward claims", "Recruit citizens", 0], civilization_card: ["Reward claims", "Civilization card pack", 0], empire_depot: ["Reward claims", "Empire Depot", 0],
