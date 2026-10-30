@@ -228,7 +228,7 @@ function layout() {
         // (ui-simple) Pause all / Stop all live only in the page header - one place for run controls
         h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Dashboard, settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "All instances"))),   // A8 (28 Oct): was "Control settings" - the way home
     h("div", { class: "main" },
-      h("div", { class: "top" }, sideBtn(), h("img", { src: "/assets/logo.png", alt: "" }),
+      h("div", { class: "top" }, sideBtn(), h("h2", { class: "ctltitle" }, "All instances"), h("img", { src: "/assets/logo.png", alt: "" }),   // owner 30 Oct: titled like an instance header
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "RallyForge" }, "v" + S.version),
         saveStEl(),
         h("div", { class: "livebar", id: "liveBar", role: "group", "aria-label": "Live - what each instance is doing" }),

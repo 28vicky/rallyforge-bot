@@ -1761,7 +1761,7 @@ function applyToDialog(what, run) {
 }
 function defaultsHead(what, run) {
   return h("div", { class: "defhead" },
-    h("div", {}, h("b", {}, "Universal defaults"), h("small", { class: "hint" }, "New instances start with these " + what + ". An instance with its own " + what + " keeps them.")),
+    h("div", {}, h("b", {}, "Universal defaults"), h("small", { class: "hint" }, "For every instance without its own " + what + " ", infoTip("Universal defaults", "New instances start with these " + what + ". An instance with its own " + what + " keeps them."))),   // owner 30 Oct: less to read
     btn("Apply to…", () => applyToDialog(what, run), "sm"));
 }
 const OWN_DUTY_KEYS = ["duties", "crazy_eggs", "champions", "wheel"];
