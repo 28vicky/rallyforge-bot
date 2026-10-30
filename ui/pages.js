@@ -1776,7 +1776,9 @@ PAGES.duties = function (fixed) {
   // My tasks (your own tap lists) is one more row in the same list; its switch is the old 'Do the tasks' (city_enabled)
   const list = () => rows.filter((r) => dutyShown(r.id) && !RUN_SETUP.has(r.id)).map((r) => {     // one-time jobs live in Run now, not as switches
     const run = serial && r.on && nowText() && nowText().includes(String(r.title).toLowerCase());
-    return Object.assign({}, r, { g: dutyGroup(r.id, r.group), t: dutyName(r.id, r.title), pts: DUTY_UI[r.id] ? DUTY_UI[r.id][2] : 0, status: run ? "run" : r.status });
+    const uv = ((r.opts || []).find((x) => x.k === "until") || {}).val, gv = ((r.opts || []).find((x) => x.k === "goal") || {}).val;
+    const sched = uv && uv !== "my Repeat setting" ? "Until " + Number(gv || 0).toLocaleString() + (uv === "a number of runs" ? " runs" : " troops") : r.schedule;   // a goal replaces the repeat text
+    return Object.assign({}, r, { g: dutyGroup(r.id, r.group), t: dutyName(r.id, r.title), pts: DUTY_UI[r.id] ? DUTY_UI[r.id][2] : 0, status: run ? "run" : r.status, schedule: sched });
   }).sort((a, b) => DUTY_ORDER(a.id) - DUTY_ORDER(b.id));   // owner 30 Oct 23:10: "My tasks" (old tap lists) removed
   const setOn = async (r, v) => {
     if (r.id === "@tasks") { if (serial) ovMake().city_enabled = v; else S.cfg.city_enabled = v; draw(); return; }   // page autosave
@@ -1790,6 +1792,11 @@ PAGES.duties = function (fixed) {
       if (o.type === "presets" || o.type === "order" || o.type === "saved_orders" || o.k === "own_order") return null;
       const ov = (k) => (r.opts.find((x) => x.k === k) || {}).val;
       const goalOn = ov("until") && ov("until") !== "my Repeat setting";
+      // owner 30 Oct 23:37: Repeat + Train until are ONE question -> "Train: Once a day | Every... | Until a goal"
+      if (r.opts.some((x) => x.k === "until")) {
+        if (o.k === "until" || o.k === "every_n" || o.k === "goal") return null;
+        if (o.k === "every_unit") return trainWhen(r, ov, goalOn);
+      }
       if (o.k === "goal" && !goalOn) return null;                                  // owner 30 Oct 23:10: Train until a goal
       if ((o.k === "every_unit" || o.k === "every_n") && goalOn) return null;      // a goal runs until reached - no Repeat
       if (o.k === "every_n" && ov("every_unit") === "once a day") return null;     // owner 30 Oct 23:04
@@ -1800,6 +1807,26 @@ PAGES.duties = function (fixed) {
       const lab = o.k === "goal" ? (ov("until") === "a number of runs" ? "Runs per building" : "Troops per building") : o.label;
       return h("label", {}, h("span", { class: "lab" }, lab), h("input", { type: "number", min: o.min, max: o.max, value: o.val, onchange: (e) => save(e.target.value) }));
     }));
+  // one "Train" row: the saved keys stay every_unit / every_n / until / goal, so old settings carry over as they are
+  const trainWhen = (r, ov, goalOn) => {
+    const mode = goalOn ? "goal" : ov("every_unit") === "once a day" ? "day" : "every";
+    const put = async (opt) => { take(await act(api("duty_set", { serial, id: r.id, opt }))); drawSide(); };
+    const num = (k, label) => { const o = r.opts.find((x) => x.k === k) || {};
+      return h("label", {}, h("span", { class: "lab" }, label), h("input", { type: "number", min: o.min, max: o.max, value: o.val, "aria-label": label, onchange: (e) => put({ [k]: e.target.value }) })); };
+    const pick = (label, cur, pairs, on) => segPick({ v: cur }, "v", pairs, { small: true, label, after: on });
+    const top = h("label", { class: "wide" }, h("span", { class: "lab" }, "Train"),
+      pick("Train", mode, [["day", "Once a day"], ["every", "Every…"], ["goal", "Until a goal"]], (v) =>
+        put(v === "day" ? { every_unit: "once a day", until: "my Repeat setting" }
+          : v === "every" ? { every_unit: ov("every_unit") === "once a day" ? "hours" : ov("every_unit"), until: "my Repeat setting" }
+          : { until: goalOn ? ov("until") : "a number of runs" })));
+    if (mode === "every") return [top,
+      num("every_n", "Every"),
+      h("label", {}, h("span", { class: "lab" }, "Hours or minutes"), pick("Hours or minutes", ov("every_unit"), [["hours", "Hours"], ["minutes", "Minutes"]], (v) => put({ every_unit: v })))];
+    if (mode === "goal") return [top,
+      h("label", {}, h("span", { class: "lab" }, "Goal in"), pick("Goal in", ov("until"), [["a number of runs", "Runs"], ["a total of troops", "Troops"]], (v) => put({ until: v }))),
+      num("goal", ov("until") === "a number of runs" ? "Runs per building" : "Troops per building")];
+    return top;
+  };
   const SET_IDS = ["crazy_eggs", "champions", "wheel", "black_market", "@tasks"];
   const hasSet = (r) => !!((r.opts && r.opts.length) || SET_IDS.includes(r.id));
   const setBody = (r) => [

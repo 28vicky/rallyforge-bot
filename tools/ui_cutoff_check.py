@@ -28,12 +28,12 @@ with sync_playwright() as pw:
         if not row.count():
             pg.get_by_text("All (", exact=False).first.click(); pg.wait_for_timeout(800)
         pg.locator('.dset[data-id="train_troops"]').first.click(); pg.wait_for_timeout(1000)
-        for mode in ("My repeat", "Troops"):
-            if mode != "My repeat":
+        for mode in ("Once a day", "Every…", "Until a goal", "Troops"):
+            if mode != "Once a day":
                 pg.locator(".sidep .segb", has_text=mode).first.click(); pg.wait_for_timeout(1200)
             res[f"{w}-{mode}"] = pg.evaluate(CHECK)
-            pg.screenshot(path=f"{out}/train_{w}_{mode.replace(' ','_')}.png")
-        pg.locator(".sidep .segb", has_text="My repeat").first.click(); pg.wait_for_timeout(800)
+            pg.screenshot(path=f"{out}/train_{w}_{mode.replace(' ','_').replace('…','')}.png")
+        pg.locator(".sidep .segb", has_text="Once a day").first.click(); pg.wait_for_timeout(800)
         pg.close()
     b.close()
 print(json.dumps(res, indent=1))
