@@ -13695,16 +13695,39 @@ def _at_map_zoom(dev, shot):
 
 
 def ensure_city_zoom(dev, cfg, stop, log):
-    """Owner 30 Oct 11:45 (Stalds stayed zoomed in, Kiravik roamed): every city duty starts on the city view at the zoom the
-    city maps were made at (fully out). Cheap when it already is: one screenshot checked against the maps."""
+    """Owner 30 Oct 11:45 + 11:54: every city duty starts zoomed out. Look first: already out -> carry on, no zooming.
+    Not out -> ONE zoom-out (Ctrl+wheel), look again and carry on either way. A view that does not change is not an
+    error: no loop of zoom tries, no real-mouse wait, never a reason to give up the task. -> True when confirmed out."""
     try:
         leave_to_city(dev, cfg, stop, log)
-        if stop.is_set() or _at_map_zoom(dev, dev.screenshot()):
-            return
-        log("[*] City is zoomed in - zooming out first")
-        zoom_out_full(dev, cfg, stop, log)
+        if stop.is_set():
+            return False
+        before = dev.screenshot()
+        if getattr(dev, "zoomed_out", False) and _at_map_zoom(dev, before):
+            return True
+        if _at_map_zoom(dev, before):
+            dev.zoomed_out = True
+            return True
+        name = (load_config().get("device_names") or {}).get(dev.serial)
+        if not wheel_zoom_out(dev, log, name):
+            log("[i]   zoom: could not send the zoom-out - carrying on with the task at this zoom")
+            return False
+        _nap(stop, 1.0, 1.3)
+        after = dev.screenshot()
+        if _at_map_zoom(dev, after):
+            dev.zoomed_out = True
+            log("[i]   zoom: zoomed out - the city now matches the map")
+            return True
+        sc = _view_scale(before, after)
+        if sc and sc < 0.97:
+            log(f"[i]   zoom: zoomed out (view {sc:.2f}x) - carrying on")
+        else:
+            log("[i]   zoom: the view did not change (probably already out) - carrying on with the task")
+        return False
     except Exception as _e:
         quiet_err("ensure_city_zoom", _e)
+        return False
+
 
 def zoom_out_full(dev, cfg, stop, log):
     """All the way out: Ctrl+wheel until the picture stops getting smaller (Kiravik 23 Oct: the two-notch zoom of the duties

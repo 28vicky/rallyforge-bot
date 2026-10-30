@@ -48,3 +48,27 @@ def test_no_pin_falls_back_to_looking_around(monkeypatch):
     rb.run_collect_resources(d, {}, logs.append, threading.Event())
     assert len(d.swipes) == len(rb.HAND_SWEEP)
     assert "no Warehouse pin" in logs[0]
+
+
+def _zoom_setup(mp, at_zoom_seq):
+    seq = iter(at_zoom_seq)
+    wheels = []
+    mp.setattr(rb, "leave_to_city", lambda *a, **k: None)
+    mp.setattr(rb, "_at_map_zoom", lambda d, s: next(seq, False))
+    mp.setattr(rb, "wheel_zoom_out", lambda *a, **k: wheels.append(1) or True)
+    mp.setattr(rb, "_view_scale", lambda a, b: 1.0)
+    mp.setattr(rb, "_nap", lambda *a: None)
+    mp.setattr(rb, "load_config", lambda: {})
+    return wheels
+
+
+def test_zoom_already_out_does_nothing(monkeypatch):
+    w = _zoom_setup(monkeypatch, [True])
+    assert rb.ensure_city_zoom(Dev(), {}, threading.Event(), lambda *a: None) is True and not w
+
+
+def test_zoom_tries_once_then_carries_on(monkeypatch):
+    logs = []
+    w = _zoom_setup(monkeypatch, [False, False, False, False])
+    rb.ensure_city_zoom(Dev(), {}, threading.Event(), logs.append)
+    assert len(w) == 1 and "carrying on" in logs[-1]
