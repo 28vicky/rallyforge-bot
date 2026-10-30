@@ -11774,11 +11774,31 @@ def wheel_coins(img, min_digits=1):
         return None
 
 
+def _wheel_pic(img, name, region, thr):
+    """Owner 30 Oct (Manhattan 13:42 screenshot): the Wheel page and its reward window are found by PICTURE - a text
+    read took 1-20 s on the busy PC, one x100 press then took ~1 min. -> True / False / None (template missing)."""
+    try:
+        t = tpl(name)
+        x, y, w, h = region
+        a = img[y:y + h, x:x + w]
+        if a.shape[0] < t.shape[0] or a.shape[1] < t.shape[1]:
+            return None
+        return float(cv2.matchTemplate(a, t, cv2.TM_CCOEFF_NORMED).max()) >= thr
+    except Exception:
+        return None
+
+
 def wheel_on_page(img):
+    r = _wheel_pic(img, "wheel_page_title", (100, 0, 340, 70), 0.8)   # also matches with the reward window up (dimmed)
+    if r is not None and r:
+        return True
     return bool(find_text(img, ["Wheel of Fortune"], region=(100, 5, 340, 60), cutoff=0.7))
 
 
 def wheel_reward_panel(img):
+    r = _wheel_pic(img, "wheel_reward_banner", (30, 140, 480, 140), 0.7)   # "Congratulations on getting" banner
+    if r is not None:
+        return r
     return bool(find_text(img, ["Congratulations", "Continue"], region=(30, 150, 480, 650), cutoff=0.7))
 
 
@@ -11986,8 +12006,8 @@ def run_wheel(dev, cfg, log, stop):
                 if closes > 8:                             # Rob 25 Oct 03:10: the x100 panel never closed -> 17 min without a log line
                     rd_snap(shot, "wheel_panel_stuck")
                     raise RuntimeError(f"the Wheel reward panel does not close (after {done} spin(s))")
-                dev.tap(*(WHEEL_BTN[last_pick] if closes % 2 else (270, 110)))   # owner 25 Oct: the spin button's own spot or
-                stop.wait(0.6)                             # outside closes it (tapped only while the panel is seen = no extra spin)
+                dev.tap(270, 110)                          # owner 30 Oct: outside closes it (never the spin button: no extra spin)
+                stop.wait(0.3)
                 continue
             closes = 0
             if not wheel_on_page(shot):
@@ -12036,24 +12056,26 @@ def run_wheel(dev, cfg, log, stop):
         shown = spent = False
         s2 = shot
         t0 = time.time()
-        last_coin_read = t0
-        while time.time() - t0 < 9 and not stop.is_set():
-            stop.wait(0.4)
+        # Owner 30 Oct 13:44: x10 / x100 - press, then do NOTHING until the reward window shows (it comes after a few ms
+        # on a quiet PC, 5-15 s on a busy one): the bot follows the window, never a fixed wait. The picture check takes
+        # milliseconds, so it looks every 0.1 s. 90 s with no window = something else is wrong (normal checks below).
+        # Spin once shows no window: the coins dropping is the proof (as before).
+        limit = 9 if pick == 1 else 90
+        while time.time() - t0 < limit and not stop.is_set():
+            stop.wait(0.4 if pick == 1 else 0.1)
             s2 = dev.screenshot()
             if wheel_reward_panel(s2):
                 shown = True
                 break
-            # Spin once shows no panel: the coins dropping = it spun. Owner 30 Oct (K / Manhattan 13:01-13:26): the x10 /
-            # x100 reward window is not always recognised either - each press then waited ~1 min; the coins dropping
-            # by the cost is proof for every button (read every 2 s for x10 / x100: text reads are slow).
-            if pick == 1 or time.time() - last_coin_read >= 2.0:
-                last_coin_read = time.time()
-                c2 = wheel_coins(s2) if wheel_on_page(s2) and not wheel_reward_panel(s2) else None
-                if c2 is not None and coins - c2 >= WHEEL_COST[pick]:
-                    spent = True
-                    if pick == 1:
-                        stop.wait(1.5)                     # let the wheel stop turning
-                    break
+            if pick != 1:
+                if time.time() - t0 > 20:
+                    duty_progress()                        # a slow window is waiting, not stuck
+                continue
+            c2 = wheel_coins(s2) if wheel_on_page(s2) else None
+            if c2 is not None and coins - c2 >= WHEEL_COST[pick]:
+                spent = True
+                stop.wait(1.5)                             # let the wheel stop turning
+                break
         if not (shown or spent):                          # Skip 27 Oct 20:37/20:40: after 3-4 x100 presses an unknown window
             rd_snap(s2, f"wheel_nospin_{fails + 1}")         # covered the Wheel (recovery then needed 2 Backs) - picture it,
             for _ in range(3):                               # tap outside to close it, and count the press if the coins dropped
@@ -12083,12 +12105,17 @@ def run_wheel(dev, cfg, log, stop):
         if spent:
             ready = pick == 1                              # x10 / x100: a reward window may still come up - the next round
             continue                                       # looks for it (and closes it) before pressing again
-        for k in range(6):                                 # close the panel: the button's own spot (owner 25 Oct), every other
-            dev.tap(*(WHEEL_BTN[pick] if k % 2 == 0 else (270, 110)))     # try outside; tapped only while the panel is seen
-            stop.wait(0.5)
-            s3 = dev.screenshot()
-            if not wheel_reward_panel(s3):
-                ready = wheel_on_page(s3)                  # small title read: the next press only on the Wheel page
+        for k in range(8):                                 # owner 30 Oct 13:40: close the reward window by tapping OUTSIDE it
+            dev.tap(270, 110)                              # (never the spin button: a late tap there would spin again)
+            s3 = None
+            t1 = time.time()
+            while time.time() - t1 < 3 and not stop.is_set():   # follow the screen: the moment the window is gone,
+                stop.wait(0.1)                             # press again (a busy PC may need a second outside tap)
+                s3 = dev.screenshot()
+                if not wheel_reward_panel(s3):
+                    break
+            if s3 is not None and not wheel_reward_panel(s3):
+                ready = wheel_on_page(s3)                  # the next press at once, only on the Wheel page
                 break
     return done
 
