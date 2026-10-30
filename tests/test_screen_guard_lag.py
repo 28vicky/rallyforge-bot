@@ -136,3 +136,12 @@ def test_alliance_page_with_promotion_is_not_a_popup():
     img = cv2.imread(str(Path(__file__).parent / "screens" / "alliance_page_promo_rory.png"))
     assert rb.is_alliance_page(img)
     assert rb._poplib_seen(rb._pop_hash(img), img, lambda m: None) is None
+
+
+def test_war_shortcut_icon_found_only_when_shown():
+    import cv2
+    t = cv2.imread(str(Path(__file__).resolve().parents[1] / "war_shortcut.png"))
+    for f, want in (("rory_city_war_icon.png", True), ("rory_city_no_war_icon.png", False)):
+        img = cv2.imread(str(Path(__file__).parent / "screens" / f))
+        mv = cv2.minMaxLoc(cv2.matchTemplate(img, t, cv2.TM_CCOEFF_NORMED))[1]
+        assert (mv >= 0.8) == want

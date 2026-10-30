@@ -21394,7 +21394,10 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 nap(1.0, 1.5)
                 continue
             nav = None
-            for step in cfg["rally_nav_steps"]:
+            step = "war_shortcut"                            # owner 30 Oct 20:00: the Alliance War icon (fists + rally count +
+            if has_template(step):                           # timer, right side) opens the rally list in one tap - first;
+                nav = find(screen, step, 0.8)                # only when it is not shown: Alliance -> Alliance War
+            for step in ([] if nav else cfg["rally_nav_steps"]):
                 if has_template(step):
                     nav = find(screen, step, 0.85)
                     if nav:
