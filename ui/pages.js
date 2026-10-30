@@ -1101,17 +1101,10 @@ const REFRESH = [["none", "Never"], ["count", "A set number of times"], ["all", 
 // Black Market pictures that ship with the app (templates mk_BM_NN.png, cut from a real shop recording): plain name + category.
 // The item keeps its "BM NN" name in the settings (that is the picture the bot looks for); only the label shown changes.
 const BM_CATS = [["all", "All"], ["gold", "Gold & resources"], ["stamina", "Stamina"], ["res", "Resources"], ["speed", "Speed-ups"], ["chest", "Chests"], ["gear", "Gear & materials"], ["other", "Other"]];
-const BM_INFO = {
-  "BM 44": ["Stamina 50 x10", "stamina"], "VIT 50": ["Stamina 50", "stamina"],   // VIT 50 = the owner's own capture (single item)
-  "BM 04": ["Gold 100K", "res"], "BM 08": ["Food 200M", "res"], "BM 21": ["Food 500M", "res"], "BM 19": ["Lumber 200M", "res"], "BM 17": ["Resource 50M", "res"],
-  "BM 13": ["Stone 200M", "res"], "BM 42": ["Stone 200M (2)", "res"], "BM 22": ["Ore 500M", "res"],
-  "BM 01": ["Chest VI x5", "chest"], "BM 25": ["Chest V x5", "chest"], "BM 03": ["Chest IV x5", "chest"], "BM 07": ["Red chest x20", "chest"], "BM 10": ["Red chest x1", "chest"],
-  "BM 27": ["Gold chest x1", "chest"], "BM 29": ["Jewel chest x50", "chest"],
-  "BM 06": ["Green jewel Lv.4", "gear"], "BM 11": ["Gear: axe", "gear"], "BM 15": ["Gear: boots", "gear"], "BM 30": ["Gear: horn Lv.4", "gear"], "BM 32": ["Gear: spear", "gear"],
-  "BM 39": ["Gear: legs", "gear"], "BM 12": ["Blue crystal x25", "gear"], "BM 41": ["Blue crystal x50", "gear"], "BM 14": ["Orange shard x50", "gear"],
-  "BM 45": ["Rainbow crystal x20", "gear"], "BM 48": ["Purple crystal x20", "gear"],
-  "BM 05": ["EXP 5000 x10", "other"], "BM 09": ["EXP 20000", "other"], "BM 16": ["EXP 10000", "other"], "BM 02": ["Medals x500", "other"],
-  "BM 31": ["Scroll x10", "other"], "BM 51": ["Scroll x20", "other"],
+const BM_INFO = {   // old pictures whose game name is not known yet (the rest carry real names since 30 Oct)
+  "BM 02": ["Medals x500", "other"], "BM 06": ["Green jewel Lv.4", "gear"], "BM 07": ["Red chest x20", "chest"], "BM 10": ["Red chest x1", "chest"],
+  "BM 15": ["Gear: boots", "gear"], "BM 27": ["Gold chest x1", "chest"], "BM 30": ["Gear: horn Lv.4", "gear"], "BM 31": ["Scroll x10", "other"],
+  "BM 32": ["Gear: spear", "gear"], "BM 39": ["Gear: legs", "gear"], "BM 42": ["Stone 200M (2)", "res"], "BM 51": ["Scroll x20", "other"],
 };
 // Owner 28 Oct: names offered when the owner names a new shop item (typed text is fine too) - item names only.
 const BM_SUGGEST = (() => {
@@ -1127,11 +1120,11 @@ const BM_SUGGEST = (() => {
   x("Production Speed-up 24h", [1, 2, 5, 20]);
   out.push("VIP 30 Minutes x1", "VIP 60 Minutes x1", "VIP 1 Day x1", "VIP 1 Day x4", "VIP 7 Days x1", "VIP 30 Days x1", "Gold 50K", "Gold 100K");
   x("Chips 100", [1, 2, 5]); x("Medal", [100, 200]); x("Refining Stone", [10, 50]); x("Research Stone", [5, 10, 25, 50]);
-  x("Runestone Chest", [10]); x("Dragon Crystal", [10]);
+  x("Runestone Chest", [10, 50]); x("Dragon Crystal", [10, 20]);
   out.push("Stamina 50", "Stamina 50 x10", "Royal Waybill x1"); x("Tribute", [1, 2, 5, 10]);
-  x("Monarch EXP 1000", [1, 2, 5]); x("Monarch EXP 2000", [1, 2, 5]); x("Monarch EXP 5000", [1, 5]); x("Monarch EXP 10000", [1, 5]);
+  x("Monarch EXP 1000", [1, 2, 5]); x("Monarch EXP 2000", [1, 2, 5]); x("Monarch EXP 5000", [1, 5]); x("Monarch EXP 10000", [1, 5]); x("Monarch EXP 20000", [1]);
   x("General EXP 500", [1, 2, 5, 10]); x("General EXP 1000", [1, 2, 5]); x("General EXP 2000", [1, 2, 5]); x("General EXP 5000", [1, 2, 5]);
-  x("General EXP 10000", [5]); x("General EXP 20000", [5]); x("Spiritual Beast EXP 1000", [5, 10]);
+  x("General EXP 10000", [5, 20]); x("General EXP 20000", [5, 20]); x("Spiritual Beast EXP 1000", [5, 10]); x("Spiritual Beast EXP 5000", [10]);
   out.push("Generals Scroll Chest x1", "Kings Scroll Chest x1", "Dragon Scroll Chest x1");
   ["I", "II", "III", "IV", "V", "VI"].forEach((n) => out.push("Artwork Fragment Chest " + n + " x5"));
   ["Bow", "Spear", "Axe", "Sword", "Leg Armor", "Boots", "Ring"].forEach((g) => out.push("Generals " + g));

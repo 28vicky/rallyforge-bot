@@ -541,6 +541,22 @@ def build_report(path, include_debug=True, description="", devices=None):
 
 def migrate_cfg(cfg):
     """Older configs pointed the general tap at the magnifier (x~477), which opens the info view."""
+    try:                                             # owner 30 Oct: Black Market picks follow the real item names ("BM 44" -> "Stamina 50 x10")
+        for box in [cfg] + [v for v in (cfg.get("per_device") or {}).values() if isinstance(v, dict)]:
+            items = box.get("market_items")
+            if isinstance(items, list) and any(isinstance(i, dict) and i.get("name") in MK_RENAMED for i in items):
+                seen, out = set(), []
+                for i in items:
+                    if isinstance(i, dict):
+                        i = dict(i, name=mk_name(i.get("name")))
+                        if i["name"] in seen:
+                            continue
+                        seen.add(i["name"])
+                    out.append(i)
+                box["market_items"] = out
+        migrate_market_pictures()
+    except Exception as _e:
+        quiet_err("migrate_cfg market", _e)
     if not cfg.get("_reset_auto_v1"):                   # one time (owner 23 Oct): the old default 00:00 UTC was wrong and 07:00
         cfg["_reset_auto_v1"] = True                    # does not follow daylight saving - both become Evony's own reset time
         if str(cfg.get("game_reset_utc") or "").strip() in ("", "00:00", "0:00", "07:00", "7:00"):
@@ -9726,16 +9742,62 @@ def market_confirm(dev, log, stop, rebuy=False):
 
 # What the user sees for a Black Market item (same labels as ui/pages.js BM_INFO). The saved name ("BM 44", "VIT 50") is
 # only the picture's name; logs show the label (owner 28 Oct: users only ever see "Stamina 50", never "VIT 50").
-BM_LABEL = {"BM 44": "Stamina 50 x10", "VIT 50": "Stamina 50",
-            "BM 04": "Gold 100K", "BM 08": "Food 200M", "BM 21": "Food 500M", "BM 19": "Lumber 200M", "BM 17": "Resource 50M",
-            "BM 13": "Stone 200M", "BM 42": "Stone 200M (2)", "BM 22": "Ore 500M",
-            "BM 01": "Chest VI x5", "BM 25": "Chest V x5", "BM 03": "Chest IV x5", "BM 07": "Red chest x20", "BM 10": "Red chest x1",
-            "BM 27": "Gold chest x1", "BM 29": "Jewel chest x50",
-            "BM 06": "Green jewel Lv.4", "BM 11": "Gear: axe", "BM 15": "Gear: boots", "BM 30": "Gear: horn Lv.4", "BM 32": "Gear: spear",
-            "BM 39": "Gear: legs", "BM 12": "Blue crystal x25", "BM 41": "Blue crystal x50", "BM 14": "Orange shard x50",
-            "BM 45": "Rainbow crystal x20", "BM 48": "Purple crystal x20",
-            "BM 05": "EXP 5000 x10", "BM 09": "EXP 20000", "BM 16": "EXP 10000", "BM 02": "Medals x500",
-            "BM 31": "Scroll x10", "BM 51": "Scroll x20"}
+BM_LABEL = {"BM 02": "Medals x500", "BM 06": "Green jewel Lv.4", "BM 07": "Red chest x20", "BM 10": "Red chest x1",
+            "BM 15": "Gear: boots", "BM 27": "Gold chest x1", "BM 30": "Gear: horn Lv.4", "BM 31": "Scroll x10",
+            "BM 32": "Gear: spear", "BM 39": "Gear: legs", "BM 42": "Stone 200M (2)", "BM 51": "Scroll x20"}
+
+# Owner 30 Oct 22:04: Black Market pictures carry the game's real item names (from the owner's shop screenshots), not "BM 44".
+# Old saved picks and old picture copies move to the new name by themselves (migrate_cfg / migrate_market_pictures).
+MK_RENAMED = {"BM 01": "Artwork Fragment Chest VI x5", "BM 03": "Artwork Fragment Chest IV x5", "BM 25": "Artwork Fragment Chest V x5",
+              "BM 04": "Gold 100K", "BM 08": "Food 200M", "BM 21": "Food 500M", "BM 19": "Lumber 200M", "BM 13": "Stone 200M",
+              "BM 22": "Ore 500M", "BM 17": "Stone 50M", "BM 44": "Stamina 50 x10", "VIT 50": "Stamina 50",
+              "BM 09": "Monarch EXP 20000 x1", "BM 16": "Monarch EXP 10000 x1", "BM 05": "Spiritual Beast EXP 5000 x10",
+              "BM 12": "Research Stone x25", "BM 41": "Research Stone x50", "BM 14": "Refining Stone x50",
+              "BM 29": "Runestone Chest x50", "BM 48": "Dragon Crystal x20", "BM 45": "Dragon Crystal x20", "BM 11": "Generals Sword",
+              "Runestone Chest x1": "Champions Boots",      # the old picture showed Champion's Boots
+              "Tribute x1": "Tribute x10"}                 # the old picture showed a pack of 10
+# wrong pictures removed 30 Oct (empty stand / sold tile / faded copy): a user's copy is deleted only when it is this exact file
+MK_REMOVED_SHA = {"37b807828fbc2ee7936facc43c45f191301b8f1303807d6523bd0b6a910b55b5",     # Dragon Crystal x10 (empty stand)
+                  "ef9e79fd6f0df1ad9124b304fd8ead246cedcdbb748ab8a0b97447cebfdef7ea",     # Lumber 20M (sold, greyed)
+                  "85a62f27ec3704b8e0e4803a2a2eb013b175f74c4db3116a14dc14c40876fbaf"}     # BM 45 (faded Dragon Crystal x20)
+
+
+def mk_name(name):
+    """A saved Black Market pick -> its current picture name (old "BM 44" -> "Stamina 50 x10")."""
+    n = (name or "").strip()
+    return MK_RENAMED.get(n, n)
+
+
+def _mk_stem(name):
+    return "mk_" + re.sub(r"[^\w\-]", "_", name)
+
+
+_mk_migrated = [False]
+
+
+def migrate_market_pictures():
+    """Once per start: the user's own copies of renamed shop pictures get the new name; exact copies of removed wrong
+    pictures are deleted. A picture the user captured himself under a new name is never overwritten."""
+    if _mk_migrated[0]:
+        return
+    _mk_migrated[0] = True
+    try:
+        import hashlib
+        d = USER / "templates"
+        if not d.exists():
+            return
+        for old, new in MK_RENAMED.items():
+            src, dst = d / (_mk_stem(old) + ".png"), d / (_mk_stem(new) + ".png")
+            if src.exists():
+                if dst.exists():
+                    src.unlink()
+                else:
+                    src.rename(dst)
+        for f in d.glob("mk_*.png"):
+            if hashlib.sha256(f.read_bytes()).hexdigest() in MK_REMOVED_SHA:
+                f.unlink()
+    except Exception as _e:
+        quiet_err("migrate_market_pictures", _e)
 
 
 def bm_label(name):
@@ -9745,9 +9807,9 @@ def bm_label(name):
 def market_wanted(cfg):
     out = []
     for it in cfg.get("market_items") or []:
-        name = it.get("name", "").strip()
-        tpl_name = "mk_" + re.sub(r"[^\w\-]", "_", name)
-        if name and has_template(tpl_name):
+        name = mk_name(it.get("name", ""))
+        tpl_name = _mk_stem(name)
+        if name and has_template(tpl_name) and name not in [w[0] for w in out]:
             out.append((name, tpl_name, it.get("pay") or cfg.get("market_pay", "gems")))
     return out
 
@@ -9836,11 +9898,11 @@ def _bm_item_names():
     out += ["VIP 30 Minutes x1", "VIP 60 Minutes x1", "VIP 1 Day x1", "VIP 1 Day x4", "VIP 7 Days x1", "VIP 30 Days x1",
             "Gold 50K", "Gold 100K"]
     x("Chips 100", [1, 2, 5]); x("Medal", [100, 200]); x("Refining Stone", [10, 50]); x("Research Stone", [5, 10, 25, 50])
-    x("Runestone Chest", [10]); x("Dragon Crystal", [10])
+    x("Runestone Chest", [10, 50]); x("Dragon Crystal", [10, 20])
     out += ["Stamina 50", "Stamina 50 x10", "Royal Waybill x1"]; x("Tribute", [1, 2, 5, 10])
-    x("Monarch EXP 500", [1]); x("Monarch EXP 1000", [1, 2, 5]); x("Monarch EXP 2000", [1, 2, 5]); x("Monarch EXP 5000", [1, 5]); x("Monarch EXP 10000", [1, 5])
+    x("Monarch EXP 500", [1]); x("Monarch EXP 1000", [1, 2, 5]); x("Monarch EXP 2000", [1, 2, 5]); x("Monarch EXP 5000", [1, 5]); x("Monarch EXP 10000", [1, 5]); x("Monarch EXP 20000", [1])
     x("General EXP 500", [1, 2, 5, 10]); x("General EXP 1000", [1, 2, 5]); x("General EXP 2000", [1, 2, 5])
-    x("General EXP 5000", [1, 2, 5]); x("General EXP 10000", [5]); x("General EXP 20000", [5]); x("Spiritual Beast EXP 1000", [5, 10])
+    x("General EXP 5000", [1, 2, 5]); x("General EXP 10000", [5, 20]); x("General EXP 20000", [5, 20]); x("Spiritual Beast EXP 1000", [5, 10]); x("Spiritual Beast EXP 5000", [10])
     out += ["Generals Scroll Chest x1", "Kings Scroll Chest x1", "Dragon Scroll Chest x1"]
     out += [f"Artwork Fragment Chest {n} x5" for n in ("I", "II", "III", "IV", "V", "VI")]
     out += [f"Generals {g}" for g in ("Bow", "Spear", "Axe", "Sword", "Leg Armor", "Boots", "Ring")]
@@ -10132,7 +10194,7 @@ def run_market(dev, cfg, log, stop):
         cv2.imwrite(str(USER / "debug" / f"bm_totals_{str(getattr(dev, 'serial', '')).replace(':', '_')}.png"), img)
     except Exception as _e:
         quiet_err("bm_totals_pic", _e)
-    log(f"[*] Black Market: looking for {', '.join(w[0] for w in wanted)}; gold {gold if gold is not None else '?'}, "
+    log(f"[*] Black Market: looking for {', '.join(bm_label(w[0]) for w in wanted)}; gold {gold if gold is not None else '?'}, "
         f"gems {gems if gems is not None else '?'} (keep at least {min_gold:,} gold, {min_gems:,} gems)")
     need_totals = bool(min_gems or min_gold or budget)   # totals are only read every round when a floor / limit needs them
     free_left = None                                     # once the free refreshes are used up they stay at 0: no more reading them
