@@ -20059,7 +20059,7 @@ DUTY_LIBRARY = [
     {"id": "ev_valuable", "group": "Events", "title": "Valuable Event free claims", "every_min": 240, "verified": False,
      "note": "Opens every Valuable Event tab with a red badge and takes only what is free (daily Free package, free Blazon chest, Active Monthly Card claims, daily free chests). Never buys.",
      "target": "self:", "steps": ["ev_valuable"]},
-    {"id": "event_quests", "group": "Events", "title": "Event quests: claim", "every_min": 0, "verified": False, "late_hours": 18,
+    {"id": "event_quests", "group": "Events", "title": "Event quests: claim", "every_min": 0, "verified": False, "late_hours": 18, "quit_after": 5,
      "note": "King's Path, Gather Troops...: opens the current event's icon (right column), claims finished quests (Claim All) on every day with a red dot and the reached progress chests. Never presses Go. Once a day by default, late in the game day so most quests are finished.",
      "target": "self:", "steps": ["event_quests"],
      "opts": repeat_opts("Every", 6, "once a day")},
@@ -20243,6 +20243,8 @@ def duty_status(serial, duty_id, cfg):
         if row.get("next_at", 0) > now:
             return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"])) + (" · " + sp if sp else "")
         return "due", "Due" + (" · " + sp if sp else "")
+    if d.get("quit_after") and tries >= d["quit_after"]:    # owner 31 Oct 04:16: Event quests stops for the day after 5 misses
+        return "done", f"Stopped for today after {tries} failed tries"
     if row.get("done_day") == day:                          # checked twice: nothing left in the game until the reset
         return "done", "Done for today"
     if duty_id in ("crazy_eggs", "royal_thief", "monster_rally", "champions"):   # timer driven: comes back when the next egg / greeting is ready
