@@ -1801,16 +1801,13 @@ PAGES.duties = function (fixed) {
       if (o.type === "select") return h("label", {}, h("span", { class: "lab" }, o.label), ((st) => sel(st, "v", o.choices, { label: o.label, after: () => save(st.v) }))({ v: o.val }));
       return h("label", {}, h("span", { class: "lab" }, o.label), h("input", { type: "number", min: o.min, max: o.max, value: o.val, onchange: (e) => save(e.target.value) }));
     }));
-  const SET_IDS = ["crazy_eggs", "champions", "wheel", "black_market", "@tasks"].concat(serial ? ["collect_resources"] : []);
+  const SET_IDS = ["crazy_eggs", "champions", "wheel", "black_market", "@tasks"];
   const hasSet = (r) => !!((r.opts && r.opts.length) || SET_IDS.includes(r.id));
   const setBody = (r) => [
     (r.opts && r.opts.length) ? dutyOpts(r) : null,
     r.id === "crazy_eggs" ? ce : null, r.id === "champions" ? ch : null, r.id === "wheel" ? wh : null,
     r.id === "black_market" ? PAGES.market(serial || undefined, () => drawSide()) : null,
     r.id === "@tasks" ? PAGES.tasks(serial || undefined, true, () => drawSide()) : null,
-    r.id === "collect_resources" && serial ? h("div", { class: "subset" }, h("div", { class: "subtitle" }, "City map"),
-      note("Resource collecting taps the farms on this instance's city map (Overview \u203a City map). Missing a farm? Place it with Fix pins."),
-      h("div", { class: "row" }, S.dev ? btn("Scan city", () => scanCityFlow(serial), "sm") : null, btn("Map by hand", () => manualMapFlow(serial), "sm"), btn("Fix pins", () => { if (S.gotoInstTab) S.gotoInstTab("ov"); }, "sm"))) : null,   // PCR2 B3: one city-map word set
   ].filter(Boolean);
   // ---- side panel (C2): Settings on the row opens it; Esc, Done or a click outside closes; changes save as they are made
   let sideId = null;

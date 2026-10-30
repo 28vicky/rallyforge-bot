@@ -15496,6 +15496,58 @@ def run_alliance_help(dev, cfg, log, stop):
     log("[+]  Alliance Help: Help All pressed - everyone helped")
 
 
+# --- Resource collecting (owner 29 Oct + recording 29 Oct 18:04): one tap on the floating hand above the Warehouse
+# collects every field. No city map: look at the city view, then a few slow drags around it.
+HAND_TPL = "warehouse_hand"
+HAND_SWEEP = [(0, 300), (300, 0), (0, -300), (0, -300), (-300, 0), (-300, 0), (0, 300), (0, 300)]   # finger moves: 3x3 views
+
+
+def find_warehouse_hand(shot, threshold=0.75):
+    """The Warehouse's floating hand bubble on the city view -> (x, y, score) or None (template from the owner's
+    recording; a few scales because the zoom differs between instances)."""
+    try:
+        t0 = tpl(HAND_TPL)
+    except Exception:
+        return None
+    x0, y0, x1, y1 = 0, 120, 540, 860                      # below the top bar, above the bottom icons
+    area = shot[y0:y1, x0:x1]
+    best = None
+    for sc in (0.85, 1.0, 1.15):
+        t = cv2.resize(t0, None, fx=sc, fy=sc) if sc != 1.0 else t0
+        r = cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED)
+        _, m, _, loc = cv2.minMaxLoc(r)
+        if m >= threshold and (best is None or m > best[2]):
+            best = (x0 + loc[0] + t.shape[1] // 2, y0 + loc[1] + t.shape[0] // 2, float(m))
+    return best
+
+
+def run_collect_resources(dev, cfg, log, stop):
+    leave_to_city(dev, cfg, stop, log)
+    for i in range(len(HAND_SWEEP) + 1):
+        if stop.is_set():
+            return
+        shot = _settled_shot(dev, stop)
+        hit = find_warehouse_hand(shot)
+        if hit:
+            for _ in range(2):
+                dev.tap(hit[0], hit[1])
+                _nap(stop, 1.6, 2.0)
+                after = dev.screenshot()
+                again = find_warehouse_hand(after, 0.6)
+                if not again or abs(again[0] - hit[0]) > 40 or abs(again[1] - hit[1]) > 40:
+                    log(f"[+]  Collect resources: Warehouse hand tapped - all fields collected (match {hit[2]:.2f})")
+                    return
+            rd_snap(after, "collect_hand_stays")
+            raise RuntimeError("the Warehouse hand is still there after tapping it")
+        if i == len(HAND_SWEEP):
+            break
+        dx, dy = HAND_SWEEP[i]
+        dev.swipe(270, 480, 270 + dx, 480 + dy, 1500)         # slow drag: no glide
+        _nap(stop, 0.6, 0.8)
+    rd_snap(dev.screenshot(), "collect_no_hand")
+    log("[i]   Collect resources: no hand above the Warehouse - nothing ready yet (tries again later)")
+
+
 def run_alliance_treasure(dev, cfg, log, stop):
     """Alliance > Alliance Treasure > Open All (chests still on a timer stay closed)."""
     rd_alliance_page(dev, cfg, stop)
@@ -18005,7 +18057,7 @@ RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor
             "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes,
             "wisdom_dome_tokens": run_wisdom_dome_tokens, "royal_thief": run_royal_thief,
             "ev_legion": run_ev_legion, "ev_garuda": run_ev_garuda, "ev_windmill": run_ev_windmill, "ev_eagle": run_ev_eagle,
-            "ev_star_trail": run_ev_star_trail, "ev_divination": run_ev_divination, "alliance_shop": run_alliance_shop, "ev_duel": run_ev_duel, "ev_taotie": run_ev_taotie,
+            "ev_star_trail": run_ev_star_trail, "collect_resources": run_collect_resources, "ev_divination": run_ev_divination, "alliance_shop": run_alliance_shop, "ev_duel": run_ev_duel, "ev_taotie": run_ev_taotie,
             "ev_expedition": run_ev_expedition, "ev_valuable": run_ev_valuable, "ev_super_value": run_ev_super_value,
             "monster_rally": run_monster_rally}
 
@@ -18047,8 +18099,8 @@ DUTY_LIBRARY = [
      "target": "tpl:event_center_icon|Center",
      "steps": ["wait 2", "crazy_eggs"]},
     {"id": "collect_resources", "group": "Common tasks", "title": "Collect resources", "every_min": 180, "verified": False,
-     "note": "Taps every mapped farm / sawmill / quarry / mine. Needs the city mapper.",
-     "target": "building:Farm", "count": 6, "steps": ["wait 1", "tap_text Collect|Claim"]},
+     "note": "Taps the floating hand above the Warehouse: the game collects every field at once. No city map needed.",
+     "target": "self:", "steps": ["collect_resources"]},
     {"id": "reach_keep_tavern", "group": "Common tasks", "title": "Test: Keep, then Tavern", "every_min": 60, "verified": False,
      "note": "Walks to the Keep, opens its menu, then walks to the Tavern and opens its menu (nothing is pressed).",
      "target": "building:Keep+Tavern", "tap_dy": 0, "steps": ["wait 1.5", "ring_name"]},
