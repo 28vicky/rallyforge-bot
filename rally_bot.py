@@ -7867,7 +7867,16 @@ def patch_shift(before, after):
     return best
 
 
-_ORB = [None]
+_ORB_TL = threading.local()
+
+
+def _orb():
+    """This thread's own ORB feature finder (owner 30 Oct): one finder shared by all 8 instance threads gave wrong /
+    missing points when two instances looked at their city at the same moment - every thread gets its own."""
+    o = getattr(_ORB_TL, "o", None)
+    if o is None:
+        o = _ORB_TL.o = cv2.ORB_create(2500)
+    return o
 
 
 def feat_shift(before, after):
@@ -7876,12 +7885,10 @@ def feat_shift(before, after):
     -> (dx, dy, agreeing points) of the map content, or None."""
     try:
         x, y, w, h = CITY_VIEW
-        if _ORB[0] is None:
-            _ORB[0] = cv2.ORB_create(2500)
         ga = cv2.cvtColor(before[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
         gb = cv2.cvtColor(after[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
-        ka, da = _ORB[0].detectAndCompute(ga, None)
-        kb, db = _ORB[0].detectAndCompute(gb, None)
+        ka, da = _orb().detectAndCompute(ga, None)
+        kb, db = _orb().detectAndCompute(gb, None)
         if da is None or db is None or len(ka) < 30 or len(kb) < 30:
             return None
         m = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(da, db)
@@ -11733,6 +11740,17 @@ WHEEL_BTN = {100: (95, 924), 10: (269, 924), 1: (443, 924)}          # Spin butt
 WHEEL_COST = {100: 9000, 10: 900, 1: 100}
 WHEEL_COINS_BOX = (234, 128, 190, 48)
 WHEEL_ICON = (141, 328)                                              # "Wheel of Fortune" in the Tavern's ring menu
+WHEEL_RING_REF = (276, 476)       # where the Tavern was tapped when WHEEL_ICON was right (K 279,491 / Manhattan 272,462 30 Oct)
+
+
+def wheel_ring_shift(serial):
+    """Owner 30 Oct (Kiravik/Stalds 13:23-13:26): the ring menu opens AROUND the tapped Tavern. The map jump may leave
+    the Tavern low on the screen (228,689) - the fixed Wheel spot then hits empty ground. -> (dx, dy) to move the
+    Wheel item and its text search by (0, 0 when the Tavern spot is not known)."""
+    r = _RING_OK.get(serial or "")
+    if not r or len(r) < 4 or str(r[0]).lower() != "tavern" or time.time() - r[1] > 120:
+        return 0, 0
+    return int(r[2] - WHEEL_RING_REF[0]), int(r[3] - WHEEL_RING_REF[1])
 
 
 WHEEL_COINS_TIGHT = (225, 132, 155, 40)                  # the number only (the '+' button left out)
@@ -11928,8 +11946,12 @@ def run_wheel(dev, cfg, log, stop):
     reserve = int(conf["reserve"] or 0)
     shot = dev.screenshot()
     if not wheel_on_page(shot):
-        p = find_text(shot, ["Wheel of Fortune", "Wheel of", "Fortune"], region=(0, 250, 300, 300), cutoff=0.7)
-        tap_at = (p[0], p[1] - 40) if p else WHEEL_ICON
+        sdx, sdy = wheel_ring_shift(serial)
+        rx0, ry0 = max(0, min(240, sdx)), max(100, min(560, 250 + sdy))
+        p = find_text(shot, ["Wheel of Fortune", "Wheel of", "Fortune"], region=(rx0, ry0, 300, 300), cutoff=0.7)
+        tap_at = (p[0], p[1] - 40) if p else (max(20, min(520, WHEEL_ICON[0] + sdx)), max(120, min(840, WHEEL_ICON[1] + sdy)))
+        if sdx or sdy:
+            log(f"[i]   Wheel: the Tavern ring is not in the middle - Wheel item looked for {sdx:+},{sdy:+} px from its usual spot")
         dev.tap(*tap_at)
         _nap(stop, 2.2, 2.8)
         shot = dev.screenshot()
@@ -12014,17 +12036,23 @@ def run_wheel(dev, cfg, log, stop):
         shown = spent = False
         s2 = shot
         t0 = time.time()
+        last_coin_read = t0
         while time.time() - t0 < 9 and not stop.is_set():
             stop.wait(0.4)
             s2 = dev.screenshot()
             if wheel_reward_panel(s2):
                 shown = True
                 break
-            if pick == 1:                                  # Spin once shows no panel: the coins dropping = it spun
-                c2 = wheel_coins(s2) if wheel_on_page(s2) else None
+            # Spin once shows no panel: the coins dropping = it spun. Owner 30 Oct (K / Manhattan 13:01-13:26): the x10 /
+            # x100 reward window is not always recognised either - each press then waited ~1 min; the coins dropping
+            # by the cost is proof for every button (read every 2 s for x10 / x100: text reads are slow).
+            if pick == 1 or time.time() - last_coin_read >= 2.0:
+                last_coin_read = time.time()
+                c2 = wheel_coins(s2) if wheel_on_page(s2) and not wheel_reward_panel(s2) else None
                 if c2 is not None and coins - c2 >= WHEEL_COST[pick]:
                     spent = True
-                    stop.wait(1.5)                         # let the wheel stop turning
+                    if pick == 1:
+                        stop.wait(1.5)                     # let the wheel stop turning
                     break
         if not (shown or spent):                          # Skip 27 Oct 20:37/20:40: after 3-4 x100 presses an unknown window
             rd_snap(s2, f"wheel_nospin_{fails + 1}")         # covered the Wheel (recovery then needed 2 Backs) - picture it,
@@ -12053,8 +12081,8 @@ def run_wheel(dev, cfg, log, stop):
         wheel_spun_today(serial, pick)
         log(f"[i]   Wheel: {done} spin(s) done (about {coins:,} coins left)")
         if spent:
-            ready = True
-            continue
+            ready = pick == 1                              # x10 / x100: a reward window may still come up - the next round
+            continue                                       # looks for it (and closes it) before pressing again
         for k in range(6):                                 # close the panel: the button's own spot (owner 25 Oct), every other
             dev.tap(*(WHEEL_BTN[pick] if k % 2 == 0 else (270, 110)))     # try outside; tapped only while the panel is seen
             stop.wait(0.5)
@@ -13121,7 +13149,7 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
             return True
         if trust and ring and spots and (x, y) == tuple(spots[0]):   # owner 28 Oct: the building's own picture matched (>= 0.85) and its ring
             log(f"[i]   {bname} reached by {how} ({x},{y}) - ring open, picture trusted")   # opened at that spot: no name read
-            _RING_OK[getattr(dev, "serial", "")] = (bname, time.time())
+            _RING_OK[getattr(dev, "serial", "")] = (bname, time.time(), x, y)
             return True
         if not ring:
             # Kiravik 27 Oct 19:02: a 'Congratulations! 25 Stamina' reward window sat over the Tavern and took all 7
@@ -13141,7 +13169,7 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
                            rd_seen(shot, RING_OWN_ITEMS_TEXT.get(want, []), region=(0, 100, 540, 760)))
         if by_item or want in nm or any(difflib.SequenceMatcher(None, want, w).ratio() >= 0.8 for w in re.findall(r"[a-z ]+", nm)):
             log(f"[i]   {bname} reached by {how} ({x},{y})")
-            _RING_OK[getattr(dev, "serial", "")] = (bname, time.time())
+            _RING_OK[getattr(dev, "serial", "")] = (bname, time.time(), x, y)
             learn_building(dev, before, bname, x, y)
             return True
         log(f"[i]   after Go the menu at ({x},{y}) is '{nm or '?'}', not {bname}")
@@ -13289,9 +13317,7 @@ def _kf_gray(img):
 
 
 def _kf_feats(gray):
-    if _ORB[0] is None:
-        _ORB[0] = cv2.ORB_create(2500)
-    return _ORB[0].detectAndCompute(gray, None)
+    return _orb().detectAndCompute(gray, None)
 
 
 def _kf_consensus(d, min_pts=KF_MIN_PTS, step=300):
@@ -13459,7 +13485,10 @@ class CityMap:
         except Exception:
             self.meta = {}
         self.kf = []                                       # [(x, y, gray, keypoints)]
-        self.index = None
+        self.index = None                                  # set once the features are ready (kept as the 'ready' flag)
+        self._desc = None                                  # all keyframe features, stacked (each thread builds its own matcher from them)
+        self._tl = threading.local()                       # owner 30 Oct: Rob + K + Manhattan share ONE Europe map object -
+        self._build_lock = threading.Lock()                # one matcher used by 3 threads at once = silent misses / slow locates
         self.labels = self.pts = None
         self.half = bool(self.meta.get("half"))            # shipped culture map: half-size pictures + precomputed features
         try:
@@ -13481,9 +13510,8 @@ class CityMap:
         if len(desc) != len(pts) or len(desc) != len(lab) or not len(desc) or lab.max() >= len(self.kf):
             raise ValueError("feats.npz does not fit map.json")
         self.labels, self.pts = lab, pts
-        self.index = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=12, multi_probe_level=1), dict(checks=50))
-        self.index.add([desc])
-        self.index.train()
+        self._desc = desc
+        self.index = self._matcher()
 
     def ok(self):
         return len(self.kf) >= 2
@@ -13493,19 +13521,32 @@ class CityMap:
         5.7 s for 56 keyframes)."""
         if self.index is not None:
             return
-        descs, labels, pts = [], [], []
-        for n, (x, y, g, _) in enumerate(self.kf):
-            k, d = _kf_feats(g)
-            if d is None:
-                continue
-            descs.append(d)
-            labels.append(np.full(len(k), n))
-            pts.append(np.float32([q.pt for q in k]))
-        self.labels = np.concatenate(labels)
-        self.pts = np.vstack(pts)
-        self.index = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=12, multi_probe_level=1), dict(checks=50))
-        self.index.add([np.vstack(descs)])
-        self.index.train()
+        with self._build_lock:                             # two instances starting together build it once
+            if self.index is not None:
+                return
+            descs, labels, pts = [], [], []
+            for n, (x, y, g, _) in enumerate(self.kf):
+                k, d = _kf_feats(g)
+                if d is None:
+                    continue
+                descs.append(d)
+                labels.append(np.full(len(k), n))
+                pts.append(np.float32([q.pt for q in k]))
+            self.labels = np.concatenate(labels)
+            self.pts = np.vstack(pts)
+            self._desc = np.vstack(descs)
+            self.index = self._matcher()
+
+    def _matcher(self):
+        """This thread's own feature matcher (owner 30 Oct, Rob/K misses 12:38-12:45): an OpenCV matcher is not safe to
+        search from several instance threads at the same time - every instance thread gets its own copy, built once."""
+        m = getattr(self._tl, "m", None)
+        if m is None:
+            m = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=12, multi_probe_level=1), dict(checks=50))
+            m.add([self._desc])
+            m.train()
+            self._tl.m = m
+        return m
 
     def locate(self, shot, min_pts=KF_MIN_PTS):
         """Camera place from any city screenshot: its feature points searched in all keyframes at once, the keyframe
@@ -13520,7 +13561,7 @@ class CityMap:
             if d is None or len(k) < 30:
                 return None
             pts = np.float32([q.pt for q in k])
-            ms = self.index.knnMatch(d, k=3)
+            ms = self._matcher().knnMatch(d, k=3)
             halt_check()
             qi = np.array([m.queryIdx for mm in ms for m in mm], dtype=np.int64)
             ti = np.array([m.trainIdx for mm in ms for m in mm], dtype=np.int64)
@@ -13541,9 +13582,13 @@ class CityMap:
                                (g.shape[1], g.shape[0]), interpolation=cv2.INTER_LINEAR)
             for npts, n, dx, dy in cands[:4]:
                 if _kf_ncc(self.kf[n][2], g, dx, dy) >= KF_MIN_NCC:
+                    self._tl.err = ""
                     return self.kf[n][0] - dx, self.kf[n][1] - dy, npts
+            self._tl.err = ""
             return None
-        except Exception:
+        except Exception as _e:                            # owner 30 Oct: an error is NOT 'not on the map' - write it down
+            self._tl.err = f"{type(_e).__name__}: {str(_e)[:160]}"
+            quiet_err("citymap_locate", _e)
             return None
 
 
@@ -14282,9 +14327,27 @@ def relocate_view(dev, cfg, log, stop, cmap, nav):
                 return r
             if abs(dx) + abs(dy) > 30:                      # it moved: come back before the next direction
                 nav._drag(270 - fx / 2, 440 - fy / 2, 270 + fx / 2, 440 + fy / 2)
-    log("[i]   nav: relocate=miss shot=debug/duty_nav_relocate.png")
-    rd_snap(dev.screenshot(), "nav_relocate")
+    shot = dev.screenshot()
+    rd_snap(shot, "nav_relocate")
+    _locate_miss_note(dev, log, cmap, shot, "relocate")
+    log("[i]   nav: relocate=miss")
     return None
+
+
+def _locate_miss_note(dev, log, cmap, shot, where):
+    """Owner 30 Oct (Rob/K 12:38-12:45): every 'not on the map' keeps ITS OWN picture - per instance, with the time
+    (failures/map_locate_miss, last 20 kept) - and an error inside the search is logged as an error, not a miss."""
+    err = getattr(getattr(cmap, "_tl", None), "err", "") if cmap is not None else ""
+    if err:
+        log(f"[!]   nav: the map search itself failed ({err}) - not a real miss")
+    try:
+        g = cv2.cvtColor(shot[250:730, 60:440], cv2.COLOR_BGR2GRAY) if shot is not None else None
+        extra = {"where": where, "error": err, "screen_std": round(float(g.std()), 1) if g is not None else None,
+                 "map": str(getattr(cmap, "path", "")), "keyframes": len(getattr(cmap, "kf", []) or [])}
+    except Exception as _e:
+        extra = {"where": where, "error": err, "note": type(_e).__name__}
+    failure_evidence(dev, "map_locate_miss", f"{where} locate: {err or 'screen not found on the city map'}",
+                     shot=shot, extra=extra)
 
 
 def _map_tap_note(dev, log, stop_no, bname, tx, ty, before, after, cmap):
@@ -15343,14 +15406,15 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
     r = cmap.locate(shot)                                  # already looking at the pin? then no jump at all
     rd_snap(shot, "nav_initial")
     if not r:                                              # fix C (owner 28 Oct): drive back onto the known city first
-        log("[i]   nav: initial_locate=miss shot=debug/duty_nav_initial.png - relocating")
+        _locate_miss_note(dev, log, cmap, shot, "initial")
+        log("[i]   nav: initial_locate=miss - relocating")
         r = relocate_view(dev, cfg, log, stop, cmap, nav)   # (pastes its own located screenshot)
     else:
         _city_seen(dev, shot, r)
     if r:
         log(f"[i]   nav: initial_locate=hit cx={round(r[0])} cy={round(r[1])} points={r[2]} shot=debug/duty_nav_initial.png")
     else:
-        log("[i]   nav: initial_locate=miss shot=debug/duty_nav_initial.png")
+        log("[i]   nav: initial_locate=miss (pictures in failures/map_locate_miss)")
     if r and 110 <= mapx - r[0] <= 410 and 220 <= mapy - r[1] <= 740:
         log(f"[i]   nav: origin_used=initial cx={round(r[0])} cy={round(r[1])}")
         nav.cx, nav.cy = r[0], r[1]                        # the caller saves the building's map place from nav (27 Oct: left at 0,0 -> Tavern saved at the corner)
@@ -21265,6 +21329,21 @@ def game_responds(serial, adb):
     except Exception:
         return False                                          # no screenshot at all = the emulator does not answer
 QUIET_UNTIL = {}          # serial -> end of a planned long wait (cool-down) the watchdog must not count as stuck
+_APP_PAUSE_LOG = [0.0]
+
+
+def app_wide_pause(serial, now, quiet_s=120):
+    """Owner 30 Oct: at 12:28 and 13:02 seven instances were all silent for 2-3 min and the watchdog stopped all seven
+    tasks at once - that is the PC / app pausing, not seven stuck tasks. -> True when at least 3 OTHER running instances
+    and at least 3/4 of them have also written nothing for quiet_s seconds."""
+    try:
+        others = [t for k, t in list(HEARTBEAT.items()) if k != serial and now - t < 3600]
+        if len(others) < 3:
+            return False
+        quiet = sum(1 for t in others if now - t >= quiet_s)
+        return quiet >= 3 and quiet * 4 >= len(others) * 3
+    except Exception:
+        return False
 
 
 def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
@@ -21289,13 +21368,23 @@ def start_instance(serial, adb, cfg, log, ctl, on_frame=None, on_end=None):
         (default 5 min) while running and not in a planned wait -> close its emulator by force from outside. The stuck
         bot thread then gets errors from ADB and its normal recovery restarts the emulator and the game."""
         last_force = 0.0
+        prev = time.time()
         while not ctl.stop.wait(20):
             now = time.time()
+            late = now - prev - 20                            # owner 30 Oct (12:26-12:28, 13:00-13:02): the WHOLE app
+            prev = now                                        # stood still -> every task was stopped at once. Time the
+            if late > 15:                                     # app itself was frozen is not this task's fault.
+                HEARTBEAT[serial] = HEARTBEAT.get(serial, now) + late
             if not ctl.run.is_set():                          # paused: not stuck
                 HEARTBEAT[serial] = now
                 continue
             limit = int(merge_device_cfg(cfg, serial).get("no_progress_seconds", 300) or 0)
             idle = now - max(HEARTBEAT.get(serial, now), QUIET_UNTIL.get(serial, 0))
+            if 150 <= idle < 600 and app_wide_pause(serial, now):   # most silent together = PC / app paused (10 min max), not
+                if now - _APP_PAUSE_LOG[0] > 300:              # this task: wait for the app to move again
+                    _APP_PAUSE_LOG[0] = now
+                    log("[i] Every instance went quiet at the same time (the PC or the app paused) - no task is stopped for it")
+                continue
             if limit and idle >= min(180, limit * 0.6) and serial not in TASK_ABORT and now - last_force >= 600:
                 TASK_ABORT.add(serial)                        # first: stop the stuck task, it is retried later (no restart)
                 log(f"[!] No progress for {idle / 60:.0f} min - stopping the current task, it is tried again later")
