@@ -976,6 +976,8 @@ class Controller:
     # ------------------------------------------------------------------ generals
     def generals_info(self):
         out, cat = [], rb.load_catalog()
+        meta_all = rb.load_general_meta()                    # read once (was 2 file reads per general)
+        gmeta = lambda n: meta_all.get(n) if isinstance(meta_all.get(n), dict) else {}
         key = lambda t: re.sub(r"[^a-z0-9]", "", str(t).lower())
         known = [key(k) for k in rb.KNOWN_GENERALS]
 
@@ -991,15 +993,15 @@ class Controller:
             if not rb.is_known_general(n) and any(k != key(n) and k.startswith(key(n)) for k in full):
                 continue                                      # "Sanada" when "Sanada Yukimura" has a picture too: show the full name only
             pictured.add(key(n))
-            m = rb.get_general_meta(n)
+            m = gmeta(n)
             c = cat.get(n) or {}
             out.append({"name": n, "tab": m.get("tab"), "fav": m.get("fav"), "copy": m.get("copy", "any"), "tabs": m.get("tabs", []),
                         "region": c.get("region", []), "troops": c.get("troops", []), "cat_tab": rb.catalog_tab(n) if c else 0, "cat": m.get("cat", ""), "pic": True})
-        hidden = set(rb.load_general_meta().get("__hidden__", []))
+        hidden = set(meta_all.get("__hidden__", []))
         for n in rb.KNOWN_GENERALS:                           # every general of the game can be listed, also without a picture (found by name)
             if key(n) in pictured or n in hidden:
                 continue
-            m = rb.get_general_meta(n)
+            m = gmeta(n)
             out.append({"name": n, "tab": m.get("tab"), "fav": m.get("fav"), "copy": m.get("copy", "any"), "tabs": m.get("tabs", []),
                         "region": [], "troops": [], "cat_tab": 0, "cat": m.get("cat", ""), "pic": False})
         out.sort(key=lambda g: (not g["pic"], g["name"].lower()))
@@ -3263,7 +3265,7 @@ def open_window(url, ctl):
         import webview
         ww, wh, wx, wy = window_size()
         win = webview.create_window("RallyForge Bot", url, width=ww, height=wh, x=wx, y=wy, min_size=(920, 560),    # owner 28 Oct: the app is built for 900 px and up; window frame included
-                                    background_color="#12141f", text_select=True)
+                                    background_color="#f8f6f0", text_select=True)   # light theme colour: no dark or white flash before the page paints
         ctl_events = {"win": win}
         min_state = {"native": False}
 

@@ -103,3 +103,20 @@ def test_app_start_marker(tmp_path):
     assert second["why"] == "restart for new code" and not second["code_changed"]
     assert not rb.RESTART_WHY.exists()
     assert "App start" in rb.TASK_LOG.read_text(encoding="utf-8")
+
+
+def test_rd_page_back_then_carry_on(monkeypatch):
+    monkeypatch.setattr(rb, "_nap", lambda *a, **k: None)
+    monkeypatch.setattr(rb, "rd_snap", lambda *a, **k: None)
+    good, bad = cv2.imread(str(S / "dome_honor_token_kiravik.png")), cv2.imread(str(S / "city_invite_kiravik.png"))
+    dev = _Dev([bad, good, good])
+    got = rb.rd_page(dev, threading.Event(), lambda m: None, ["Goddess Honor"], (0, 0, 540, 260))
+    assert got is not None and dev.backs == 1
+
+
+def test_known_general_check_is_fast():
+    import time
+    t = time.time()
+    for _ in range(20000):
+        rb.is_known_general("Zhuge Liang")
+    assert time.time() - t < 1.0 and rb.is_known_general("zhuge  liang") and not rb.is_known_general("a ae")

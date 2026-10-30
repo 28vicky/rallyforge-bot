@@ -3752,9 +3752,16 @@ CATALOG_TAB = {"Ground Troop": 2, "Mounted Troop": 2, "Ranged Troop": 2, "Siege 
                "Administration": 3, "Duty": 4, "Subordinate City": 5}      # troop type (Portraits filter) -> tab of the Generals list
 
 
+_GEN_KEY_RE = re.compile(r"[^a-z0-9]")
+_KNOWN_KEYS = [0, frozenset()]          # (len of KNOWN_GENERALS, its keys) - built once, not on every call
+
+
 def is_known_general(name):
-    key = lambda t: re.sub(r"[^a-z0-9]", "", str(t).lower())
-    return key(name) in {key(n) for n in KNOWN_GENERALS}
+    # owner 30 Oct 16:04 (white window at start): this rebuilt the set of ~330 names on EVERY call - opening the app
+    # called it ~11,000 times (12 s of CPU while the instances start). The set is now built once.
+    if _KNOWN_KEYS[0] != len(KNOWN_GENERALS):
+        _KNOWN_KEYS[:] = [len(KNOWN_GENERALS), frozenset(_GEN_KEY_RE.sub("", str(n).lower()) for n in KNOWN_GENERALS)]
+    return _GEN_KEY_RE.sub("", str(name).lower()) in _KNOWN_KEYS[1]
 
 
 def load_catalog():
@@ -12816,7 +12823,8 @@ def run_gold_levy(dev, cfg, log, stop):
         raise RuntimeError("no Levy button in the Keep menu")
     shot = dev.screenshot()
     rd_snap(shot, "levy_1")
-    if not rd_seen(shot, ["Levy"], region=(0, 80, 540, 760)):
+    shot = rd_page(dev, stop, log, ["Levy"], (0, 80, 540, 760), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+    if shot is None:
         raise RuntimeError("the Levy window did not open")
     left = levy_free_times(shot)
     if left == 0:
@@ -12862,7 +12870,8 @@ def run_resource_tax(dev, cfg, log, stop):
         raise RuntimeError("no Tax button in the Market menu")
     shot = dev.screenshot()
     rd_snap(shot, "tax_1")
-    if not rd_seen(shot, ["Revenue", "Free"], region=(0, 80, 540, 600)):
+    shot = rd_page(dev, stop, log, ["Revenue", "Free"], (0, 80, 540, 600), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+    if shot is None:
         raise RuntimeError("the Tax page did not open")
     row = find_text(shot, [res + " Revenue", res], region=(60, 300, 300, 420), cutoff=0.72)
     if not row:                                             # the rows are pictures only (no names): always Food, Lumber, Stone, Iron
@@ -12916,7 +12925,8 @@ def run_labor(dev, cfg, log, stop):
         log("[+]  Labor: on cooldown")
         return
     if not rd_tap(dev, stop, ["Labor"], region=(160, 600, 280, 100), whole=True, wait=(2.0, 2.5), shot=shot):
-        if not rd_seen(shot, ["instantly receive", "production"], region=(0, 300, 540, 200)):
+        shot = rd_page(dev, stop, log, ["instantly receive", "production"], (0, 300, 540, 200), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+        if shot is None:
             raise RuntimeError("no Labor button in the popup")
         dev.tap(270, 638)                                   # orange Labor button of the Labor popup, text not read
         _nap(stop, 2.0, 2.5)
@@ -12951,7 +12961,8 @@ def run_vip_claim(dev, cfg, log, stop):
     _nap(stop, 2.2, 2.8)
     shot = dev.screenshot()
     rd_snap(shot, "vip_1")
-    if not rd_seen(shot, ["VIP"], region=(0, 0, 540, 200)):
+    shot = rd_page(dev, stop, log, ["VIP"], (0, 0, 540, 200), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+    if shot is None:
         raise RuntimeError("the VIP page did not open")
     if not rd_tap(dev, stop, ["Claim"], region=(330, 560, 210, 120), whole=True, wait=(2.0, 2.5), shot=shot):
         log("[+]  VIP: daily chest already claimed")
@@ -12967,7 +12978,8 @@ def run_recruit_citizens(dev, cfg, log, stop):
     dev.tap(280, 46)
     _nap(stop, 2.0, 2.6)
     shot = dev.screenshot()
-    if not rd_seen(shot, ["Citizen"], region=(0, 0, 540, 160)):
+    shot = rd_page(dev, stop, log, ["Citizen"], (0, 0, 540, 160), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+    if shot is None:
         raise RuntimeError("the Citizen page did not open")
     if not rd_tap(dev, stop, ["Citizen List"], region=(270, 80, 270, 70), shot=shot):
         dev.tap(426, 113)
@@ -12999,7 +13011,8 @@ def run_civilization_card(dev, cfg, log, stop):
             _nap(stop, 2.0, 2.6)
             shot = dev.screenshot()
     rd_snap(shot, "civ_1")
-    if not rd_seen(shot, ["Card Pack", "Open Card"], region=(0, 0, 540, 300)):
+    shot = rd_page(dev, stop, log, ["Card Pack", "Open Card"], (0, 0, 540, 300), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+    if shot is None:
         raise RuntimeError("the Open Card Pack page did not open")
     if not rd_tap(dev, stop, ["Free"], region=(0, 300, 180, 120), whole=True, cutoff=0.85, wait=(2.5, 3.0), shot=shot):
         log("[+]  Civilization card: the free pack is not ready")
@@ -13877,8 +13890,26 @@ def ensure_city_zoom(dev, cfg, stop, log):
         sc = _view_scale(before, after)
         if sc and sc < 0.97:
             log(f"[i]   zoom: zoomed out (view {sc:.2f}x) - carrying on")
-        else:
-            log("[i]   zoom: the view did not change (probably already out) - carrying on with the task")
+            return False
+        # owner 30 Oct 16:05 (Rory's Wheel failed 9x today): MuMu ignores the Ctrl+wheel WINDOW MESSAGE, so a zoomed-in
+        # MuMu city never matched the map ("the view did not change" every time). The view did not change AND the screen
+        # is not on the map = zoomed in, not "already out": one real Ctrl+wheel (opt-in 'zoom_foreground', skipped while
+        # the user is using the mouse), then look again.
+        if load_config().get("zoom_foreground", False) and not stop.is_set():
+            b2 = dev.screenshot()
+            if real_wheel_zoom_out(dev, log, name, stop=stop):
+                _nap(stop, 1.0, 1.3)
+                a2 = dev.screenshot()
+                if _at_map_zoom(dev, a2):
+                    dev.zoomed_out = True
+                    dev._zoom_ok_at = time.time()
+                    log("[i]   zoom: zoomed out with the real mouse wheel - the city now matches the map")
+                    return True
+                s2 = _view_scale(b2, a2)
+                log(f"[i]   zoom: real mouse wheel - view {s2:.2f}x, carrying on" if s2 else
+                    "[i]   zoom: real mouse wheel - view not measurable, carrying on")
+                return False
+        log("[i]   zoom: the view did not change and the city is not on the map - carrying on with the task")
         return False
     except Exception as _e:
         quiet_err("ensure_city_zoom", _e)
@@ -15737,7 +15768,8 @@ def run_alliance_gift(dev, cfg, log, stop):
             break
         shot = _settled_shot(dev, stop)
         rd_snap(shot, "agift_1")
-        if not rd_seen(shot, ["Alliance Gift", "Gift"], region=(0, 0, 540, 70)):
+        shot = rd_page(dev, stop, log, ["Alliance Gift", "Gift"], (0, 0, 540, 70), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+        if shot is None:
             raise RuntimeError("left the Alliance Gift page (screen not found)")
         p = alliance_page_btn(shot, ["Open All"], (120, 870, 300, 90), ALLIANCE_GIFT_OPEN_ALL, "orange")
         if not p:
@@ -15762,7 +15794,8 @@ def run_alliance_help(dev, cfg, log, stop):
         raise RuntimeError("the Alliance Help page did not open (row not found or another page opened)")
     shot = _settled_shot(dev, stop)
     rd_snap(shot, "ahelp_1")
-    if not rd_seen(shot, ["Alliance Help", "Help"], region=(0, 0, 540, 70)):
+    shot = rd_page(dev, stop, log, ["Alliance Help", "Help"], (0, 0, 540, 70), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+    if shot is None:
         raise RuntimeError("the Alliance Help page did not open (screen not found)")
     p = alliance_page_btn(shot, ["Help All", "Help all"], (100, 860, 340, 100), ALLIANCE_HELP_ALL, "green")
     if not p:
@@ -16082,7 +16115,8 @@ def run_alliance_shop(dev, cfg, log, stop):
                 shop_close_popup(dev, stop)
                 log(f"[i]   Alliance Shop: could not buy {it[1]} (pop-up not as expected - picture saved)")
             shot = _settled_shot(dev, stop)
-            if not rd_seen(shot, ["Alliance Shop"], region=(0, 0, 540, 70)):
+            shot = rd_page(dev, stop, log, ["Alliance Shop"], (0, 0, 540, 70), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+            if shot is None:
                 raise RuntimeError("left the Alliance Shop page after a buy")
         dev.swipe(270, 780, 270, 470, 900)               # slow drag only (flicks glide and land anywhere)
         _nap(stop, 0.8, 1.0)
@@ -16300,7 +16334,8 @@ def run_troop_healing(dev, cfg, log, stop):
         raise RuntimeError("no Heal button in the Hospital menu")
     shot = dev.screenshot()
     rd_snap(shot, "heal_1")
-    if not rd_seen(shot, ["Wounded", "Hospital"], region=(0, 0, 540, 400)):
+    shot = rd_page(dev, stop, log, ["Wounded", "Hospital"], (0, 0, 540, 400), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+    if shot is None:
         raise RuntimeError("the Hospital page did not open")
     if rd_tap(dev, stop, ["Heal"], region=(300, 860, 240, 100), whole=True, wait=(2.0, 2.5), shot=shot):
         log("[+]  Troop healing: healing started")
@@ -16324,7 +16359,8 @@ def run_activity_chests(dev, cfg, log, stop):
         raise RuntimeError("no Activity button in the Tavern menu")
     shot = dev.screenshot()
     rd_snap(shot, "activity_1")
-    if not rd_seen(shot, ["Activity"], region=(0, 0, 540, 120)):
+    shot = rd_page(dev, stop, log, ["Activity"], (0, 0, 540, 120), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+    if shot is None:
         raise RuntimeError("the Activity page did not open")
     n = 0
     for _ in range(40):
@@ -16479,6 +16515,19 @@ def task_guard(dev, stop, log, what, expect, shot=None):
             pass
     log(f"[!]  {what}: lost - back to the city, the task starts again")
     return False
+
+
+def rd_page(dev, stop, log, words, region, shot=None):
+    """Screen guard for a duty page found by its words: right page -> the screenshot; wrong screen -> the game's Back
+    arrow, then the phone Back key (task_guard) -> the new screenshot when back on the page, else None (the caller
+    stops; the runner goes to the city and starts the task again)."""
+    expect = lambda sh: rd_seen(sh, words, region=region)
+    shot = dev.screenshot() if shot is None else shot
+    if expect(shot):
+        return shot
+    if task_guard(dev, stop, log, "/".join(words[:2]) + " page", expect, shot=shot):
+        return dev.screenshot()
+    return None
 
 
 def is_carriage_page(shot):
@@ -16714,7 +16763,8 @@ def run_wisdom_dome_tokens(dev, cfg, log, stop):
         raise RuntimeError("no Rare Books button in the Wisdom Dome menu")
     shot = dev.screenshot()
     rd_snap(shot, "dome_1")
-    if not rd_seen(shot, ["Rare Books", "Honor"], region=(0, 0, 540, 300)):
+    shot = rd_page(dev, stop, log, ["Rare Books", "Honor"], (0, 0, 540, 300), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+    if shot is None:
         raise RuntimeError("the Rare Books page did not open")
     dev.tap(222, 819)                                       # + under the Goddess Honor Token
     _nap(stop, 1.8, 2.3)
@@ -18728,7 +18778,8 @@ def run_ev_divination(dev, cfg, log, stop):
         if not p:
             if n == 0:
                 rd_snap(shot, "ev_divination")
-                if not rd_seen(shot, ["Divination"], region=(0, 0, 540, 70)):
+                shot = rd_page(dev, stop, log, ["Divination"], (0, 0, 540, 70), shot)   # owner 30 Oct 15:37: wrong screen -> Back, then carry on
+                if shot is None:
                     raise RuntimeError("the Divination of Fate page did not open")
             break
         dev.tap(*p)
@@ -20052,7 +20103,7 @@ def read_task_events(n=150):
     return out
 
 
-DUTY_BUDGET_MIN = 8      # owner 25 Oct: a duty that cannot finish is left after 8 min (was 20 - Rob missed rallies for 18 min on
+DUTY_BUDGET_MIN = 4      # owner 30 Oct 15:37 "never stuck 4-5 min" (was 8; 25 Oct: 20 -> 8) (was 20 - Rob missed rallies for 18 min on
                          # a stuck Wheel panel); it is retried later and the instance goes back to joining rallies
 
 
