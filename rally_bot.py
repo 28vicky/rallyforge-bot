@@ -6586,7 +6586,23 @@ def ready_screen(screen, cfg):
     """A screen the game only shows once it has finished loading."""
     if screen_state(screen, cfg) != "unknown":
         return True
+    if world_map_fast(screen):                             # owner 30 Oct 15:20 (Kiravik): the game was open on the WORLD MAP
+        return True                                        # and the bot waited 2 min "for loading" (pop-up rounds with text reads)
     return has_template("rally_icon") and find(screen, "rally_icon", 0.85) is not None
+
+
+def world_map_fast(shot):
+    """World map by the picture of its 'World Map' button only (milliseconds, no text read)."""
+    try:
+        tp = template_path("world_map_btn")
+        if tp is None:
+            return False
+        t = tpl("world_map_btn")
+        a = shot[740:920, 0:160]
+        _, mx, _, (x, y) = cv2.minMaxLoc(cv2.matchTemplate(a, t, cv2.TM_CCOEFF_NORMED))
+        return mx >= 0.85 and a[y:y + t.shape[0], x:x + t.shape[1]].mean() >= 0.8 * t.mean()
+    except Exception:
+        return False
 
 
 def wait_calm(dev, cfg, log, stop, secs=20, limit=120):
@@ -16403,6 +16419,22 @@ ORANGE = ((8, 120, 110), (28, 255, 255))
 CARRIAGE_SWORDS = (44, 930)        # small crossed-swords button left of Power First / Reset (changes the troop mode)
 
 
+def march_power_first(dev, stop, log, what):
+    """March screen: the swords button switches the green mode button (Reset -> One Soldier -> Full Tiers -> Power First,
+    owner recording 30 Oct 15:12). Switch until it is the green 'Power First' and tap it. Reset is red (never tapped)."""
+    for k in range(5):
+        shot = dev.screenshot()
+        pf = find_green_button(shot, x_min=70, x_max=300, y_min=820, y_max=960)
+        if pf and rd_seen(shot, ["Power First", "Power"], region=(70, 860, 240, 90)):   # One Soldier / Full Tiers are green too
+            dev.tap(*pf)
+            _nap(stop, 1.0, 1.3)
+            return True
+        dev.tap(*CARRIAGE_SWORDS)
+        _nap(stop, 0.9, 1.2)
+    log(f"[i]   {what}: 'Power First' did not show - marching with the troops already set")
+    return False
+
+
 def carriage_march(dev, cfg, log, stop, preset):
     """The March (formation) screen is open. preset 1-8: that preset, nothing else (owner 14:47: the bot does not care
     which troops it holds). No preset: the troop mode until the green 'Power First' shows, tap it. Then March."""
@@ -16410,17 +16442,7 @@ def carriage_march(dev, cfg, log, stop, preset):
         dev.tap(*preset_xy(cfg, preset))
         _nap(stop, 1.0, 1.3)
     else:
-        for k in range(4):                                 # green = Power First; red = Reset: the swords switch the mode
-            shot = dev.screenshot()
-            pf = find_green_button(shot, x_min=70, x_max=300, y_min=820, y_max=960)
-            if pf:
-                dev.tap(*pf)
-                _nap(stop, 1.0, 1.3)
-                break
-            dev.tap(*CARRIAGE_SWORDS)
-            _nap(stop, 0.9, 1.2)
-        else:
-            log("[i]   Trade Carriage: 'Power First' did not show - marching with the troops already set")
+        march_power_first(dev, stop, log, "Trade Carriage")
     shot = dev.screenshot()
     mb = find_colour_button(shot, *ORANGE, x_min=300, x_max=540, y_min=820, y_max=960)
     if not mb:
@@ -16637,7 +16659,42 @@ def offer_with_gems(dev, cfg, log, stop):
 # A thief only appears when an alliance member invites you (Invite icon on the left of the city / map).
 # Invite > Royal Thief row > Go > tap a thief that is not killed > map flies there > tap it > Attack > Attack >
 # troops (Power First or a preset) > March. No free march: wait for the soonest march to come back, then try again.
-RT_POLL_MIN = 15                         # look for an Invite icon this often
+RT_POLL_MIN = 15                         # look for an Invite icon this often (backup: it is also spotted after every city task)
+
+
+def find_invite_icon(shot):
+    """The Invite icon (left column, city or map) by its picture (owner 30 Oct 15:18 screenshots). -> (x, y) or None."""
+    try:
+        t0 = tpl("icon_invite")
+    except Exception:
+        return None
+    best = None
+    for sc in (0.9, 1.0, 1.1):
+        t = t0 if sc == 1.0 else cv2.resize(t0, None, fx=sc, fy=sc)
+        _, mv, _, ml = cv2.minMaxLoc(cv2.matchTemplate(shot[100:900, 0:150], t, cv2.TM_CCOEFF_NORMED))
+        if mv >= 0.75 and (best is None or mv > best[2]):
+            best = (ml[0] + t.shape[1] // 2, ml[1] + 100 + t.shape[0] // 2, mv)
+    return (int(best[0]), int(best[1])) if best else None
+
+
+def rt_invite_seen(dev, cfg, log, shot=None):
+    """Owner 30 Oct 15:13: Royal Thief starts the moment an Invite shows - not on a timer. Called on the city after every
+    task: Invite icon seen + Royal Thief switched on -> it goes first in Run now. -> True when queued."""
+    try:
+        serial = getattr(dev, "serial", "")
+        if not ((cfg.get("duties") or {}).get("royal_thief") or {}).get("on"):
+            return False
+        if "duty:royal_thief" in run_now_list(serial):
+            return False
+        if find_invite_icon(shot if shot is not None else dev.screenshot()) is None:
+            return False
+        run_now_set(serial, ["duty:royal_thief"] + run_now_list(serial))
+        rt_save(serial, next_at=0)
+        log("[*] Royal Thief: an Invite is on the screen - going for the thief next")
+        return True
+    except Exception as _e:
+        quiet_err("rt_invite_seen", _e)
+        return False
 RT_RECHECK_MIN = 5                       # after marching / when something got in the way: look again this soon
 RT_THIEF_SPOTS = {"left": (120, 600), "mid": (288, 392), "right": (410, 600)}
 RT_PRESETS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
@@ -16712,7 +16769,9 @@ def run_royal_thief(dev, cfg, log, stop):
         log(f"[*]  Royal Thief: {why} - again at {time.strftime('%H:%M', time.localtime(time.time() + minutes * 60))}")
 
     shot = dev.screenshot()
-    p = rd_find(shot, ["Invite"], region=(0, 220, 130, 560), cutoff=0.75, whole=True)
+    p = find_invite_icon(shot) or rd_find(shot, ["Invite"], region=(0, 220, 130, 560), cutoff=0.75, whole=True)
+    if p and find_invite_icon(shot):
+        p = (p[0], p[1] + 18)                              # picture = the icon itself (the tap below aims 18 px above a label)
     if not p:                                               # no invite = no thief to kill (Kiravik 27 Oct 20:23: said nothing)
         rd_snap(shot, "thief_0_noinvite")
         return later(RT_POLL_MIN, "no Invite button on the city screen (no thief invitation right now)")
@@ -16787,7 +16846,11 @@ def run_royal_thief(dev, cfg, log, stop):
         return later(max(1, round(wait / 60)), f"all {mk[1]} marches are out")
     dev.tap(274, 477)                                      # the thief sits in the middle of the screen
     _nap(stop, 1.5, 2.0)
-    if not rd_ring(dev, stop, ["Attack"]):
+    at = ring_icon(dev.screenshot(), "attack")             # owner 30 Oct 15:18: by its picture (text unread on the busy map)
+    if at:
+        dev.tap(*at)
+        _nap(stop, 2.0, 2.6)
+    elif not rd_ring(dev, stop, ["Attack"]):
         leave_to_city(dev, cfg, stop, log)
         return later(RT_RECHECK_MIN, "no Attack on the thief")
     shot = dev.screenshot()
@@ -16807,15 +16870,14 @@ def run_royal_thief(dev, cfg, log, stop):
             dev.tap(62 + n * 61, 115)
             _nap(stop, 1.4, 1.8)
     else:
-        dev.tap(57, 928)                                    # small button bottom left -> Power First
-        _nap(stop, 1.2, 1.5)
-        if not rd_tap(dev, stop, ["Power First"], region=(90, 885, 230, 75), wait=(1.4, 1.8)):
-            dev.tap(57, 928)
-            _nap(stop, 1.2, 1.5)
-            rd_tap(dev, stop, ["Power First"], region=(90, 885, 230, 75), wait=(1.4, 1.8))
+        march_power_first(dev, stop, log, "Royal Thief")
     shot = dev.screenshot()
     rd_snap(shot, "thief_6")
-    if not rd_tap(dev, stop, ["March"], region=(330, 880, 210, 75), wait=(2.0, 2.5), shot=shot):
+    mb = find_colour_button(shot, *ORANGE, x_min=300, x_max=540, y_min=820, y_max=960)   # orange March (colour, no text)
+    if mb:
+        dev.tap(*mb)
+        _nap(stop, 2.0, 2.5)
+    elif not rd_tap(dev, stop, ["March"], region=(330, 880, 210, 75), wait=(2.0, 2.5), shot=shot):
         leave_to_city(dev, cfg, stop, log)
         return later(RT_RECHECK_MIN, "no March button")
     shot = dev.screenshot()
@@ -19892,6 +19954,8 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
             map_slot_free(getattr(dev, "serial", ""))
         if not on_map and not _on_city_now(dev, cfg):         # map duties: the rally list is reached from the map (Alliance button)
             leave_to_city(dev, cfg, stop, log)
+        if duty_id != "royal_thief" and not stop.is_set():
+            rt_invite_seen(dev, cfg, log)                    # owner 15:13: a thief Invite on the city = Royal Thief next
     log("@act " + json.dumps({"k": "step", "text": "Idle - tasks done, back to the rallies"}))   # the instance list stops showing the task
 
 

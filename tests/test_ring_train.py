@@ -113,3 +113,13 @@ def test_carriage_march_buttons_by_colour():
 def test_carriage_one_on_the_road_three_slots():
     spots = rb.carriage_plus_spots(cv2.imread(str(S / "carriage_page_one_out_phone.png")))   # owner 14:50: 3 left
     assert len(spots) == 3
+
+
+def test_invite_icon_and_thief_attack_by_picture():
+    assert rb.find_invite_icon(cv2.imread(str(S / "city_invite_kiravik.png")))          # city
+    assert rb.find_invite_icon(cv2.imread(str(S / "thief_ring_map_kiravik.png")))       # map, march lines over it
+    assert rb.find_invite_icon(cv2.imread(str(S / "thief_event_kiravik.png"))) is None
+    assert rb.find_invite_icon(cv2.imread(str(S / "wheel_page_manhattan.png"))) is None
+    a = rb.ring_icon(cv2.imread(str(S / "thief_ring_map_kiravik.png")), "attack")
+    assert a and abs(a[0] - 140) < 12 and abs(a[1] - 378) < 12
+    assert rb.ring_icon(cv2.imread(str(S / "tavern_ring_stalds.png")), "attack") is None
