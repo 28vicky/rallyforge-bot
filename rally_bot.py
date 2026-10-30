@@ -16316,7 +16316,9 @@ def run_train_troops(dev, cfg, log, stop):
         else:
             rd_wait((left or 1800) + 60)                   # timer unread -> look again in 30 min
         return
-    if not rd_find(shot, ["Train"], region=(280, 860, 260, 100), whole=True):
+    # green Train + orange Instant Train by colour: the word 'Train' sits over the button's timer ("Train 1d 13:35")
+    # and is not read as a whole word (Kiravik 30 Oct 18:52)
+    if not train_page(shot) and not rd_find(shot, ["Train"], region=(280, 860, 260, 100), whole=True):
         raise RuntimeError("the training page did not open")
     if not task_guard(dev, stop, log, what, train_page):
         raise RuntimeError("lost the training page")

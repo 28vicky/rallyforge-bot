@@ -30,3 +30,11 @@ def test_busy_is_waiting_not_done(tmp_path, monkeypatch):
     assert st == "waiting" and "next try" in text
     state["s1"]["train_troops"]["next_at"] = time.time() - 1
     assert rb.duty_status("s1", "train_troops", cfg)[0] == "due"
+
+
+def test_ready_page_found_by_colour():
+    """Kiravik 18:52: 'Train' over its timer is not read as a word - the page is found by the button colours."""
+    img = cv2.imread(str(Path(__file__).parent / "screens" / "train_ready_kiravik.png"))
+    assert rb.train_page(img)
+    assert not rb.rd_find(img, ["Training Troops", "Training"], region=(0, 770, 540, 90))
+    assert not rb.train_page(cv2.imread(str(SHOT)))
