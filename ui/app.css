@@ -2227,3 +2227,4 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .runnow .rntag.bad{color:#b3261e}
 .runnow .rntag.due{color:var(--accent2)}
 .runnow .rntask .rngo{flex:none}
+.ovgrid .acttable th{font-size:12px}   /* Monster joins column titles were 11 px */
