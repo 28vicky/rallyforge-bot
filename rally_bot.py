@@ -16564,7 +16564,10 @@ def train_due_buildings(cfg, serial):
 
 
 def train_target(cfg, serial=""):
-    due = train_due_buildings(cfg, serial) or train_buildings((cfg.get("duties") or {}).get("train_troops") or {})
+    conf = (cfg.get("duties") or {}).get("train_troops") or {}
+    if train_goal(conf)[0] and train_goal_left(serial, conf):   # goal: the building whose goal is not reached yet
+        return f"go:Troop Training|{TRAIN_BUILDINGS.get(train_goal_left(serial, conf)[0], 'Barracks')}"
+    due = train_due_buildings(cfg, serial) or train_buildings(conf)
     return f"go:Troop Training|{TRAIN_BUILDINGS.get(due[0], 'Barracks') if due else 'Barracks'}"
 
 
@@ -16645,7 +16648,123 @@ def train_page(shot):
                 and not page_has_back_arrow(shot))                # it has no red title bar (Alliance / event pages do)
 
 
+# --- Train until a goal (owner 30 Oct 23:04-23:10) ------------------------------------------------------------------
+# "Train until": the user's Repeat setting (one batch each time) | a number of runs | a total of troops. The goal is what
+# the BOT trains on top of what the player already has (900M owned + goal 1B -> 1B more). Every ticked building gets the
+# goal, in order Barracks -> Stable -> Archer Camp -> Workshop. Reached -> stops ("Goal reached") until the user changes
+# the goal. The count is kept per instance in train_goal.json (survives restarts); a new goal starts a new count.
+TRAIN_GOAL_FILE = USER / "train_goal.json"
+TRAIN_UNTIL = ["my Repeat setting", "a number of runs", "a total of troops"]
+TRAIN_GOAL_BATCHES = 6                    # batches in one go, then rallies / other duties, then straight back
+
+
+def train_goal(conf):
+    """-> (mode, goal) with mode 'runs' / 'troops', or (None, 0) when no goal is set."""
+    m = str(conf.get("until") or TRAIN_UNTIL[0])
+    try:
+        g = int(float(str(conf.get("goal") or 0).replace(",", "")))
+    except (TypeError, ValueError):
+        g = 0
+    if g <= 0 or m == TRAIN_UNTIL[0]:
+        return None, 0
+    return ("runs" if m == TRAIN_UNTIL[1] else "troops"), g
+
+
+def _train_goal_load():
+    try:
+        return json.loads(TRAIN_GOAL_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def train_goal_counts(serial, conf):
+    """{building label: {'runs': n, 'troops': n}} for the CURRENT goal (another goal = empty counts)."""
+    mode, goal = train_goal(conf)
+    row = _train_goal_load().get(serial or "default") or {}
+    return row.get("b", {}) if row.get("key") == f"{mode}:{goal}" else {}
+
+
+def train_goal_add(serial, conf, label, troops):
+    mode, goal = train_goal(conf)
+    with _cache_lock:
+        data = _train_goal_load()
+        key = f"{mode}:{goal}"
+        row = data.get(serial or "default") or {}
+        if row.get("key") != key:
+            row = {"key": key, "b": {}}
+        c = row["b"].setdefault(label, {"runs": 0, "troops": 0})
+        c["runs"] += 1
+        c["troops"] += int(troops or 0)
+        data[serial or "default"] = row
+        try:
+            save_json(TRAIN_GOAL_FILE, data)
+        except OSError as _e:
+            quiet_err("train_goal_add", _e)
+
+
+def train_goal_left(serial, conf):
+    """Ticked buildings that have not reached the goal yet, in the owner's order. [] = goal reached (or no goal)."""
+    mode, goal = train_goal(conf)
+    if not mode:
+        return []
+    counts = train_goal_counts(serial, conf)
+    return [b for b in train_buildings(conf) if (counts.get(b) or {}).get(mode, 0) < goal]
+
+
 def run_train_troops(dev, cfg, log, stop):
+    conf = (cfg.get("duties") or {}).get("train_troops") or {}
+    if train_goal(conf)[0]:
+        return run_train_goal(dev, cfg, log, stop, conf)
+    return _run_train_troops(dev, cfg, log, stop)
+
+
+def run_train_goal(dev, cfg, log, stop, conf):
+    serial = getattr(dev, "serial", "")
+    mode, goal = train_goal(conf)
+    left = train_goal_left(serial, conf)
+    if not left:
+        log("[+]  Train troops: goal reached - nothing more is trained until you set a new goal")
+        return
+    label = left[0]                                        # one building at a time, in order
+    bname = TRAIN_BUILDINGS.get(label, "Barracks")
+    first = True
+    for k in range(TRAIN_GOAL_BATCHES):
+        if stop.is_set():
+            break
+        if not first or (k == 0 and train_target(cfg, serial) != f"go:Troop Training|{bname}"):
+            leave_to_city(dev, cfg, stop, log)
+            if not city_task_target(dev, cfg, log, stop, {"target": f"go:Troop Training|{bname}", "tap_dy": 0}, {}):
+                raise RuntimeError(f"could not reach the {bname}")
+            _nap(stop, 1.2, 1.6)
+        first = False
+        _TL.train_batch = 0
+        res = train_one_building(dev, cfg, log, stop, bname)
+        if res == "max":
+            raise RuntimeError(f"{bname}: the game's troop limit is reached - goal can not go on")
+        if res is not None:                                # busy (no speed-ups): back when its timer ends
+            _TRAIN_NEXT[(serial, label)] = time.time() + res
+            rd_wait(res)
+            break
+        batch = int(getattr(_TL, "train_batch", 0) or 0)
+        if mode == "troops" and not batch:
+            raise RuntimeError("could not read how many troops were trained - the goal count did not move")
+        train_goal_add(serial, conf, label, batch)
+        c = train_goal_counts(serial, conf).get(label) or {}
+        log(f"[+]  Train troops goal: {bname} {c.get(mode, 0):,} / {goal:,} {'runs' if mode == 'runs' else 'troops'}")
+        if c.get(mode, 0) >= goal:
+            nxt = train_goal_left(serial, conf)
+            if not nxt:
+                log("[+]  Train troops: goal reached on every ticked building")
+                return
+            label = nxt[0]
+            bname = TRAIN_BUILDINGS.get(label, "Barracks")
+        if not (rd_opt(cfg, "train_troops", "speedups", False) in (True, "true", "1", 1)):
+            rd_wait(60)                                    # no speed-ups: the timer runs - look again soon
+            break
+    rd_wait(60)                                            # rallies / other duties in between, then straight back
+
+
+def _run_train_troops(dev, cfg, log, stop):
     """Owner 30 Oct 19:25: every ticked building in turn. The runner already opened the first due building's ring menu;
     the others are reached by their pins from the city. A busy building (timer running) waits for its timer, the
     others still train; a building that fails does not stop the rest."""
@@ -16751,9 +16870,14 @@ def train_one_building(dev, cfg, log, stop, bname):
     btn = find_green_button(shot, x_min=280, x_max=535, y_min=860, y_max=955)   # green Train (right); Instant Train is orange (left)
     if not btn:
         raise RuntimeError("no Train button")
+    batch = amount
+    if game_number:                                        # the game's own number: read it before Train (goal counting)
+        nums = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (TRAIN_QTY[0] - 90, TRAIN_QTY[1] - 28, 180, 56))))
+        batch = max(nums) if nums else 0
     dev.tap(*btn)
     _nap(stop, 2.0, 2.5)
-    log(f"[+]  {what}: T{tier} - {'the game' + chr(39) + 's number' if game_number else f'{amount:,}'} queued")
+    _TL.train_batch = batch
+    log(f"[+]  {what}: T{tier} - {f'{batch:,}' if batch else ('the game' + chr(39) + 's number')} queued")
     if speed:
         rd_finish_with_speedups(dev, stop, log, what)
     return None
@@ -19575,6 +19699,8 @@ DUTY_LIBRARY = [
      "target": "go:Troop Training|Barracks", "tap_dy": 0, "steps": ["wait 1.2", "train_troops"],
      "opts": [{"k": TRAIN_BKEY[b], "label": b, "type": "bool", "def": False} for b in TRAIN_BUILDINGS] +
              repeat_opts("Every", 4, "once a day") +
+             [{"k": "until", "label": "Train until", "type": "select", "choices": TRAIN_UNTIL, "def": TRAIN_UNTIL[0]},
+              {"k": "goal", "label": "Goal (runs or troops per building)", "type": "number", "min": 1, "max": 999999999999, "def": 1000000}] +
              [{"k": "tier", "label": "Troop level (T1-T16)", "type": "number", "min": 1, "max": 16, "def": 1},
               {"k": "amount", "label": "Troops per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
               {"k": "game_number", "label": "Use the game's number instead", "type": "bool", "def": False},
@@ -19853,6 +19979,11 @@ def duty_status(serial, duty_id, cfg):
         if row.get("next_at", 0) > now:
             return "waiting", "Busy in the game - next try " + time.strftime("%H:%M", time.localtime(row["next_at"]))
         return "due", "Due"
+    if duty_id == "train_troops" and train_goal(conf)[0]:   # owner 30 Oct 23:10: a goal runs until reached, then stops
+        if not train_goal_left(serial, conf):
+            return "done", "Goal reached"
+        fs = _duty_fail_state(row, tries, now)
+        return fs if fs else ("due", "Due")
     every = int(conf.get("every_min", d["every_min"]) or 0)
     if any(o.get("k") == "every_n" for o in d.get("opts") or []):   # the user's own 'every N hours / minutes' wins
         every = duty_every(d, conf)

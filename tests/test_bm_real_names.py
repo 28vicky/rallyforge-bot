@@ -91,3 +91,42 @@ class NotReadyDuties(unittest.TestCase):
         ui = set(_re.findall(r'"(\w+)"', _re.search(r"DUTY_NOT_READY = new Set\(\[(.*?)\]\)", js).group(1)))
         self.assertEqual(ui, rb.NOT_READY_DUTIES)
         self.assertTrue(rb.NOT_READY_DUTIES <= set(rb.DUTY_BY_ID))
+
+
+class TrainGoal(unittest.TestCase):
+    """Owner 30 Oct 23:04-23:10: train until N runs / N troops per ticked building, on top of what is owned; stop at the goal."""
+    def setUp(self):
+        self.f = rb.TRAIN_GOAL_FILE
+        self.tmp = Path(tempfile.mkdtemp())
+        rb.TRAIN_GOAL_FILE = self.tmp / "g.json"
+
+    def tearDown(self):
+        rb.TRAIN_GOAL_FILE = self.f
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_goal_counts_and_stops(self):
+        conf = {"on": True, "b_barracks": True, "b_stable": True, "until": "a total of troops", "goal": "1,000"}
+        self.assertEqual(rb.train_goal(conf), ("troops", 1000))
+        self.assertEqual(rb.train_goal_left("S", conf), ["Barracks (ground)", "Stable (mounted)"])
+        rb.train_goal_add("S", conf, "Barracks (ground)", 600)
+        rb.train_goal_add("S", conf, "Barracks (ground)", 600)
+        self.assertEqual(rb.train_goal_left("S", conf), ["Stable (mounted)"])
+        self.assertIn("Stable", rb.train_target({"duties": {"train_troops": conf}}, "S"))
+        rb.train_goal_add("S", conf, "Stable (mounted)", 1000)
+        self.assertEqual(rb.train_goal_left("S", conf), [])
+        self.assertEqual(rb.duty_status("S", "train_troops", {"duties": {"train_troops": conf}}), ("done", "Goal reached"))
+        conf2 = dict(conf, goal=5000)                      # a new goal starts a new count
+        self.assertEqual(len(rb.train_goal_left("S", conf2)), 2)
+
+    def test_runs_and_off(self):
+        conf = {"b_barracks": True, "until": "a number of runs", "goal": 2}
+        rb.train_goal_add("S", conf, "Barracks (ground)", 0)
+        self.assertEqual(rb.train_goal_left("S", conf), ["Barracks (ground)"])
+        rb.train_goal_add("S", conf, "Barracks (ground)", 0)
+        self.assertEqual(rb.train_goal_left("S", conf), [])
+        self.assertEqual(rb.train_goal({"until": "my Repeat setting", "goal": 5}), (None, 0))
+
+    def test_repeat_default_once_a_day(self):
+        d = rb.DUTY_BY_ID["train_troops"]
+        self.assertEqual(rb.duty_every(d, {}), 0)
+        self.assertEqual(rb.duty_every(d, {"every_unit": "hours", "every_n": 2}), 120)

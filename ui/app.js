@@ -74,7 +74,7 @@ function toast(msg, kind) {
 // ------------------------------------------------------------------ state
 const S = {
   cfg: {}, devices: [], generals: [], monsters: [], profiles: [], cityInfo: [], bosses: [], meta: {},
-  devStatus: [], logs: [], seq: 0, sel: "control", tab: (() => { try { return localStorage.getItem("rf_ctl_tab") || "dashboard"; } catch (e) { return "dashboard"; } })(), tg: { status: "", ready: false },
+  devStatus: [], logs: [], seq: 0, sel: "control", tab: (() => { try { const t = localStorage.getItem("rf_ctl_tab"); return t && t !== "tasks" ? t : "dashboard"; } catch (e) { return "dashboard"; } })(), tg: { status: "", ready: false },
   ram: {}, genScan: {}, city: false, version: "",
 };
 // ------------------------------------------------------------------ icon set (one outline style: 24 grid, 1.8 stroke, currentColor)
@@ -123,7 +123,7 @@ const TAB_ICO = { dashboard: "grid", presets: "layers", settings: "sliders", mon
 
 const TABS = [
   ["dashboard", "Dashboard"], ["presets", "Presets & generals"], ["settings", "Settings"], ["monsters", "Join rallies"],
-  ["tasks", "My tasks"], ["duties", "Duties"], ["market", "Black Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram coordinates"], ["reliability", "Reliability"],
+  ["duties", "Duties"], ["market", "Black Market"], ["logs", "Logs"], ["reports", "Reports"], ["telegram", "Telegram coordinates"], ["reliability", "Reliability"],
   ["schedule", "Schedule & alerts"], ["updates", "Updates"], ["themes", "Appearance"], ["license", "Account"],
 ];
 const STATE_TXT = { idle: "Not started", run: "Running", pause: "Paused", stop: "Stopped", error: "Needs attention - see the log" };
@@ -649,7 +649,6 @@ const TAB_GROUPS = [
   ["presets", "Presets & generals", null],
   ["monsters", "Join rallies", null],   // owner 28 Oct 21:01: the monsters the bot JOINS (not Monster hunts)
   ["duties", "Duties", null],
-  ["tasks", "My tasks", null],
   ["market", "Black Market", null],   // PCR2 B3: one name (tab + duty)
   // one row only (ui-simple): the rarely used pages live under More, grouped by small headings ("#...")
   ["more", "More", ["logs", "reports", "#Setup", "settings", "reliability", "schedule", "#App", "themes", "telegram", "license"]],   // A9: Updates lives in the App menu only

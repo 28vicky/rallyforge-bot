@@ -1691,7 +1691,7 @@ function renderTodayAll() {
 // ====================================================================== duties: ONE list wherever duties are switched (rules C1-C4, C7, C8)
 // Instance > Routines = this instance's duties (the main editor). Control settings > Duties = the universal defaults new
 // instances start with, plus "Apply to...". Same names, groups, rows, badges and side panel in both places.
-const DUTY_GROUPS = ["City", "Market & Tavern", "Alliance", "Army", "Events", "Reward claims", "My tasks"];
+const DUTY_GROUPS = ["City", "Market & Tavern", "Alliance", "Army", "Events", "Reward claims"];
 // id: [group, name, Activity points]. Names follow the game's Activity screen; the saved settings still use the ids.
 const DUTY_UI = {
   train_troops: ["City", "Troop training", 3], troop_healing: ["City", "Troop healing", 2], build_traps: ["City", "Trap building", 2],
@@ -1772,14 +1772,10 @@ PAGES.duties = function (fixed) {
   const take = (j) => { if (!j) return; rows = j.duties; own = j.own || {}; count = j.count || null; draw(); };
   const nowText = () => (((S.now && S.now[serial]) || {}).text || "").toLowerCase();
   // My tasks (your own tap lists) is one more row in the same list; its switch is the old 'Do the tasks' (city_enabled)
-  const tasksOn = () => { const ov = ovGet(); return (ov && ov.city_enabled !== undefined ? ov.city_enabled : S.cfg.city_enabled) !== false; };
-  const nTasks = () => { const ov = ovGet(); return ((ov && ov.city_tasks) || S.cfg.city_tasks || []).length; };
   const list = () => rows.filter((r) => dutyShown(r.id) && !RUN_SETUP.has(r.id)).map((r) => {     // one-time jobs live in Run now, not as switches
     const run = serial && r.on && nowText() && nowText().includes(String(r.title).toLowerCase());
     return Object.assign({}, r, { g: dutyGroup(r.id, r.group), t: dutyName(r.id, r.title), pts: DUTY_UI[r.id] ? DUTY_UI[r.id][2] : 0, status: run ? "run" : r.status });
-  }).sort((a, b) => DUTY_ORDER(a.id) - DUTY_ORDER(b.id))
-    .concat(nTasks() ? [{ id: "@tasks", g: "My tasks", t: "My tasks", pts: 0, on: tasksOn(), status: "off",   // owner 30 Oct 22:59: the old
-      schedule: nTasks() + " tap list" + (nTasks() > 1 ? "s" : "") + ", run when no rally is waiting" }] : []);   // tap lists: shown only to someone who made one
+  }).sort((a, b) => DUTY_ORDER(a.id) - DUTY_ORDER(b.id));   // owner 30 Oct 23:10: "My tasks" (old tap lists) removed
   const setOn = async (r, v) => {
     if (r.id === "@tasks") { if (serial) ovMake().city_enabled = v; else S.cfg.city_enabled = v; draw(); return; }   // page autosave
     take(await act(api("duty_set", { serial, id: r.id, on: v })));
@@ -1790,8 +1786,12 @@ PAGES.duties = function (fixed) {
       if (o.type === "rules") return h("div", { class: "wide" }, h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); closeSide(); if (S.gotoInstTab && serial) S.gotoInstTab("mrally"); } },
         serial ? "Monsters, presets and rules: Monster hunts tab →" : "Monsters, presets and rules are set on each instance's Monster hunts tab."));
       if (o.type === "presets" || o.type === "order" || o.type === "saved_orders" || o.k === "own_order") return null;
-      if (o.k === "every_n" && ((r.opts.find((x) => x.k === "every_unit") || {}).val) === "once a day") return null;   // owner 30 Oct 23:04
-      const save = async (v) => { take(await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } }))); if (o.k === "every_unit") drawSide(); };
+      const ov = (k) => (r.opts.find((x) => x.k === k) || {}).val;
+      const goalOn = ov("until") && ov("until") !== "my Repeat setting";
+      if (o.k === "goal" && !goalOn) return null;                                  // owner 30 Oct 23:10: Train until a goal
+      if ((o.k === "every_unit" || o.k === "every_n") && goalOn) return null;      // a goal runs until reached - no Repeat
+      if (o.k === "every_n" && ov("every_unit") === "once a day") return null;     // owner 30 Oct 23:04
+      const save = async (v) => { take(await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } }))); if (o.k === "every_unit" || o.k === "until") drawSide(); };
       if (o.type === "bool") return h("div", { class: "wide" }, h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label)));
       if (o.type === "select") return h("label", {}, h("span", { class: "lab" }, o.label), ((st) => sel(st, "v", o.choices, { label: o.label, after: () => save(st.v) }))({ v: o.val }));
       return h("label", {}, h("span", { class: "lab" }, o.label), h("input", { type: "number", min: o.min, max: o.max, value: o.val, onchange: (e) => save(e.target.value) }));

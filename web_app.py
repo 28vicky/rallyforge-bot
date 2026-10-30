@@ -1713,6 +1713,8 @@ class Api:
                                        else conf.get(o["k"], o.get("def"))) for o in (d.get("opts") or [])],
                          "gems": bool(d.get("gems")),
                          "schedule": ("When the next egg is ready" if d["id"] == "crazy_eggs"
+                                      else ("Until " + f"{rb.train_goal(conf)[1]:,} " + ("runs" if rb.train_goal(conf)[0] == "runs" else "troops") + " per building")
+                                      if d["id"] == "train_troops" and rb.train_goal(conf)[0]
                                       else ("Every " + rb.fmt_mins(rb.duty_every(d, conf)) if rb.duty_every(d, conf) else "Once per game day")
                                       if any(o.get("k") == "every_n" for o in d.get("opts") or [])
                                       else "Once per game day" if not d["every_min"] else "Every " + rb.fmt_mins(d["every_min"]))})   # PCR2 B3: "Every 6 h", not "360 min"
@@ -1988,10 +1990,7 @@ class Api:
 
     def _rn_catalog(self):
         cat = [{"id": "duty:" + d["id"], "title": d["title"], "group": d["group"]} for d in rb.DUTY_LIBRARY if rb.duty_ready(d["id"])]
-        for t in self.c.cfg.get("city_tasks") or []:
-            if t.get("name"):
-                cat.append({"id": "task:" + t["name"], "title": t["name"], "group": "Your own tasks"})
-        return cat
+        return cat                                           # owner 30 Oct 23:10: "My tasks" (own tap lists) removed
 
     def run_now(self, p):
         """'Run a task now': the list of every task and what is queued to run first on this emulator."""
