@@ -607,16 +607,11 @@ function instancePage(serial) {
         h("h3", {}, h("span", { class: "livedot" + (st === "run" ? " on" : "") }), st === "run" ? "Now executing" : "Last step"), st === "run" ? h("span", { class: "livetag" }, "Live") : null));   // A2: a stopped instance shows its last step, not a live one
       const lab = L.querySelector(".actlab"); if (lab) lab.remove();
       R.querySelector("h3").replaceWith(h("div", { class: "cardhead" },
-        h("div", {}, h("h3", {}, "Monster joins"), h("small", { class: "sub" }, "Live rally history log")),
+        h("div", {}, h("h3", {}, "Monster joins")),
         h("a", { href: "#", class: "viewall", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("logs"); } }, "View all \u2192")));
-      // a new instance (no own settings yet) leads with Auto-Join: one question, one click; nothing is written until the user picks
-      const how = { m: "" };
-      const lead = Object.keys(ov).length ? null : panel(null,
-        h("div", { class: "cardhead" }, h("h3", {}, "How should " + (dev.name || "this instance") + " join rallies?")),
-        segPick(how, "m", [["game", "The game's Auto-Join", AJ_TIP], ["bot", "The bot joins with your presets", "The bot opens each rally and marches with your presets."]],
-          { label: "How it joins", after: (v) => { ajSetOne(serial, v === "game"); rerender(); } }),
-        h("p", { class: "hint", style: { marginTop: "8px" } }, "Have the Rally Monthly Card? Pick Auto-Join - no presets needed. You can change it any time with the Auto-Join switch at the top."));
-      return [lead, renderTodayCard(serial), h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, cityMapCard(serial), runNowCard(serial)))];
+      // owner 30 Oct 20:51-20:54: less to read - the setup question (same as the header switches) and the repeated counters are gone
+      return [h("div", { class: "ovtop" }, runNowCard(serial), nowNextCard(serial)), renderTodayCard(serial, { lite: true }),
+        h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, R)), h("div", { class: "dcol" }, cityMapCard(serial)))];
     }],
     ["routines", "Duties", () => [PAGES.duties(serial)]],   // A9: one word - "Duties" everywhere
     ["rally", "Join rallies", () => sections("rally", [
@@ -638,6 +633,7 @@ function instancePage(serial) {
   const tabRow = h("div", { class: "tabs", style: { margin: "4px 0 0" } });
   const showTab = (k) => {
     S.instTab = k;
+    const shd = tabRow.closest(".stickyhead"); if (shd) shd.dataset.tab = k;   // Overview has the Run a task card: no second button there
     try { localStorage.setItem("rf_inst_tab", k); } catch (e) {}
     [...tabRow.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
     body.innerHTML = "";
@@ -1536,7 +1532,7 @@ PAGES.license = function () {
 
 
 // ====================================================================== Today card (one instance)
-function renderTodayCard(serial) {
+function renderTodayCard(serial, o = {}) {
   const head = h("div", { class: "tdreset" }), list = h("div", { class: "tdq" }), sum = h("div", { class: "tdsum" });
   const res = h("div", { class: "tdres" }), week = h("small", { class: "tdweek" });
   // the game's Auto-Join (ui-simple): time left, when the bot renews it, and a warning when it has not been checked for a while
@@ -1559,7 +1555,8 @@ function renderTodayCard(serial) {
       h("span", { class: "ajsub" }, left <= renewMin * 60 ? "renews now" : "renews at " + at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })),
       stale ? h("span", { class: "ajwarn" }, "Not checked for " + Math.round(r.age_s / 60) + " min") : h("span", { class: "ajsub" }, "checked " + (r.age_s < 60 ? "just now" : Math.round(r.age_s / 60) + " min ago")));
   };
-  const card = h("div", { class: "panel today" },
+  const card = o.lite ? h("div", { class: "panel today lite" },          // Overview (owner 30 Oct): numbers only, no lists to read
+      h("div", { class: "cardhead" }, h("h3", {}, "Today"), head), aj, res, h("div", { class: "tdfoot" }, week)) : h("div", { class: "panel today" },
     h("div", { class: "cardhead" }, h("h3", {}, "Today"), head),
     aj,
     h("div", { class: "tdgrid" },
@@ -2069,7 +2066,7 @@ function cityMapCard(serial) {
     root.appendChild(h("div", { class: "cardhead cmhead" }, h("div", {}, h("h3", {}, "City map"), h("small", { class: "sub" }, sub)), h("div", { class: "cmacts" }, acts)));
     if (!j.running && !j.mapped) {                     // empty state: one clear action, nothing else
       root.appendChild(h("div", { class: "cmempty" }, h("b", {}, "This city is not mapped yet"),
-        h("p", { class: "hint" }, "Map my city moves round your whole city once (about 5-6 min), builds its picture and pins the buildings. This instance doesn't join rallies while it maps.")));
+        h("p", { class: "hint" }, "One-time setup, about 5 min ", infoTip("Map my city", "The bot moves round your whole city once, builds its picture and pins the buildings. This instance doesn't join rallies while it maps."))));
       return;
     }
     const n = j.running ? (pr.found || 0) : have, tot = j.running ? (pr.total || total) : total;
@@ -2291,7 +2288,7 @@ function runNowPop(anchor, serial) {
   const was = document.querySelector(".rnpop");
   if (was) { was._close(); if (was._anchor === anchor) return; }     // second click on the button closes it
   const box = h("div", { class: "rnpop", role: "dialog", "aria-label": "Run a task now" },
-    h("div", { class: "rnhead" }, h("b", {}, "Run a task now")), runNowCard(serial, { bare: true }));
+    runNowCard(serial, { bare: true, onAdd: () => box._close() }));
   box._anchor = anchor;
   document.body.appendChild(box);
   const place = () => {
@@ -2309,40 +2306,95 @@ function runNowPop(anchor, serial) {
   place();
   setTimeout(() => { document.addEventListener("mousedown", off, true); document.addEventListener("keydown", key, true); }, 0);
   addEventListener("resize", place);
-  const sel = box.querySelector("select"); if (sel) setTimeout(() => sel.focus(), 50);
+  const f = box.querySelector(".rnfind"); if (f) setTimeout(() => f.focus(), 50);
 }
 function runNowCard(serial, o = {}) {
-  const root = h("div", { class: o.bare ? "runnow bare" : "panel runnow" });   // bare: inside the header "Run now" pop-up (owner 30 Oct 20:19)
-  let pick = "", last = "";
-  const set = async (name, o) => { const r = await act(api(name, { serial, ...o })); if (r) { last = JSON.stringify(r.queue); draw(r); } };
-  const draw = (j) => {
-    root.innerHTML = "";
-    const groups = {};
-    for (const t of j.tasks || []) {
+  // owner 30 Oct 20:51-20:54: ONE list - search, click a task = it runs next. No list inside a list, no extra Run button.
+  const root = h("div", { class: o.bare ? "runnow bare" : "panel runnow" });
+  let data = { tasks: [], queue: [] }, q = "", last = "";
+  const find = h("input", { type: "search", class: "rnfind", placeholder: "Search tasks", "aria-label": "Search tasks", autocomplete: "off", oninput: () => { q = find.value.trim().toLowerCase(); drawList(); } });
+  const list = h("div", { class: "rnlist", role: "list" }), wait = h("div", { class: "rnwait" });
+  const name = (t) => { const id = String(t.id || "").startsWith("duty:") ? t.id.slice(5) : ""; return id ? dutyName(id, t.title) : t.title; };
+  const add = async (t) => {
+    const r = await act(api("run_now_add", { serial, id: t.id }));
+    if (!r) return;
+    data = r; last = JSON.stringify(r.queue); drawList(); drawWait();
+    toast(name(t) + (serial ? " runs next" : " runs next on every instance"), "ok");
+    if (o.onAdd) o.onAdd();
+  };
+  const drawList = () => {
+    list.innerHTML = "";
+    const queued = new Set((data.queue || []).map((x) => x.id)), groups = {};
+    for (const t of data.tasks || []) {
       const id = t.id.startsWith("duty:") ? t.id.slice(5) : "";
       if (id && !dutyShown(id)) continue;
       if (RUN_SETUP.has(id) && !S.dev) continue;          // PCR2 A5: Map my city lives on Overview > City map only (it can wipe pins)
-      // one-time jobs on top (Setup), developer test duties in their own group at the bottom - never mixed into City
+      if (q && !name(t).toLowerCase().includes(q)) continue;
       const g = !id ? "My tasks" : RUN_SETUP.has(id) ? "Setup" : DUTY_TEST.has(id) ? "Testing (developer)" : dutyGroup(id, t.group);
-      (groups[g] = groups[g] || []).push([t.id, id ? dutyName(id, t.title) : t.title]);
+      (groups[g] = groups[g] || []).push(t);
     }
-    const go = h("button", { class: "btn", type: "button", disabled: !pick, onclick: () => { if (pick) { const id = pick; pick = ""; set("run_now_add", { id }); } } }, "Run now");
-    const s = h("select", { "aria-label": "Task to run", onchange: (e) => { pick = e.target.value; go.disabled = !pick; } }, h("option", { value: "" }, "Pick a task\u2026"),
-      ["Setup", ...DUTY_GROUPS, "Testing (developer)"].filter((g) => groups[g]).map((g) => h("optgroup", { label: g }, groups[g].map(([v, t]) => h("option", { value: v, selected: v === pick }, t)))));
-    root.append(...[o.bare ? null : h("div", { class: "cardhead" }, h("h3", {}, "Run a task now")),
-      h("small", { class: "sub" }, serial ? "Runs once, before anything else, then the bot carries on." : "Runs once on every instance, before anything else."),
-      h("div", { class: "runrow" }, s, go),
-      (j.queue || []).length ? h("div", { class: "row", style: { gap: "6px", flexWrap: "wrap", marginTop: "8px" } }, h("span", { class: "lab" }, "Waiting:"),
-        j.queue.map((q, i) => { const id = String(q.id || "").startsWith("duty:") ? q.id.slice(5) : ""; return h("span", { class: "chip" }, (i + 1) + ". " + (id ? dutyName(id, q.title) : q.title) + " ",
-          h("a", { href: "#", title: "Cancel", "aria-label": "Cancel", onclick: (e) => { e.preventDefault(); set("run_now_remove", { id: q.id }); } }, "\u00d7")); })) : null].filter(Boolean));
+    const order = ["Setup", ...DUTY_GROUPS, "Testing (developer)"].filter((g) => groups[g]);
+    for (const g of order) {
+      list.appendChild(h("div", { class: "rngrp" }, g));
+      for (const t of groups[g]) list.appendChild(h("button", { class: "rntask" + (queued.has(t.id) ? " q" : ""), type: "button", role: "listitem", disabled: queued.has(t.id), onclick: () => add(t) },
+        h("span", {}, name(t)), queued.has(t.id) ? h("small", {}, "Queued") : h("span", { class: "rngo" }, ico("bolt"))));
+    }
+    if (!order.length) list.appendChild(h("div", { class: "rnnone" }, (data.tasks || []).length ? "No task matches" : "Loading\u2026"));
   };
-  draw({ tasks: [], queue: [] });
-  act(api("run_now", { serial })).then((j) => { if (j) { last = JSON.stringify(j.queue); draw(j); } });
+  const drawWait = () => {
+    wait.innerHTML = "";
+    const qq = data.queue || [];
+    if (!qq.length) { wait.hidden = true; return; }
+    wait.hidden = false;
+    wait.append(h("span", { class: "lab" }, "Next:"), ...qq.map((x, i) => h("span", { class: "chip" }, (i + 1) + ". " + name(x) + " ",
+      h("a", { href: "#", title: "Cancel", "aria-label": "Cancel " + name(x), onclick: async (e) => { e.preventDefault(); const r = await act(api("run_now_remove", { serial, id: x.id })); if (r) { data = r; last = JSON.stringify(r.queue); drawList(); drawWait(); } } }, "\u00d7"))));
+  };
+  root.append(...[o.bare ? null : h("div", { class: "cardhead" }, h("h3", { title: serial ? "Runs next, then the bot carries on" : "Runs next on every instance" }, "Run a task now")),
+    find, list, wait].filter(Boolean));
+  drawList(); drawWait();
+  act(api("run_now", { serial })).then((j) => { if (j) { data = j; last = JSON.stringify(j.queue); drawList(); drawWait(); } });
   const tick = setInterval(async () => {          // the queue empties when the bot starts the task: redraw only when it changed
     if (!root.isConnected) { clearInterval(tick); return; }
     const j = await api("run_now", { serial }, { quiet: true }).catch(() => null);
-    if (j && j.queue && JSON.stringify(j.queue) !== last && !root.contains(document.activeElement)) { last = JSON.stringify(j.queue); draw(j); }
+    if (j && j.queue && JSON.stringify(j.queue) !== last) { data = j; last = JSON.stringify(j.queue); drawList(); drawWait(); }
   }, 10000);
+  return root;
+}
+
+// owner 30 Oct 20:53: the second column next to Run a task - what the bot does now, what comes next, and problems only when there are any
+function nowNextCard(serial) {
+  const root = h("div", { class: "panel nownext" });
+  const dot = h("span", { class: "livedot" }), nowEl = h("div", { class: "nnnow" }), next = h("div", { class: "nnlist" }), probs = h("div", { class: "nnprob" });
+  root.append(h("div", { class: "cardhead" }, h("h3", {}, dot, "Now")), nowEl, h("div", { class: "nnlab" }, "Up next"), next, probs);
+  let items = [], lastKey = "";
+  const goDuties = (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("routines"); };
+  const paint = () => {
+    const st = (S.devStatus.find((x) => x.id === serial) || {}).state;
+    const run = st === "run", t = ((S.now || {})[serial] || {}).text || "";
+    const nowTxt = run ? (t || "Starting\u2026") : st === "pause" ? "Paused" : "Not running";
+    const key = JSON.stringify([nowTxt, run, items]);
+    if (key === lastKey) return;
+    lastKey = key;
+    dot.classList.toggle("on", run);
+    nowEl.textContent = nowTxt; nowEl.classList.toggle("off", !run); nowEl.title = t;
+    next.innerHTML = "";
+    const up = items.filter((x) => ["run", "due", "waiting", "retry"].includes(x.k)).slice(0, 3);
+    up.forEach((x) => next.appendChild(h("div", { class: "nnrow" }, h("span", { class: "nnt" }, x.title), dutyBadge(x.k, x.text, x.tip))));
+    if (!up.length) next.appendChild(h("div", { class: "nnempty" }, items.length ? "All duties done for today" : h("span", {}, "No duties on \u00b7 ", h("a", { href: "#", class: "lnk", onclick: goDuties }, "Choose duties"))));
+    probs.innerHTML = "";
+    const bad = items.filter((x) => x.k === "gaveup");
+    if (bad.length) probs.appendChild(h("a", { href: "#", class: "nnbad", title: bad.map((x) => x.title + (x.tip ? " - " + x.tip : "")).join("\n"), onclick: goDuties },
+      h("b", {}, bad.length === 1 ? bad[0].title + " needs a look" : bad.length + " duties need a look"), h("span", {}, "Open \u2192")));
+  };
+  const load = async () => {
+    if (!root.isConnected) return;
+    const j = await api("today", { serial }, { quiet: true }).catch(() => null);
+    if (j) items = todayModel(j, serial).items;
+    paint();
+  };
+  setTimeout(load, 0);                                   // after the card is on the page (load skips a card that is not)
+  const t1 = setInterval(() => { if (!root.isConnected) { clearInterval(t1); clearInterval(t2); return; } paint(); }, 1000);
+  const t2 = setInterval(load, 15000);
   return root;
 }
 
