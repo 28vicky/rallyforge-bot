@@ -1790,7 +1790,8 @@ PAGES.duties = function (fixed) {
       if (o.type === "rules") return h("div", { class: "wide" }, h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); closeSide(); if (S.gotoInstTab && serial) S.gotoInstTab("mrally"); } },
         serial ? "Monsters, presets and rules: Monster hunts tab →" : "Monsters, presets and rules are set on each instance's Monster hunts tab."));
       if (o.type === "presets" || o.type === "order" || o.type === "saved_orders" || o.k === "own_order") return null;
-      const save = async (v) => take(await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } })));
+      if (o.k === "every_n" && ((r.opts.find((x) => x.k === "every_unit") || {}).val) === "once a day") return null;   // owner 30 Oct 23:04
+      const save = async (v) => { take(await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } }))); if (o.k === "every_unit") drawSide(); };
       if (o.type === "bool") return h("div", { class: "wide" }, h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label)));
       if (o.type === "select") return h("label", {}, h("span", { class: "lab" }, o.label), ((st) => sel(st, "v", o.choices, { label: o.label, after: () => save(st.v) }))({ v: o.val }));
       return h("label", {}, h("span", { class: "lab" }, o.label), h("input", { type: "number", min: o.min, max: o.max, value: o.val, onchange: (e) => save(e.target.value) }));

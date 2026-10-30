@@ -19422,13 +19422,30 @@ DUTY_RETRY_MIN = 60                     # minutes between two tries of a duty th
 # group, id, title, what it does, schedule text, every_min (0 = once per game day), target, steps.
 # verified=False means the steps are a first guess from the game's menu text and have not been watched on a real
 # emulator yet - the interface shows them as "untested" until they are recorded.
+def repeat_opts(label, n_def, unit_def):
+    """Owner 30 Oct 23:04: 'Repeat' = once a day, or every N hours / minutes (any number the user types)."""
+    return [{"k": "every_unit", "label": "Repeat", "type": "select", "choices": ["once a day", "hours", "minutes"], "def": unit_def},
+            {"k": "every_n", "label": label, "type": "number", "min": 1, "max": 999, "def": n_def}]
+
+
+def duty_every(d, conf):
+    """The duty's repeat time in minutes (0 = once a day), the user's own choice filled with the duty's defaults."""
+    defs = {o["k"]: o.get("def") for o in d.get("opts") or []}
+    full = {"every_n": defs.get("every_n", 12), "every_unit": defs.get("every_unit", "hours")}
+    full.update({k: conf[k] for k in ("every_n", "every_unit") if conf.get(k) not in (None, "")})
+    return every_n_minutes(full, d["every_min"])
+
+
 def every_n_minutes(conf, default_min):
     """Owner 30 Oct 12:23: the user types any number and picks hours or minutes (default 12 hours). -> minutes."""
+    unit = conf.get("every_unit") or ""
+    if unit == "once a day":                                # owner 30 Oct 23:04: Train troops etc. - the user picks
+        return 0                                            # once a day or every N hours / minutes
     try:
         n = max(1, int(float(conf.get("every_n", 12))))
     except (TypeError, ValueError):
         return default_min
-    return max(5, n if conf.get("every_unit") == "minutes" else n * 60)   # never more often than every 5 minutes
+    return max(5, n if unit == "minutes" else n * 60)       # never more often than every 5 minutes
 
 
 DUTY_LIBRARY = [
@@ -19557,6 +19574,7 @@ DUTY_LIBRARY = [
      "note": "Every building you tick (Barracks / Stable / Archer Camp / Workshop) > Train: a busy building waits for its timer, the others train. Picks the troop level you set (T1 = lowest) and trains the number you set (500 by default) or the game's own number. Instant Train (gems) is never pressed. Needs the city map.",
      "target": "go:Troop Training|Barracks", "tap_dy": 0, "steps": ["wait 1.2", "train_troops"],
      "opts": [{"k": TRAIN_BKEY[b], "label": b, "type": "bool", "def": False} for b in TRAIN_BUILDINGS] +
+             repeat_opts("Every", 4, "once a day") +
              [{"k": "tier", "label": "Troop level (T1-T16)", "type": "number", "min": 1, "max": 16, "def": 1},
               {"k": "amount", "label": "Troops per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
               {"k": "game_number", "label": "Use the game's number instead", "type": "bool", "def": False},
@@ -19837,7 +19855,7 @@ def duty_status(serial, duty_id, cfg):
         return "due", "Due"
     every = int(conf.get("every_min", d["every_min"]) or 0)
     if any(o.get("k") == "every_n" for o in d.get("opts") or []):   # the user's own 'every N hours / minutes' wins
-        every = every_n_minutes(conf, d["every_min"])
+        every = duty_every(d, conf)
     last_ok = row.get("last_ok", 0)
     if every == 0:                                          # once per game day
         # 28 Oct: compare the GAME day of last_ok (was its UTC date: everything done between UTC midnight, 05:30 IST, and

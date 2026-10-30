@@ -2230,3 +2230,6 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 /* owner 30 Oct 22:28: duties not ready yet - faded, switch locked (testers' builds) */
 .dline.notready{opacity:.45;cursor:default}
 .dline.notready .tgl{pointer-events:none}
+
+/* owner 30 Oct 23:04: the status bar's go-to-top / bottom arrows never show over a side panel or a dialog */
+body:has(.sideov) .jumpbox, body:has(.ov) .jumpbox{visibility:hidden}

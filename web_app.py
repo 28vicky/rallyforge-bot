@@ -1713,7 +1713,7 @@ class Api:
                                        else conf.get(o["k"], o.get("def"))) for o in (d.get("opts") or [])],
                          "gems": bool(d.get("gems")),
                          "schedule": ("When the next egg is ready" if d["id"] == "crazy_eggs"
-                                      else "Every " + rb.fmt_mins(rb.every_n_minutes(conf, d["every_min"]))
+                                      else ("Every " + rb.fmt_mins(rb.duty_every(d, conf)) if rb.duty_every(d, conf) else "Once per game day")
                                       if any(o.get("k") == "every_n" for o in d.get("opts") or [])
                                       else "Once per game day" if not d["every_min"] else "Every " + rb.fmt_mins(d["every_min"]))})   # PCR2 B3: "Every 6 h", not "360 min"
         return rows
