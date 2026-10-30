@@ -73,3 +73,9 @@ def test_dome_buy_button_by_colour():
     b = rb.find_green_button(conf, x_min=280, x_max=480, y_min=360, y_max=840)
     assert b and 330 < b[0] < 390                                      # the green Buy (right), never the red Cancel
     assert rb.find_green_button(page, x_min=280, x_max=480, y_min=360, y_max=840) is None
+
+
+def test_dome_ring_rare_books_from_detail_icon():
+    shot = cv2.imread(str(S / "dome_ring_kiravik.png"))
+    r = rb.tavern_ring_spot(shot, "rare_books")
+    assert r and abs(r[0] - 195) < 25 and 290 < r[1] < 345

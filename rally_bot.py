@@ -11743,7 +11743,8 @@ WHEEL_ICON = (141, 328)                                              # "Wheel of
 # Owner 30 Oct 14:10: Tavern ring items found from the ring's own "i" (Detail) icon, found by picture - the items sit at a
 # fixed distance from it wherever the ring opens (measured on Stalds' open Tavern ring, debug\duty_ring_Great_General_Chest:
 # Detail i at 113,402). No text read (1-60 s on the busy PC; the two-line "Great General / Chest" label was not read).
-TAVERN_RING = {"wheel": (28, -84), "gchest": (259, -132)}
+TAVERN_RING = {"wheel": (28, -84), "gchest": (259, -132),
+               "rare_books": (21, -91)}                   # Wisdom Dome ring (Kiravik debug\duty_ring_Rare_Books: Detail 174,409)
 
 
 def tavern_ring_spot(shot, item):
@@ -16313,7 +16314,13 @@ def run_wisdom_dome_tokens(dev, cfg, log, stop):
     """Wisdom Dome's ring menu is open: Rare Books -> + under the Goddess Honor Token -> Purchase by Gems (500 gems)
     and Buy in the confirm popup, as many times as set (game limit 5 a day). SPENDS GEMS."""
     want = max(1, min(int(float(rd_opt(cfg, "wisdom_dome_tokens", "times", 5) or 5)), 5))
-    if not rd_ring(dev, stop, ["Rare Books"]):
+    at = tavern_ring_spot(dev.screenshot(), "rare_books")  # owner 30 Oct: from the ring picture first (no text read)
+    opened = False
+    if at:
+        dev.tap(*at)
+        _nap(stop, 2.0, 2.6)
+        opened = not find_detail_icon(dev.screenshot())
+    if not opened and not rd_ring(dev, stop, ["Rare Books"]):
         raise RuntimeError("no Rare Books button in the Wisdom Dome menu")
     shot = dev.screenshot()
     rd_snap(shot, "dome_1")
