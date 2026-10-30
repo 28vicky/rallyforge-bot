@@ -1,5 +1,9 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.31", date: "2026-10-31",
+    new: ["Monster hunts go to the newest monster sightings first, so fewer trips end at an empty spot."],
+    fixed: ["Troop training settings are simpler: one choice - Once a day, Every..., or Until a goal - and they fit any window size.",
+      "Monster hunts get back to hunting faster after a routine check."] },
   { v: "2.5.30", date: "2026-10-30",
     new: ["Troop training: choose Repeat (once a day, or every few hours / minutes) and \"Train until\" a number of runs or a total of troops for each building you tick. The bot keeps going until the goal is reached, then stops."],
     fixed: ["My tasks removed - the built-in duties do the work.",
