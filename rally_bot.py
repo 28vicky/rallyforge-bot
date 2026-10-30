@@ -10301,14 +10301,12 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
     if kind == "self":                                     # the step finds its own way from the city (e.g. alliance_gift)
         return True
     if kind == "learned":                                  # by its learned picture only (owner 23 Oct: the Activity route is a teacher, not the way)
-        if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
-            zoom_out_city(dev, stop, log)
+        ensure_city_zoom(dev, cfg, stop, log)          # owner 30 Oct: every city duty starts fully zoomed out
         leave_to_city(dev, cfg, stop, log)
         return find_learned_building(dev, cfg, log, stop, name.strip())
     if kind in ("go", "via"):                              # a PINNED building goes by the keyframe map (locate -> a few measured drags
         tile, _, bname = name.partition("|")               # -> tap); the Activity tile is only the teacher for a building not pinned yet
-        if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
-            zoom_out_city(dev, stop, log)                   # learned pictures are taken / searched at the widest zoom
+        ensure_city_zoom(dev, cfg, stop, log)          # owner 30 Oct: every city duty starts fully zoomed out
         if bname.strip().lower() == "prison":             # owner 25 Oct: City Buff > City Labor jumps to the Prison
             if city_buff_jump(dev, cfg, log, stop) and open_building_here(dev, cfg, log, stop, "Prison",
                                                                          spots=BUFF_PRISON_SPOTS, how="the City Labor jump"):
@@ -10473,8 +10471,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             px_, py_ = tx - nav.cx, ty - nav.cy
             return (px_, py_) if (x0 <= px_ <= x0 + w and y0 <= py_ <= y0 + h) else None
 
-        if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
-            zoom_out_city(dev, stop, log)                   # buildings are found at the zoomed-out size (owner 23 Oct)
+        ensure_city_zoom(dev, cfg, stop, log)          # owner 30 Oct: every city duty starts fully zoomed out
         for k in pkeys:
             tx, ty = pitems[k]
             log(f"[*] Going to {k}")
@@ -10553,8 +10550,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         if not keys:
             log(f"[!] Task '{task.get('name')}': '{name}' is not on the city map. {CITY_MAP_HELP}")
             return False
-        if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
-            zoom_out_city(dev, stop, log)
+        ensure_city_zoom(dev, cfg, stop, log)          # owner 30 Oct: every city duty starts fully zoomed out
         nav = nav_state.get("nav") or CityNav(dev, stop, log)
         if not nav_state.get("nav"):
             nav.to_origin()
@@ -12464,9 +12460,7 @@ def rd_close_reward(dev, stop, spot=(270, 754)):
     return n
 
 
-def rd_city_label(dev, stop, names, dy=45):
-    """Find a building by the name printed under it on the city screen (for buildings the city map does not know,
-    e.g. Trade Carriage, World Civilizations) and tap the building just above the name. -> True when tapped."""
+def _rd_label_tap(dev, stop, names, dy):
     x, y, w, h = LABEL_VIEW
     shot = dev.screenshot()
     for bright in (False, True):
@@ -12478,7 +12472,44 @@ def rd_city_label(dev, stop, names, dy=45):
                     cy = int(sum(s[2] for s in ws) / len(ws)) + y
                     dev.tap(cx, max(110, cy - dy))
                     _nap(stop, 2.0, 2.6)
+                    return True, shot
+    return False, shot
+
+
+def rd_city_label(dev, stop, names, dy=45, cfg=None, log=None):
+    """Find a building by the name printed under it on the city screen (e.g. Trade Carriage, World Civilizations) and tap
+    the building just above the name. Owner 30 Oct 11:51: every building task jumps there like the Tavern does - when the
+    name is not on screen, zoom out and go to the building's PIN by the city map, then read / tap it there.
+    -> True when tapped."""
+    ok, shot = _rd_label_tap(dev, stop, names, dy)
+    if ok:
+        return True
+    if cfg is not None:
+        lg = log or (lambda *_a, **_k: None)
+        ensure_city_zoom(dev, cfg, stop, lg)
+        pin = None
+        for n in names:
+            pin = _pin_of(dev, n) or culture_pin(dev, n)
+            if pin:
+                break
+        cmap = city_map(dev) if pin else None
+        if pin and cmap is not None and not stop.is_set():
+            nav = CityNav(dev, stop, lg)
+            at = goto_on_map(dev, cfg, lg, stop, nav, cmap, float(pin[0]), float(pin[1]), tol=120)
+            if at is not None:
+                ok, shot = _rd_label_tap(dev, stop, names, dy)
+                if ok:
                     return True
+                if 60 <= at[0] <= 470 and 150 <= at[1] <= 820:    # name not readable at this zoom: tap the pin itself
+                    lg(f"[i]   {names[0]}: reached its pin by the city map - tapping it")
+                    dev.tap(int(at[0]), int(at[1]))
+                    _nap(stop, 2.0, 2.6)
+                    return True
+        elif not pin:
+            lg(f"[i]   {names[0]}: not on screen and not pinned on this city (pin it once with Map by hand)")
+        ok, shot = _rd_label_tap(dev, stop, names, dy)
+        if ok:
+            return True
     rd_snap(shot, "label_" + names[0].replace(" ", "_"))
     return False
 
@@ -12822,7 +12853,7 @@ def run_recruit_citizens(dev, cfg, log, stop):
 
 def run_civilization_card(dev, cfg, log, stop):
     """From the city: World Civilizations building (found by its name) -> the Free card pack. Purchase / Open 10 never."""
-    if not rd_city_label(dev, stop, ["World Civilizations", "Civilizations", "Civilization"]):
+    if not rd_city_label(dev, stop, ["World Civilizations", "Civilizations", "Civilization"], cfg=cfg, log=log):
         raise RuntimeError("the World Civilizations building is not on the city screen")
     shot = dev.screenshot()
     if not rd_seen(shot, ["Card Pack", "Open Card"], region=(0, 0, 540, 300)):
@@ -13661,6 +13692,19 @@ def _at_map_zoom(dev, shot):
         quiet_err("at_map_zoom", _e)
     return False
 
+
+
+def ensure_city_zoom(dev, cfg, stop, log):
+    """Owner 30 Oct 11:45 (Stalds stayed zoomed in, Kiravik roamed): every city duty starts on the city view at the zoom the
+    city maps were made at (fully out). Cheap when it already is: one screenshot checked against the maps."""
+    try:
+        leave_to_city(dev, cfg, stop, log)
+        if stop.is_set() or _at_map_zoom(dev, dev.screenshot()):
+            return
+        log("[*] City is zoomed in - zooming out first")
+        zoom_out_full(dev, cfg, stop, log)
+    except Exception as _e:
+        quiet_err("ensure_city_zoom", _e)
 
 def zoom_out_full(dev, cfg, stop, log):
     """All the way out: Ctrl+wheel until the picture stops getting smaller (Kiravik 23 Oct: the two-notch zoom of the duties
@@ -15540,7 +15584,7 @@ def find_warehouse_hand(shot, threshold=0.75):
     x0, y0, x1, y1 = 0, 120, 540, 860                      # below the top bar, above the bottom icons
     area = shot[y0:y1, x0:x1]
     best = None
-    for sc in (0.85, 1.0, 1.15):
+    for sc in (0.6, 0.7, 0.85, 1.0, 1.15, 1.3):            # fully zoomed out the bubble may be smaller
         t = cv2.resize(t0, None, fx=sc, fy=sc) if sc != 1.0 else t0
         r = cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED)
         _, m, _, loc = cv2.minMaxLoc(r)
@@ -15549,29 +15593,59 @@ def find_warehouse_hand(shot, threshold=0.75):
     return best
 
 
+def _tap_warehouse_hand(dev, stop, log, hit, how):
+    """Tap the hand; True when it went away (collected)."""
+    after = None
+    for _ in range(2):
+        dev.tap(hit[0], hit[1])
+        _nap(stop, 1.6, 2.0)
+        after = dev.screenshot()
+        again = find_warehouse_hand(after, 0.6)
+        if not again or abs(again[0] - hit[0]) > 40 or abs(again[1] - hit[1]) > 40:
+            log(f"[+]  Collect resources: Warehouse hand tapped {how} - all fields collected (match {hit[2]:.2f})")
+            return True
+    rd_snap(after, "collect_hand_stays")
+    raise RuntimeError("the Warehouse hand is still there after tapping it")
+
+
 def run_collect_resources(dev, cfg, log, stop):
-    leave_to_city(dev, cfg, stop, log)
-    for i in range(len(HAND_SWEEP) + 1):
+    """Owner 30 Oct 11:49: zoom fully out, go straight to the Warehouse by the city map, tap the hand above it.
+    The blind 3x3 drag is only the fallback for a city with no Warehouse pin / no map."""
+    ensure_city_zoom(dev, cfg, stop, log)
+    if stop.is_set():
+        return
+    shot = _settled_shot(dev, stop)
+    hit = find_warehouse_hand(shot)
+    if hit:                                                # already on screen
+        _tap_warehouse_hand(dev, stop, log, hit, "(on screen)")
+        return
+    pin = _pin_of(dev, "Warehouse") or culture_pin(dev, "Warehouse")
+    cmap = city_map(dev)
+    if pin and cmap is not None:
+        nav = CityNav(dev, stop, log)
+        at = goto_on_map(dev, cfg, log, stop, nav, cmap, float(pin[0]), float(pin[1]), tol=120)
+        if at is not None:
+            shot = _settled_shot(dev, stop)
+            hit = find_warehouse_hand(shot)
+            if hit:
+                _tap_warehouse_hand(dev, stop, log, hit, "(by the city map)")
+                return
+            rd_snap(shot, "collect_no_hand")
+            log("[i]   Collect resources: at the Warehouse, no hand above it - nothing ready yet (tries again later)")
+            return
+        log("[i]   Collect resources: the city map could not reach the Warehouse - looking around instead")
+    else:
+        log("[i]   Collect resources: no Warehouse pin on this city - looking around instead")
+    for i, (dx, dy) in enumerate(HAND_SWEEP):              # fallback only: slow drags around the current view
         if stop.is_set():
             return
+        dev.swipe(270, 480, 270 + dx, 480 + dy, 1500)     # slow drag: no glide
+        _nap(stop, 0.6, 0.8)
         shot = _settled_shot(dev, stop)
         hit = find_warehouse_hand(shot)
         if hit:
-            for _ in range(2):
-                dev.tap(hit[0], hit[1])
-                _nap(stop, 1.6, 2.0)
-                after = dev.screenshot()
-                again = find_warehouse_hand(after, 0.6)
-                if not again or abs(again[0] - hit[0]) > 40 or abs(again[1] - hit[1]) > 40:
-                    log(f"[+]  Collect resources: Warehouse hand tapped - all fields collected (match {hit[2]:.2f})")
-                    return
-            rd_snap(after, "collect_hand_stays")
-            raise RuntimeError("the Warehouse hand is still there after tapping it")
-        if i == len(HAND_SWEEP):
-            break
-        dx, dy = HAND_SWEEP[i]
-        dev.swipe(270, 480, 270 + dx, 480 + dy, 1500)         # slow drag: no glide
-        _nap(stop, 0.6, 0.8)
+            _tap_warehouse_hand(dev, stop, log, hit, "(found by looking around)")
+            return
     rd_snap(dev.screenshot(), "collect_no_hand")
     log("[i]   Collect resources: no hand above the Warehouse - nothing ready yet (tries again later)")
 
@@ -15971,7 +16045,7 @@ def carriage_left(img):
 def run_trade_carriage(dev, cfg, log, stop):
     """From the city: Trade Carriage (found by its name) -> each empty slot: take the first carriage, Select Formation,
     March with the preset already shown, until Transports Left Today is 0. Refresh Goods is never pressed (owner)."""
-    if not rd_city_label(dev, stop, ["Trade Carriage", "Carriage"]):
+    if not rd_city_label(dev, stop, ["Trade Carriage", "Carriage"], cfg=cfg, log=log):
         raise RuntimeError("the Trade Carriage is not on the city screen")
     shot = dev.screenshot()
     rd_snap(shot, "carriage_1")
@@ -18127,7 +18201,7 @@ DUTY_LIBRARY = [
      "target": "tpl:event_center_icon|Center",
      "steps": ["wait 2", "crazy_eggs"]},
     {"id": "collect_resources", "group": "Common tasks", "title": "Collect resources", "every_min": 180, "verified": False,
-     "note": "Taps the floating hand above the Warehouse: the game collects every field at once. No city map needed.",
+     "note": "Zooms out, goes to the Warehouse and taps the floating hand above it: the game collects every field at once.",
      "target": "self:", "steps": ["collect_resources"]},
     {"id": "reach_keep_tavern", "group": "Common tasks", "title": "Test: Keep, then Tavern", "every_min": 60, "verified": False,
      "note": "Walks to the Keep, opens its menu, then walks to the Tavern and opens its menu (nothing is pressed).",
