@@ -1533,6 +1533,8 @@ class Controller:
 
     def restart_for_update(self):
         """Restart now for the installed update; the emulators that were running start again by themselves."""
+        if not rb.RESTART_WHY.exists():
+            rb.restart_reason_set("automatic restart after an update was installed")
         now = time.time()
         running = [s for s in self.dev if self.running(s)]
         try:
@@ -1556,6 +1558,8 @@ class Controller:
         return [s for s in d.get("serials", []) if s in ids]
 
     def restart_app(self):
+        if not rb.RESTART_WHY.exists():
+            rb.restart_reason_set("the app restarted itself")
         env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
         args = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable] + sys.argv
         self.shutdown()
@@ -3032,6 +3036,7 @@ class Api:
         return {"ok_send": bool(ok), "msg": msg}
 
     def restart(self, p):
+        rb.restart_reason_set("restart pressed in the app" + (" (installed update)" if self.c.restart_pending else ""))
         if self.c.restart_pending:                    # an installed update: the running instances start again too
             self.c.restart_for_update()
             return {}
@@ -3041,10 +3046,12 @@ class Api:
     def restart_update_now(self, p):
         """Status bar clicked while the installed update waits for a quiet moment: restart at once (instances resume)."""
         self.c.restart_pending = False
+        rb.restart_reason_set("restart for the installed update / new code (status bar)")
         threading.Timer(0.3, lambda: self.c._safe(self.c.restart_for_update)).start()
         return {}
 
     def quit(self, p):
+        rb.restart_reason_set("Quit pressed in the app")
         self.c.shutdown()
         threading.Timer(0.5, lambda: os._exit(0)).start()
         return {}
@@ -3400,6 +3407,7 @@ def main():
         (rb.USER / "startup.log").open("a", encoding="utf-8").write(f"server up on port {port}\n")
     except Exception as _e:
         rb.quiet_err("main", _e)
+    rb.app_start_marker(ctl.log)                         # owner 30 Oct 15:49: why the app (re)started + which code
     resume = ctl.take_resume()
     if resume:
         def _resume():                                  # restarted for an update: carry on where we were

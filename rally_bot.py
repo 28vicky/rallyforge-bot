@@ -3027,7 +3027,9 @@ def failure_evidence(dev, duty, reason, shot=None, pics=None, extra=None, every_
                 "taps": list(getattr(dev, "ev_taps", None) or []),
                 "ocr": list(getattr(_TL, "ev_ocr", None) or []),
                 "log": list(EV_LOG.get(serial) or []), "pictures": files, "extra": extra or {}, "notes": notes,
-                "took_ms": int((time.time() - t0) * 1000)}
+                "took_ms": int((time.time() - t0) * 1000),
+                "build": BUILD.get("id", ""), "build_note": BUILD.get("note", ""),     # which code ran (app_starts.jsonl)
+                "app_started": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(BUILD["started"])) if BUILD.get("started") else ""}
         p = folder / f"{stem}.json"
         p.write_text(json.dumps(info, indent=1, default=str), encoding="utf-8")
     except BaseException as _e:
@@ -6634,6 +6636,7 @@ def settle_game(dev, cfg, log, stop):
     log(f"[*] Letting the game settle ({secs}s) before starting")
     t_end, limit = time.time() + secs, time.time() + secs + 45
     prev, calm, odd_since = None, 0, None
+    page_backs = 0                                       # was missing: a full page here raised NameError (30 Oct 15:55)
     while not stop.is_set() and time.time() < limit:
         try:
             screen = dev.screenshot()
@@ -16227,6 +16230,14 @@ def train_pick_tier(dev, stop, log, tier):
     return True
 
 
+def train_page(shot):
+    """Training page: green Train (bottom right) + orange Instant Train (bottom left), by colour (the text is not read
+    over the button's timer - Stalds 30 Oct)."""
+    return bool(find_green_button(shot, x_min=280, x_max=535, y_min=860, y_max=955)
+                and find_colour_button(shot, *ORANGE, x_min=0, x_max=270, y_min=860, y_max=955)
+                and not page_has_back_arrow(shot))                # it has no red title bar (Alliance / event pages do)
+
+
 def run_train_troops(dev, cfg, log, stop):
     what = "Train troops"
     bname = TRAIN_BUILDINGS.get(str(rd_opt(cfg, "train_troops", "building", "Barracks (ground)")), "Barracks")
@@ -16249,6 +16260,8 @@ def run_train_troops(dev, cfg, log, stop):
         return
     if not rd_find(shot, ["Train"], region=(280, 860, 260, 100), whole=True):
         raise RuntimeError("the training page did not open")
+    if not task_guard(dev, stop, log, what, train_page):
+        raise RuntimeError("lost the training page")
     if not train_pick_tier(dev, stop, log, tier):
         raise RuntimeError(f"could not select T{tier} - not trained")
     if not game_number:
@@ -16263,6 +16276,9 @@ def run_train_troops(dev, cfg, log, stop):
         got = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (TRAIN_QTY[0] - 90, TRAIN_QTY[1] - 28, 180, 56))))
         if amount not in got:                              # never train the full (max) amount by mistake
             raise RuntimeError(f"the amount box does not show {amount} (read {got[:3]}) - not trained")
+    shot = dev.screenshot()
+    if not task_guard(dev, stop, log, what, train_page, shot=shot):   # owner 15:37: a stray window -> back, never tap there
+        raise RuntimeError("lost the training page")
     shot = dev.screenshot()
     btn = find_green_button(shot, x_min=280, x_max=535, y_min=860, y_max=955)   # green Train (right); Instant Train is orange (left)
     if not btn:
@@ -16417,6 +16433,102 @@ def find_colour_button(shot, lo, hi, x_min, x_max, y_min, y_max, min_w=90, min_h
 
 ORANGE = ((8, 120, 110), (28, 255, 255))
 CARRIAGE_SWORDS = (44, 930)        # small crossed-swords button left of Power First / Reset (changes the troop mode)
+GAME_BACK_ARROW = (35, 35)         # gold round Back arrow, top left of every full game page
+
+
+def page_has_back_arrow(shot):
+    """A full game page: gold Back arrow top left + red title bar (the world map's gold portrait has no red bar)."""
+    try:
+        g = cv2.countNonZero(cv2.inRange(cv2.cvtColor(shot[8:80, 5:75], cv2.COLOR_BGR2HSV), (12, 110, 150), (32, 255, 255)))
+        bar = cv2.cvtColor(shot[8:58, 120:420], cv2.COLOR_BGR2HSV)
+        red = float((((bar[:, :, 0] < 10) | (bar[:, :, 0] > 170)) & (bar[:, :, 1] > 80) & (bar[:, :, 2] > 40)).mean())
+        return g > 250 and red >= 0.5
+    except Exception:
+        return False
+
+
+def task_guard(dev, stop, log, what, expect, shot=None):
+    """Owner 30 Oct 15:37 - screen guard for every task step. expect(shot) -> True when the screen is the one this step
+    belongs to. Wrong screen (stray tap, pop-up, other window): nothing is tapped or bought there; the game's Back arrow
+    first, then the phone Back key, checking after each. -> True = back on the step's screen (carry on from there),
+    False = lost (the caller stops; the duty runner goes to the city and starts the task again)."""
+    shot = dev.screenshot() if shot is None else shot
+    try:
+        if expect(shot):
+            return True
+    except Exception:
+        pass
+    rd_snap(shot, "guard_" + re.sub(r"\W+", "_", what.lower())[:30])
+    log(f"[!]  {what}: not the expected screen - going back (nothing tapped there)")
+    for how in ("arrow", "key", "key"):
+        if stop.is_set():
+            return False
+        if how == "arrow":
+            if not page_has_back_arrow(shot):
+                continue
+            dev.tap(*GAME_BACK_ARROW)
+        else:
+            dev.back()
+        _nap(stop, 1.2, 1.6)
+        shot = dev.screenshot()
+        try:
+            if expect(shot):
+                log(f"[i]   {what}: back on the right screen - carrying on")
+                return True
+        except Exception:
+            pass
+    log(f"[!]  {what}: lost - back to the city, the task starts again")
+    return False
+
+
+def is_carriage_page(shot):
+    return carriage_left(shot) is not None
+
+
+CARRIAGE_CHEST_MIN = 0.62
+
+
+def carriage_chests(shot):
+    """Owner 30 Oct 15:13 recording: a returned carriage shows a white bubble with a chest - tap = claim. Found by its
+    picture (carriage_chest.png, from the owner's Kiravik screenshot). -> [(x, y)] top to bottom."""
+    out = []
+    try:
+        t = cv2.cvtColor(tpl("carriage_chest"), cv2.COLOR_BGR2GRAY)
+        g = cv2.GaussianBlur(cv2.cvtColor(shot, cv2.COLOR_BGR2GRAY), (3, 3), 0)   # the picture is an enlarged recording
+        r = cv2.matchTemplate(g[170:900], t, cv2.TM_CCOEFF_NORMED)
+        h, w = t.shape[:2]
+        for _ in range(6):
+            _, mv, _, ml = cv2.minMaxLoc(r)
+            if mv < CARRIAGE_CHEST_MIN:
+                break
+            out.append((ml[0] + w // 2, ml[1] + 170 + h // 2))
+            r[max(0, ml[1] - 30):ml[1] + 30, max(0, ml[0] - 30):ml[0] + 30] = -1
+    except Exception as _e:
+        quiet_err("carriage_chests", _e)
+    return sorted(out, key=lambda p: p[1])
+
+
+def carriage_claim_chests(dev, cfg, log, stop):
+    """Owner 30 Oct 15:45: chests on returned carriages are ALWAYS claimed. Tap the badge -> 'Congratulations!' -> tap
+    anywhere (or Back) closes it. -> chests claimed."""
+    got = 0
+    for _ in range(6):
+        if stop.is_set():
+            break
+        spots = carriage_chests(dev.screenshot())
+        if not spots:
+            break
+        dev.tap(*spots[0])
+        _nap(stop, 1.6, 2.0)
+        rd_snap(dev.screenshot(), "carriage_chest")
+        dev.tap(383, 844)                                  # owner's recording: the empty ground under the reward list
+        _nap(stop, 1.2, 1.6)
+        if not task_guard(dev, stop, log, "Trade Carriage chest", is_carriage_page):
+            raise RuntimeError("lost after claiming a carriage chest")
+        got += 1
+    if got:
+        log(f"[+]  Trade Carriage: {got} chest(s) claimed")
+    return got
 
 
 def march_power_first(dev, stop, log, what):
@@ -16438,19 +16550,31 @@ def march_power_first(dev, stop, log, what):
 def carriage_march(dev, cfg, log, stop, preset):
     """The March (formation) screen is open. preset 1-8: that preset, nothing else (owner 14:47: the bot does not care
     which troops it holds). No preset: the troop mode until the green 'Power First' shows, tap it. Then March."""
+    # owner 30 Oct 15:45: the first preset fills the troops by itself. Troops there -> straight March. March did not
+    # leave (no / too few troops) -> Power First once, then March again. Any troop count is fine.
     if preset:
         dev.tap(*preset_xy(cfg, preset))
         _nap(stop, 1.0, 1.3)
-    else:
-        march_power_first(dev, stop, log, "Trade Carriage")
-    shot = dev.screenshot()
-    mb = find_colour_button(shot, *ORANGE, x_min=300, x_max=540, y_min=820, y_max=960)
-    if not mb:
-        rd_snap(shot, "carriage_nomarch")
-        return False
-    dev.tap(*mb)
-    _nap(stop, 2.0, 2.6)
-    return True
+    for k in range(2):
+        shot = dev.screenshot()
+        mb = find_colour_button(shot, *ORANGE, x_min=300, x_max=540, y_min=820, y_max=960)
+        if not mb:
+            rd_snap(shot, "carriage_nomarch")
+            return False
+        dev.tap(*mb)
+        _nap(stop, 2.0, 2.6)
+        shot = dev.screenshot()
+        if is_carriage_page(shot):                          # owner: after March the game is back on the carriage page
+            return True
+        if find_colour_button(shot, *ORANGE, x_min=300, x_max=540, y_min=820, y_max=960):   # still on the March screen
+            if k == 0:
+                log("[i]   Trade Carriage: March did not leave (no troops?) - Power First, then March again")
+                march_power_first(dev, stop, log, "Trade Carriage")
+                continue
+            rd_snap(shot, "carriage_notleft")
+            return False
+        return True
+    return False
 
 
 def run_trade_carriage(dev, cfg, log, stop):
@@ -16465,7 +16589,10 @@ def run_trade_carriage(dev, cfg, log, stop):
         raise RuntimeError("the Trade Carriage is not on the city screen (pin it once in Fix pins)")
     shot = dev.screenshot()
     rd_snap(shot, "carriage_1")
-    left = carriage_left(shot)
+    if not task_guard(dev, stop, log, "Trade Carriage", is_carriage_page, shot=shot):
+        raise RuntimeError("the Trade Carriage page did not open")
+    carriage_claim_chests(dev, cfg, log, stop)             # owner 15:45: always claim the chests first
+    left = carriage_left(dev.screenshot())
     if left is None:
         raise RuntimeError("the Trade Carriage page did not open")
     if left <= 0:                                          # owner 14:48: 0 left = all used today, a + would only show a pop-up
@@ -16480,6 +16607,9 @@ def run_trade_carriage(dev, cfg, log, stop):
     tried = 0
     while left > 0 and done_today + sent < want and tried < 6 and not stop.is_set():
         tried += 1
+        if not task_guard(dev, stop, log, "Trade Carriage", is_carriage_page):
+            raise RuntimeError("lost the Trade Carriage page")
+        carriage_claim_chests(dev, cfg, log, stop)          # a claimed chest frees its slot ('+')
         spots = carriage_plus_spots(dev.screenshot())
         if not spots:
             # every slot holds a carriage: on the road (timer) or back with a chest to claim (e.g. from yesterday).
@@ -16563,6 +16693,10 @@ def find_green_button(shot, x_min, x_max, y_min, y_max, min_w=90, min_h=30):
         return None
 
 
+def dome_token_page(shot):
+    return page_has_back_arrow(shot) and rd_seen(shot, ["Goddess Honor", "Daily Chance", "Purchase by Gems"], region=(0, 0, 540, 260))
+
+
 DOME_GEM_BTN = (450, 155)          # green "500 gems" button, Purchase by Gems row (Kiravik 30 Oct debug\duty_dome_2)
 
 
@@ -16588,6 +16722,9 @@ def run_wisdom_dome_tokens(dev, cfg, log, stop):
     for _ in range(want):
         if stop.is_set():
             break
+        shot = dev.screenshot()
+        if not task_guard(dev, stop, log, "Wisdom Dome", dome_token_page, shot=shot):   # owner 15:37: never buy on a wrong screen
+            raise RuntimeError(f"lost the Goddess Honor Token page ({bought} bought)")
         shot = dev.screenshot()
         rd_snap(shot, "dome_2")
         for t, _ in rd_lines(shot, (0, 80, 540, 300)):
@@ -16714,6 +16851,10 @@ def rt_thief_colours(shot):
     return out
 
 
+def rt_event_page(shot):
+    return rd_seen(shot, ["Royal Thief", "Help kill"], region=(0, 0, 540, 160))
+
+
 def rt_save(serial, **kw):
     with _DUTY_LOCK:
         data = load_duty_state()
@@ -16772,14 +16913,53 @@ def rt_go_rows(img):
 
 
 def run_royal_thief(dev, cfg, log, stop):
+    """Owner 30 Oct 15:37 + 15:41: Royal Thief is never 'done' and never an error. The bot does its normal work; when it
+    is free (no rally to join, between tasks) it looks for the Invite icon and kills the thief. A miss is tried again from
+    the Invite button (RT_MAX_TRIES in a row), then a 15-30 min pause. Invite gone = that thief is gone (killed by others
+    / expired): nothing to do, keep working."""
+    try:
+        _run_royal_thief(dev, cfg, log, stop)
+    except Exception as e:                                  # never an error: log it and look again soon
+        if stop.is_set():
+            return
+        quiet_err("run_royal_thief", e)
+        try:
+            leave_to_city(dev, cfg, stop, log)
+        except Exception:
+            pass
+        rt_missed(getattr(dev, "serial", ""), log, f"something went wrong ({str(e)[:80]})")
+
+
+RT_MAX_TRIES = 5                         # owner 15:37: misses in a row before a pause
+RT_PAUSE_MIN = (15, 30)                  # ...then wait this long (minutes, random) and try again
+
+
+def rt_missed(serial, log, why):
+    """One more miss on a thief. -> minutes until the next try (1 = the next free moment; after RT_MAX_TRIES a pause)."""
+    n = int(rt_row(serial).get("misses", 0) or 0) + 1
+    if n >= RT_MAX_TRIES:
+        mins = random.randint(*RT_PAUSE_MIN)
+        n = 0
+        msg = f"{RT_MAX_TRIES} tries in a row did not reach the thief ({why}) - next look in {mins} min"
+    else:
+        mins = 1
+        msg = f"{why} - try {n + 1} of {RT_MAX_TRIES} from the Invite button at the next free moment"
+    rt_save(serial, misses=n, next_at=time.time() + mins * 60)
+    log(f"[*]  Royal Thief: {msg}")
+    return mins
+
+
+def _run_royal_thief(dev, cfg, log, stop):
     serial = getattr(dev, "serial", "")
     day = _game_day()
     row = rt_row(serial)
     done = row.get("done", []) if row.get("day") == day else []
     rt_save(serial, day=day, done=done, next_at=time.time() + RT_POLL_MIN * 60)
 
-    def later(minutes, why):
-        rt_save(serial, next_at=time.time() + minutes * 60)
+    def later(minutes, why, miss=None):
+        if (miss if miss is not None else minutes == RT_RECHECK_MIN):   # a miss on the way to the thief (page / button / map not found)
+            return rt_missed(serial, log, why)
+        rt_save(serial, next_at=time.time() + minutes * 60, misses=0)   # waiting for a march / nothing to do: not a miss
         log(f"[*]  Royal Thief: {why} - again at {time.strftime('%H:%M', time.localtime(time.time() + minutes * 60))}")
 
     shot = dev.screenshot()
@@ -16788,6 +16968,8 @@ def run_royal_thief(dev, cfg, log, stop):
         p = (p[0], p[1] + 18)                              # picture = the icon itself (the tap below aims 18 px above a label)
     if not p:                                               # no invite = no thief to kill (Kiravik 27 Oct 20:23: said nothing)
         rd_snap(shot, "thief_0_noinvite")
+        if int(row.get("misses", 0) or 0):                  # owner 15:37: the icon is gone = that thief is gone - stop trying
+            log("[i]  Royal Thief: the Invite is gone - that thief was killed by others or ran out; watching for the next one")
         return later(RT_POLL_MIN, "no Invite button on the city screen (no thief invitation right now)")
     dev.tap(p[0], max(100, p[1] - 18))
     _nap(stop, 2.0, 2.5)
@@ -16818,9 +17000,10 @@ def run_royal_thief(dev, cfg, log, stop):
     _nap(stop, 2.5, 3.0)
     shot = dev.screenshot()
     rd_snap(shot, "thief_2")
-    if not rd_seen(shot, ["Royal Thief", "Help kill"], region=(0, 0, 540, 160)):
+    if not task_guard(dev, stop, log, "Royal Thief", rt_event_page, shot=shot):
         leave_to_city(dev, cfg, stop, log)
         return later(RT_RECHECK_MIN, "the Royal Thief page did not open")
+    shot = dev.screenshot()
     alive, killed = [], set()
     for t, ws in rd_lines(shot, (0, 200, 540, 300)):
         x = int(sum(s[1] for s in ws) / len(ws))
@@ -16932,8 +17115,8 @@ def run_royal_thief(dev, cfg, log, stop):
         rd_snap(shot, "thief_7")
         leave_to_city(dev, cfg, stop, log)
         return later(RT_RECHECK_MIN, "the march did not leave (no troops?)")
-    rt_save(serial, who=who, col=col)
-    later(RT_RECHECK_MIN, f"marched on {who}'s thief ({troops})")
+    rt_save(serial, who=who, col=col, misses=0)
+    later(RT_RECHECK_MIN, f"marched on {who}'s thief ({troops})", miss=False)
     leave_to_city(dev, cfg, stop, log)
 
 
@@ -18886,7 +19069,7 @@ DUTY_LIBRARY = [
      "note": "Tavern > Activity: opens every ready task chest and milestone chest. Runs every 3 hours so the later chests are caught too. Needs the city map (Tavern).",
      "target": "via:Wheel of Fortune|Tavern", "tap_dy": 0, "steps": ["wait 1.2", "activity_chests"]},
     {"id": "royal_thief", "group": "Daily activities", "title": "Royal Thief", "every_min": 15, "verified": False,
-     "note": "When an alliance member invites you (Invite icon): opens the invite, picks a thief that is not killed and attacks it. Keeps trying until it is killed; when all marches are out it waits for one to come back.",
+     "note": "Never done for the day: any alliance member can invite at any time. Between rallies and tasks the bot looks for the Invite icon; when it shows, it opens the invite, picks a thief that is not killed and attacks it. A miss is tried again (5 times), then it waits 15-30 min. When all marches are out it waits for one to come back.",
      "target": "self:", "steps": ["royal_thief"],
      "opts": [{"k": "troops", "label": "Troops", "type": "select", "def": "Power First",
                "choices": ["Power First"] + ["Preset " + n for n in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")]}]},
@@ -18973,6 +19156,9 @@ def save_duty_state(data):
         quiet_err("save_duty_state", _e)
 
 
+NEVER_DONE_DUTIES = {"royal_thief"}     # owner 30 Oct 15:37: any alliance member can invite at any time - never done / failed
+
+
 def duty_record(serial, duty_id, ok, msg="", nothing=False):
     with _DUTY_LOCK:
         data = load_duty_state()
@@ -18993,7 +19179,7 @@ def duty_record(serial, duty_id, ok, msg="", nothing=False):
         if ok:
             row["last_ok"], row["status"] = time.time(), "done"
             row["tries"] = 0                                     # fulfilled: failures start counting again from 0
-            if nothing:                                          # the game had nothing left: once more to be sure, then done until the reset
+            if nothing and duty_id not in NEVER_DONE_DUTIES:     # the game had nothing left: once more to be sure, then done until the reset
                 row["empty"] = int(row.get("empty", 0)) + 1 if row.get("empty_day") == day else 1
                 row["empty_day"] = day
                 if row["empty"] >= 2:
@@ -19002,7 +19188,9 @@ def duty_record(serial, duty_id, ok, msg="", nothing=False):
                 row["empty"] = 0
         else:
             row["status"] = "retry"
-            if row["tries"] == DUTY_MAX_TRIES:                   # the 3rd failure today: alert + report once (it keeps trying every hour)
+            if duty_id in NEVER_DONE_DUTIES:                     # owner 30 Oct 15:37: never 'failed' - it simply looks again
+                row["tries"] = 0
+            elif row["tries"] == DUTY_MAX_TRIES:                 # the 3rd failure today: alert + report once (it keeps trying every hour)
                 row["status"] = "gaveup"
         save_duty_state(data)
         return row.get("status")
@@ -19789,6 +19977,65 @@ def task_event(serial, task, ok, msg=""):
                 TASK_LOG.write_text("\n".join(lines) + "\n", encoding="utf-8")
     except Exception as _e:
         quiet_err("task_event", _e)
+
+
+APP_STARTS = USER / "app_starts.jsonl"     # owner 30 Oct 15:49: one line per app start - why it restarted, which code
+DEPLOY_NOTE = USER / "deploy_note.txt"     # written when new code is copied in (what changed); read at the next start
+RESTART_WHY = USER / "restart_reason.txt"  # written just before the app restarts / quits itself; read + removed at the next start
+BUILD = {"id": "", "note": "", "started": 0.0}
+
+
+def restart_reason_set(why):
+    """Remember why the app is about to restart / quit, so the next start can log it."""
+    try:
+        RESTART_WHY.write_text(str(why)[:200], encoding="utf-8")
+    except Exception as _e:
+        quiet_err("restart_reason_set", _e)
+
+
+def app_start_marker(log=None):
+    """Owner 30 Oct 15:49: every app start leaves a clear mark in the logs (app_starts.jsonl, tasks_log.jsonl, failure
+    evidence 'build'), so whoever reads the logs later (Claude, the Teacher) knows the app restarted, why, and whether
+    the code changed in between - 'it failed at 14:00 and worked at 15:00' then shows the fix that came between."""
+    try:
+        code = Path(__file__).read_bytes()
+        build = hashlib.md5(code).hexdigest()[:8]
+        prev = {}
+        try:
+            for line in APP_STARTS.read_text(encoding="utf-8").splitlines()[-1:]:
+                prev = json.loads(line)
+        except Exception:
+            prev = {}
+        changed = bool(prev) and prev.get("build") != build
+        why = ""
+        try:
+            why = RESTART_WHY.read_text(encoding="utf-8").strip()
+            RESTART_WHY.unlink()
+        except Exception:
+            pass
+        note = ""
+        try:
+            if DEPLOY_NOTE.exists() and (changed or not prev):
+                note = DEPLOY_NOTE.read_text(encoding="utf-8").strip()[:600]
+        except Exception:
+            pass
+        if not why:
+            why = "first start" if not prev else "the app was closed or stopped (no reason saved)"
+        rec = {"t": int(time.time()), "time": time.strftime("%Y-%m-%d %H:%M:%S"), "version": VERSION, "build": build,
+               "prev_build": prev.get("build", ""), "code_changed": changed, "why": why, "note": note}
+        with open(APP_STARTS, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+        BUILD.update(id=build, note=note if changed else (prev.get("note", "") if prev.get("build") == build else note),
+                     started=time.time())
+        msg = f"v{VERSION} build {build} - {why}" + (f" - NEW CODE: {note}" if changed and note else
+                                                       " - NEW CODE" if changed else " - same code as before")
+        task_event("app", "App start", True, msg)
+        if log:
+            log(f"[i] ===== App started: {msg} =====")
+        return rec
+    except Exception as _e:
+        quiet_err("app_start_marker", _e)
+        return None
 
 
 def read_task_events(n=150):
