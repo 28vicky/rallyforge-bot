@@ -2182,7 +2182,8 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .stickyhead[data-tab="ov"] .runnowbtn{display:none}
 .runnow .rnfind{width:100%;margin:10px 0 8px;padding:9px 12px 9px 34px;border:1px solid var(--line);border-radius:9px;background:var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='m16 16 4.5 4.5'/%3E%3C/svg%3E") no-repeat 11px center/15px;font:inherit;font-size:14px;color:var(--fg)}
 .runnow .rnfind:focus{outline:none;border-color:var(--accent1)}
-.runnow .rnlist{flex:1;min-height:0;max-height:212px;overflow-y:auto;margin:0 -6px;padding:0 6px;scrollbar-width:thin}
+.runnow .rnlist{margin:0 -6px;padding:0 6px}
+.runnow .rnlist.scroll{max-height:236px;overflow-y:auto;scrollbar-width:thin;overscroll-behavior:contain}
 .rnpop .runnow .rnlist{max-height:300px}
 .runnow .rngrp{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);padding:10px 8px 4px}
 .runnow .rngrp:first-child{padding-top:2px}
@@ -2218,3 +2219,11 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .ovtop .runnow .rnfind{margin-top:14px}
 .nownext .nnnow{margin-top:14px}
 .nownext .nnbad>span{white-space:nowrap;flex:none}
+.runnow .rnlab{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:4px 0 4px;padding:0 4px}
+.runnow .rnall{font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--accent2);background:none;border:0;cursor:pointer;padding:2px 0}
+.runnow .rnall[hidden]{display:none}
+.runnow .rnn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.runnow .rntag{font-size:12px;font-weight:600;color:var(--mute);white-space:nowrap}
+.runnow .rntag.bad{color:#b3261e}
+.runnow .rntag.due{color:var(--accent2)}
+.runnow .rntask .rngo{flex:none}

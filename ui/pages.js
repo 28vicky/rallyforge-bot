@@ -2309,55 +2309,77 @@ function runNowPop(anchor, serial) {
   const f = box.querySelector(".rnfind"); if (f) setTimeout(() => f.focus(), 50);
 }
 function runNowCard(serial, o = {}) {
-  // owner 30 Oct 20:51-20:54: ONE list - search, click a task = it runs next. No list inside a list, no extra Run button.
+  // owner 30 Oct 21:11: quick picks + search (like Spotlight) - up to 5 smart picks, no list scrolling inside the page;
+  // type to find any task; "All tasks" for browsing. Click = runs next; x on "Next:" cancels.
   const root = h("div", { class: o.bare ? "runnow bare" : "panel runnow" });
-  let data = { tasks: [], queue: [] }, q = "", last = "";
-  const find = h("input", { type: "search", class: "rnfind", placeholder: "Search tasks", "aria-label": "Search tasks", autocomplete: "off", oninput: () => { q = find.value.trim().toLowerCase(); drawList(); } });
+  let data = { tasks: [], queue: [] }, q = "", all = false, last = "", today = [];
+  const RK = "rf_rn_recent_" + (serial || "all");
+  const recent = () => { try { return JSON.parse(localStorage.getItem(RK) || "[]"); } catch (e) { return []; } };
+  const remember = (id) => { try { localStorage.setItem(RK, JSON.stringify([id, ...recent().filter((x) => x !== id)].slice(0, 8))); } catch (e) {} };
+  const find = h("input", { type: "search", class: "rnfind", placeholder: "Search all tasks", "aria-label": "Search all tasks", autocomplete: "off", oninput: () => { q = find.value.trim().toLowerCase(); draw(); } });
   const list = h("div", { class: "rnlist", role: "list" }), wait = h("div", { class: "rnwait" });
+  const allBtn = h("button", { class: "lnkb rnall", type: "button", onclick: () => { all = !all; draw(); } });
   const name = (t) => { const id = String(t.id || "").startsWith("duty:") ? t.id.slice(5) : ""; return id ? dutyName(id, t.title) : t.title; };
+  const shown = () => (data.tasks || []).filter((t) => { const id = t.id.startsWith("duty:") ? t.id.slice(5) : ""; return !(id && !dutyShown(id)) && !(RUN_SETUP.has(id) && !S.dev); });
   const add = async (t) => {
     const r = await act(api("run_now_add", { serial, id: t.id }));
     if (!r) return;
-    data = r; last = JSON.stringify(r.queue); drawList(); drawWait();
+    remember(t.id); data = r; last = JSON.stringify(r.queue); draw();
     toast(name(t) + (serial ? " runs next" : " runs next on every instance"), "ok");
     if (o.onAdd) o.onAdd();
   };
-  const drawList = () => {
-    list.innerHTML = "";
-    const queued = new Set((data.queue || []).map((x) => x.id)), groups = {};
-    for (const t of data.tasks || []) {
-      const id = t.id.startsWith("duty:") ? t.id.slice(5) : "";
-      if (id && !dutyShown(id)) continue;
-      if (RUN_SETUP.has(id) && !S.dev) continue;          // PCR2 A5: Map my city lives on Overview > City map only (it can wipe pins)
-      if (q && !name(t).toLowerCase().includes(q)) continue;
-      const g = !id ? "My tasks" : RUN_SETUP.has(id) ? "Setup" : DUTY_TEST.has(id) ? "Testing (developer)" : dutyGroup(id, t.group);
-      (groups[g] = groups[g] || []).push(t);
-    }
-    const order = ["Setup", ...DUTY_GROUPS, "Testing (developer)"].filter((g) => groups[g]);
-    for (const g of order) {
-      list.appendChild(h("div", { class: "rngrp" }, g));
-      for (const t of groups[g]) list.appendChild(h("button", { class: "rntask" + (queued.has(t.id) ? " q" : ""), type: "button", role: "listitem", disabled: queued.has(t.id), onclick: () => add(t) },
-        h("span", {}, name(t)), queued.has(t.id) ? h("small", {}, "Queued") : h("span", { class: "rngo" }, ico("bolt"))));
-    }
-    if (!order.length) list.appendChild(h("div", { class: "rnnone" }, (data.tasks || []).length ? "No task matches" : "Loading\u2026"));
+  const row = (t, tag, queued) => h("button", { class: "rntask" + (queued ? " q" : ""), type: "button", role: "listitem", disabled: queued, onclick: () => add(t) },
+    h("span", { class: "rnn" }, name(t)), queued ? h("small", { class: "rntag" }, "Queued") : tag ? h("small", { class: "rntag " + tag[1] }, tag[0]) : null, queued ? null : h("span", { class: "rngo" }, ico("bolt")));
+  const picks = () => {                                  // failed today -> recently run -> due now; at most 5
+    const by = new Map(shown().map((t) => [t.id, t])), out = [], seen = new Set();
+    const push = (id, tag) => { const t = by.get(id); if (t && !seen.has(id) && out.length < 5) { seen.add(id); out.push([t, tag]); } };
+    today.filter((x) => x.k === "gaveup" || x.k === "retry").forEach((x) => push("duty:" + x.id, ["Failed today", "bad"]));
+    recent().forEach((id) => push(id, ["Recent", ""]));
+    today.filter((x) => x.k === "due").forEach((x) => push("duty:" + x.id, ["Due now", "due"]));
+    return out;
   };
-  const drawWait = () => {
+  const draw = () => {
+    list.innerHTML = "";
+    const queued = new Set((data.queue || []).map((x) => x.id)), tasks = shown();
+    list.classList.toggle("scroll", !!q || all);
+    if (q || all) {                                       // search results / every task, grouped
+      const groups = {};
+      for (const t of tasks) {
+        if (q && !name(t).toLowerCase().includes(q)) continue;
+        const id = t.id.startsWith("duty:") ? t.id.slice(5) : "";
+        const g = !id ? "My tasks" : RUN_SETUP.has(id) ? "Setup" : DUTY_TEST.has(id) ? "Testing (developer)" : dutyGroup(id, t.group);
+        (groups[g] = groups[g] || []).push(t);
+      }
+      const order = ["Setup", ...DUTY_GROUPS, "Testing (developer)"].filter((g) => groups[g]);
+      for (const g of order) { list.appendChild(h("div", { class: "rngrp" }, g)); for (const t of groups[g]) list.appendChild(row(t, null, queued.has(t.id))); }
+      if (!order.length) list.appendChild(h("div", { class: "rnnone" }, tasks.length ? "No task called \u201c" + find.value.trim() + "\u201d" : "Loading\u2026"));
+    } else {
+      const p = picks();
+      p.forEach(([t, tag]) => list.appendChild(row(t, tag, queued.has(t.id))));
+      if (!p.length) list.appendChild(h("div", { class: "rnnone" }, tasks.length ? "Search above, or open All tasks. Tasks you run show up here." : "Loading\u2026"));
+    }
+    allBtn.hidden = !!q; allBtn.textContent = all ? "Show quick picks" : "All tasks (" + tasks.length + ")";
     wait.innerHTML = "";
     const qq = data.queue || [];
-    if (!qq.length) { wait.hidden = true; return; }
-    wait.hidden = false;
-    wait.append(h("span", { class: "lab" }, "Next:"), ...qq.map((x, i) => h("span", { class: "chip" }, (i + 1) + ". " + name(x) + " ",
-      h("a", { href: "#", title: "Cancel", "aria-label": "Cancel " + name(x), onclick: async (e) => { e.preventDefault(); const r = await act(api("run_now_remove", { serial, id: x.id })); if (r) { data = r; last = JSON.stringify(r.queue); drawList(); drawWait(); } } }, "\u00d7"))));
+    wait.hidden = !qq.length;
+    if (qq.length) wait.append(h("span", { class: "lab" }, "Next:"), ...qq.map((x, i) => h("span", { class: "chip" }, (i + 1) + ". " + name(x) + " ",
+      h("a", { href: "#", title: "Cancel", "aria-label": "Cancel " + name(x), onclick: async (e) => { e.preventDefault(); const r = await act(api("run_now_remove", { serial, id: x.id })); if (r) { data = r; last = JSON.stringify(r.queue); draw(); } } }, "\u00d7"))));
   };
+  const lab = h("div", { class: "rnlab" }, h("span", {}, "Quick picks"), allBtn);
   root.append(...[o.bare ? null : h("div", { class: "cardhead" }, h("h3", { title: serial ? "Runs next, then the bot carries on" : "Runs next on every instance" }, "Run a task now")),
-    find, list, wait].filter(Boolean));
-  drawList(); drawWait();
-  act(api("run_now", { serial })).then((j) => { if (j) { data = j; last = JSON.stringify(j.queue); drawList(); drawWait(); } });
+    find, lab, list, wait].filter(Boolean));
+  const relab = () => { lab.firstChild.textContent = q ? "Results" : all ? "All tasks" : "Quick picks"; };
+  find.addEventListener("input", relab); allBtn.addEventListener("click", relab);
+  draw();
+  act(api("run_now", { serial })).then((j) => { if (j) { data = j; last = JSON.stringify(j.queue); draw(); } });
+  const loadToday = async () => { if (!serial) return; const j = await api("today", { serial }, { quiet: true }).catch(() => null); if (j) { today = (j.queue || []).map((x) => ({ id: x.id, k: x.status })); draw(); } };
+  setTimeout(loadToday, 0);
   const tick = setInterval(async () => {          // the queue empties when the bot starts the task: redraw only when it changed
     if (!root.isConnected) { clearInterval(tick); return; }
     const j = await api("run_now", { serial }, { quiet: true }).catch(() => null);
-    if (j && j.queue && JSON.stringify(j.queue) !== last) { data = j; last = JSON.stringify(j.queue); drawList(); drawWait(); }
+    if (j && j.queue && JSON.stringify(j.queue) !== last) { data = j; last = JSON.stringify(j.queue); if (!root.contains(document.activeElement) || document.activeElement === find) draw(); }
   }, 10000);
+  const tick2 = setInterval(() => { if (!root.isConnected) { clearInterval(tick2); return; } loadToday(); }, 30000);
   return root;
 }
 
