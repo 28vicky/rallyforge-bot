@@ -19640,13 +19640,15 @@ def eq_green_buttons(shot, region=(330, 370, 210, 585)):
     return sorted(out, key=lambda b: (-b[2], b[1]))
 
 
-def eq_claim_here(dev, stop):
+def eq_claim_here(dev, stop, tag=""):
     """Every green Claim (and a green Claim All) on the open day / sub-tab, by colour. -> presses."""
     n = swipes = 0
-    for _ in range(25):
+    for i in range(25):
         if stop.is_set():
             break
         shot = dev.screenshot()
+        if i == 0 and tag and (USER / "admin.txt").exists():
+            rd_snap(shot, "eq_" + tag)                   # owner PC only: what each day / sub-tab looked like (31 Oct test)
         btn = eq_green_buttons(shot) or eq_green_buttons(shot, (0, 820, 540, 135))   # rows, else a Claim All bar at the bottom
         if btn:
             x, y, w = btn[0]
@@ -19719,7 +19721,8 @@ def eq_quest_page(dev, stop, log, name):
                 return n
             dev.tap(x + 10, y)
             _nap(stop, 0.9, 1.2)
-            n += eq_claim_here(dev, stop)
+            t0, n0 = time.time(), n
+            n += eq_claim_here(dev, stop, f"r{rnd}_d{x}_tab0")
             done = set()
             for _ in range(4):                           # sub-tabs (2-3 a day) with a red dot, in the band under the days
                 spots = [sp for sp in ev_red_spots(dev.screenshot(), (0, y + 25, 540, 75)) if (sp[0] // 30) not in done]
@@ -19729,7 +19732,8 @@ def eq_quest_page(dev, stop, log, name):
                 done.add(sx // 30)
                 dev.tap(max(20, sx - 40), sy + 14)
                 _nap(stop, 0.9, 1.2)
-                n += eq_claim_here(dev, stop)
+                n += eq_claim_here(dev, stop, f"r{rnd}_d{x}_tab{sx}")
+            log(f"[i]   {name}: day at x{x} round {rnd + 1}: {n - n0} claim(s), {len(done)} sub-tab(s) with a dot, {time.time() - t0:.0f} s")
     return n + eq_chests(dev, stop)
 
 
@@ -19745,7 +19749,9 @@ def run_event_quests(dev, cfg, log, stop):
     for name in EQ_NAMES:
         if stop.is_set():
             break
+        _t = time.time()
         state, p = eq_row_state(dev, stop, name)
+        log(f"[i]   {name}: row read in {time.time() - _t:.0f} s ({state or 'not there'})")
         if not state:
             log(f"[i]   {name}: not on the event page now (runs only on some days)")
             continue
