@@ -11740,17 +11740,22 @@ WHEEL_BTN = {100: (95, 924), 10: (269, 924), 1: (443, 924)}          # Spin butt
 WHEEL_COST = {100: 9000, 10: 900, 1: 100}
 WHEEL_COINS_BOX = (234, 128, 190, 48)
 WHEEL_ICON = (141, 328)                                              # "Wheel of Fortune" in the Tavern's ring menu
-WHEEL_RING_REF = (276, 476)       # where the Tavern was tapped when WHEEL_ICON was right (K 279,491 / Manhattan 272,462 30 Oct)
+# Owner 30 Oct 14:10: Tavern ring items found from the ring's own "i" (Detail) icon, found by picture - the items sit at a
+# fixed distance from it wherever the ring opens (measured on Stalds' open Tavern ring, debug\duty_ring_Great_General_Chest:
+# Detail i at 113,402). No text read (1-60 s on the busy PC; the two-line "Great General / Chest" label was not read).
+TAVERN_RING = {"wheel": (28, -84), "gchest": (259, -132)}
 
 
-def wheel_ring_shift(serial):
-    """Owner 30 Oct (Kiravik/Stalds 13:23-13:26): the ring menu opens AROUND the tapped Tavern. The map jump may leave
-    the Tavern low on the screen (228,689) - the fixed Wheel spot then hits empty ground. -> (dx, dy) to move the
-    Wheel item and its text search by (0, 0 when the Tavern spot is not known)."""
-    r = _RING_OK.get(serial or "")
-    if not r or len(r) < 4 or str(r[0]).lower() != "tavern" or time.time() - r[1] > 120:
-        return 0, 0
-    return int(r[2] - WHEEL_RING_REF[0]), int(r[3] - WHEEL_RING_REF[1])
+def tavern_ring_spot(shot, item):
+    """-> (x, y) of a Tavern ring item, or None when no ring (Detail icon) is on the screen."""
+    d = find_detail_icon(shot)
+    if not d or item not in TAVERN_RING:
+        return None
+    dx, dy = TAVERN_RING[item]
+    x, y = d[0] + dx, d[1] + dy
+    if not (15 <= x <= 525 and 110 <= y <= 860):
+        return None
+    return int(x), int(y)
 
 
 WHEEL_COINS_TIGHT = (225, 132, 155, 40)                  # the number only (the '+' button left out)
@@ -11966,12 +11971,9 @@ def run_wheel(dev, cfg, log, stop):
     reserve = int(conf["reserve"] or 0)
     shot = dev.screenshot()
     if not wheel_on_page(shot):
-        sdx, sdy = wheel_ring_shift(serial)
-        rx0, ry0 = max(0, min(240, sdx)), max(100, min(560, 250 + sdy))
-        p = find_text(shot, ["Wheel of Fortune", "Wheel of", "Fortune"], region=(rx0, ry0, 300, 300), cutoff=0.7)
-        tap_at = (p[0], p[1] - 40) if p else (max(20, min(520, WHEEL_ICON[0] + sdx)), max(120, min(840, WHEEL_ICON[1] + sdy)))
-        if sdx or sdy:
-            log(f"[i]   Wheel: the Tavern ring is not in the middle - Wheel item looked for {sdx:+},{sdy:+} px from its usual spot")
+        ring_at = tavern_ring_spot(shot, "wheel")
+        p = None if ring_at else find_text(shot, ["Wheel of Fortune", "Wheel of", "Fortune"], region=(0, 250, 300, 300), cutoff=0.7)
+        tap_at = ring_at or ((p[0], p[1] - 40) if p else WHEEL_ICON)
         dev.tap(*tap_at)
         _nap(stop, 2.2, 2.8)
         shot = dev.screenshot()
@@ -11982,7 +11984,7 @@ def run_wheel(dev, cfg, log, stop):
                 cv2.imwrite(str(d / "wheel_after_ring_tap.png"), shot)
             except Exception as _e:
                 quiet_err("wheel_after_ring_tap", _e)
-            log(f"[!]  Wheel: tapped the ring's Wheel item at {tap_at} ({'by its name' if p else 'fixed spot'}) - "
+            log(f"[!]  Wheel: tapped the ring's Wheel item at {tap_at} ({'from the ring picture' if ring_at else 'by its name' if p else 'fixed spot'}) - "
                 "the Wheel page did not show (picture: debug/wheel_after_ring_tap.png)")
             raise RuntimeError("the Wheel of Fortune page did not open")
     if conf.get("chips", "off") != "off":
@@ -12885,7 +12887,15 @@ def run_labor(dev, cfg, log, stop):
 
 def run_general_chest(dev, cfg, log, stop):
     """Tavern's ring menu is open: Great General Chest -> Free (only the free daily open)."""
-    if not rd_ring(dev, stop, ["Great General Chest", "General Chest"]):
+    at = tavern_ring_spot(dev.screenshot(), "gchest")      # owner 30 Oct: from the ring picture first (no text read)
+    opened = False
+    if at:
+        dev.tap(*at)
+        _nap(stop, 2.0, 2.6)
+        opened = not find_detail_icon(dev.screenshot())    # the ring is gone = the chest page opened
+        if opened:
+            log(f"[i]   Great General Chest: opened from the ring picture at {at}")
+    if not opened and not rd_ring(dev, stop, ["Great General Chest", "General Chest", "Great General"]):
         raise RuntimeError("no Great General Chest button in the Tavern menu")
     shot = dev.screenshot()
     rd_snap(shot, "gchest_1")
@@ -15596,6 +15606,9 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
     return None
 
 
+BUBBLE_BUILDINGS = {"tavern", "warehouse"}
+
+
 def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
     """Building with a known map place: go there on the own map, check its learned picture near the expected spot, tap.
     -> True (ring open), False (went there but not it), None (no map / place / camera lost: explore instead)."""
@@ -15622,6 +15635,9 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
     # Kiravik 25 Oct 14:02: camera reached the Tavern pin, but one tap exactly on the pin hit the ground (no ring) and the
     # map route gave up. A pin is a hand-placed point: try it, then a few spots around it.
     near = [spot] + [(spot[0] + ox, spot[1] + oy) for ox, oy in ((0, 45), (-45, 20), (45, 20), (0, 80), (-40, -30), (0, -40))]   # lower spots first: icons float above a building (Kiravik Tavern chest 27 Oct)
+    if bname.lower() in BUBBLE_BUILDINGS:                  # owner 30 Oct 14:10: the Tavern's chest bubble / the Warehouse's hand
+        near = [(spot[0] + ox, spot[1] + oy) for ox, oy in ((0, 45), (-45, 30), (45, 30), (0, 80), (0, 0))]   # sit ON TOP of the
+                                                           # building: a tap on the pin can hit the bubble - tap its lower body first
     near = [(x, y) for x, y in near if 70 <= x <= 420 and 160 <= y <= 800]   # never the HUD columns / bars
     rd_snap(shot, "nav_arrived")
     log(f"[i]   nav: arrived - tapping {bname} at {spot} shot=debug/duty_nav_arrived.png")
@@ -16272,6 +16288,9 @@ def run_offering_tributes(dev, cfg, log, stop):
 
 
 # --- gem duties (owner 22 Oct: the user switches them on knowing they spend gems; no extra gem block) ----------------
+DOME_GEM_BTN = (450, 155)          # green "500 gems" button, Purchase by Gems row (Kiravik 30 Oct debug\duty_dome_2)
+
+
 def run_wisdom_dome_tokens(dev, cfg, log, stop):
     """Wisdom Dome's ring menu is open: Rare Books -> + under the Goddess Honor Token -> Purchase by Gems (500 gems)
     and Buy in the confirm popup, as many times as set (game limit 5 a day). SPENDS GEMS."""
@@ -16300,10 +16319,16 @@ def run_wisdom_dome_tokens(dev, cfg, log, stop):
                 break
         if bought >= want:
             break
-        if not rd_tap(dev, stop, ["Purchase by Gems", "Purchase"], region=(300, 100, 240, 120), wait=(1.4, 1.8), shot=shot):
+        # Owner 30 Oct 14:10 (Kiravik 13:57): the text "Purchase by Gems" sits LEFT (x 150-325) - it was looked for over
+        # the green 500-gem button on the right, never found. The button is tapped by its place + green colour.
+        if btn_colour(shot, *DOME_GEM_BTN) != "green":
+            rd_snap(shot, "dome_nobutton")
             if bought == 0:
                 raise RuntimeError("no Purchase by Gems button on the Goddess Honor Token page")
             break
+        dev.tap(*DOME_GEM_BTN)
+        _nap(stop, 1.4, 1.8)
+        rd_snap(dev.screenshot(), "dome_3_confirm")
         if not rd_tap(dev, stop, ["Buy"], region=(240, 500, 280, 110), whole=True, wait=(1.8, 2.3)):
             rd_snap(dev.screenshot(), "dome_3")
             dev.back()

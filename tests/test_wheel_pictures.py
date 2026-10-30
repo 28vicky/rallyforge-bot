@@ -51,3 +51,17 @@ def test_x100_follows_the_reward_window(monkeypatch):
     assert done == 300
     spin = rb.WHEEL_BTN[100]
     assert taps == [spin, (270, 110), spin, (270, 110), spin, (270, 110)]
+
+
+def test_tavern_ring_items_from_detail_icon():
+    """Owner 30 Oct 14:10: Stalds' open Tavern ring - Wheel and Great General Chest from the Detail icon."""
+    shot = cv2.imread(str(S / "tavern_ring_stalds.png"))
+    w = rb.tavern_ring_spot(shot, "wheel")
+    g = rb.tavern_ring_spot(shot, "gchest")
+    assert w and abs(w[0] - 141) < 25 and 280 < w[1] < 340          # Wheel of Fortune icon / label
+    assert g and abs(g[0] - 372) < 30 and 240 < g[1] < 300          # Great General Chest icon
+
+
+def test_dome_gem_button_is_green():
+    shot = cv2.imread(str(S / "dome_honor_token_kiravik.png"))
+    assert rb.btn_colour(shot, *rb.DOME_GEM_BTN) == "green"
