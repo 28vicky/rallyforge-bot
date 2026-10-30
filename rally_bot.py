@@ -19545,52 +19545,13 @@ def run_ev_super_value(dev, cfg, log, stop):
 
 
 # --- Event quests: claim (owner 31 Oct 02:22-02:39; doc claude/flow_kings_path_gather_troops_31oct.md) ---------------
-# King's Path / Gather Troops live on the page of the CURRENT event icon in the city's right column (now Halloween), not in
-# the Event Center. That icon's picture and place change every event, so: every right-column icon with a countdown under
-# it is tried in turn (Follow Us has none) until one opens a page listing an event-quest row; that icon's picture is
-# remembered for the rest of the event. Row timer: "Event Quest Countdown" = claim the quests, "Chest Claiming Countdown"
+# King's Path / Gather Troops live on the page of the CURRENT event's icon (now Halloween), not in the Event Center. That
+# icon's place changes per instance and its picture every event: the bot finds it by its picture (event_icons/*.png,
+# one picture captured per event - owner 31 Oct 03:02). Row timer: "Event Quest Countdown" = claim the quests, "Chest Claiming Countdown"
 # = only the reached progress chests, row missing = event not on (not a failure). Go is never pressed.
 EQ_NAMES = ["King's Path", "Gather Troops"]
 EQ_COLUMN = (0, 55, 540, 850)                           # owner 31 Oct: event icons sit anywhere (K: top row, Kiravik: right column, bottom row)
-EQ_COUNTDOWN = re.compile(r"\d+\s*d\s*\d{1,2}\s*[:.]?\s*\d{2}", re.I)   # a DAY countdown ("3d 10:38"): event icons only, not building / buff timers
-
-
-def eq_icon_file(dev):
-    return USER / f"event_quest_icon_{re.sub(r'[^A-Za-z0-9]+', '_', str(getattr(dev, 'serial', 'dev')))}.png"
-
-
-def eq_countdown_words(shot):
-    """Day countdowns ("3d 10:32") anywhere on the city screen -> [(text, x, y)]. They are coloured text on banners
-    (K 31 Oct: yellow on red) that a plain text read misses, so each text colour is read on its own as well."""
-    x0, y0, w, h = EQ_COLUMN
-    area = shot[y0:y0 + h, x0:x0 + w]
-    out = [(t, int(sum(s[1] for s in ws) / len(ws)) + x0, int(sum(s[2] for s in ws) / len(ws)) + y0)
-           for t, ws in ocr_lines(area)]
-    hsv = cv2.cvtColor(area, cv2.COLOR_BGR2HSV)
-    for lo, hi in (((15, 120, 170), (40, 255, 255)), ((40, 110, 150), (90, 255, 255)), ((0, 0, 215), (180, 50, 255))):
-        halt_check()
-        g = cv2.resize(255 - cv2.inRange(hsv, lo, hi), None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-        try:
-            d = pytesseract.image_to_data(cv2.GaussianBlur(g, (3, 3), 0), output_type=pytesseract.Output.DICT,
-                                          config="--psm 11 -c tessedit_char_whitelist=0123456789d:")
-        except Exception:
-            continue
-        for i, t in enumerate(d["text"]):
-            if len(t.strip()) >= 4:
-                out.append((t.strip(), int((d["left"][i] + d["width"][i] / 2) / 3) + x0, int((d["top"][i] + d["height"][i] / 2) / 3) + y0))
-    return out
-
-
-def eq_column_icons(shot):
-    """-> [(x, y)] centres of the icons that carry a day countdown under them (anywhere on the city screen; the place and
-    the picture change every event), top to bottom."""
-    out = []
-    for text, x, y in eq_countdown_words(shot):
-        if "follow" in text.lower() or not EQ_COUNTDOWN.search(text.replace("O", "0").replace("o", "0")):
-            continue
-        if all(abs(y - 34 - oy) > 30 or abs(x - ox) > 40 for ox, oy in out):
-            out.append((x, y - 34))                      # the icon sits just above its countdown (phone 31 Oct: ~55 px of 2000)
-    return sorted(out, key=lambda p: (p[1] // 40, p[0]))
+EQ_ICON_DIR = USER / "event_icons"                      # owner 31 Oct 03:02: the event's icon picture, captured once per event
 
 
 def eq_list_names(dev, stop, scrolls=3):
@@ -19607,46 +19568,32 @@ def eq_list_names(dev, stop, scrolls=3):
 
 
 def eq_open_event_page(dev, cfg, log, stop):
-    """From the city: open the event page that lists King's Path / Gather Troops. -> True when it shows."""
-    f = eq_icon_file(dev)
-    if f.exists():                                       # the icon that worked earlier in this event
-        try:
-            tpl = cv2.imread(str(f))
-            x0, y0, w, h = EQ_COLUMN
-            shot = dev.screenshot()
-            r = cv2.matchTemplate(shot[y0:y0 + h, x0:x0 + w], tpl, cv2.TM_CCOEFF_NORMED)
-            _, best, _, loc = cv2.minMaxLoc(r)
-            if best >= 0.8:
-                dev.tap(x0 + loc[0] + tpl.shape[1] // 2, y0 + loc[1] + tpl.shape[0] // 2)
-                _nap(stop, 2.2, 2.8)
-                if eq_list_names(dev, stop):
-                    return True
-                leave_to_city(dev, cfg, stop, log)
-        except Exception as e:
-            quiet_err("eq_icon", e)
-        log("[i]   Event quests: the remembered event icon is gone (new event?) - looking again")
-        try:
-            f.unlink()
-        except OSError:
-            pass
-    icons = eq_column_icons(dev.screenshot())
-    if not icons:
-        rd_snap(dev.screenshot(), "event_quests_no_icons")
-    for n, (x, y) in enumerate(icons[:6]):
+    """From the city: tap the current event's icon, found by its picture (event_icons/*.png - a new picture is added
+    for every event, owner 31 Oct 03:02), wherever it sits. -> True when its page lists King's Path / Gather Troops."""
+    pics = sorted(EQ_ICON_DIR.glob("*.png")) if EQ_ICON_DIR.exists() else []
+    if not pics:
+        log("[!]   Event quests: no event icon picture yet - add the current event's icon to event_icons")
+        return False
+    x0, y0, w, h = EQ_COLUMN
+    for f in pics:
         if stop.is_set():
             return False
+        tpl = cv2.imread(str(f))
+        if tpl is None:
+            continue
         shot = dev.screenshot()
-        crop = shot[max(0, y - 30):y + 30, max(0, x - 30):x + 30].copy()
-        dev.tap(x, y)
+        r = cv2.matchTemplate(shot[y0:y0 + h, x0:x0 + w], tpl, cv2.TM_CCOEFF_NORMED)
+        _, best, _, loc = cv2.minMaxLoc(r)
+        if best < 0.75:
+            continue
+        dev.tap(x0 + loc[0] + tpl.shape[1] // 2, y0 + loc[1] + tpl.shape[0] // 2)
         _nap(stop, 2.2, 2.8)
         if eq_list_names(dev, stop):
-            try:
-                cv2.imwrite(str(f), crop)
-            except Exception as e:
-                quiet_err("eq_icon_save", e)
-            log(f"[i]   Event quests: event icon {n + 1} in the right column opens it - remembered for this event")
+            log(f"[i]   Event quests: opened the event by its icon picture '{f.stem}' ({best:.2f})")
             return True
+        log(f"[i]   Event quests: icon '{f.stem}' opened a page without King's Path / Gather Troops")
         leave_to_city(dev, cfg, stop, log)
+    rd_snap(dev.screenshot(), "event_quests_no_icon")
     return False
 
 
