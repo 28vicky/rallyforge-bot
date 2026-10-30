@@ -111,6 +111,7 @@ const ICO = {
   eye: '<path d="M2.500 12S6 5.500 12 5.500 21.500 12 21.500 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="2.800"/>',
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   egg: '<path d="M12 3C8 3 5 10 5 14.500a7 7 0 0 0 14 0C19 10 16 3 12 3z"/>',
+  bolt: '<path d="M13 3 5 13.5h6L10 21l8-11h-6z"/>',
 };
 function ico(name, cls) {
   const e = h("span", { class: "ico" + (cls ? " " + cls : "") });

@@ -445,7 +445,9 @@ function instancePage(serial) {
     h("div", { class: "ihtitle" }, sideBtn(), h("h2", { title: dev.name + " \u00b7 " + serial, style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx), status),
     h("div", { class: "ihacts" }, saveStEl(), bar),
     h("div", { class: "ihctl" }, jrSwitch(serial, { after: () => rerender() }), ajSwitch(serial, { after: () => rerender() }),
-      h("button", { id: "instTakeBack", class: "btn sm takeback", type: "button", style: { display: "none" }, title: "The game was opened on another device. Take it back now instead of waiting.", onclick: () => act(api("takeback", { serial })) }, "Take back")));
+      h("button", { id: "instTakeBack", class: "btn sm takeback", type: "button", style: { display: "none" }, title: "The game was opened on another device. Take it back now instead of waiting.", onclick: () => act(api("takeback", { serial })) }, "Take back"),
+      // owner 30 Oct 20:19: "Run a task now" was two scrolls down at 900 px - now on every tab, next to the switches
+      h("button", { class: "btn sm runnowbtn", type: "button", title: "Run one task now, before anything else - then the bot carries on", onclick: () => modal({ title: "Run a task now", body: runNowCard(serial, { bare: true }), buttons: [{ label: "Close" }] }) }, ico("bolt"), "Run a task now")));
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
@@ -2284,8 +2286,8 @@ function pinBuildingsDialog(culture) {
   load(culture);
 }
 
-function runNowCard(serial) {
-  const root = h("div", { class: "panel runnow" });
+function runNowCard(serial, o = {}) {
+  const root = h("div", { class: o.bare ? "runnow bare" : "panel runnow" });   // bare: inside the header "Run now" pop-up (owner 30 Oct 20:19)
   let pick = "", last = "";
   const set = async (name, o) => { const r = await act(api(name, { serial, ...o })); if (r) { last = JSON.stringify(r.queue); draw(r); } };
   const draw = (j) => {
@@ -2302,7 +2304,7 @@ function runNowCard(serial) {
     const go = h("button", { class: "btn", type: "button", disabled: !pick, onclick: () => { if (pick) { const id = pick; pick = ""; set("run_now_add", { id }); } } }, "Run now");
     const s = h("select", { "aria-label": "Task to run", onchange: (e) => { pick = e.target.value; go.disabled = !pick; } }, h("option", { value: "" }, "Pick a task\u2026"),
       ["Setup", ...DUTY_GROUPS, "Testing (developer)"].filter((g) => groups[g]).map((g) => h("optgroup", { label: g }, groups[g].map(([v, t]) => h("option", { value: v, selected: v === pick }, t)))));
-    root.append(...[h("div", { class: "cardhead" }, h("h3", {}, "Run a task now")),
+    root.append(...[o.bare ? null : h("div", { class: "cardhead" }, h("h3", {}, "Run a task now")),
       h("small", { class: "sub" }, serial ? "Runs once, before anything else, then the bot carries on." : "Runs once on every instance, before anything else."),
       h("div", { class: "runrow" }, s, go),
       (j.queue || []).length ? h("div", { class: "row", style: { gap: "6px", flexWrap: "wrap", marginTop: "8px" } }, h("span", { class: "lab" }, "Waiting:"),
