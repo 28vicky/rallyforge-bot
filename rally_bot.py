@@ -19552,25 +19552,45 @@ def run_ev_super_value(dev, cfg, log, stop):
 # = only the reached progress chests, row missing = event not on (not a failure). Go is never pressed.
 EQ_NAMES = ["King's Path", "Gather Troops"]
 EQ_COLUMN = (0, 55, 540, 850)                           # owner 31 Oct: event icons sit anywhere (K: top row, Kiravik: right column, bottom row)
-EQ_COUNTDOWN = re.compile(r"\d+\s*d\s*\d{1,2}\s*[:.]\s*\d{2}", re.I)   # a DAY countdown ("3d 10:38"): event icons only, not building / buff timers
+EQ_COUNTDOWN = re.compile(r"\d+\s*d\s*\d{1,2}\s*[:.]?\s*\d{2}", re.I)   # a DAY countdown ("3d 10:38"): event icons only, not building / buff timers
 
 
 def eq_icon_file(dev):
     return USER / f"event_quest_icon_{re.sub(r'[^A-Za-z0-9]+', '_', str(getattr(dev, 'serial', 'dev')))}.png"
 
 
+def eq_countdown_words(shot):
+    """Day countdowns ("3d 10:32") anywhere on the city screen -> [(text, x, y)]. They are coloured text on banners
+    (K 31 Oct: yellow on red) that a plain text read misses, so each text colour is read on its own as well."""
+    x0, y0, w, h = EQ_COLUMN
+    area = shot[y0:y0 + h, x0:x0 + w]
+    out = [(t, int(sum(s[1] for s in ws) / len(ws)) + x0, int(sum(s[2] for s in ws) / len(ws)) + y0)
+           for t, ws in ocr_lines(area)]
+    hsv = cv2.cvtColor(area, cv2.COLOR_BGR2HSV)
+    for lo, hi in (((15, 120, 170), (40, 255, 255)), ((40, 110, 150), (90, 255, 255)), ((0, 0, 215), (180, 50, 255))):
+        halt_check()
+        g = cv2.resize(255 - cv2.inRange(hsv, lo, hi), None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+        try:
+            d = pytesseract.image_to_data(cv2.GaussianBlur(g, (3, 3), 0), output_type=pytesseract.Output.DICT,
+                                          config="--psm 11 -c tessedit_char_whitelist=0123456789d:")
+        except Exception:
+            continue
+        for i, t in enumerate(d["text"]):
+            if len(t.strip()) >= 4:
+                out.append((t.strip(), int((d["left"][i] + d["width"][i] / 2) / 3) + x0, int((d["top"][i] + d["height"][i] / 2) / 3) + y0))
+    return out
+
+
 def eq_column_icons(shot):
     """-> [(x, y)] centres of the icons that carry a day countdown under them (anywhere on the city screen; the place and
     the picture change every event), top to bottom."""
     out = []
-    for text, ws in rd_lines(shot, EQ_COLUMN):
+    for text, x, y in eq_countdown_words(shot):
         if "follow" in text.lower() or not EQ_COUNTDOWN.search(text.replace("O", "0").replace("o", "0")):
             continue
-        x = int(sum(s[1] for s in ws) / len(ws))
-        y = int(sum(s[2] for s in ws) / len(ws))
         if all(abs(y - 34 - oy) > 30 or abs(x - ox) > 40 for ox, oy in out):
             out.append((x, y - 34))                      # the icon sits just above its countdown (phone 31 Oct: ~55 px of 2000)
-    return sorted(out, key=lambda p: p[1])
+    return sorted(out, key=lambda p: (p[1] // 40, p[0]))
 
 
 def eq_list_names(dev, stop, scrolls=3):
