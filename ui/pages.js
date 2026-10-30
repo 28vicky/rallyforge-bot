@@ -1777,8 +1777,9 @@ PAGES.duties = function (fixed) {
   const list = () => rows.filter((r) => dutyShown(r.id) && !RUN_SETUP.has(r.id)).map((r) => {     // one-time jobs live in Run now, not as switches
     const run = serial && r.on && nowText() && nowText().includes(String(r.title).toLowerCase());
     return Object.assign({}, r, { g: dutyGroup(r.id, r.group), t: dutyName(r.id, r.title), pts: DUTY_UI[r.id] ? DUTY_UI[r.id][2] : 0, status: run ? "run" : r.status });
-  }).sort((a, b) => DUTY_ORDER(a.id) - DUTY_ORDER(b.id)).concat([{ id: "@tasks", g: "My tasks", t: "My tasks", pts: 0, on: tasksOn(), status: "off",
-    schedule: nTasks() ? nTasks() + " tap list" + (nTasks() > 1 ? "s" : "") + ", run when no rally is waiting" : "Your own tap lists - none yet" }]);
+  }).sort((a, b) => DUTY_ORDER(a.id) - DUTY_ORDER(b.id))
+    .concat(nTasks() ? [{ id: "@tasks", g: "My tasks", t: "My tasks", pts: 0, on: tasksOn(), status: "off",   // owner 30 Oct 22:59: the old
+      schedule: nTasks() + " tap list" + (nTasks() > 1 ? "s" : "") + ", run when no rally is waiting" }] : []);   // tap lists: shown only to someone who made one
   const setOn = async (r, v) => {
     if (r.id === "@tasks") { if (serial) ovMake().city_enabled = v; else S.cfg.city_enabled = v; draw(); return; }   // page autosave
     take(await act(api("duty_set", { serial, id: r.id, on: v })));
@@ -1883,7 +1884,7 @@ PAGES.duties = function (fixed) {
       onkeydown: (e) => { if (e.key === "Escape" && q) { e.preventDefault(); e.stopPropagation(); q = ""; draw(); } } });
     const filters = h("div", { class: "dfilter" }, search,
       h("div", { class: "seg small" }, segBtn("On (" + onCount + ")", v.show === "on", () => { view.show = "on"; draw(); }), segBtn("All (" + L.length + ")", v.show === "all", () => { view.show = "all"; draw(); })),
-      h("div", { class: "rtnpills" }, [["", "All groups"]].concat(DUTY_GROUPS.map((g) => [g, g])).map(([g, l]) =>
+      h("div", { class: "rtnpills" }, [["", "All groups"]].concat(DUTY_GROUPS.filter((g) => L.some((r) => r.g === g)).map((g) => [g, g])).map(([g, l]) =>
         h("button", { class: "rtnpill" + (v.group === g ? " on" : ""), type: "button", onclick: () => { view.group = g; draw(); } }, l, h("span", { class: "pc" }, String(L.filter((r) => (!g || r.g === g) && pass(r)).length))))));
     const body = [];
     for (const g of DUTY_GROUPS) {
