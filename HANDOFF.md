@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## READY (30 Oct 11:30 IST) - test/live-30oct 27db985 = feat/shop-divination-30oct c6511f0 + fix/restart-only-empty-30min 0711895 (restart only after 30 min of an empty list; chat 'join an alliance' exact; Rory/GK-P alone via alliance_groups.json). 124 tests. NOT on the PC. Live test on Kiravik: claude/READ_HERE_live_test_30oct.md.
+
 ## RELEASED 2.5.28 (30 Oct ~03:30 IST, owner 03:15) - main 0472183 (version.json signed, check_release origin/main: tests OK, every file matches)
 = pc/ship4-plus-fastcap 92685ce: map safety + map lock, Alliance page / Mail fix, phone Back fix, Champions greets, rally list checks + 10 s refresh, MuMu fast capture. Nothing else.
 Owner PC: app\v2.5.27 already runs this code (labelled 2.5.27); installing 2.5.28 is safe (same code). PC free. Doc claude/release_2528_30oct.md.
