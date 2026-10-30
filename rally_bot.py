@@ -11723,6 +11723,15 @@ def ch_greet_word(img):
                     # Skip 30 Oct: read as 'gGreet' (the icon's edge before the word) - allow 1-2 stray letters in front
                     if 0 <= letters.find("greet") <= 2 or letters in ("gree", "greel", "greer"):
                         return (int(w[1]) + x0, int(w[2]) + y0)
+        # GK-P 30 Oct (0 greets all day): over the bright floor the page read never finds 'Greet4/10'. Read the left
+        # column one thin strip at a time, white letters only (they are the brightest) - one line per read.
+        for y in range(y0, y0 + h0 - 30, 12):
+            g = cv2.cvtColor(img[y:y + 34, 0:120], cv2.COLOR_BGR2GRAY)
+            big = cv2.resize(g, None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
+            txt = pytesseract.image_to_string(255 - ((big > 170) * 255).astype(np.uint8), config="--psm 7")
+            letters = re.sub(r"[^a-z]", "", txt.lower())
+            if "greet" in letters:
+                return (55, y + 17)
     except Exception as _e:
         quiet_err("ch_greet_word", _e)
     return None

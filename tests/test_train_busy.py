@@ -44,3 +44,9 @@ def test_champion_greet_read_with_stray_letter():
     """Skip 30 Oct (all day 'no Greet button'): OCR read 'gGreet' - the Greet button must still be found."""
     img = cv2.imread(str(Path(__file__).parent / "screens" / "champ_nogreet_skip.png"))
     assert rb.ch_greet_word(img) is not None
+
+
+def test_champion_greet_found_gkp():
+    """GK-P 30 Oct (0 greets all day): 'Greet4/10' over the bright floor - found by the thin-strip read."""
+    img = cv2.imread(str(Path(__file__).parent / "screens" / "champ_nogreet_gkp.png"))
+    assert rb.ch_greet_word(img) is not None
