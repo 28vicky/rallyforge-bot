@@ -12486,6 +12486,22 @@ def rd_nothing():
     _TL.rd_nothing = True
 
 
+def rd_wait(seconds):
+    """A duty step found the game busy (e.g. troops already training): not done and not failed - the duty comes back
+    once the game's timer is over (duty_record / duty_status 'waiting'). Owner 30 Oct 18:43."""
+    _TL.rd_wait_until = time.time() + max(60, int(seconds))
+
+
+def rd_hms_left(text):
+    """Seconds from a game countdown in OCR text ('04:51:19', '1d 02:10:05', '12:30'), or None."""
+    t = str(text).replace("O", "0").replace("o", "0")
+    m = re.search(r"(?:(\d+)\s*d\s*)?(\d{1,2})\s*[:.]\s*(\d{2})(?:\s*[:.]\s*(\d{2}))?", t)
+    if not m:
+        return None
+    d, a, b, c = (int(g) if g else 0 for g in m.groups())
+    return d * 86400 + (a * 3600 + b * 60 + c if m.group(4) else a * 60 + b)
+
+
 def rd_snap(img, tag):
     try:
         (USER / "debug").mkdir(exist_ok=True)
@@ -16159,8 +16175,10 @@ def rd_train(dev, cfg, log, stop, duty_id, ring_word, qty_xy, what):
     if not rd_find(shot, ["Train"], region=(300, 860, 240, 100), whole=True):
         if rd_find(shot, ["Speed Up", "Speedup"], region=(300, 860, 240, 100)):
             log(f"[+]  {what}: already busy")
-            if rd_opt(cfg, duty_id, "speedups", False) in (True, "true", "1", 1):
-                rd_finish_with_speedups(dev, stop, log, what)
+            if rd_opt(cfg, duty_id, "speedups", False) in (True, "true", "1", 1) and rd_finish_with_speedups(dev, stop, log, what):
+                rd_wait(60)
+            else:
+                rd_wait(1800)                                # busy: not done - look again in 30 min (owner 30 Oct 18:43)
             return
         raise RuntimeError("the training page did not open")
     dev.tap(*qty_xy)
@@ -16287,10 +16305,16 @@ def run_train_troops(dev, cfg, log, stop):
         raise RuntimeError(f"no Train button in the {bname} menu")
     shot = dev.screenshot()
     rd_snap(shot, "train_troops_1")
-    if rd_find(shot, ["Training Speedup", "Speed Up", "Speedup"], region=(280, 860, 260, 100)):
-        log(f"[+]  {what}: the {bname} is already training")
-        if speed:
-            rd_finish_with_speedups(dev, stop, log, what)
+    busy_row = rd_find(shot, ["Training Troops", "Training"], region=(0, 770, 540, 90))
+    if busy_row or rd_find(shot, ["Training Speedup", "Speed Up", "Speedup"], region=(280, 860, 260, 100)):
+        # owner 30 Oct 18:43 (Stalds 18:08): the page opened but the building is still training - "Training Troops
+        # 04:51:19", no Train button. Not a failure, not done: come back when the timer is over.
+        left = rd_hms_left(" ".join(t for t, _ in rd_lines(shot, (230, 790, 160, 60)))) if busy_row else None
+        log(f"[+]  {what}: the {bname} is already training" + (f" ({fmt_hms(left)} left)" if left else ""))
+        if speed and rd_finish_with_speedups(dev, stop, log, what):
+            rd_wait(60)                                    # finished with speed-ups: train the next batch in a minute
+        else:
+            rd_wait((left or 1800) + 60)                   # timer unread -> look again in 30 min
         return
     if not rd_find(shot, ["Train"], region=(280, 860, 260, 100), whole=True):
         raise RuntimeError("the training page did not open")
@@ -19210,7 +19234,7 @@ def save_duty_state(data):
 NEVER_DONE_DUTIES = {"royal_thief"}     # owner 30 Oct 15:37: any alliance member can invite at any time - never done / failed
 
 
-def duty_record(serial, duty_id, ok, msg="", nothing=False):
+def duty_record(serial, duty_id, ok, msg="", nothing=False, wait_until=0):
     with _DUTY_LOCK:
         data = load_duty_state()
         row = data.setdefault(serial or "default", {}).setdefault(duty_id, {})
@@ -19227,9 +19251,11 @@ def duty_record(serial, duty_id, ok, msg="", nothing=False):
             hist.pop(k, None)
         if not ok:
             row["last_error"], row["last_error_at"] = msg, time.time()
-        if ok:
+        if ok and wait_until:                                    # the game was busy (timer): not done, not failed - back after it
+            row["status"], row["next_at"], row["tries"] = "waiting", float(wait_until), 0
+        elif ok:
             row["last_ok"], row["status"] = time.time(), "done"
-            row["tries"] = 0                                     # fulfilled: failures start counting again from 0
+            row["tries"] = 0                                    # fulfilled: failures start counting again from 0
             if nothing and duty_id not in NEVER_DONE_DUTIES:     # the game had nothing left: once more to be sure, then done until the reset
                 row["empty"] = int(row.get("empty", 0)) + 1 if row.get("empty_day") == day else 1
                 row["empty_day"] = day
@@ -19350,6 +19376,10 @@ def duty_status(serial, duty_id, cfg):
             return fs
         if row.get("next_at", 0) > now:
             return "waiting", "Next " + time.strftime("%H:%M", time.localtime(row["next_at"]))
+        return "due", "Due"
+    if row.get("status") == "waiting":                      # the game was busy (e.g. troops training): due when its timer ends
+        if row.get("next_at", 0) > now:
+            return "waiting", "Busy in the game - next try " + time.strftime("%H:%M", time.localtime(row["next_at"]))
         return "due", "Due"
     every = int(conf.get("every_min", d["every_min"]) or 0)
     if any(o.get("k") == "every_n" for o in d.get("opts") or []):   # the user's own 'every N hours / minutes' wins
@@ -20246,6 +20276,7 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                     ev_step(f"{shown}: running its steps")
                     _nap(stop, 1.2, 1.8)
                     _TL.rd_nothing = False
+                    _TL.rd_wait_until = 0
                     was_busy = getattr(dev, "_guard_busy", False)
                     dev._guard_busy = True                   # the pop-up closer must not shut the duty's own windows (Levy window, 23 Oct)
                     try:
@@ -20278,7 +20309,8 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         if result is not None and not stop.is_set():
             task_event(getattr(dev, "serial", ""), shown, *result)
         if duty_id and result is not None and not stop.is_set():
-            if duty_record(getattr(dev, "serial", ""), duty_id, *result, nothing=bool(result[0] and getattr(_TL, "rd_nothing", False))) == "gaveup":
+            if duty_record(getattr(dev, "serial", ""), duty_id, *result, nothing=bool(result[0] and getattr(_TL, "rd_nothing", False)),
+                           wait_until=(getattr(_TL, "rd_wait_until", 0) or 0) if result[0] else 0) == "gaveup":
                 duty_failed_report(dev, cfg, log, shown, result[1])
         if not stop.is_set():                                # finished (done or failed): nothing to pick up again
             task_running_set(getattr(dev, "serial", ""), None)
