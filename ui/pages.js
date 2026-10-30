@@ -1699,7 +1699,7 @@ const DUTY_UI = {
   resource_tax: ["City", "Resource tax", 1], offering_tributes: ["City", "Offering", 3],
   black_market: ["Market & Tavern", "Black Market", 4], wheel: ["Market & Tavern", "Wheel of Fortune", 3], trade_carriage: ["Market & Tavern", "Trade Carriage", 3],
   champions: ["Market & Tavern", "Greet champions", 2], ranger_knight: ["Market & Tavern", "Ranger Knight Order", 3], tavern_catalog: ["Market & Tavern", "General library", 0],
-  alliance_help: ["Alliance", "Alliance help", 1],
+  alliance_help: ["Alliance", "Alliance help", 1], alliance_donation: ["Alliance", "Alliance donation", 0],
   alliance_shop: ["Alliance", "Alliance shop", 0],
   monster_rally: ["Army", "Monster hunts", 0],
   crazy_eggs: ["Events", "Crazy Eggs", 0], wisdom_dome_tokens: ["Events", "Wisdom Dome tokens", 0], royal_thief: ["Events", "Royal Thief", 0],
@@ -1720,6 +1720,10 @@ const DUTY_ORDER = (id) => { const i = Object.keys(DUTY_UI).indexOf(id); return 
 const dutyName = (id, t) => (DUTY_UI[id] ? DUTY_UI[id][1] : t);
 const dutyGroup = (id, g) => (DUTY_UI[id] ? DUTY_UI[id][0] : g === "Reward claims" ? g : "City");
 const dutyShown = (id) => S.dev || !DUTY_TEST.has(id);
+// owner 30 Oct 22:18-22:28: not proven yet on the owner's instances -> testers see them faded ("Not ready yet"), switch locked,
+// never run (rally_bot.NOT_READY_DUTIES - keep both lists the same). The owner's PC (dev tools) uses them as usual.
+const DUTY_NOT_READY = new Set(["trade_carriage", "alliance_donation", "wisdom_dome_tokens", "civilization_card", "lucky_raffle", "refining_card", "alliance_treasure", "recruit_citizens", "ranger_knight", "troop_healing", "build_traps", "mail", "alliance_shop", "ev_star_trail", "ev_divination", "ev_taotie", "tavern_catalog"]);
+const dutyLocked = (id) => !S.dev && DUTY_NOT_READY.has(id);
 const RUN_SETUP = new Set(["map_city"]);              // one-time jobs: Run now lists them under Setup, on top
 // C7: one status badge, one vocabulary (Done 07:23 · Done for today · Due · Next 08:01 · Retrying 08:30 · Running now)
 // PCR2 A2: a duty that failed 3+ times today is still tried every hour - never call it "Gave up"
@@ -1852,7 +1856,9 @@ PAGES.duties = function (fixed) {
       btn("Copy from another instance…", copyFrom, "sm"));
   };
   // ---- the list (C1): On / All, group chips with counts, two columns, fits one screen
-  const item = (r) => h("div", { class: "dline" + (r.on ? "" : " off") },
+  const item = (r) => dutyLocked(r.id) ? h("div", { class: "dline off notready", title: "Not ready yet - it comes in a later update. A screen recording of this task helps us finish it." },
+    h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: false, disabled: true, "aria-label": r.t + " (not ready yet)" }), h("span", { class: "sw" })),
+    h("div", { class: "dtx" }, h("b", {}, r.t), h("small", {}, "Not ready yet"))) : h("div", { class: "dline" + (r.on ? "" : " off") },
     h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!r.on, "aria-label": r.t, onchange: (e) => setOn(r, e.target.checked) }), h("span", { class: "sw" })),
     h("div", { class: "dtx", title: r.note || "" }, h("b", {}, r.t, r.pts ? h("span", { class: "dpts", title: "Activity points" }, "+" + r.pts) : null), h("small", {}, r.schedule || r.note || "")),
     S.dev && r.verified === false ? h("span", { class: "dbadge", title: "Developer: steps not yet watched on a real instance" }, "untested") : null,
@@ -1864,14 +1870,14 @@ PAGES.duties = function (fixed) {
   const draw = () => {
     const had = document.activeElement && document.activeElement.classList.contains("dsearch") && root.contains(document.activeElement);
     root.innerHTML = "";
-    const L = list(), onCount = L.filter((r) => r.on).length;
+    const L = list(), onCount = L.filter((r) => r.on && !dutyLocked(r.id)).length;
     const view = (S.dutyView = S.dutyView || {});
     if (!view.show && rows.length) view.show = onCount ? "on" : "all";
     if (view.show === "on" && !onCount) view.show = "all";
     if (view.group && !DUTY_GROUPS.includes(view.group)) view.group = "";
     const v = { show: view.show || "all", group: view.group || "" };
     const segBtn = (lab, on, fn) => h("button", { class: "segb" + (on ? " on" : ""), type: "button", onclick: fn }, lab);
-    const pass = (r) => (q.trim() ? qHit(r) : v.show === "all" || r.on);
+    const pass = (r) => (q.trim() ? qHit(r) : v.show === "all" || (r.on && !dutyLocked(r.id)));
     const search = h("input", { type: "search", class: "dsearch", placeholder: "Search duties", "aria-label": "Search duties", value: q, autocomplete: "off",
       oninput: (e) => { q = e.target.value; if (q.trim()) view.group = ""; draw(); },
       onkeydown: (e) => { if (e.key === "Escape" && q) { e.preventDefault(); e.stopPropagation(); q = ""; draw(); } } });
@@ -2181,97 +2187,6 @@ const FIXED_BUILDINGS = ["Keep", "Tavern", "Shrine", "Pasture", "Academy", "Mili
   "Triumphal Arch", "Research Factory", "Walls", "Archer Tower 1", "Archer Tower 2", "Watchtower", "Rally Spot",
   "Victory Column", "Wonder", "Fountain of the Gods", "Wisdom Dome", "Dragon Cliff", "Holy Palace", "Art Hall",
   "Council of State", "Subordinate City", "Battlefield"];
-function pinBuildingsDialog(culture) {
-  const st = { c: culture, sel: null, pins: {}, size: null, suggest: {}, z: 1, px: 0, py: 0 };
-  const body = h("div", { class: "pinbox" });
-  const cap = (c) => c.charAt(0).toUpperCase() + c.slice(1);
-  const norm = (x) => x.toLowerCase().replace(/[^a-z]/g, "");
-  const pinOf = (b) => { const k = Object.keys(st.pins).find((k) => norm(k) === norm(b)); return k ? st.pins[k] : null; };
-  const save = async (name, xy) => {
-    const r = await act(api("culture_pin_set", { culture: st.c, name, map: xy }));
-    if (r) { st.pins = r.pins; draw(); }
-  };
-  const nextFree = () => FIXED_BUILDINGS.find((b) => !pinOf(b)) || null;
-  const draw = () => {
-    body.innerHTML = "";
-    const done = FIXED_BUILDINGS.filter(pinOf).length;
-    body.appendChild(h("div", { class: "seg small pinseg" }, ["europe", "russia", "china", "korea", "japan", "arabia", "america"].map((c) =>
-      h("button", { class: "segb" + (st.c === c ? " on" : ""), type: "button", onclick: () => load(c) }, cap(c)))));
-    body.appendChild(h("p", { class: "hint" }, st.sel ? "Click on the map where the " + st.sel + " is. Drag a pin to move it." :
-      done === FIXED_BUILDINGS.length ? "Every building is pinned on the " + cap(st.c) + " map." : "Pick a building on the left, then click it on the map." +
-      (Object.keys(st.suggest).some((b) => !pinOf(b)) ? " Dashed pins are suggestions from the other cultures: click one to accept it or drag it onto the building." : "") +
-      " Scroll or +/- to zoom, drag the map to move it."));
-    const list = h("div", { class: "pinlist" }, FIXED_BUILDINGS.map((b) => {
-      const p = pinOf(b);
-      return h("div", { class: "pinrow" + (st.sel === b ? " on" : ""), onclick: () => { st.sel = b; draw(); } },
-        h("span", {}, b),
-        p ? h("span", { class: "row", style: { gap: "6px" } }, h("span", { class: "dbadge ok" }, "Pinned"),
-          h("button", { class: "pinx", type: "button", title: "Remove pin", onclick: (e) => { e.stopPropagation(); save(b, null); } }, "\u00d7"))
-          : h("span", { class: "dbadge todo" }, "To pin"));
-    }));
-    // Owner 27 Oct: zoom (wheel or +/-) and move the map (drag it) to read the buildings; dots keep their size.
-    // Suggested pins (dashed) = where the other cultures have this building: click to accept, drag to adjust.
-    const img = h("img", { class: "pinimg", src: "/api/culture_img?c=" + st.c + "&k=" + encodeURIComponent(window.KEY), alt: cap(st.c) + " map", draggable: false });
-    const stage = h("div", { class: "pinstage" }, img);
-    const wrap = h("div", { class: "pinwrap" + (st.sel ? " picking" : "") }, stage);
-    const view = () => { stage.style.transform = "translate(" + st.px + "px," + st.py + "px) scale(" + st.z + ")"; stage.style.setProperty("--iz", 1 / st.z); };
-    const clampPan = () => { const w = wrap.clientWidth, hh = wrap.clientHeight;
-      st.px = Math.min(0, Math.max(w - w * st.z, st.px)); st.py = Math.min(0, Math.max(hh - hh * st.z, st.py)); };
-    const zoomAt = (f, cx, cy) => { const z = Math.max(1, Math.min(6, st.z * f)); if (z === st.z) return;
-      st.px = cx - (cx - st.px) * z / st.z; st.py = cy - (cy - st.py) * z / st.z; st.z = z; clampPan(); view(); };
-    wrap.addEventListener("wheel", (e) => { e.preventDefault(); const r = wrap.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.25 : 0.8, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
-    const toMap = (e) => { const r = img.getBoundingClientRect();
-      return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * st.size[0], Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * st.size[1]]; };
-    img.onpointerdown = (e) => {                         // drag the map = move it; a click without moving = place the picked pin
-      if (e.button !== 0) return;
-      e.preventDefault(); img.setPointerCapture(e.pointerId);
-      const sx = e.clientX, sy = e.clientY, ox = st.px, oy = st.py; let moved = false;
-      const move = (ev) => { if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return; moved = true; wrap.classList.add("panning");
-        st.px = ox + ev.clientX - sx; st.py = oy + ev.clientY - sy; clampPan(); view(); };
-      const up = (ev) => { img.removeEventListener("pointermove", move); img.removeEventListener("pointerup", up); wrap.classList.remove("panning");
-        if (moved || !st.sel || !st.size) return; const b = st.sel; st.sel = null; save(b, toMap(ev)).then(() => { st.sel = nextFree(); draw(); }); };
-      img.addEventListener("pointermove", move); img.addEventListener("pointerup", up);
-    };
-    const addDot = (b, p, ghost) => {
-      const dot = h("span", { class: "pindot" + (ghost ? " ghost" : ""), title: ghost ? b + " - suggested: click to accept, drag to adjust" : b,
-        style: { left: (p[0] * 100 / st.size[0]) + "%", top: (p[1] * 100 / st.size[1]) + "%" } }, h("em", {}, b + (ghost ? "?" : "")));
-      dot.onpointerdown = (e) => {                       // drag a pin: pointer captured, no page scroll, no click on the map after it
-        e.preventDefault(); e.stopPropagation();
-        dot.setPointerCapture(e.pointerId);
-        st.dragged = false;
-        const move = (ev) => { st.dragged = true; const m = toMap(ev); dot.style.left = (m[0] * 100 / st.size[0]) + "%"; dot.style.top = (m[1] * 100 / st.size[1]) + "%"; };
-        const up = (ev) => {
-          dot.removeEventListener("pointermove", move); dot.removeEventListener("pointerup", up);
-          if (st.dragged) save(b, toMap(ev)); else if (ghost) save(b, p);
-          setTimeout(() => { st.dragged = false; }, 0);
-        };
-        dot.addEventListener("pointermove", move); dot.addEventListener("pointerup", up);
-      };
-      dot.onclick = (e) => e.stopPropagation();
-      stage.appendChild(dot);
-    };
-    if (st.size) for (const b of FIXED_BUILDINGS) {
-      const p = pinOf(b);
-      if (p) addDot(b, p, false);
-      else if (st.suggest[b]) addDot(b, st.suggest[b], true);
-    }
-    const zbar = h("div", { class: "pinzoom" },
-      h("button", { class: "btn small", type: "button", title: "Zoom in", "aria-label": "Zoom in", onclick: () => zoomAt(1.5, wrap.clientWidth / 2, wrap.clientHeight / 2) }, "+"),
-      h("button", { class: "btn small", type: "button", title: "Zoom out", "aria-label": "Zoom out", onclick: () => zoomAt(1 / 1.5, wrap.clientWidth / 2, wrap.clientHeight / 2) }, "\u2212"),
-      h("button", { class: "btn small", type: "button", title: "Whole map", onclick: () => { st.z = 1; st.px = st.py = 0; view(); } }, "Fit"));
-    view();
-    body.appendChild(h("div", { class: "pingrid" }, list, h("div", { class: "pinmapcol" }, zbar, wrap)));   // zoom buttons above the map: never over a building
-    body.appendChild(h("p", { class: "hint" }, done + " of " + FIXED_BUILDINGS.length + " pinned on the " + cap(st.c) + " map. Pins are saved at once and used by every instance matched to this culture."));
-  };
-  const load = async (c) => {
-    const r = await act(api("culture_pins_get", { culture: c }));
-    if (!r) return;
-    if (c !== st.c) { st.z = 1; st.px = st.py = 0; }
-    st.c = c; st.pins = r.pins; st.size = r.size; st.suggest = r.suggest || {}; st.sel = nextFree(); draw();
-  };
-  modal({ title: "Pin buildings", wide: true, body, buttons: [{ label: "Done", cls: "pri" }] });
-  load(culture);
-}
 
 function runNowCard(serial, o = {}) {
   // owner 30 Oct 21:11-21:17: quick picks (your recent tasks) + search, like Spotlight - no list scrolling inside the page;
@@ -2318,17 +2233,11 @@ function runNowCard(serial, o = {}) {
     list.innerHTML = "";
     const queued = new Set((data.queue || []).map((x) => x.id)), tasks = shown();
     list.classList.toggle("scroll", !!q || all);
-    if (q || all) {                                       // search results / every task, grouped
-      const groups = {};
-      for (const t of tasks) {
-        if (q && !name(t).toLowerCase().includes(q)) continue;
-        const id = t.id.startsWith("duty:") ? t.id.slice(5) : "";
-        const g = !id ? "My tasks" : RUN_SETUP.has(id) ? "Setup" : DUTY_TEST.has(id) ? "Testing (developer)" : dutyGroup(id, t.group);
-        (groups[g] = groups[g] || []).push(t);
-      }
-      const order = ["Setup", ...DUTY_GROUPS, "Testing (developer)"].filter((g) => groups[g]);
-      for (const g of order) { list.appendChild(h("div", { class: "rngrp" }, g)); for (const t of groups[g]) list.appendChild(row(t, null, queued.has(t.id))); }
-      if (!order.length) list.appendChild(h("div", { class: "rnnone" }, tasks.length ? "No task called \u201c" + find.value.trim() + "\u201d" : "Loading\u2026"));
+    if (q || all) {                                       // owner 30 Oct 22:33: search results / every task as one A-Z list -
+      const found = tasks.filter((t) => !q || name(t).toLowerCase().includes(q))   // no categories (they misled: Trade Carriage
+        .sort((a, b) => name(a).localeCompare(name(b)));                         // is not a Market & Tavern task)
+      for (const t of found) list.appendChild(row(t, null, queued.has(t.id)));
+      if (!found.length) list.appendChild(h("div", { class: "rnnone" }, tasks.length ? "No task called \u201c" + find.value.trim() + "\u201d" : "Loading\u2026"));
     } else {
       const p = picks();
       p.forEach(([t, tag]) => list.appendChild(row(t, tag, queued.has(t.id))));
@@ -2922,13 +2831,11 @@ function monsterRallyTab(serial) {
   const oSave = (rows) => { order = rows; queue({ order: rows }); };
   const oKey = (r) => r.name.toLowerCase() + "|" + r.min + "|" + r.max;
   const oName = (r) => r.name + (r.min <= 1 && r.max >= 99 ? " · all levels" : r.min === r.max ? " " + r.min : " " + r.min + "\u2013" + r.max);
-  const oPresets = (r) => MR_PRESETS.filter((p) => model[p].some((c) => oFits(c.name, r.name) && (!c.l || (c.l >= r.min && c.l <= r.max))));
   const oMissing = () => { const rows = oRows(), out = [], seen = new Set();
     for (const p of MR_PRESETS) for (const c of model[p]) { const k = c.name.toLowerCase() + "|" + (c.l || 0);
       if (seen.has(k)) continue; seen.add(k);
       if (!rows.some((r) => oFits(r.name, c.name) && (c.l ? r.min <= c.l && c.l <= r.max : r.min <= 1 && r.max >= 99))) out.push({ name: c.name, min: c.l || 1, max: c.l || 99, km: 0 }); }
     return out; };
-  const kmTxt = (km) => km ? "\u2264 " + km + " km" : "Any";
   const orderBox = h("section", { class: "panel huorder", "aria-label": "Hunt order" });
   // owner 29 Oct 22:28: Save order (any name) + Load order (pop-up: Load / Rename / Delete per saved list)
   let saved = null;

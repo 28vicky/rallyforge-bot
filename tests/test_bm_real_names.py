@@ -63,3 +63,31 @@ class BMRealNames(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NotReadyDuties(unittest.TestCase):
+    """Owner 30 Oct 22:28: testers never run 'Not ready yet' duties; the owner's PC (admin.txt) does."""
+    def test_tester_skips(self):
+        import types
+        d = rb.USER / "admin.txt"
+        had = d.exists()
+        try:
+            if had:
+                d.rename(d.with_suffix(".bak"))
+            cfg = {"duties": {"trade_carriage": {"on": True}, "alliance_help": {"on": True}}}
+            self.assertEqual(rb.duty_status("x", "trade_carriage", cfg)[0], "off")
+            self.assertNotIn("duty:trade_carriage", [t["name"] for t in rb.duty_tasks_due(cfg, "x")])
+            d.write_text("owner")
+            self.assertTrue(rb.duty_ready("trade_carriage"))
+        finally:
+            if d.exists():
+                d.unlink()
+            if had:
+                d.with_suffix(".bak").rename(d)
+
+    def test_lists_match_ui(self):
+        import re as _re
+        js = (Path(rb.__file__).parent / "ui" / "pages.js").read_text(encoding="utf-8")
+        ui = set(_re.findall(r'"(\w+)"', _re.search(r"DUTY_NOT_READY = new Set\(\[(.*?)\]\)", js).group(1)))
+        self.assertEqual(ui, rb.NOT_READY_DUTIES)
+        self.assertTrue(rb.NOT_READY_DUTIES <= set(rb.DUTY_BY_ID))

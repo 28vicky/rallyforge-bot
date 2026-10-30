@@ -768,7 +768,6 @@ def bluestacks_confs():
 
 
 _BS_CACHE = [0.0, []]
-BLUESTACKS_CONFS = tuple(_BS_DEFAULT)
 
 
 def mumu_names(adb=None):
@@ -3377,8 +3376,6 @@ class DeviceControl:
 
 
 # ----------------------------------------------------------------- generals
-GEN_BOX = (120, 130)                    # old fixed picture size (kept for old code)
-GEN_FROM_CENTRE = (60, 92)
 GEN_SLOTS_X, GEN_SLOTS_Y = (101, 269, 439), (319, 568)     # card centres in the grid view
 GEN_CARDS_X, GEN_CARDS_Y = (22, 191, 360), (203, 452)      # top-left of each card in the grid view
 GEN_PORTRAIT = (4, 32, 152, 136)        # the whole portrait art inside a card (x, y, w, h), without the stars,
@@ -3988,12 +3985,6 @@ def find_general(screen, name, threshold=0.8, copy="any", idle_only=False):
     return (pick[0], pick[1], pick[2], (w, h))
 
 
-def save_general(name, img, cx, cy):
-    """Save the whole portrait of the grid-view card nearest to (cx, cy) in a 540x960 screenshot."""
-    rect = portrait_rect(cx, cy, img)
-    if rect is None:
-        raise ValueError("That card is cut off by the edge of the list. Scroll so it is fully visible.")
-    return save_general_region(name, img, rect)
 
 
 def save_general_region(name, img, rect):
@@ -4303,8 +4294,6 @@ def favourite_on(screen):
 
 
 GEN_TAB_NAMES = ["All", "Military", "Development", "Duty", "Subordinate City"]
-VIEW_LIST_X = {"toggle": 133, "heart": 189, "idle": 244}          # the buttons under the tabs while the list is in LIST view
-VIEW_GRID_X = {"toggle": 160, "heart": 278, "idle": 395}          # ... and in GRID view (they get text labels)
 
 
 def tab_row(screen):
@@ -5433,18 +5422,6 @@ def plausible_general_name(name):
     return True
 
 
-def _words_to_labels(lines, gap=22):
-    """OCR words of one strip -> [(label, x centre)] (words closer than `gap` pixels form one label)."""
-    ws = sorted((w for _, row in lines for w in row), key=lambda w: w[1])
-    out = []
-    for w in ws:
-        if out and w[1] - w[3] / 2 - out[-1][2] < gap:
-            out[-1][0].append(w[0])
-            out[-1][2] = w[1] + w[3] / 2
-            out[-1][1] = (out[-1][1] + w[1]) / 2
-        else:
-            out.append([[w[0]], w[1], w[1] + w[3] / 2])
-    return [(" ".join(o[0]), int(o[1])) for o in out]
 
 
 def crawl_portraits(dev, cfg, log, stop, progress=None):
@@ -8952,21 +8929,6 @@ def _flag_on():
         return False
 
 
-def gain_probe(dev, stop, log):
-    """Test aid (only with city_nav_squares.txt, on a city that fits the picture): swipe by known amounts and log how far the
-    map really moved, to learn how to count squares in other city styles."""
-    try:
-        for fx, fy, tx, ty in [(300, 400, 140, 400), (300, 400, 300, 160), (230, 300, 380, 560), (300, 600, 300, 520), (300, 460, 300, 480)]:
-            a = locate_in_city(dev.screenshot())
-            dev.swipe(fx, fy, tx, ty, 450)
-            _nap(stop, 1.0, 1.3)
-            b = locate_in_city(dev.screenshot())
-            if a and b:
-                log(f"[i]   swipe probe: finger {tx - fx},{ty - fy} -> camera moved {round(b[0] - a[0])},{round(b[1] - a[1])}")
-            else:
-                log(f"[i]   swipe probe: finger {tx - fx},{ty - fy} -> picture not matched ({bool(a)},{bool(b)})")
-    except Exception as e:
-        log(f"[i]   swipe probe failed: {e}")
 
 
 def learn_corner(nav, log):
@@ -9356,40 +9318,6 @@ def nearest_slot(slots, x, y, far=260, name=None, taken=()):
     return 0
 
 
-def read_building_level(dev, cfg, log, stop, pos):
-    """Test run, the 'tap it and read it' way: tap the building, press Detail, then More Information and read the header
-    ('Walls Level 35'). Everything is closed again afterwards. -> (name, level) or None."""
-    nap = lambda lo, hi=None: _nap(stop, lo, hi)
-    dev.tap(*pos)
-    nap(0.9, 1.3)
-    shot = dev.screenshot()
-    d = find_text(shot, ["Detail", "Details"], region=(0, 180, 540, 640))
-    result = None
-    if d:
-        dev.tap(d[0], d[1] - 34)                            # the round icon sits just above its word
-        nap(1.0, 1.4)
-        shot = dev.screenshot()
-        more = find_text(shot, ["More Information"], region=(60, 780, 420, 150))
-        if more:
-            dev.tap(*more)
-            nap(0.9, 1.3)
-            shot = dev.screenshot()
-            x, y, w, h = 60, 130, 420, 80
-            for text, _ in ocr_lines(shot[y:y + h, x:x + w]):
-                m = re.search(r"([A-Za-z' ]+?)\s+Level\s*(\d+)", text)
-                if m:
-                    result = (m.group(1).strip(), int(m.group(2)))
-                    break
-                nm = match_building(text)                   # some buildings (Wonder...) have no level in the header
-                if nm:
-                    result = (nm, 0)
-                    break
-    for _ in range(4):                                      # close the pop-up / Detail page, back to the city
-        if screen_state(dev.screenshot(), cfg) == "city":
-            break
-        dev.back()
-        nap(0.7, 1.0)
-    return result
 
 
 def scan_city(dev, cfg, log, stop, progress=None):
@@ -11882,7 +11810,6 @@ CHAMPIONS = ["Cleopatra VII", "Helen", "Elisabeth", "Ariadne", "Dulcinea", "Esme
 CH_TAPS, CH_GREETS = 15, 10
 CH_LEFT, CH_RIGHT = (31, 486), (507, 486)          # arrows between champions (stop at both ends)
 CH_BODY = (270, 520)                               # tap the champion
-CH_GREET = (55, 782)                               # Greet button
 CH_NAME_BOX = (90, 100, 360, 80)
 CH_COUNT_BOX = (20, 590, 500, 55)                  # "Daily Empowerment Chance (n/15)"
 CH_GREET_BOX = (0, 795, 150, 70)                   # "Greet 3/10" + timer
@@ -16099,6 +16026,108 @@ def run_alliance_help(dev, cfg, log, stop):
     log("[+]  Alliance Help: Help All pressed - everyone helped")
 
 
+# --- Alliance Donation (owner 30 Oct 19:56 + 22:28; recordings 21 Oct 15:07 Kiravik, 22 Oct 02:27 tester) -----------------
+# Alliance > Alliance Science > green Donate on the first science until 'Remaining Donations' is 0/13. Only the FREE
+# donations: the button must read 'Donate' (when they are used up it shows a gem price - never pressed). The chances refill
+# over time ('Chances will be full in 03:59:59'), so the duty comes back every hour.
+def don_remaining(img):
+    """'Remaining Donations: 13/13' -> (left, max) or None."""
+    try:
+        for t, _ws in ocr_lines(img[150:300, 0:360], 2.5):
+            m = re.search(r"(\d{1,2})\s*[/\\l|]\s*(\d{1,2})", t)
+            if m and ("onat" in t.lower() or "emain" in t.lower() or len(_ws) <= 3):
+                a, b = int(m.group(1)), int(m.group(2))
+                if 0 <= a <= b <= 50:
+                    return a, b
+        c = img[180:250, 0:300]                            # a full counter wraps to 2 lines ('Remaining / Donations:13/13')
+        g = cv2.resize(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY), None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+        for b in (g, 255 - cv2.threshold(g, 130, 255, cv2.THRESH_BINARY)[1]):
+            t = pytesseract.image_to_string(b, config="--psm 6")
+            m = re.search(r"(\d{1,2})\s*[/\\l|]\s*(\d{1,2})", t)
+            if m and "onat" in t.lower() and int(m.group(1)) <= int(m.group(2)) <= 50:
+                return int(m.group(1)), int(m.group(2))
+    except Exception as _e:
+        quiet_err("don_remaining", _e)
+    return None
+
+
+def don_button(img):
+    """The top-most green Donate button (right side) -> (x, y) or None: its word first, else the green button shape.
+    Only tapped while the counter shows free donations left (when they are used up the button shows a gem price)."""
+    p = find_text(img, ["Donate"], region=(300, 300, 240, 560), cutoff=0.8)
+    if p and btn_colour(img, int(p[0]), int(p[1])) == "green":
+        return int(p[0]), int(p[1])
+    try:
+        hsv = cv2.cvtColor(img[300:860, 300:540], cv2.COLOR_BGR2HSV)
+        m = cv2.morphologyEx(cv2.inRange(hsv, (40, 90, 50), (85, 255, 230)), cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+        cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        boxes = [b for b in (cv2.boundingRect(c) for c in cs) if 80 < b[2] < 170 and 30 < b[3] < 65]
+        if boxes:
+            x, y, w, h = min(boxes, key=lambda b: b[1])
+            return x + w // 2 + 300, y + h // 2 + 300
+    except Exception as _e:
+        quiet_err("don_button", _e)
+    return None
+
+
+def run_alliance_donation(dev, cfg, log, stop):
+    rd_alliance_page(dev, cfg, stop)
+    if not rd_alliance_row(dev, stop, ["Alliance Science"], title=["Alliance Science", "Science"]):
+        rd_snap(dev.screenshot(), "adon_failed")
+        raise RuntimeError("the Alliance Science page did not open (row not found or another page opened)")
+    t0, rem, btn, shot = time.time(), None, None, None
+    while not stop.is_set() and time.time() - t0 < 8:      # slow page load: wait for the counter
+        _nap(stop, 0.7, 0.9)
+        shot = dev.screenshot()
+        rem, btn = don_remaining(shot), don_button(shot)
+        if rem is not None:
+            break
+    if shot is not None:
+        rd_snap(shot, "adon_1")
+    if rem is None:
+        raise RuntimeError("the donation counter (Remaining Donations) was not readable - nothing donated")
+    left, top = rem
+    log(f"[i]   Alliance Donation: donations left {left}/{top}")
+    if left == 0:
+        log("[+]  Alliance Donation: no free donation left right now - back in an hour")
+        return
+    if not btn:
+        raise RuntimeError("no green Donate button on the page")
+    done = 0
+    while left > 0 and done < 60 and not stop.is_set():
+        for _ in range(min(left, 5)):                      # recording: taps ~1 s apart work; re-read the counter every 5
+            dev.tap(*btn)
+            duty_progress()
+            _nap(stop, 0.9, 1.2)
+            done += 1
+        _nap(stop, 0.8, 1.1)
+        shot = dev.screenshot()
+        r = don_remaining(shot)
+        if r is None:                                      # something covered the page (critical pop-up?) - look again once
+            _nap(stop, 1.0, 1.4)
+            shot = dev.screenshot()
+            r = don_remaining(shot)
+            if r is None:
+                rd_snap(shot, "adon_unknown")
+                raise RuntimeError("the page changed while donating - stopped")
+        if r[0] >= left:                                   # nothing used: the science is full or the button moved
+            nb = don_button(shot)
+            if not nb or nb == btn:
+                rd_snap(shot, "adon_stuck")
+                raise RuntimeError(f"the donations did not go down ({r[0]}/{r[1]} left)")
+            btn = nb
+        left = r[0]
+        if left > 0:
+            nb = don_button(shot)                          # the free button must still read 'Donate' before more taps
+            if not nb:
+                break
+            btn = nb
+    rd_snap(dev.screenshot(), "adon_2")
+    log(f"[+]  Alliance Donation: {top - left} of {top} free donations used" + ("" if left == 0 else f", {left} left"))
+    if left > 0:
+        raise RuntimeError(f"{left} free donation(s) left - trying again later")
+
+
 # --- Resource collecting (owner 29 Oct + recording 29 Oct 18:04): one tap on the floating hand above the Warehouse
 # collects every field. No city map: look at the city view, then a few slow drags around it.
 HAND_TPL = "warehouse_hand"
@@ -16812,6 +16841,18 @@ CARRIAGE_PER_DAY = 4                                       # the game's daily tr
 
 
 def carriage_left(img):
+    """'Transports Left Today: 4' -> 4. Kiravik 30 Oct 22:32: read over the whole top the line came out as noise and the
+    right page was taken for a wrong one - the counter's own dark bar is read first."""
+    try:
+        bar = img[150:195, 15:440]
+        for bright in (False, True):
+            for t, _ in ocr_lines(bar, 2.5 if not bright else 3.0, bright=bright):
+                if "transport" in t.lower() and "left" in t.lower():
+                    nums = rd_numbers(t)
+                    if nums and 0 <= nums[-1] <= 10:
+                        return nums[-1]
+    except Exception as _e:
+        quiet_err("carriage_left", _e)
     for t, _ in rd_lines(img, (0, 60, 540, 260)):
         if "transport" in t.lower() and "today" in t.lower():
             nums = rd_numbers(t)
@@ -16870,6 +16911,16 @@ def page_has_back_arrow(shot):
         return False
 
 
+def on_base_view(shot):
+    """The city or the world map with no window on top (where the phone Back key would only ask to exit the game)."""
+    try:
+        if world_map_fast(shot):
+            return True
+        return has_template("city_screen") and find(shot, "city_screen", 0.8, STATE_REGIONS["city_screen"]) is not None
+    except Exception:
+        return False
+
+
 def task_guard(dev, stop, log, what, expect, shot=None):
     """Owner 30 Oct 15:37 - screen guard for every task step. expect(shot) -> True when the screen is the one this step
     belongs to. Wrong screen (stray tap, pop-up, other window): nothing is tapped or bought there; the game's Back arrow
@@ -16891,6 +16942,8 @@ def task_guard(dev, stop, log, what, expect, shot=None):
                 continue
             dev.tap(*GAME_BACK_ARROW)
         else:
+            if on_base_view(shot):                         # owner 25 Oct + 30 Oct 22:33: Back on the city / map only opens
+                break                                      # 'exit the game?' - the runner restarts the task from the city
             dev.back()
         _nap(stop, 1.2, 1.6)
         shot = dev.screenshot()
@@ -16918,7 +16971,9 @@ def rd_page(dev, stop, log, words, region, shot=None):
 
 
 def is_carriage_page(shot):
-    return carriage_left(shot) is not None
+    if carriage_left(shot) is not None:
+        return True
+    return rd_seen(shot, ["Trade Carriage"], region=(100, 0, 340, 70)) and rd_seen(shot, ["My Carriage"], region=(0, 80, 540, 60))
 
 
 CARRIAGE_CHEST_MIN = 0.62
@@ -18183,21 +18238,6 @@ def mr_attack_spot(shot):
     return (p[0], p[1]) if p else None
 
 
-def mr_still_there(dev, stop):
-    """While waiting for a march: tap the monster in the middle; True when its ring shows Attack (the ring is closed again)."""
-    for dx, dy in MR_NEAR[:3]:
-        if stop.is_set():
-            return True
-        dev.tap(MR_CENTER[0] + dx, MR_CENTER[1] + dy)
-        _nap(stop, 1.2, 1.5)
-        hit = mr_attack_spot(dev.screenshot())
-        dev.tap(*MR_EMPTY)                                  # close the ring on empty map
-        _nap(stop, 0.7, 0.9)
-        if hit:
-            return True
-        if MR_EMPTY_RING[0]:                                # empty land on the tile: the monster is dead
-            return False
-    return False
 
 
 def mr_open_monster(dev, stop, want, level=None):
@@ -18865,7 +18905,6 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
 # Great Expedition, Valuable Event, Super Value Return). Events come and go: when the event row / icon is not there the
 # duty logs it and is done for the day (rd_nothing), never a failure. Only Claim / Free buttons are pressed; a green
 # Claim is checked by its colour, prices / gems / Buy / packages are never pressed (RD_DANGER).
-EV_BACK = (46, 40)                                       # round Back arrow, top-left of every event page
 EV_CLOSE_SPOT = (110, 250)                               # empty spot above a "Congratulations!" panel on event pages
 
 
@@ -19241,7 +19280,6 @@ def ev_bottom_icon(dev, stop, captions, titles):
     return rd_seen(dev.screenshot(), titles, region=(80, 0, 380, 70))
 
 
-EV_FREE_WORDS = ["Free", "Daily Free", "Claimable"]
 
 
 def ev_free_on_page(dev, stop, limit=6):
@@ -19324,7 +19362,7 @@ def run_ev_super_value(dev, cfg, log, stop):
 RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor": run_labor,
             "general_chest": run_general_chest, "vip_claim": run_vip_claim, "recruit_citizens": run_recruit_citizens,
             "civilization_card": run_civilization_card, "empire_depot": run_empire_depot, "lucky_raffle": run_lucky_raffle,
-            "refining_card": run_refining_card, "alliance_gift": run_alliance_gift, "alliance_help": run_alliance_help, "alliance_treasure": run_alliance_treasure,
+            "refining_card": run_refining_card, "alliance_gift": run_alliance_gift, "alliance_help": run_alliance_help, "alliance_donation": run_alliance_donation, "alliance_treasure": run_alliance_treasure,
             "ranger_knight": run_ranger_knight, "train_troops": run_train_troops, "build_traps": run_build_traps,
             "troop_healing": run_troop_healing, "activity_chests": run_activity_chests, "gate_visitors": run_gate_visitors,
             "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes,
@@ -19366,6 +19404,9 @@ DUTY_LIBRARY = [
     {"id": "alliance_help", "group": "Daily activities", "title": "Alliance help", "every_min": 60, "verified": False,
      "note": "Alliance > Help > Help all.",
      "target": "self:", "steps": ["alliance_help"]},
+    {"id": "alliance_donation", "group": "Daily activities", "title": "Alliance donation", "every_min": 60, "verified": False,
+     "note": "Alliance > Alliance Science > Donate until the free donations are used (never the gem donation). Comes back every hour as the chances refill.",
+     "target": "self:", "steps": ["alliance_donation"]},
     {"id": "alliance_shop", "group": "Daily activities", "title": "Alliance shop", "every_min": 0, "verified": False,
      "note": "Alliance > Alliance Shop: buys the items you tick, as many as the shop allows, with Alliance Points only. Sold-out items are skipped.",
      "target": "self:", "steps": ["alliance_shop"],
@@ -19564,6 +19605,14 @@ DUTY_LIBRARY = [
      "target": "self:", "steps": ["ev_super_value"]},
 ]
 DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
+# Owner 30 Oct 22:18-22:28: duties not yet proven on the owner's instances (no recording / never worked / not tested on the
+# new code) are shown faded as "Not ready yet" in testers' builds and never run there - their saved switch stays, so they
+# come back by themselves once ready. The owner's PC (admin.txt) runs them as usual. Same list in ui/pages.js DUTY_NOT_READY.
+NOT_READY_DUTIES = {"trade_carriage", "alliance_donation", "wisdom_dome_tokens", "civilization_card", "lucky_raffle", "refining_card", "alliance_treasure", "recruit_citizens", "ranger_knight", "troop_healing", "build_traps", "mail", "alliance_shop", "ev_star_trail", "ev_divination", "ev_taotie", "tavern_catalog"}
+
+
+def duty_ready(did):
+    return did not in NOT_READY_DUTIES or (USER / "admin.txt").exists()
 
 
 def _game_day():
@@ -19711,6 +19760,8 @@ def duty_status(serial, duty_id, cfg):
     d = DUTY_BY_ID.get(duty_id)
     if not d or not conf.get("on"):
         return "off", "Off"
+    if not duty_ready(duty_id):                             # testers' build: "Not ready yet" duties count as off
+        return "off", "Not ready yet"
     if duty_id in MAP_HEAVY:                                # owner 30 Oct: mapping is not a daily task - only a button press runs it
         m = mymap_info(_SerialOnly(serial or "default"))
         return ("done", "Mapped " + str(m.get("at", ""))) if m.get("complete") else ("waiting", "Not mapped - press Map my city")
@@ -19776,6 +19827,9 @@ def run_now_tasks(cfg, serial):
     out = []
     for tid in run_now_list(serial):
         if tid.startswith("duty:") and tid[5:] in DUTY_BY_ID:
+            if not duty_ready(tid[5:]):                          # testers' build: a "Not ready yet" duty is never run
+                run_now_done(serial, tid)
+                continue
             if tid[5:] in MAP_HEAVY and not map_slot(serial):
                 continue                                         # 2 others are mapping: stays queued, joins rallies meanwhile
             d = DUTY_BY_ID[tid[5:]]
@@ -19803,6 +19857,8 @@ def duty_tasks_due(cfg, serial):
     for d in DUTY_LIBRARY:
         if d["id"] in MAP_HEAVY:                           # owner spec 28 Oct: the bot never maps by itself - only the
             continue                                       # Map my city / Map city again button (Run now) starts it
+        if not duty_ready(d["id"]):                        # testers' build: "Not ready yet" duties never run
+            continue
         if duty_status(serial, d["id"], cfg)[0] in ("due",):
             t = {k: d[k] for k in ("target", "steps", "no_tile", "go_page") if k in d}
             if d["id"] == "train_troops":
@@ -19857,7 +19913,6 @@ ANCHOR_TO_KEEP = {"Tavern": (90, -135), "Shrine": (313, -139)}   # Keep label mi
 FIXED_OFFSETS_FROM_SHRINE = {"Victory Column": [-681, -363], "Council of State": [74, -439], "Ideal Land": [324, -449], "Dragon Cliff": [651, -447], "Arsenal": [-91, -352], "Triumphal Arch": [219, -357], "Academy": [65, -272], "Military Academy": [492, -267], "Research Factory": [-451, -182], "Barracks": [-205, -178], "Wisdom Dome": [681, -159], "Warehouse": [-19, -133], "Keep": [314, -139], "Art Hall": [-628, -101], "Prison": [-381, -88], "Holy Palace": [528, -73], "Tavern": [223, -3], "Trap Factory": [-203, -6], "Shrine": [0, 0], "Archer Camp": [657, 27], "Pasture": [-808, -10], "Stables": [-577, 51], "Market": [-425, 132], "Workshop": [89, 141], "War Hall": [405, 126], "Embassy": [231, 211], "Hospital": [-72, 311], "Rally Spot": [644, 234], "Walls": [-406, 291], "Battlefield": [-701, 357], "Bounty Cave": [-471, 455]}
 # Squares the bot does not need for now (owner, 20 Oct): Bounty Cave, Wonder, Watchtower, Archer Tower 1 and 2. Parked for a future build; ask for them with numbers (square:N).
 PARKED_SQUARES = {31, 32, 34, 35, 36}
-UNIQUE_BUILDINGS = {k.lower() for k in FIXED_OFFSETS_FROM_SHRINE}                # one of each in the city: a second read of the same name means the camera was somewhere else
 
 # Numbered squares of the default city map (city_map/city_map_default.png): number -> [name, centre of the square minus the Shrine label, emulator pixels]. 1 = Keep.
 CITY_SQUARES = {int(k): v for k, v in {"1": ["Keep", 319, -218], "2": ["Tavern", 232, -27], "3": ["Shrine", 30, -29], "4": ["Victory Column", -684, -334], "5": ["Council of State", 73, -452], "6": ["Ideal Land", 291, -487], "7": ["Dragon Cliff", 704, -430], "8": ["Arsenal", -85, -379], "9": ["Triumphal Arch", 222, -388], "10": ["Academy", 65, -302], "11": ["Military Academy", 502, -280], "12": ["Research Factory", -443, -204], "13": ["Barracks", -206, -199], "14": ["Wisdom Dome", 682, -177], "15": ["Warehouse", -21, -172], "16": ["Art Hall", -655, -123], "17": ["Prison", -378, -118], "18": ["Holy Palace", 515, -103], "19": ["Trap Factory", -210, -27], "20": ["Archer Camp", 658, 13], "21": ["Pasture", -810, -29], "22": ["Stables", -581, 52], "23": ["Market", -432, 116], "24": ["Workshop", 80, 111], "25": ["War Hall", 424, 103], "26": ["Embassy", 240, 190], "27": ["Hospital", -68, 280], "28": ["Rally Spot", 653, 221], "29": ["Walls", -473, 290], "30": ["Battlefield", -704, 359], "31": ["Bounty Cave", -473, 475], "32": ["Wonder", -999, -208], "33": ["Subordinate City", -1058, -523], "34": ["Watchtower", -1160, -88], "35": ["Archer Tower 1", -1085, 673], "36": ["Archer Tower 2", -990, 731], "37": ["Army Camp", 535, 421]}.items()}

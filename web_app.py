@@ -1987,7 +1987,7 @@ class Api:
         return [scope] if scope else [d["id"] for d in self.c.devices] or ["default"]
 
     def _rn_catalog(self):
-        cat = [{"id": "duty:" + d["id"], "title": d["title"], "group": d["group"]} for d in rb.DUTY_LIBRARY]
+        cat = [{"id": "duty:" + d["id"], "title": d["title"], "group": d["group"]} for d in rb.DUTY_LIBRARY if rb.duty_ready(d["id"])]
         for t in self.c.cfg.get("city_tasks") or []:
             if t.get("name"):
                 cat.append({"id": "task:" + t["name"], "title": t["name"], "group": "Your own tasks"})

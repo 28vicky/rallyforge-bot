@@ -78,7 +78,19 @@ class MergeDeviceCfg(unittest.TestCase):
 
 
 # ---------------------------------------------------------------- duty_status
-class DutyStatus(Base):
+class OwnerPC:
+    """These tests use duties (e.g. Mail rewards) that testers' builds lock as 'Not ready yet': run them as the owner's PC."""
+    def setUp(self):
+        super().setUp()
+        self._ready = rb.duty_ready
+        rb.duty_ready = lambda did: True
+
+    def tearDown(self):
+        rb.duty_ready = self._ready
+        super().tearDown()
+
+
+class DutyStatus(OwnerPC, Base):
     def test_off_when_switched_off_or_unknown(self):
         self.assertEqual(rb.duty_status("S1", "vip_claim", {"duties": {"vip_claim": {"on": False}}})[0], "off")
         self.assertEqual(rb.duty_status("S1", "no_such_duty", self.cfg(no_such_duty={}))[0], "off")
@@ -149,7 +161,7 @@ class DutyStatus(Base):
 
 
 # ---------------------------------------------------------------- city_tasks_due
-class CityTasksDue(Base):
+class CityTasksDue(OwnerPC, Base):
     def names(self, cfg, last_run=None):
         return [t["name"] for t in rb.city_tasks_due(cfg, last_run or {}, "S1")]
 

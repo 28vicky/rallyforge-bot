@@ -410,13 +410,6 @@ async function loadProfileFlow() {
 }
 
 // ------------------------------------------------------------------ sidebar / tabs / pages
-function devTag(d) {
-  if (S.cityJobs && S.cityJobs[d.id] && S.cityJobs[d.id].running) return "Mapping city";
-  const t = { run: "Running", pause: "Paused", stop: "Stopped", error: "Problem" }[d.state] || "";
-  if (d.state === "run" && d.kicked_at) return "Kicked";
-  if (d.state === "run" && d.no_stamina) return "No stamina";
-  return d.queued ? "Queued" : t;
-}
 function renderSide() {
   const L = $("#instList");
   if (!L || S.dragging) return;          // do not redraw under the mouse while an instance is being dragged
@@ -776,7 +769,6 @@ function logBox(serial, tall) {
 }
 // ---- Activity screen: what the bot is doing, and how each rally went
 S.acts = []; S.now = {}; S.steps = {}; S.mapAct = {}; S.mapFoundAt = {};
-const esc = (t) => String(t == null ? "" : t);
 // what an instance is doing right now (from its latest step), in a few words for the instance list; "" = nothing (idle)
 function busyTask(serial, long) {
   const t = ((S.now && S.now[serial]) || {}).text || "";
@@ -874,13 +866,6 @@ function offSkipHidden(v, l) {
   if (prev != null && t >= prev && t - prev < 3600) return true;
   v.offSeen[key] = t;
   return false;
-}
-function actStats(serial) {
-  const list = S.acts.filter((l) => serial === null || l.s === serial);
-  const n = (k) => list.filter((l) => l.a.k === k).length;
-  const joins = list.filter((l) => l.a.k === "join" && l.a.took != null);
-  const avg = joins.length ? (joins.reduce((t, l) => t + l.a.took, 0) / joins.length).toFixed(1) + "s" : "-";
-  return `Joined ${n("join")}  ·  Skipped (all reasons) ${list.filter((l) => l.a.k === "skip" && !isOffSkip(l.a)).length}  ·  Failed ${n("fail")}  ·  Average join time ${avg}`;
 }
 function paintStats(el, serial) {
   const list = S.acts.filter((l) => serial === null || l.s === serial);
