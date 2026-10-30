@@ -11720,7 +11720,8 @@ def ch_greet_word(img):
             for _t, ws in ocr_lines(img[y0:y0 + h0, x0:x0 + w0], sc, bright=br):
                 for w in ws:
                     letters = re.sub(r"[^a-z]", "", str(w[0]).lower())
-                    if letters.startswith("greet") or letters in ("gree", "greel", "greer"):
+                    # Skip 30 Oct: read as 'gGreet' (the icon's edge before the word) - allow 1-2 stray letters in front
+                    if 0 <= letters.find("greet") <= 2 or letters in ("gree", "greel", "greer"):
                         return (int(w[1]) + x0, int(w[2]) + y0)
     except Exception as _e:
         quiet_err("ch_greet_word", _e)

@@ -38,3 +38,9 @@ def test_ready_page_found_by_colour():
     assert rb.train_page(img)
     assert not rb.rd_find(img, ["Training Troops", "Training"], region=(0, 770, 540, 90))
     assert not rb.train_page(cv2.imread(str(SHOT)))
+
+
+def test_champion_greet_read_with_stray_letter():
+    """Skip 30 Oct (all day 'no Greet button'): OCR read 'gGreet' - the Greet button must still be found."""
+    img = cv2.imread(str(Path(__file__).parent / "screens" / "champ_nogreet_skip.png"))
+    assert rb.ch_greet_word(img) is not None
