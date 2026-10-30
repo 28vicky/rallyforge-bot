@@ -19646,14 +19646,16 @@ def eq_claim_here(dev, stop):
 
 def eq_chests(dev, stop, region=(0, 95, 540, 140)):     # chest row ~y115, above Progress; day tabs (~y287) stay out
     """Progress chests at the top of the quest page: a reached chest carries a red badge. -> taps."""
-    n = 0
+    n, tried = 0, set()
     for _ in range(6):
         if stop.is_set():
             break
-        dots = [d for d in ev_red_spots(dev.screenshot(), region) if not (d[0] > 420 and d[1] < 200)]   # never the red X
+        dots = [d for d in ev_red_spots(dev.screenshot(), region) if not (d[0] > 420 and d[1] < 200)   # never the red X
+                and (d[0] // 25, d[1] // 25) not in tried]          # each spot once: King's Path's count bubble is red too (K 31 Oct)
         if not dots:
             break
         x, y = dots[0]
+        tried.add((x // 25, y // 25))
         dev.tap(x - 12, y + 14)                          # badge = top-right corner of the chest
         n += 1
         _nap(stop, 1.3, 1.7)
