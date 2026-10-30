@@ -11737,6 +11737,12 @@ def ch_greet_label(img, box=None):
 
 
 WHEEL_BTN = {100: (95, 924), 10: (269, 924), 1: (443, 924)}          # Spin buttons at the bottom of the Wheel of Fortune page
+WHEEL_BTN2 = {10: (140, 924), 1: (400, 924)}       # owner 30 Oct (Manhattan 14:30): under 9,000 coins "100 Spins" is gone and
+                                                   # the two buttons fill the row
+
+
+def wheel_btn(pick, coins):
+    return WHEEL_BTN2[pick] if coins is not None and coins < WHEEL_COST[100] and pick in WHEEL_BTN2 else WHEEL_BTN[pick]
 WHEEL_COST = {100: 9000, 10: 900, 1: 100}
 WHEEL_COINS_BOX = (234, 128, 190, 48)
 WHEEL_ICON = (141, 328)                                              # "Wheel of Fortune" in the Tavern's ring menu
@@ -11802,7 +11808,8 @@ def wheel_on_page(img):
 
 
 def wheel_reward_panel(img):
-    r = _wheel_pic(img, "wheel_reward_banner", (30, 140, 480, 140), 0.7)   # "Congratulations on getting" banner
+    r = _wheel_pic(img, "wheel_reward_banner", (30, 140, 480, 360), 0.7)   # "Congratulations on getting" banner (x100 ~y205,
+                                                                            # x10 ~y318: fewer rows - Manhattan 14:30)
     if r is not None:
         return r
     return bool(find_text(img, ["Congratulations", "Continue"], region=(30, 150, 480, 650), cutoff=0.7))
@@ -12054,7 +12061,7 @@ def run_wheel(dev, cfg, log, stop):
             else:
                 log(f"[+]  Wheel: stopped after {done} spin(s) - {coins:,} coins left (cost/keep-at-least {reserve:,})")
             break
-        dev.tap(*WHEEL_BTN[pick])
+        dev.tap(*wheel_btn(pick, coins))
         last_pick = pick
         shown = spent = False
         s2 = shot

@@ -79,3 +79,13 @@ def test_dome_ring_rare_books_from_detail_icon():
     shot = cv2.imread(str(S / "dome_ring_kiravik.png"))
     r = rb.tavern_ring_spot(shot, "rare_books")
     assert r and abs(r[0] - 195) < 25 and 290 < r[1] < 345
+
+
+def test_x10_window_and_two_button_row(monkeypatch):
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.setattr(rb, "template_path", lambda n: (root / f"{n}.png") if (root / f"{n}.png").exists() else None)
+    rb._cache.clear()
+    shot = cv2.imread(str(S / "wheel_reward10_two_buttons.png"))    # Manhattan 14:30: x10 window lower, 6,800 coins
+    assert rb.wheel_reward_panel(shot)
+    assert rb.wheel_btn(10, 6800) == (140, 924) and rb.wheel_btn(1, 6800) == (400, 924)
+    assert rb.wheel_btn(10, 100000) == (269, 924)
