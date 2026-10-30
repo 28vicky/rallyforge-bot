@@ -128,3 +128,11 @@ def test_troop_at_game_limit_is_read():
     p = Path(__file__).parent / "screens" / "train_stable_max_kiravik.png"
     if p.exists():
         assert rb.train_own(cv2.imread(str(p))) >= rb.TRAIN_OWN_MAX
+
+
+def test_alliance_page_with_promotion_is_not_a_popup():
+    """Rory 30 Oct 17:39-19:50: the Alliance page (Super Promotion banner) was learned as a pop-up and closed with Back."""
+    import cv2
+    img = cv2.imread(str(Path(__file__).parent / "screens" / "alliance_page_promo_rory.png"))
+    assert rb.is_alliance_page(img)
+    assert rb._poplib_seen(rb._pop_hash(img), img, lambda m: None) is None

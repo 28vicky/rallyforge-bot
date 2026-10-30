@@ -4553,8 +4553,27 @@ def _poplib_save():
         pass
 
 
+def _poplib_forget(h, log=None):
+    """A library entry that is really one of the bot's own pages (the Alliance page): its close-fix is dropped so it is
+    never 'closed' again."""
+    if h is None:
+        return
+    with _poplib_lock:
+        k, v = _poplib_find(h)
+        if v is not None and v.get("fix"):
+            v["fix"], v["xy"] = None, None
+            _poplib_save()
+            if log:
+                log(f"[i] Pop-up {k} is the Alliance page (a page the bot uses) - no longer closed as a pop-up")
+
+
 def _poplib_seen(h, shot, log):
     """Save a pop-up the bot has not met before (picture + entry). -> its entry."""
+    try:
+        if is_alliance_page(shot):                         # owner 30 Oct 19:53: the bot's own page is never a pop-up
+            return None
+    except Exception:
+        pass
     with _poplib_lock:
         k, v = _poplib_find(h)
         if v is None and h is not None:
@@ -21167,6 +21186,10 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             return True
         if cancel_quit_dialog(dev, screen, log):
             return True
+        if x_ok and is_alliance_page(screen):             # owner 30 Oct 19:53 (Rory 17:39-19:50): the Alliance page with a
+            _poplib_forget(_pop_hash(screen), log)        # 'Super Promotion' banner was learned as a pop-up and closed with
+            if tap_alliance_war_row(dev, screen, log):     # Back every time - the bot's own page is never a pop-up
+                return True
         if x_ok:                                          # a pop-up met before: the way that closed it last time, first
             ph = _pop_hash(screen)
             _k, pe = _poplib_find(ph)
