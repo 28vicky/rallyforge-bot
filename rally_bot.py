@@ -15616,6 +15616,186 @@ def run_ranger_knight(dev, cfg, log, stop):
 
 
 # --- training with speed-ups ----------------------------------------------------------------------------------------
+# Alliance Shop (owner recording 29 Oct 09:42): (setting key, label, words of the item name in the buy pop-up,
+# price on the shop tile for one, default on). Prices only pick which tiles to open; the pop-up name decides.
+ALLIANCE_SHOP_ITEMS = [
+    ("stamina10", "10 Stamina", ["10 Stamina"], 30000, False),
+    ("stamina50", "50 Stamina", ["50 Stamina"], 50000, False),
+    ("stamina100", "100 Stamina", ["100 Stamina"], 100000, False),
+    ("vip100", "100 VIP Points", ["100 VIP Points", "VIP Points"], 15000, False),
+    ("tribute", "Tribute", ["Tribute"], 10000, False),
+    ("truce24", "24 Hour Truce Agreement", ["24 Hour Truce", "24 Hour Truce Agreement"], 50000, False),
+    ("truce3d", "3 Day Truce Agreement", ["3 Day Truce", "3 Day Truce Agreement"], 100000, False),
+]
+SHOP_PRICE_RE = re.compile(r"(\d{1,3}(?:[,.]\d{3})+)")
+
+
+def shop_price_bars(shot, prices):
+    """Green price bars on the Alliance Shop page whose price is one of `prices` -> [(x, y, price)]. Grey bars
+    (Sold Out) are left out."""
+    out = []
+    for text, ws in rd_lines(shot, (0, 140, 540, 790)):
+        for s in ws:
+            m = SHOP_PRICE_RE.search(s[0])
+            if not m:
+                continue
+            v = int(re.sub(r"[,.]", "", m.group(1)))
+            if v in prices and ev_greenish(shot, int(s[1]), int(s[2]), w=20, h=6):
+                out.append((int(s[1]), int(s[2]), v))
+    return out
+
+
+def shop_popup_name(shot, items):
+    """The item in the open buy pop-up (title line above 'Unlocks at') -> the matching ALLIANCE_SHOP_ITEMS row or None."""
+    import difflib
+    for text, ws in rd_lines(shot, (170, 260, 330, 120)):
+        low = text.lower().strip(".,:;!() ")
+        num = re.findall(r"\d+", low)[:1]
+        for it in items:
+            for w in it[2]:
+                if re.findall(r"\d+", w)[:1] != num:          # '10 Stamina' is never '100 Stamina'
+                    continue
+                if low == w.lower() or difflib.SequenceMatcher(None, low, w.lower()).ratio() >= 0.86:
+                    return it
+    return None
+
+
+def shop_popup_count(shot):
+    """'1/5' under the slider in the buy pop-up -> (have, max, (x, y)) or None."""
+    for text, ws in rd_lines(shot, (170, 470, 200, 120)):
+        m = re.search(r"(\d+)\s*/\s*(\d+)", text)
+        if m:
+            return int(m.group(1)), int(m.group(2)), (int(sum(s[1] for s in ws) / len(ws)), int(sum(s[2] for s in ws) / len(ws)))
+    return None
+
+
+def shop_slider_y(shot):
+    """The slider row of the buy pop-up when the count was not read: the row of the blue knob / '+' box between y 440
+    and 540 (recording: 480 for a one-line text, ~505 for a long one)."""
+    hsv = cv2.cvtColor(shot[440:540, 380:470], cv2.COLOR_BGR2HSV)
+    m = cv2.inRange(hsv, (95, 80, 80), (130, 255, 255))       # the blue '+' box
+    rows = np.where(m.sum(axis=1) > 255 * 6)[0]
+    return int(440 + rows.mean()) if len(rows) else 480
+
+
+def shop_close_popup(dev, stop):
+    """Close a buy pop-up: tap the plain 'Monthly Card Items' title strip above it (no button there); still open ->
+    phone Back."""
+    dev.tap(200, 150)
+    _nap(stop, 0.9, 1.1)
+    sh = dev.screenshot()
+    if rd_seen(sh, ["Unlocks at", "Are you sure"], region=(0, 250, 540, 400)):
+        dev.back()
+        _nap(stop, 1.0, 1.3)
+
+
+def shop_buy_open_popup(dev, stop, log, it):
+    """The buy pop-up of `it` is open: slider to the most allowed, the green price button, then Confirm on
+    'Are you sure you want to purchase <item>?'. -> number bought (0 = nothing done)."""
+    shot = dev.screenshot()
+    cnt = shop_popup_count(shot)
+    if not cnt or (cnt[1] > 1 and cnt[0] < cnt[1]):
+        ys = cnt[2][1] - 42 if cnt else shop_slider_y(shot)  # slider line sits ~42 px above the count
+        dev.swipe(178, ys, 480, ys + 6, 800)             # knob to the right end (recording: 181 -> 450)
+        _nap(stop, 0.8, 1.0)
+        shot = dev.screenshot()
+        c2 = shop_popup_count(shot)
+        for _ in range(8):                               # not at the end yet: the + button right of the slider
+            if not c2 or c2[0] >= c2[1] or stop.is_set():
+                break
+            dev.tap(424, ys)
+            _nap(stop, 0.4, 0.6)
+            shot = dev.screenshot()
+            c2 = shop_popup_count(shot)
+        cnt = c2 or cnt
+    btn = None
+    for text, ws in rd_lines(shot, (120, 560, 300, 140)):
+        if SHOP_PRICE_RE.search(text):
+            x, y = int(sum(s[1] for s in ws) / len(ws)), int(sum(s[2] for s in ws) / len(ws))
+            if ev_greenish(shot, x, y, w=24, h=6):
+                btn = (x, y)
+                break
+    if not btn:
+        g = _green_button(shot, (120, 570, 300, 110))     # the price text not read: the green button itself
+        btn = (int(g[0]), int(g[1])) if g else None
+    if not btn:
+        rd_snap(shot, "ashop_no_price_btn")
+        return 0
+    dev.tap(*btn)
+    _nap(stop, 1.2, 1.6)
+    shot = dev.screenshot()
+    ask = " ".join(t for t, _ in rd_lines(shot, (0, 380, 540, 160))).lower()
+    name_ok = any(w.lower().split()[-1] in ask for w in it[2])
+    if "sure" not in ask or not name_ok:                 # not the confirm we expect (not enough points, other pop-up)
+        rd_snap(shot, "ashop_no_confirm")
+        return 0
+    p = rd_find(shot, ["Confirm"], region=(100, 480, 340, 180), cutoff=0.75, whole=True) or \
+        _green_button(shot, (100, 520, 340, 120))
+    if not p:
+        rd_snap(shot, "ashop_no_confirm_btn")
+        return 0
+    dev.tap(int(p[0]), int(p[1]))
+    _nap(stop, 1.6, 2.0)
+    return cnt[1] if cnt else 1
+
+
+def run_alliance_shop(dev, cfg, log, stop):
+    """Alliance > Alliance Shop: open the price bars of the ticked items, check the name in the pop-up, buy the most
+    the shop allows. Slow drags down the shop until it stops moving. Alliance Points only - gems are never on this page."""
+    want = [it for it in ALLIANCE_SHOP_ITEMS if rd_opt(cfg, "alliance_shop", it[0], it[4])]
+    if not want:
+        log("[i]   Alliance Shop: no items ticked in its settings - nothing to buy")
+        rd_nothing()
+        return
+    rd_alliance_page(dev, cfg, stop)
+    if not rd_alliance_row(dev, stop, ["Alliance Shop"], title=["Alliance Shop"]):
+        raise RuntimeError("the Alliance Shop page did not open (row not found or another page opened)")
+    prices = {it[3] for it in want}
+    left = list(want)
+    tried, bought, last = set(), [], None
+    for page in range(14):
+        if stop.is_set() or not left:
+            break
+        shot = _settled_shot(dev, stop)
+        if not rd_seen(shot, ["Alliance Shop"], region=(0, 0, 540, 70)):
+            rd_snap(shot, "ashop_left_page")
+            raise RuntimeError("left the Alliance Shop page")
+        sig = cv2.resize(cv2.cvtColor(shot[150:900, :], cv2.COLOR_BGR2GRAY), (27, 38)).astype(int)
+        if last is not None and float(np.mean(np.abs(sig - last))) < 2.0:
+            break                                        # the shop did not move: its end
+        last = sig
+        for x, y, v in shop_price_bars(shot, prices):
+            key = (page, x // 60, y // 60)
+            if key in tried or not left or stop.is_set():
+                continue
+            tried.add(key)
+            dev.tap(x, y)
+            _nap(stop, 1.2, 1.6)
+            pop = dev.screenshot()
+            it = shop_popup_name(pop, left)
+            if not it:
+                shop_close_popup(dev, stop)
+                continue
+            n = shop_buy_open_popup(dev, stop, log, it)
+            if n:
+                bought.append(f"{it[1]} x{n}")
+                left.remove(it)
+                log(f"[+]  Alliance Shop: bought {it[1]} x{n}")
+            else:
+                shop_close_popup(dev, stop)
+                log(f"[i]   Alliance Shop: could not buy {it[1]} (pop-up not as expected - picture saved)")
+            shot = _settled_shot(dev, stop)
+            if not rd_seen(shot, ["Alliance Shop"], region=(0, 0, 540, 70)):
+                raise RuntimeError("left the Alliance Shop page after a buy")
+        dev.swipe(270, 780, 270, 470, 900)               # slow drag only (flicks glide and land anywhere)
+        _nap(stop, 0.8, 1.0)
+    if bought:
+        log("[+]  Alliance Shop: " + ", ".join(bought) + (f"; not found / sold out: {', '.join(i[1] for i in left)}" if left else ""))
+    else:
+        log("[i]   Alliance Shop: nothing to buy (ticked items sold out or not in the shop today)")
+        rd_nothing()
+
+
 def rd_finish_with_speedups(dev, stop, log, what):
     """The busy button (Speed Up / Training Speedup) -> Finish All with speed-up ITEMS. Instant (gems) never."""
     if not rd_tap(dev, stop, ["Training Speedup", "Speed Up", "Speedup"], region=(300, 860, 240, 100), wait=(1.8, 2.3)):
@@ -17709,6 +17889,44 @@ def run_ev_star_trail(dev, cfg, log, stop):
     log("[+]  Grace of Star Trail: daily gift claimed")
 
 
+def divine_once_free(shot):
+    """Divination of Fate: (x, y) of 'Divine Once' when the word 'Free' is under it (owner recording 29 Oct: green
+    button bottom-right, small 'Free' line under the text). After the free one it shows a cost -> None.
+    Divine x10 (left button) is never looked at."""
+    for text, ws in rd_lines(shot, (290, 840, 250, 80)):
+        if re.search(r"\bfree\b", text.lower()) and _green_button(shot, (290, 840, 250, 80)):
+            g = _green_button(shot, (290, 840, 250, 80))
+            return int(g[0]), int(g[1])
+    return None
+
+
+def run_ev_divination(dev, cfg, log, stop):
+    """Event Center > Limited > Divination of Fate > Divine Once while it says Free. Never Divine x10, never a paid one."""
+    if not ev_open(dev, cfg, log, stop, "Limited", ["Divination of Fate", "Divination"], "Divination of Fate"):
+        return
+    n = 0
+    for _ in range(3):                                   # one free a day on the recording; a few in case the game gives more
+        if stop.is_set():
+            break
+        shot = dev.screenshot()
+        p = divine_once_free(shot)
+        if not p:
+            if n == 0:
+                rd_snap(shot, "ev_divination")
+                if not rd_seen(shot, ["Divination"], region=(0, 0, 540, 70)):
+                    raise RuntimeError("the Divination of Fate page did not open")
+            break
+        dev.tap(*p)
+        n += 1
+        _nap(stop, 2.4, 3.0)
+        ev_close(dev, stop)
+    if n:
+        log(f"[+]  Divination of Fate: {n} free divine(s) done")
+    else:
+        log("[i]   Divination of Fate: no free divine left today")
+        rd_nothing()
+
+
 def run_ev_duel(dev, cfg, log, stop):
     """Alliance Duel: the round result (Result tab) and the Prosperity Point quests (Level Rewards > +)."""
     if not ev_open(dev, cfg, log, stop, "Competition", ["Alliance Duel"], "Alliance Duel"):
@@ -17859,7 +18077,7 @@ RD_STEPS = {"gold_levy": run_gold_levy, "resource_tax": run_resource_tax, "labor
             "trade_carriage": run_trade_carriage, "offering_tributes": run_offering_tributes,
             "wisdom_dome_tokens": run_wisdom_dome_tokens, "royal_thief": run_royal_thief,
             "ev_legion": run_ev_legion, "ev_garuda": run_ev_garuda, "ev_windmill": run_ev_windmill, "ev_eagle": run_ev_eagle,
-            "ev_star_trail": run_ev_star_trail, "ev_duel": run_ev_duel, "ev_taotie": run_ev_taotie,
+            "ev_star_trail": run_ev_star_trail, "ev_divination": run_ev_divination, "alliance_shop": run_alliance_shop, "ev_duel": run_ev_duel, "ev_taotie": run_ev_taotie,
             "ev_expedition": run_ev_expedition, "ev_valuable": run_ev_valuable, "ev_super_value": run_ev_super_value,
             "monster_rally": run_monster_rally}
 
@@ -17886,6 +18104,10 @@ DUTY_LIBRARY = [
     {"id": "alliance_help", "group": "Daily activities", "title": "Alliance help", "every_min": 60, "verified": False,
      "note": "Alliance > Help > Help all.",
      "target": "self:", "steps": ["alliance_help"]},
+    {"id": "alliance_shop", "group": "Daily activities", "title": "Alliance shop", "every_min": 0, "verified": False,
+     "note": "Alliance > Alliance Shop: buys the items you tick, as many as the shop allows, with Alliance Points only. Sold-out items are skipped.",
+     "target": "self:", "steps": ["alliance_shop"],
+     "opts": [{"k": o[0], "label": o[1], "type": "bool", "def": o[4]} for o in ALLIANCE_SHOP_ITEMS]},
     {"id": "champions", "group": "Daily activities", "title": "Champions", "every_min": 0, "verified": False,
      "note": "Keep > Champions: 15 taps and 10 greetings a day on the champions you pick (only active ones). Needs the city map (Keep).",
      "target": "go:Greet Champion|Keep", "tap_dy": 0, "steps": ["wait 1.2", "champions"]},
@@ -18055,6 +18277,9 @@ DUTY_LIBRARY = [
     {"id": "ev_star_trail", "group": "Events", "title": "Grace of Star Trail", "every_min": 0, "verified": False,
      "note": "Event Center > Limited > Grace of Star Trail > Star Trail Gift: the free daily gift. Never draws or buys.",
      "target": "self:", "steps": ["ev_star_trail"]},
+    {"id": "ev_divination", "group": "Events", "title": "Divination of Fate", "every_min": 0, "verified": False,
+     "note": "Event Center > Limited > Divination of Fate: Divine Once while it says Free. Never Divine x10 or a paid divine.",
+     "target": "self:", "steps": ["ev_divination"]},
     {"id": "ev_duel", "group": "Events", "title": "Alliance Duel", "every_min": 240, "verified": False,
      "note": "Event Center > Competition > Alliance Duel: the round result reward and the Prosperity Point quests (Gathering, Alliance, Ambition).",
      "target": "self:", "steps": ["ev_duel"]},

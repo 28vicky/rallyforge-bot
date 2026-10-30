@@ -2,6 +2,8 @@
 
 Owner: Vicky (vicky.2812@gmail.com, IST). Repo: 28vicky/rallyforge-bot. Evony rally automation, Windows app.
 
+## READY (30 Oct 11:30 IST, recordings chat) - feat/shop-divination-30oct (on main 2.5.28): two new duties, both OFF by default, NOT live tested. alliance_shop (Alliance group): buys the ticked items (10/50/100 Stamina, 100 VIP Points, Tribute, 24 Hour / 3 Day Truce) - price bar > pop-up name check > slider to max > green price > Confirm; Alliance Points only. ev_divination (Events): Divine Once only while it says Free. Alliance Gift / Help already existed and match the 29 Oct recordings - unchanged. Doc claude/flows_29oct.md.
+
 ## RELEASED 2.5.28 (30 Oct ~03:30 IST, owner 03:15) - main 0472183 (version.json signed, check_release origin/main: tests OK, every file matches)
 = pc/ship4-plus-fastcap 92685ce: map safety + map lock, Alliance page / Mail fix, phone Back fix, Champions greets, rally list checks + 10 s refresh, MuMu fast capture. Nothing else.
 Owner PC: app\v2.5.27 already runs this code (labelled 2.5.27); installing 2.5.28 is safe (same code). PC free. Doc claude/release_2528_30oct.md.
