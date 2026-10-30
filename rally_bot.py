@@ -16433,7 +16433,8 @@ def run_trade_carriage(dev, cfg, log, stop):
     """Owner 30 Oct 14:44-14:47: the carriage (its pin) -> a '+' slot (by picture) -> green Select Formation -> the user's
     preset, or Power First when none is set -> March. As many as set per day (2 = the Activity task), never more than
     'Transports Left Today'. Refresh Goods is never pressed."""
-    want = max(1, min(int(float(rd_opt(cfg, "trade_carriage", "times", 2) or 2)), 4))
+    want = max(1, min(int(float(rd_opt(cfg, "trade_carriage", "times", 4) or 4)), 4))   # owner 14:52: done = the game's
+                                                                                          # 'Transports Left Today: 0' (default all 4)
     pr = str(rd_opt(cfg, "trade_carriage", "preset", "Don't change") or "")
     preset = int(pr) if pr.isdigit() else 0
     if not rd_city_label(dev, stop, ["Trade Carriage", "Carriage"], cfg=cfg, log=log):
@@ -18769,9 +18770,9 @@ DUTY_LIBRARY = [
      "note": "While 'A visitor is waiting at the city gate' shows: opens each visitor and claims the gift.",
      "target": "self:", "steps": ["gate_visitors"]},
     {"id": "trade_carriage", "group": "Daily activities", "title": "Trade Carriage", "every_min": 0, "verified": False,
-     "note": "Trade Carriage (its pin): fills empty slots and marches - with your preset, or Power First when no preset is set - as many times as you set (2 completes the daily Activity task), never more than the game's 'Transports Left Today'. Never refreshes goods.",
+     "note": "Trade Carriage (its pin): fills empty slots and marches - with your preset, or Power First when no preset is set - until the game's 'Transports Left Today' is 0 (or the number you set; 2 is enough for the daily Activity task). Never refreshes goods.",
      "target": "self:", "steps": ["trade_carriage"],
-     "opts": [{"k": "times", "label": "Transports per day", "type": "number", "min": 1, "max": 4, "def": 2},
+     "opts": [{"k": "times", "label": "Transports per day", "type": "number", "min": 1, "max": 4, "def": 4},
               {"k": "preset", "label": "March preset", "type": "select", "choices": ["Don't change", "1", "2", "3", "4", "5", "6", "7", "8"], "def": "Don't change"}]},
     {"id": "offering_tributes", "group": "Daily activities", "title": "Shrine offering", "every_min": 0, "verified": False,
      "note": "Shrine > Offer > Offer Tribute at the most allowed (50), using Tribute items. When no tributes are left it can offer with gems instead (your choice below, off by default). Needs the city map (Shrine).",
