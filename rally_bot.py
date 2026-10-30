@@ -10195,9 +10195,6 @@ def run_step(dev, cfg, log, stop, step):
     if cmd == "wheel":
         run_wheel(dev, cfg, log, stop)
         return
-    if cmd == "alliance_science":
-        run_alliance_science(dev, cfg, log, stop)
-        return
     if cmd == "activity_go":                               # More > Activity > tile > Go: the game itself walks to the building
         activity_go(dev, cfg, log, stop, arg or "Greet Champion", probe=True)
         return
@@ -10273,7 +10270,7 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
             return False
         dev.tap(*pos)
         return True
-    if kind == "self":                                     # the step finds its own way from the city (e.g. alliance_science)
+    if kind == "self":                                     # the step finds its own way from the city (e.g. alliance_gift)
         return True
     if kind == "learned":                                  # by its learned picture only (owner 23 Oct: the Activity route is a teacher, not the way)
         if cfg.get("zoom_out", False) and not getattr(dev, "zoomed_out", False):
@@ -12311,124 +12308,6 @@ def run_view_reset_test(dev, cfg, log, stop):
         sx, sy, conf = city_shift(pics[0], pics[i])
         log(f"[+]  reset test: city after round 1 vs round {i + 1}: difference {d:.1f} (0-5 = same place), shift {sx:.0f},{sy:.0f} (confidence {conf:.2f})")
     log("[i]   reset test pictures saved in debug/view_reset")
-
-
-# ------------------------------------------------------------ alliance science
-def as_remaining(img):
-    """'Remaining Donations: 13/13' on the Alliance Science page -> (left, max) or None."""
-    try:
-        for t, _ws in ocr_lines(img[150:300, 0:360], 2.5):
-            m = re.search(r"(\d{1,2})\s*[/\\l|]\s*(\d{1,2})", t)
-            if m and ("onat" in t.lower() or "emain" in t.lower() or len(_ws) <= 3):
-                a, b = int(m.group(1)), int(m.group(2))
-                if 0 <= a <= b <= 50:
-                    return a, b
-        c = img[185:235, 0:240]
-        g = cv2.resize(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY), None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-        for b in (g, 255 - cv2.threshold(g, 130, 255, cv2.THRESH_BINARY)[1]):
-            t = pytesseract.image_to_string(b, config="--psm 6")
-            m = re.search(r"(\d{1,2})\s*[/\\l|]\s*(\d{1,2})", t)
-            if m and int(m.group(1)) <= int(m.group(2)) <= 50:
-                return int(m.group(1)), int(m.group(2))
-    except Exception as _e:
-        quiet_err("as_remaining", _e)
-    return None
-
-
-def as_donate_button(img):
-    """The green Donate button (top-most on the page, right side) -> (x, y) or None. Text first, colour as fallback."""
-    p = find_text(img, ["Donate"], region=(300, 300, 240, 560), cutoff=0.75)
-    if p:
-        return p
-    hsv = cv2.cvtColor(img[300:860, 300:540], cv2.COLOR_BGR2HSV)
-    m = cv2.morphologyEx(cv2.inRange(hsv, (40, 90, 50), (85, 255, 230)), cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
-    cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    boxes = [cv2.boundingRect(c) for c in cs]
-    boxes = [b for b in boxes if 80 < b[2] < 170 and 30 < b[3] < 65]
-    if not boxes:
-        return None
-    x, y, w, h = min(boxes, key=lambda b: b[1])
-    return x + w // 2 + 300, y + h // 2 + 300
-
-
-def as_snap(img, tag):
-    try:
-        (USER / "debug").mkdir(exist_ok=True)
-        cv2.imwrite(str(USER / "debug" / f"alliance_science_{tag}.png"), img)
-    except Exception as _e:
-        quiet_err("as_snap", _e)
-
-
-def run_alliance_science(dev, cfg, log, stop):
-    """From the city: Alliance button -> Alliance Science row -> tap Donate on the recommended science until the day's
-    donations are used up. Only the free daily donations; nothing that costs gems is pressed."""
-    as_snap(rd_alliance_page(dev, cfg, stop), "1_alliance")
-    words = ["Alliance Science"]
-    # Owner 30 Oct: the row sits under the bottom bar until scrolled; tap it only fully visible on a settled list, and
-    # the page that opens must be Alliance Science (another page -> Back, look again)
-    if not rd_alliance_row(dev, stop, words, title=["Alliance Science", "Science"]):
-        as_snap(dev.screenshot(), "2_failed")
-        raise RuntimeError("the Alliance Science page did not open (row not found or another page opened)")
-    t0 = time.time()                                       # Kiravik 28 Oct 'page did not open': wait for the page (slow load),
-    rem = btn = None
-    while not stop.is_set():
-        _nap(stop, 0.7, 0.9)
-        shot = dev.screenshot()
-        rem = as_remaining(shot)
-        btn = as_donate_button(shot)
-        if rem is not None or (btn and find_text(shot, ["Alliance Science", "Science"], region=(0, 0, 540, 340), cutoff=0.7)):
-            break
-        if time.time() - t0 > 7:
-            break
-
-    as_snap(shot, "3_science")
-    if rem is None and not (btn and find_text(shot, ["Alliance Science", "Science"], region=(0, 0, 540, 340), cutoff=0.7)):
-        raise RuntimeError("the Alliance Science page did not open")
-    if rem is None:                                        # counter not readable: tap one at a time while the green button stays
-        log("[i]   Alliance Science: the donation counter is not readable - donating one at a time")
-        n = 0
-        while n < int(cfg.get("alliance_science_max", 13) or 13) and not stop.is_set():
-            b = as_donate_button(dev.screenshot())
-            if not b:
-                break
-            dev.tap(*b)
-            n += 1
-            _nap(stop, 0.7, 1.0)
-        as_snap(dev.screenshot(), "5_done")
-        log(f"[+]  Alliance Science: {n} donation tap(s)")
-        return
-    left, top = rem
-    log(f"[i]   Alliance Science: donations left {left}/{top}")
-    if left == 0:
-        log("[+]  Alliance Science: all donations already done today")
-        rd_nothing()
-        return
-    if not btn:
-        raise RuntimeError("no Donate button on the recommended science")
-    done = 0
-    while left > 0 and done < 60 and not stop.is_set():
-        for _ in range(min(left, 5)):                      # quick taps work; re-read the counter every 5
-            dev.tap(*btn)
-            _nap(stop, 0.3, 0.45)
-            done += 1
-        _nap(stop, 0.8, 1.1)
-        shot = dev.screenshot()
-        r = as_remaining(shot)
-        if r is None:                                      # something covered the page (a dialog?) - do not keep tapping
-            as_snap(shot, "4_unknown")
-            log("[!]  Alliance Science: the page changed while donating - stopping")
-            break
-        if r[0] >= left:                                   # nothing was used: the button moved or the science is maxed
-            nb = as_donate_button(shot)
-            if not nb or nb == btn:
-                log("[!]  Alliance Science: the donations did not go down - stopping")
-                break
-            btn = nb
-        left = r[0]
-    as_snap(dev.screenshot(), "5_done")
-    log(f"[+]  Alliance Science done: {top - left} of {top} donations used today" + ("" if left == 0 else f", {left} left"))
-    if left > 0:
-        raise RuntimeError(f"{left} donation(s) left")
 
 
 # ------------------------------------------------------------ recorded duties (tester flows, 22 Oct 2026)
@@ -15535,37 +15414,86 @@ def find_on_map(dev, cfg, log, stop, bname, tpl, meta, p):
     return False                                           # the pin stays; the task tries again later
 
 # --- Alliance page ------------------------------------------------------------------------------------------------
+ALLIANCE_GIFT_OPEN_ALL = (320, 923)        # owner recording 29 Oct: orange 'Open All' (grey when nothing is left)
+ALLIANCE_HELP_ALL = (309, 912)             # owner recording 29 Oct: green 'Help All' (gone when nobody needs help)
+ALLIANCE_BACK_ARROW = (40, 50)             # gold Back arrow top left (also closes the gift 'Congratulations!' list)
+
+
+def btn_colour(shot, x, y, w=40, h=12):
+    """'orange' / 'green' / 'grey' for the button under (x, y): share of strongly coloured pixels around the spot
+    (white text and the recorder's red circle are ignored)."""
+    try:
+        hsv = cv2.cvtColor(shot[max(0, y - h):y + h, max(0, x - w):x + w], cv2.COLOR_BGR2HSV)
+        n = float(hsv.shape[0] * hsv.shape[1])
+        green = cv2.inRange(hsv, (40, 90, 50), (85, 255, 255)).sum() / 255 / n
+        orange = cv2.inRange(hsv, (8, 120, 110), (28, 255, 255)).sum() / 255 / n
+    except Exception:
+        return "grey"
+    if green > 0.3 and green > orange:
+        return "green"
+    if orange > 0.3:
+        return "orange"
+    return "grey"
+
+
+def alliance_page_btn(shot, words, region, spot, colour):
+    """A button at the bottom of an Alliance sub-page that is ready to press: read by its word (else the recorded spot)
+    and only when it has its live colour (`colour`); a grey one = nothing to do. -> (x, y) or None."""
+    hit = rd_find(shot, words, region=region, cutoff=0.75)
+    x, y = (hit[0], hit[1]) if hit else spot
+    return (int(x), int(y)) if btn_colour(shot, int(x), int(y)) == colour else None
+
+
 def run_alliance_gift(dev, cfg, log, stop):
-    """Alliance > Alliance Gift > Open All. Gifts keep coming all day: this runs every hour, and 'nothing to open'
-    counts only when the gift page itself was seen (owner 23 Oct: never Done without checking the screen)."""
+    """Rebuilt from the owner's recording (29 Oct 16:51): Alliance > Alliance Gift > orange Open All > 'Congratulations!'
+    list > Back arrow. Gifts keep coming all day: runs every hour; 'nothing to open' only when the gift page was seen."""
     rd_alliance_page(dev, cfg, stop)
     if not rd_alliance_row(dev, stop, ["Alliance Gift"], title=["Alliance Gift"]):
-        raise RuntimeError("no Alliance Gift row on the Alliance page (screen not found)")
-    shot = dev.screenshot()
-    if not rd_tap(dev, stop, ["Open All"], region=(130, 860, 280, 100), wait=(2.2, 2.8), shot=shot):
+        raise RuntimeError("the Alliance Gift page did not open (row not found or another page opened)")
+    opened = 0
+    for _ in range(3):                                   # a second Open All when more gifts arrived meanwhile
+        if stop.is_set():
+            break
+        shot = _settled_shot(dev, stop)
         rd_snap(shot, "agift_1")
-        if not rd_seen(shot, ["Alliance Gift", "Gift"], region=(0, 0, 540, 160)):
-            raise RuntimeError("the Alliance Gift page did not open (screen not found)")
-        log("[+]  Alliance Gift: gift page checked - nothing to open right now")
-        return
-    rd_close_reward(dev, stop, spot=(270, 120))
-    log("[+]  Alliance Gift: all gifts opened")
+        if not rd_seen(shot, ["Alliance Gift", "Gift"], region=(0, 0, 540, 70)):
+            raise RuntimeError("left the Alliance Gift page (screen not found)")
+        p = alliance_page_btn(shot, ["Open All"], (120, 870, 300, 90), ALLIANCE_GIFT_OPEN_ALL, "orange")
+        if not p:
+            break
+        dev.tap(*p)
+        opened += 1
+        _nap(stop, 2.2, 2.8)
+        if wheel_reward_panel(dev.screenshot()) or rd_seen(dev.screenshot(), ["Congratulations"], region=(0, 150, 540, 200)):
+            dev.tap(*ALLIANCE_BACK_ARROW)                # recording: the Back arrow closes the list, the gift page stays
+            _nap(stop, 1.2, 1.6)
+    if opened:
+        log("[+]  Alliance Gift: all gifts opened")
+    else:
+        log("[+]  Alliance Gift: gift page checked - nothing to open right now (Open All grey)")
 
 
 def run_alliance_help(dev, cfg, log, stop):
-    """Alliance > Help > Help All. Help requests come and go all day: runs every hour; 'nothing to help' counts only when
-    the help page itself was seen."""
+    """Rebuilt from the owner's recording (29 Oct 17:56): Alliance > (drag) Alliance Help > green Help All > 'Your ally
+    appreciates your help!'. Runs every hour; 'nobody to help' only when the help page was seen."""
     rd_alliance_page(dev, cfg, stop)
     if not rd_alliance_row(dev, stop, ["Alliance Help"], title=["Alliance Help"]):
         raise RuntimeError("the Alliance Help page did not open (row not found or another page opened)")
-    shot = dev.screenshot()
+    shot = _settled_shot(dev, stop)
     rd_snap(shot, "ahelp_1")
-    if rd_tap(dev, stop, ["Help All", "Help all"], region=(0, 760, 540, 200), wait=(1.8, 2.3), shot=shot):
-        log("[+]  Alliance Help: Help All pressed")
-        return
-    if not rd_seen(shot, ["Help"], region=(0, 0, 540, 160)):
+    if not rd_seen(shot, ["Alliance Help", "Help"], region=(0, 0, 540, 70)):
         raise RuntimeError("the Alliance Help page did not open (screen not found)")
-    log("[+]  Alliance Help: help page checked - nobody needs help right now")
+    p = alliance_page_btn(shot, ["Help All", "Help all"], (100, 860, 340, 100), ALLIANCE_HELP_ALL, "green")
+    if not p:
+        log("[+]  Alliance Help: help page checked - nobody needs help right now")
+        return
+    dev.tap(*p)
+    _nap(stop, 1.6, 2.0)
+    after = dev.screenshot()
+    if alliance_page_btn(after, ["Help All", "Help all"], (100, 860, 340, 100), ALLIANCE_HELP_ALL, "green"):
+        rd_snap(after, "ahelp_2")
+        raise RuntimeError("Help All still there after pressing it")
+    log("[+]  Alliance Help: Help All pressed - everyone helped")
 
 
 def run_alliance_treasure(dev, cfg, log, stop):
@@ -18148,9 +18076,6 @@ DUTY_LIBRARY = [
     {"id": "reach_market", "group": "Common tasks", "title": "Test: go to Market", "every_min": 60, "verified": False,
      "note": "Only checks that the bot walks to the Market and opens its menu (nothing is pressed).",
      "target": "building:Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market"]},
-    {"id": "alliance_science", "group": "Daily activities", "title": "Alliance Science", "verified": False,
-     "note": "Alliance > Alliance Science: uses the day's free donations on the recommended science. Never spends gems.",
-     "target": "self:", "every_min": 240, "steps": ["alliance_science"]},
     {"id": "black_market", "group": "Daily activities", "title": "Black Market", "every_min": 0, "verified": False,
      "note": "Market > Black Market: buys the goods on the Market tab, refreshes as set there, keeps the gem and gold floors. Finds the Market by trying the building plots once, then remembers it.",
      "target": "go:Black Market|Market", "tap_dy": 0, "steps": ["wait 1.5", "ring_name Market", "market"]},

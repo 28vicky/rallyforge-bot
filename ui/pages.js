@@ -1710,7 +1710,7 @@ const DUTY_UI = {
   resource_tax: ["City", "Resource tax", 1], offering_tributes: ["City", "Offering", 3],
   black_market: ["Market & Tavern", "Black Market", 4], wheel: ["Market & Tavern", "Wheel of Fortune", 3], trade_carriage: ["Market & Tavern", "Trade Carriage", 3],
   champions: ["Market & Tavern", "Greet champions", 2], ranger_knight: ["Market & Tavern", "Ranger Knight Order", 3], tavern_catalog: ["Market & Tavern", "General library", 0],
-  alliance_help: ["Alliance", "Alliance help", 1], alliance_science: ["Alliance", "Alliance donation", 1],
+  alliance_help: ["Alliance", "Alliance help", 1],
   alliance_shop: ["Alliance", "Alliance shop", 0],
   monster_rally: ["Army", "Monster hunts", 0],
   crazy_eggs: ["Events", "Crazy Eggs", 0], wisdom_dome_tokens: ["Events", "Wisdom Dome tokens", 0], royal_thief: ["Events", "Royal Thief", 0],
