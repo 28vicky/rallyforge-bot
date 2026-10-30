@@ -16700,6 +16700,19 @@ RT_THIEF_SPOTS = {"left": (120, 600), "mid": (288, 392), "right": (410, 600)}
 RT_PRESETS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
 
 
+def rt_thief_colours(shot):
+    """Royal Thief Event page: {'left'|'mid'|'right': True when that thief is killed (grey picture)}. Killed ~24 colour
+    saturation, alive 61-71 (Kiravik 30 Oct screenshots)."""
+    out = {}
+    try:
+        hsv = cv2.cvtColor(shot, cv2.COLOR_BGR2HSV)
+        for c, (x, y) in RT_THIEF_SPOTS.items():
+            out[c] = float(hsv[y - 90:y + 90, max(0, x - 60):x + 60, 1].mean()) < 42
+    except Exception as _e:
+        quiet_err("rt_thief_colours", _e)
+    return out
+
+
 def rt_save(serial, **kw):
     with _DUTY_LOCK:
         data = load_duty_state()
@@ -16814,6 +16827,13 @@ def run_royal_thief(dev, cfg, log, stop):
             killed.add(rt_col(x))
         elif re.search(r"x\s*[:.]?\s*\d{3}", t.lower()):
             alive.append(rt_col(x))
+    for c, k in rt_thief_colours(shot).items():           # owner 15:19: a killed thief is GREY - colour decides when text fails
+        if k:
+            killed.add(c)
+            if c in alive:
+                alive.remove(c)
+        elif c not in killed and c not in alive:
+            alive.append(c)
     if row.get("who") == who and row.get("col") in killed:   # the thief we attacked is dead: this invite is done
         done.append(who)
         rt_save(serial, done=done, who="", col="")
@@ -16855,7 +16875,11 @@ def run_royal_thief(dev, cfg, log, stop):
         return later(RT_RECHECK_MIN, "no Attack on the thief")
     shot = dev.screenshot()
     rd_snap(shot, "thief_4")
-    if not rd_tap(dev, stop, ["Attack"], region=(150, 680, 260, 130), whole=True, wait=(2.0, 2.5), shot=shot):
+    ab = find_green_button(shot, x_min=150, x_max=430, y_min=660, y_max=820)   # owner recording 15:16: green Attack (291,726)
+    if ab:
+        dev.tap(*ab)
+        _nap(stop, 2.0, 2.5)
+    elif not rd_tap(dev, stop, ["Attack"], region=(150, 680, 260, 130), whole=True, wait=(2.0, 2.5), shot=shot):
         leave_to_city(dev, cfg, stop, log)
         return later(RT_RECHECK_MIN, "no Attack button on the thief's page")
     shot = dev.screenshot()

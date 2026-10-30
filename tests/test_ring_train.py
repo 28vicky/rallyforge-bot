@@ -123,3 +123,13 @@ def test_invite_icon_and_thief_attack_by_picture():
     a = rb.ring_icon(cv2.imread(str(S / "thief_ring_map_kiravik.png")), "attack")
     assert a and abs(a[0] - 140) < 12 and abs(a[1] - 378) < 12
     assert rb.ring_icon(cv2.imread(str(S / "tavern_ring_stalds.png")), "attack") is None
+
+
+def test_thief_killed_by_grey_and_attack_button():
+    a = rb.rt_thief_colours(cv2.imread(str(S / "thief_event_kiravik.png")))
+    assert a == {"left": True, "mid": False, "right": True}                 # Nell + Duke killed, Nightingale alive
+    b = rb.rt_thief_colours(cv2.resize(cv2.imread(str(S / "thief_event_alive3_kiravik.jpg")), (540, 960)))
+    assert b == {"left": False, "mid": False, "right": False}
+    p = cv2.resize(cv2.imread(str(S / "thief_page_duke_kiravik.jpg")), (540, 960))
+    g = rb.find_green_button(p, x_min=150, x_max=430, y_min=660, y_max=820)
+    assert g and 230 < g[0] < 330
