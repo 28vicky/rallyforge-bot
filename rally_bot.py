@@ -15634,9 +15634,11 @@ def _tap_warehouse_hand(dev, stop, log, hit, how):
 def run_collect_resources(dev, cfg, log, stop):
     """Owner 30 Oct 11:49: zoom fully out, go straight to the Warehouse by the city map, tap the hand above it.
     The blind 3x3 drag is only the fallback for a city with no Warehouse pin / no map."""
+    t0 = time.time()
     ensure_city_zoom(dev, cfg, stop, log)
     if stop.is_set():
         return
+    log(f"[i]   Collect resources: on the city view, zoom checked ({time.time() - t0:.0f} s)")
     shot = _settled_shot(dev, stop)
     hit = find_warehouse_hand(shot)
     if hit:                                                # already on screen
@@ -15650,8 +15652,11 @@ def run_collect_resources(dev, cfg, log, stop):
         if at is not None:
             shot = _settled_shot(dev, stop)
             hit = find_warehouse_hand(shot)
+            near = find_warehouse_hand(shot, 0.6)             # at the Warehouse a weaker match close to the pin is the hand
+            if not hit and near and abs(near[0] - at[0]) < 160 and abs(near[1] - at[1]) < 200:
+                hit = near
             if hit:
-                _tap_warehouse_hand(dev, stop, log, hit, "(by the city map)")
+                _tap_warehouse_hand(dev, stop, log, hit, f"(by the city map, {time.time() - t0:.0f} s)")
                 return
             rd_snap(shot, "collect_no_hand")
             log("[i]   Collect resources: at the Warehouse, no hand above it - nothing ready yet (tries again later)")

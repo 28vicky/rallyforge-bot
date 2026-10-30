@@ -47,7 +47,7 @@ def test_no_pin_falls_back_to_looking_around(monkeypatch):
     d = Dev()
     rb.run_collect_resources(d, {}, logs.append, threading.Event())
     assert len(d.swipes) == len(rb.HAND_SWEEP)
-    assert "no Warehouse pin" in logs[0]
+    assert any("no Warehouse pin" in l for l in logs)
 
 
 def _zoom_setup(mp, at_zoom_seq):
