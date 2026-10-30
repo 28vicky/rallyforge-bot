@@ -15634,14 +15634,19 @@ def run_collect_resources(dev, cfg, log, stop):
     """Owner 30 Oct 11:49: zoom fully out, go straight to the Warehouse by the city map, tap the hand above it.
     The blind 3x3 drag is only the fallback for a city with no Warehouse pin / no map."""
     t0 = time.time()
+    shot = _settled_shot(dev, stop)                        # owner 30 Oct 12:13: the hand is often on screen already - a picture
+    hit = find_warehouse_hand(shot)                        # check takes milliseconds; the zoom check + map jump take seconds
+    if hit:
+        _tap_warehouse_hand(dev, stop, log, hit, f"(on screen, {time.time() - t0:.0f} s)")
+        return
     ensure_city_zoom(dev, cfg, stop, log)
     if stop.is_set():
         return
     log(f"[i]   Collect resources: on the city view, zoom checked ({time.time() - t0:.0f} s)")
     shot = _settled_shot(dev, stop)
     hit = find_warehouse_hand(shot)
-    if hit:                                                # already on screen
-        _tap_warehouse_hand(dev, stop, log, hit, "(on screen)")
+    if hit:                                                # on screen after zooming out
+        _tap_warehouse_hand(dev, stop, log, hit, f"(on screen, {time.time() - t0:.0f} s)")
         return
     pin = _pin_of(dev, "Warehouse") or culture_pin(dev, "Warehouse")
     cmap = city_map(dev)

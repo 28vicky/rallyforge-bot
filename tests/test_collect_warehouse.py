@@ -27,7 +27,7 @@ def _setup(mp, hands, pin=(100, 200), reach=True):
 
 
 def test_goes_to_warehouse_pin_and_taps_hand(monkeypatch):
-    logs = _setup(monkeypatch, [None, (250, 400, 0.9), None])
+    logs = _setup(monkeypatch, [None, None, (250, 400, 0.9), None])
     d = Dev()
     rb.run_collect_resources(d, {}, logs.append, threading.Event())
     assert d.taps == [(250, 400)] and not d.swipes
@@ -72,3 +72,11 @@ def test_zoom_tries_once_then_carries_on(monkeypatch):
     w = _zoom_setup(monkeypatch, [False, False, False, False])
     rb.ensure_city_zoom(Dev(), {}, threading.Event(), logs.append)
     assert len(w) == 1 and "carrying on" in logs[-1]
+
+
+def test_hand_on_screen_tapped_before_any_zoom_or_map(monkeypatch):
+    logs = _setup(monkeypatch, [(200, 300, 0.95), None])
+    monkeypatch.setattr(rb, "ensure_city_zoom", lambda *a: (_ for _ in ()).throw(AssertionError("zoom not needed")))
+    d = Dev()
+    rb.run_collect_resources(d, {}, logs.append, threading.Event())
+    assert d.taps == [(200, 300)] and "on screen" in logs[-1]
