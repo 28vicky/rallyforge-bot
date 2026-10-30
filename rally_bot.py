@@ -19581,10 +19581,19 @@ def eq_open_event_page(dev, cfg, log, stop):
         tpl = cv2.imread(str(f))
         if tpl is None:
             continue
-        shot = dev.screenshot()
-        r = cv2.matchTemplate(shot[y0:y0 + h, x0:x0 + w], tpl, cv2.TM_CCOEFF_NORMED)
-        _, best, _, loc = cv2.minMaxLoc(r)
-        if best < 0.75:
+        best, loc = 0, None
+        for i in range(3):                               # the icon is animated: best of three looks, blurred
+            if i:
+                _nap(stop, 0.3, 0.4)
+            shot = dev.screenshot()
+            r = cv2.matchTemplate(cv2.GaussianBlur(shot[y0:y0 + h, x0:x0 + w], (7, 7), 0),
+                                  cv2.GaussianBlur(tpl, (7, 7), 0), cv2.TM_CCOEFF_NORMED)
+            _, b, _, l = cv2.minMaxLoc(r)
+            if b > best:
+                best, loc = b, l
+            if best >= 0.85:
+                break
+        if best < 0.68:                                  # K 31 Oct: 0.79-1.0 on the icon, under 0.5 anywhere else
             continue
         dev.tap(x0 + loc[0] + tpl.shape[1] // 2, y0 + loc[1] + tpl.shape[0] // 2)
         _nap(stop, 2.2, 2.8)
