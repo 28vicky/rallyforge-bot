@@ -53,7 +53,10 @@ def test_x100_follows_the_reward_window(monkeypatch):
     assert taps == [spin, (270, 110), spin, (270, 110), spin, (270, 110)]
 
 
-def test_tavern_ring_items_from_detail_icon():
+def test_tavern_ring_items_from_detail_icon(monkeypatch):
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.setattr(rb, "template_path", lambda n: (root / f"{n}.png") if (root / f"{n}.png").exists() else None)
+    rb._cache.clear()
     """Owner 30 Oct 14:10: Stalds' open Tavern ring - Wheel and Great General Chest from the Detail icon."""
     shot = cv2.imread(str(S / "tavern_ring_stalds.png"))
     w = rb.tavern_ring_spot(shot, "wheel")
@@ -75,7 +78,10 @@ def test_dome_buy_button_by_colour():
     assert rb.find_green_button(page, x_min=280, x_max=480, y_min=360, y_max=840) is None
 
 
-def test_dome_ring_rare_books_from_detail_icon():
+def test_dome_ring_rare_books_from_detail_icon(monkeypatch):
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.setattr(rb, "template_path", lambda n: (root / f"{n}.png") if (root / f"{n}.png").exists() else None)
+    rb._cache.clear()
     shot = cv2.imread(str(S / "dome_ring_kiravik.png"))
     r = rb.tavern_ring_spot(shot, "rare_books")
     assert r and abs(r[0] - 195) < 25 and 290 < r[1] < 345
