@@ -16697,6 +16697,7 @@ def rt_invite_seen(dev, cfg, log, shot=None):
         return False
 RT_RECHECK_MIN = 5                       # after marching / when something got in the way: look again this soon
 RT_THIEF_SPOTS = {"left": (120, 600), "mid": (288, 392), "right": (410, 600)}
+RT_CENTER_TRIES = [(0, 0), (0, -28), (0, 24)]   # owner 30 Oct 15:30: green rally lines can catch the first tap
 RT_PRESETS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
 
 
@@ -16864,9 +16865,18 @@ def run_royal_thief(dev, cfg, log, stop):
         wait = (mk[2] or 120) + 20
         leave_to_city(dev, cfg, stop, log)
         return later(max(1, round(wait / 60)), f"all {mk[1]} marches are out")
-    dev.tap(274, 477)                                      # the thief sits in the middle of the screen
-    _nap(stop, 1.5, 2.0)
-    at = ring_icon(dev.screenshot(), "attack")             # owner 30 Oct 15:18: by its picture (text unread on the busy map)
+    # owner 30 Oct 15:30: the game flies the map to the thief (sometimes the ring is already open); green rally
+    # lines cross the hive, so a tap can hit a line - try the centre, then a little above and below.
+    at = ring_icon(shot, "attack")
+    for dx, dy in RT_CENTER_TRIES:
+        if at or (stop and stop.is_set()):
+            break
+        dev.tap(274 + dx, 477 + dy)                        # the thief sits in the middle of the screen
+        _nap(stop, 1.5, 2.0)
+        at = ring_icon(dev.screenshot(), "attack")         # owner 30 Oct 15:18: by its picture (text unread on the busy map)
+        if not at and (dx, dy) != RT_CENTER_TRIES[-1]:
+            dev.tap(*MR_EMPTY)                             # close whatever the tap opened (a march line's panel)
+            _nap(stop, 0.8, 1.0)
     if at:
         dev.tap(*at)
         _nap(stop, 2.0, 2.6)
