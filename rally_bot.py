@@ -13682,8 +13682,8 @@ def _at_map_zoom(dev, shot):
     map or on a culture map (the locate's pixel check fails at another zoom)."""
     try:
         cm = city_map(dev)
-        if cm is not None and cm.locate(shot):
-            return True
+        if cm is not None:                                 # owner 30 Oct 12:13: the own map decides - the 5 culture maps
+            return bool(cm.locate(shot))                   # cost ~20 s and are only for a city with no own map yet
         for c in CULTURES:
             m = culture_map(c)
             if m is not None and m.locate(shot):
@@ -13699,12 +13699,11 @@ def ensure_city_zoom(dev, cfg, stop, log):
     Not out -> ONE zoom-out (Ctrl+wheel), look again and carry on either way. A view that does not change is not an
     error: no loop of zoom tries, no real-mouse wait, never a reason to give up the task. -> True when confirmed out."""
     try:
-        leave_to_city(dev, cfg, stop, log)
+        if not _on_city_now(dev, cfg):
+            leave_to_city(dev, cfg, stop, log)
         if stop.is_set():
             return False
         before = dev.screenshot()
-        if getattr(dev, "zoomed_out", False) and _at_map_zoom(dev, before):
-            return True
         if _at_map_zoom(dev, before):
             dev.zoomed_out = True
             return True
@@ -19292,6 +19291,15 @@ def map_only(tasks):
     return bool(tasks) and all(str(t.get("name", "")).startswith("duty:") and t["name"][5:] in MAP_DUTIES for t in tasks)
 
 
+def _on_city_now(dev, cfg):
+    """One quick look (no taps, no text reading): the plain city view with nothing over it?"""
+    try:
+        sh = dev.screenshot()
+        return screen_state(sh, cfg) == "city" and not _quit_box(sh)
+    except Exception:
+        return False
+
+
 def run_city_tasks(dev, cfg, log, stop, tasks, last_run):
     """From the city screen: run each due task (open it, run its steps, go back)."""
     try:
@@ -19345,9 +19353,14 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                 else:                                        # stall timer: every log line of this duty pushes it (owner 29 Oct)
                     duty_budget_start(50 if duty_id in MAP_HEAVY else DUTY_BUDGET_MIN,
                                       DUTY_CEILING_MAP_MIN if duty_id in MAP_HEAVY else DUTY_CEILING_MIN)
-                if not ensure_view(dev, cfg, stop, log, "world" if on_map else "city") and not stop.is_set():
-                    log(f"[!] Could not get back to the {'world map' if on_map else 'city view'}")
-                clear_popups(dev, cfg, log, stop, want_city=not on_map)   # close offers / pop-ups first, then do the task
+                _t0 = time.time()
+                if not on_map and attempt == 0 and _on_city_now(dev, cfg):
+                    pass                                     # owner 30 Oct 12:13: already on the clean city view - no reaching / pop-up rounds
+                else:
+                    if not ensure_view(dev, cfg, stop, log, "world" if on_map else "city") and not stop.is_set():
+                        log(f"[!] Could not get back to the {'world map' if on_map else 'city view'}")
+                    clear_popups(dev, cfg, log, stop, want_city=not on_map)   # close offers / pop-ups first, then do the task
+                log(f"[i]   {shown}: ready to start after {time.time() - _t0:.0f} s")
                 ok = city_task_target(dev, cfg, log, stop, t, nav_state)
                 if not ok and clear_popups(dev, cfg, log, stop):  # a pop-up was in the way: try the same task again
                     ok = city_task_target(dev, cfg, log, stop, t, nav_state)
@@ -19362,9 +19375,10 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                             run_step(dev, cfg, log, stop, st)
                     finally:
                         dev._guard_busy = was_busy
-                    if not on_map:
+                    if not on_map and not _on_city_now(dev, cfg):
                         leave_to_city(dev, cfg, stop, log)
                 result = (ok is not False, "" if ok is not False else "could not open it")
+                log(f"[i]   {shown}: finished in {time.time() - _t0:.0f} s")
             except Exception as e:
                 log(f"[!] {'Duty' if duty_id else 'City task'} '{shown}' failed: {e}")
                 result = (False, str(e)[:120])
@@ -19390,7 +19404,7 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                 duty_failed_report(dev, cfg, log, shown, result[1])
         if duty_id in MAP_HEAVY:
             map_slot_free(getattr(dev, "serial", ""))
-        if not on_map:                                       # map duties: the rally list is reached from the map (Alliance button)
+        if not on_map and not _on_city_now(dev, cfg):         # map duties: the rally list is reached from the map (Alliance button)
             leave_to_city(dev, cfg, stop, log)
     log("@act " + json.dumps({"k": "step", "text": "Idle - tasks done, back to the rallies"}))   # the instance list stops showing the task
 
