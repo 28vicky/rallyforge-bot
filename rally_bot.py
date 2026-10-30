@@ -18652,11 +18652,15 @@ def mr_free_presets(cfg, serial, presets, now=None):
     return {p for p in presets if not mr_preset_until(cfg, serial, p, now, row, seen_only=True)}
 
 
+HUNT_FRESH_MIN = 5             # owner 30 Oct 23:47: coordinates older than this go to the back (tried only when no fresh one is left)
+
+
 def mr_plan(targets, free, hold=None, skip=(), last=None):
     """Every target with at least one FREE preset, best first, each with its best free preset:
-    the held target first, then the place in that preset's box, higher level, closer, lower preset number.
+    the held target first, then fresh coordinates (<= HUNT_FRESH_MIN) before old ones, then the place in that preset's box, higher level, closer, lower preset number.
     -> [(target, pair)]"""
     out = []
+    now_t = time.time()
     for t in targets:
         key = f"{t.get('x')},{t.get('y')}"
         if key in skip:
@@ -18666,7 +18670,8 @@ def mr_plan(targets, free, hold=None, skip=(), last=None):
             continue
         e = min(ps, key=lambda x: mr_pair_order(x, last))
         km = t.get("km") if t.get("km") is not None else 1e9
-        out.append(((0 if hold and key == hold else 1, int(e.get("rank") or 0), -int(t.get("level") or 0), km,
+        old = 1 if now_t - float(t.get("t") or now_t) > HUNT_FRESH_MIN * 60 else 0   # owner 30 Oct 23:47: fresh coordinates first
+        out.append(((0 if hold and key == hold else 1, old, int(e.get("rank") or 0), -int(t.get("level") or 0), km,
                      float((last or {}).get(e["preset"]) or 0), mr_pnum(e["preset"])), t, e))
     out.sort(key=lambda x: x[0])
     return [(t, e) for _, t, e in out]
@@ -18832,10 +18837,21 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
             kw["hold"] = key
         mr_save(serial, **kw)
 
+    # owner 30 Oct 23:47: time every step of a hunt, so the slow one can be named (Dida: ~80 s per rally start)
+    _t = [time.time()]
+    _steps = []
+
+    def mark(name):
+        n = time.time(); _steps.append(f"{name} {n - _t[0]:.0f}s"); _t[0] = n
+
+    def steps():
+        return " · steps: " + ", ".join(_steps) if _steps else ""
+
     if not mr_search(dev, stop, tgt["x"], tgt["y"]):
         later(MR_POLL_MIN, "the coordinate search did not open")
         return "later"
     _nap(stop, 1.0, 1.4)
+    mark("fly")
     mr_fold_panel(dev, stop, log)                            # owner 25 Oct: an open March panel hides the monster's Attack
     shot = dev.screenshot()
     rd_snap(shot, "mrally_map")
@@ -18856,16 +18872,18 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
         return "busy"
     if stop.is_set():
         return "stop"
+    mark("march check")
     got, page = mr_open_monster(dev, stop, tgt.get("name") or "", tgt.get("level"))
+    mark("open monster")
     if got == "gone":
         hunt_note(serial, tgt, "Skipped", "skip", "Gone before arrival")
         mr_block(key, serial, "dead")
-        log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped")
+        log(f"[*]  Monster rally: {label} - the monster is not there any more, skipped{steps()}")
         return "gone"
     if got == "other":
         hunt_note(serial, tgt, "Skipped", "skip", "Spot taken by another monster")
         mr_block(key, serial, "dead")
-        log(f"[*]  Monster rally: {label} - another monster stands there ({page}), skipped")
+        log(f"[*]  Monster rally: {label} - another monster stands there ({page}), skipped{steps()}")
         return "other"
     nomarch = time.time() + HUNT_WAIT_CAP_S                  # the game would not open a march: treat the marches as out 1 min
     if solo:                                                 # Solo: Attack opens the troop page straight away (no rally time)
@@ -18995,6 +19013,7 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
         po.update({p: time.time() + HUNT_OUT_DEFAULT_S for p in empty})
         mr_save(serial, pout=po)
     first, preset = preset, used
+    mark("rally window + preset")
     if not rd_seen(shot, ["Select a Preset", "Alliance War"], region=(0, 0, 540, 180)):
         dev.back()
         raise RuntimeError("no March button (the troop page is gone)")
@@ -19014,6 +19033,7 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
             later(30, "not enough stamina (and no stamina items)")
             return "later"
         shot = dev.screenshot()
+    mark("stamina")
     dev.tap(*MR_MARCH)                                       # fixed spot (the gold label is rarely read, PC 23 Oct); checked below
     _nap(stop, 1.5, 1.8)
     went = False
@@ -19041,6 +19061,7 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
         mr_save(serial, hold=key)
         later(0.5, f"{label} - not started, trying this monster again first")
         return "later"
+    mark("march")
     row = mr_row(serial)
     busy = dict(row.get("busy") or {})
     busy[preset] = time.time()
@@ -19058,11 +19079,11 @@ def mr_hunt_one(dev, cfg, log, stop, serial, tgt, pair, tried, later, keep_free=
         mr_save(serial, solo_day=_game_day(), solo_n=n_)
         hunt_note(serial, tgt, "Solo attack", "solo", why)
         hunt_status(serial, "running", f"Attacked {short} with Preset {mr_pnum(preset)}", f"Solo attack sent{far} · looking for the next monster")
-        log(f"[+]  Monster hunts: solo attack on {label} - preset {mr_pnum(preset)}")
+        log(f"[+]  Monster hunts: solo attack on {label} - preset {mr_pnum(preset)}{steps()}")
         return "started"
     hunt_note(serial, tgt, "Rallied", "go", why)
     hunt_status(serial, "running", f"Rallying {short} with Preset {mr_pnum(preset)}", f"{rtime} min rally started{far} · looking for the next monster")
-    log(f"[+]  Monster rally: started on {label} - {rtime} min, preset {mr_pnum(preset)}")
+    log(f"[+]  Monster rally: started on {label} - {rtime} min, preset {mr_pnum(preset)}{steps()}")
     return "started"
 
 # --- Event duties (tester recordings 22-26 Oct: Legion Hunting, Garuda, Windmill, Eagle, Star Trail, Duel, Taotie,
@@ -21982,6 +22003,13 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 dev.acted = time.time()
                 dev.back()
                 nap(1.5, 2.0)
+                continue
+            if (st == "unknown" and not rallies_on and tasks_active(cfg, serial) and time.time() >= city_block[0]
+                    and world_map(screen) and map_only(_due := city_tasks_due(cfg, city_last, serial))):
+                # owner 30 Oct 23:47: a hunt-only instance back from the 30-min check-in is already on the world map -
+                # no trip to the rally list and the city first (Dida 14:00-14:06 lost 5.5 min doing that)
+                log(f"[*] On the world map - going straight on with {len(_due)} map task(s)")
+                run_city_tasks(dev, cfg, log, stop, _due, city_last)
                 continue
             need_recover = st in ("march", "city", "general") and not (st == "city" and not rallies_on)
             if st == "unknown":
