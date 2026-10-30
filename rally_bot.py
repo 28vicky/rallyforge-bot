@@ -19551,7 +19551,7 @@ def run_ev_super_value(dev, cfg, log, stop):
 # = only the reached progress chests, row missing = event not on (not a failure). Go is never pressed.
 EQ_NAMES = ["King's Path", "Gather Troops"]
 EQ_COLUMN = (0, 55, 540, 850)                           # owner 31 Oct: event icons sit anywhere (K: top row, Kiravik: right column, bottom row)
-EQ_ICON_DIR = USER / "event_icons"                      # owner 31 Oct 03:02: the event's icon picture, captured once per event
+EQ_ICON_DIRS = (Path(__file__).parent / "event_icons", USER / "event_icons")   # owner 31 Oct 03:02: one icon picture per event
 
 
 def eq_list_names(dev, stop, scrolls=3):
@@ -19570,7 +19570,7 @@ def eq_list_names(dev, stop, scrolls=3):
 def eq_open_event_page(dev, cfg, log, stop):
     """From the city: tap the current event's icon, found by its picture (event_icons/*.png - a new picture is added
     for every event, owner 31 Oct 03:02), wherever it sits. -> True when its page lists King's Path / Gather Troops."""
-    pics = sorted(EQ_ICON_DIR.glob("*.png")) if EQ_ICON_DIR.exists() else []
+    pics = [f for d in EQ_ICON_DIRS if d.exists() for f in sorted(d.glob("*.png"))]
     if not pics:
         log("[!]   Event quests: no event icon picture yet - add the current event's icon to event_icons")
         return False
