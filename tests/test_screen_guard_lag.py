@@ -121,3 +121,10 @@ def test_quiet_taps_are_not_counted():
             look(d, same)
             d.tap(10, 10)
     assert not d.screen_stuck
+
+
+def test_troop_at_game_limit_is_read():
+    import cv2
+    p = Path(__file__).parent / "screens" / "train_stable_max_kiravik.png"
+    if p.exists():
+        assert rb.train_own(cv2.imread(str(p))) >= rb.TRAIN_OWN_MAX

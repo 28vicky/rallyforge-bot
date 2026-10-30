@@ -16398,6 +16398,19 @@ TRAIN_BUILDINGS = {"Barracks (ground)": "Barracks", "Stable (mounted)": "Stable"
                    "Workshop (siege)": "Workshop"}
 TRAIN_ROW_Y, TRAIN_SLOT, TRAIN_FIRST_X = 615, 118, 58     # Stalds' training page (debug\duty_train_troops_1)
 TRAIN_QTY = (455, 795)                                     # the amount box right of the slider
+TRAIN_OWN = (90, 525, 360, 40)                             # "Own: 2,147,000,000" under the troop name
+TRAIN_OWN_MAX = 2_147_000_000                              # the game's troop cap (Kiravik 30 Oct: Own 2,147,000,000 -> box stays 0)
+
+
+def train_own(shot):
+    """The 'Own: N' number of the selected troop, or None when not read."""
+    try:
+        txt = " ".join(t for t, _ in rd_lines(shot, TRAIN_OWN))
+        m = re.search(r"[o0]wn\W*([\d,. ]{1,20})", txt, re.I)
+        nums = rd_numbers(m.group(1).replace(".", ",").replace(" ", "")) if m else []
+        return nums[0] if nums else None
+    except Exception:
+        return None
 
 
 TRAIN_BKEY = {"Barracks (ground)": "b_barracks", "Stable (mounted)": "b_stable", "Archer Camp (ranged)": "b_archer",
@@ -16510,7 +16523,7 @@ def run_train_troops(dev, cfg, log, stop):
     todo = train_due_buildings(cfg, serial)
     if not todo:
         todo = train_buildings((cfg.get("duties") or {}).get("train_troops") or {})[:1]
-    done, busy, failed = [], {}, []
+    done, busy, failed, maxed = [], {}, [], []
     for n, label in enumerate(todo):
         if stop.is_set():
             break
@@ -16525,6 +16538,9 @@ def run_train_troops(dev, cfg, log, stop):
             if left is None:
                 done.append(bname)
                 _TRAIN_NEXT.pop((serial, label), None)
+            elif left == "max":                            # at the game's limit: skipped, not a failure
+                maxed.append(bname)
+                _TRAIN_NEXT[(serial, label)] = time.time() + 6 * 3600   # look again in 6 h (troops may be used meanwhile)
             else:
                 busy[bname] = left
                 _TRAIN_NEXT[(serial, label)] = time.time() + left
@@ -16537,6 +16553,7 @@ def run_train_troops(dev, cfg, log, stop):
             log(f"[!]  Train troops: {bname} - {e}")
     log(f"[i]  Train troops: trained {', '.join(done) or 'none'}"
         + (f"; busy {', '.join(f'{b} ({fmt_hms(v)})' for b, v in busy.items())}" if busy else "")
+        + (f"; at the game's limit {', '.join(maxed)}" if maxed else "")
         + (f"; failed {', '.join(failed)}" if failed else ""))
     if failed and not done and not busy:
         raise RuntimeError("; ".join(failed)[:110])
@@ -16580,6 +16597,11 @@ def train_one_building(dev, cfg, log, stop, bname):
         raise RuntimeError("lost the training page")
     if not train_pick_tier(dev, stop, log, tier):
         raise RuntimeError(f"could not select T{tier} - not trained")
+    own = train_own(dev.screenshot())
+    if own is not None and own >= TRAIN_OWN_MAX:
+        # owner 30 Oct 19:48 (Kiravik Stable 'Own: 2,147,000,000'): the game's own maximum - nothing more can be trained
+        log(f"[+]  {what}: T{tier} is at the game's limit (own {own:,}) - this building is skipped")
+        return "max"
     if not game_number:
         dev.tap(*TRAIN_QTY)
         _nap(stop, 1.4, 1.8)
