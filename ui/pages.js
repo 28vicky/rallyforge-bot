@@ -445,9 +445,7 @@ function instancePage(serial) {
     h("div", { class: "ihtitle" }, sideBtn(), h("h2", { title: dev.name + " \u00b7 " + serial, style: { fontSize: Math.max(18, Math.min(40, parseInt(S.cfg.ui_name, 10) || 24)) + "px", lineHeight: "1.1", fontWeight: "800", margin: "0" } }, dev.name || "Instance " + d.idx), status),
     h("div", { class: "ihacts" }, saveStEl(), bar),
     h("div", { class: "ihctl" }, jrSwitch(serial, { after: () => rerender() }), ajSwitch(serial, { after: () => rerender() }),
-      h("button", { id: "instTakeBack", class: "btn sm takeback", type: "button", style: { display: "none" }, title: "The game was opened on another device. Take it back now instead of waiting.", onclick: () => act(api("takeback", { serial })) }, "Take back"),
-      // owner 30 Oct 20:19: "Run a task now" was two scrolls down at 900 px - now on every tab, next to the switches
-      h("button", { class: "btn sm runnowbtn", type: "button", title: "Run one task now, before anything else - then the bot carries on", onclick: (e) => runNowPop(e.currentTarget, serial) }, ico("bolt"), "Run a task now")));
+      h("button", { id: "instTakeBack", class: "btn sm takeback", type: "button", style: { display: "none" }, title: "The game was opened on another device. Take it back now instead of waiting.", onclick: () => act(api("takeback", { serial })) }, "Take back")));
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
@@ -633,7 +631,6 @@ function instancePage(serial) {
   const tabRow = h("div", { class: "tabs", style: { margin: "4px 0 0" } });
   const showTab = (k) => {
     S.instTab = k;
-    const shd = tabRow.closest(".stickyhead"); if (shd) shd.dataset.tab = k;   // Overview has the Run a task card: no second button there
     try { localStorage.setItem("rf_inst_tab", k); } catch (e) {}
     [...tabRow.children].forEach((x) => x.classList.toggle("on", x.dataset.k === k));
     body.innerHTML = "";
@@ -2283,36 +2280,11 @@ function pinBuildingsDialog(culture) {
   load(culture);
 }
 
-// owner 30 Oct 20:41: Run now opens as a dropdown under its header button (not a full pop-up) - quick pick, page stays in view
-function runNowPop(anchor, serial) {
-  const was = document.querySelector(".rnpop");
-  if (was) { was._close(); if (was._anchor === anchor) return; }     // second click on the button closes it
-  const box = h("div", { class: "rnpop", role: "dialog", "aria-label": "Run a task now" },
-    runNowCard(serial, { bare: true, onAdd: () => box._close() }));
-  box._anchor = anchor;
-  document.body.appendChild(box);
-  const place = () => {
-    if (!anchor.isConnected) return close();
-    const r = anchor.getBoundingClientRect(), w = box.offsetWidth;
-    box.style.left = Math.max(8, Math.min(r.right - w, innerWidth - 8 - w)) + "px";
-    box.style.top = r.bottom + 6 + "px";
-  };
-  const off = (e) => { if (!box.contains(e.target) && !anchor.contains(e.target) && !e.target.closest(".pick")) close(); };
-  const key = (e) => { if (e.key === "Escape" && !document.querySelector(".pick")) { e.stopPropagation(); close(); anchor.focus(); } };
-  const tick = setInterval(place, 300);                 // follows the button if the window is resized; closes if the page changed
-  function close() { clearInterval(tick); document.removeEventListener("mousedown", off, true); document.removeEventListener("keydown", key, true); removeEventListener("resize", place); box.remove(); anchor.classList.remove("open"); }
-  box._close = close;
-  anchor.classList.add("open");
-  place();
-  setTimeout(() => { document.addEventListener("mousedown", off, true); document.addEventListener("keydown", key, true); }, 0);
-  addEventListener("resize", place);
-  const f = box.querySelector(".rnfind"); if (f) setTimeout(() => f.focus(), 50);
-}
 function runNowCard(serial, o = {}) {
-  // owner 30 Oct 21:11: quick picks + search (like Spotlight) - up to 5 smart picks, no list scrolling inside the page;
+  // owner 30 Oct 21:11-21:17: quick picks (your recent tasks) + search, like Spotlight - no list scrolling inside the page;
   // type to find any task; "All tasks" for browsing. Click = runs next; x on "Next:" cancels.
   const root = h("div", { class: o.bare ? "runnow bare" : "panel runnow" });
-  let data = { tasks: [], queue: [] }, q = "", all = false, last = "", today = [];
+  let data = { tasks: [], queue: [] }, q = "", all = false, last = "";
   const RK = "rf_rn_recent_" + (serial || "all");
   const recent = () => { try { return JSON.parse(localStorage.getItem(RK) || "[]"); } catch (e) { return []; } };
   const remember = (id) => { try { localStorage.setItem(RK, JSON.stringify([id, ...recent().filter((x) => x !== id)].slice(0, 8))); } catch (e) {} };
@@ -2330,14 +2302,25 @@ function runNowCard(serial, o = {}) {
   };
   const row = (t, tag, queued) => h("button", { class: "rntask" + (queued ? " q" : ""), type: "button", role: "listitem", disabled: queued, onclick: () => add(t) },
     h("span", { class: "rnn" }, name(t)), queued ? h("small", { class: "rntag" }, "Queued") : tag ? h("small", { class: "rntag " + tag[1] }, tag[0]) : null, queued ? null : h("span", { class: "rngo" }, ico("bolt")));
-  const picks = () => {                                  // failed today -> recently run -> due now; at most 5
-    const by = new Map(shown().map((t) => [t.id, t])), out = [], seen = new Set();
-    const push = (id, tag) => { const t = by.get(id); if (t && !seen.has(id) && out.length < 5) { seen.add(id); out.push([t, tag]); } };
-    today.filter((x) => x.k === "gaveup" || x.k === "retry").forEach((x) => push("duty:" + x.id, ["Failed today", "bad"]));
-    recent().forEach((id) => push(id, ["Recent", ""]));
-    today.filter((x) => x.k === "due").forEach((x) => push("duty:" + x.id, ["Due now", "due"]));
-    return out;
+  const DEFAULT_PICKS = ["duty:wheel", "duty:black_market", "duty:train_troops", "duty:alliance_help", "duty:collect_resources", "duty:alliance_gift", "duty:champions", "duty:trade_carriage", "duty:mail"];   // fresh install: common tasks
+  let upNext = new Set();                                // what the Now card already shows (Up next + failed) - never twice on one page
+  const picks = () => {                                  // owner 30 Oct 21:17: only YOUR recent tasks - failed / due live in the Now card
+    const by = new Map(shown().map((t) => [t.id, t]));
+    const ok = (id) => by.has(id) && !upNext.has(id);
+    const ids = [...new Set([...recent().filter(ok), ...DEFAULT_PICKS.filter(ok)])];   // yours first, topped up with common ones
+    return ids.slice(0, 4).map((id) => [by.get(id), null]);
   };
+  const loadNext = async () => {                         // same rule as the Now card: first 3 of running / due / waiting / retry, plus failed
+    if (!serial || o.bare) return;
+    const j = await api("today", { serial }, { quiet: true }).catch(() => null);
+    if (!j) return;
+    const its = todayModel(j, serial).items;
+    const ids = its.filter((x) => ["run", "due", "waiting", "retry"].includes(x.k)).slice(0, 3).concat(its.filter((x) => x.k === "gaveup")).map((x) => "duty:" + x.id);
+    const key = ids.join("|");
+    if (key !== [...upNext].join("|")) { upNext = new Set(ids); if (!q && !all) draw(); }
+  };
+  setTimeout(loadNext, 0);
+  const tick3 = setInterval(() => { if (!root.isConnected) { clearInterval(tick3); return; } loadNext(); }, 15000);
   const draw = () => {
     list.innerHTML = "";
     const queued = new Set((data.queue || []).map((x) => x.id)), tasks = shown();
@@ -2372,14 +2355,13 @@ function runNowCard(serial, o = {}) {
   find.addEventListener("input", relab); allBtn.addEventListener("click", relab);
   draw();
   act(api("run_now", { serial })).then((j) => { if (j) { data = j; last = JSON.stringify(j.queue); draw(); } });
-  const loadToday = async () => { if (!serial) return; const j = await api("today", { serial }, { quiet: true }).catch(() => null); if (j) { today = (j.queue || []).map((x) => ({ id: x.id, k: x.status })); draw(); } };
-  setTimeout(loadToday, 0);
+  const onQ = (e) => { if (!root.isConnected) return removeEventListener("rf-runnow", onQ); if (e.detail.serial === serial) { data = e.detail.r; last = JSON.stringify(data.queue); draw(); } };
+  addEventListener("rf-runnow", onQ);                    // "Run again" in the Now card shows up in "Next:" at once
   const tick = setInterval(async () => {          // the queue empties when the bot starts the task: redraw only when it changed
     if (!root.isConnected) { clearInterval(tick); return; }
     const j = await api("run_now", { serial }, { quiet: true }).catch(() => null);
     if (j && j.queue && JSON.stringify(j.queue) !== last) { data = j; last = JSON.stringify(j.queue); if (!root.contains(document.activeElement) || document.activeElement === find) draw(); }
   }, 10000);
-  const tick2 = setInterval(() => { if (!root.isConnected) { clearInterval(tick2); return; } loadToday(); }, 30000);
   return root;
 }
 
@@ -2388,7 +2370,7 @@ function nowNextCard(serial) {
   const root = h("div", { class: "panel nownext" });
   const dot = h("span", { class: "livedot" }), nowEl = h("div", { class: "nnnow" }), next = h("div", { class: "nnlist" }), probs = h("div", { class: "nnprob" });
   root.append(h("div", { class: "cardhead" }, h("h3", {}, dot, "Now")), nowEl, h("div", { class: "nnlab" }, "Up next"), next, probs);
-  let items = [], lastKey = "";
+  let items = [], failed = [], queued = new Set(), lastKey = "";
   const goDuties = (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("routines"); };
   const paint = () => {
     const st = (S.devStatus.find((x) => x.id === serial) || {}).state;
@@ -2404,15 +2386,19 @@ function nowNextCard(serial) {
     up.forEach((x) => next.appendChild(h("div", { class: "nnrow" }, h("span", { class: "nnt" }, x.title), dutyBadge(x.k, x.text, x.tip))));
     if (!up.length) next.appendChild(h("div", { class: "nnempty" }, items.length ? "All duties done for today" : h("span", {}, "No duties on \u00b7 ", h("a", { href: "#", class: "lnk", onclick: goDuties }, "Choose duties"))));
     probs.innerHTML = "";
-    const bad = items.filter((x) => x.k === "gaveup");
-    if (bad.length) probs.appendChild(h("a", { href: "#", class: "nnbad", title: bad.map((x) => x.title + (x.tip ? " - " + x.tip : "")).join("\n"), onclick: goDuties },
-      h("b", {}, bad.length === 1 ? bad[0].title + " needs a look" : bad.length + " duties need a look"), h("span", {}, "Open \u2192")));
+    const bad = failed.filter((x) => !queued.has("duty:" + x.id));
+    bad.slice(0, 2).forEach((x) => probs.appendChild(h("div", { class: "nnbad", title: x.msg || x.text || "" },
+      h("span", { class: "nnbt" }, h("b", {}, dutyName(x.id, x.title)), h("small", {}, "Failed today")),
+      h("button", { class: "btn sm", type: "button", onclick: async () => { const r = await act(api("run_now_add", { serial, id: "duty:" + x.id })); if (r) { queued = new Set((r.queue || []).map((y) => y.id)); lastKey = ""; paint(); window.dispatchEvent(new CustomEvent("rf-runnow", { detail: { serial, r } })); toast(dutyName(x.id, x.title) + " runs next", "ok"); } } }, "Run again"))));
+    if (bad.length > 2) probs.appendChild(h("a", { href: "#", class: "lnk nnmore", onclick: goDuties }, "+" + (bad.length - 2) + " more in Duties"));
   };
   const load = async () => {
     if (!root.isConnected) return;
     const j = await api("today", { serial }, { quiet: true }).catch(() => null);
-    if (j) items = todayModel(j, serial).items;
-    paint();
+    if (j) { items = todayModel(j, serial).items; failed = (j.queue || []).filter((x) => x.status === "gaveup"); }
+    const rq = await api("run_now", { serial }, { quiet: true }).catch(() => null);
+    if (rq) queued = new Set((rq.queue || []).map((y) => y.id));
+    lastKey = ""; paint();
   };
   setTimeout(load, 0);                                   // after the card is on the page (load skips a card that is not)
   const t1 = setInterval(() => { if (!root.isConnected) { clearInterval(t1); clearInterval(t2); return; } paint(); }, 1000);

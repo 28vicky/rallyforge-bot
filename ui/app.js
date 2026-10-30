@@ -809,7 +809,7 @@ function todayModel(j, serial) {
   const items = (j.queue || []).map((q) => {
     const k = nowText === "Duty: " + q.title ? "run" : q.status;
     const tip = k === "gaveup" || k === "retry" ? (q.msg ? "Last problem: " + q.msg : q.text) : "";
-    return { k, title: dutyName(q.id, q.title), text: q.text, tip };
+    return { id: q.id, k, title: dutyName(q.id, q.title), text: q.text, tip };
   }).sort((a, b) => (order[a.k] ?? 3) - (order[b.k] ?? 3));
   const cnt = j.count || { done: 0, on: items.length }, left = cnt.on - cnt.done;
   const resetIn = (j.reset_at || 0) - (Date.now() / 1000 + skew);
