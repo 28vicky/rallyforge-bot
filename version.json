@@ -1,24 +1,24 @@
 {
-  "version": "2.5.28",
-  "notes": "Faster screenshots on MuMu, safer city maps, fewer stuck loops.",
+  "version": "2.5.29",
+  "notes": "Black Market items show their real names. New: Alliance donation. Tasks that are not ready yet show faded. No more stray Back presses on the city.",
   "files": {
     "rally_bot.py": {
-      "sha256": "1d7833795f7bd3230887b897c51ac7b92f7fc9137a8379f47018572a7839500a"
+      "sha256": "21afbc1cde1dca3d72927d3b359a8cdeab3824b2f7ea24257d63d1264cd92e8c"
     },
     "web_app.py": {
-      "sha256": "bd7a1461713cca3c87fe927ce71ebcce2fa316675a757267885d3d395dbc576f"
+      "sha256": "cdea21199e663e3ac758f866ef78e2c4267fcfcf25bae7811efb16bb3889e294"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "d400a2970ac7b215a5ad968e9eebd317a19bb23e2a8f8bae629e66e958a09e96"
+      "sha256": "32d13331e7bf20f598db8f6deb285f9e3a43945d5014dbe33f67b6e39f582f68"
     },
     "ui/app.js": {
-      "sha256": "6a29e0f54b57968017b892eaef6750d236bf1bdd021316aa38ad93ea7b2d8420"
+      "sha256": "af34feed71851a7877825e5160b14e17b69c39c62ac0b3634120211406c33319"
     },
     "ui/changelog.js": {
-      "sha256": "c2c95ea3b2f7dcdb532ac653955cc050dc8bd1f22aa81aeb3b1daa03a6634281"
+      "sha256": "e8b5b1b54640e67c34db678a8611b16fadf3a548472e9480716750a2540cb851"
     },
     "ui/dialogs.js": {
       "sha256": "f9222b8cf22cb7d06737e48bee98a1a431b919b44397560cc92e8ad16c113252"
@@ -27,10 +27,10 @@
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
     },
     "ui/index.html": {
-      "sha256": "e4ee601430127bfb87aefc9682c8632d26c38b88ef39547210afb4b82af4c4cd"
+      "sha256": "c8bb06b64f72952473a35d3864d820553e79c0154866bb9aac3e8c445fa6329d"
     },
     "ui/pages.js": {
-      "sha256": "aadfbb2509273fcc909132317d322b679413f75b80ca9a050ec6c1a85a74df53"
+      "sha256": "a5870d5b53e04d64530841d5dbce05cfd582aa121b0538e8152c0af6d46bd911"
     },
     "ui/tour.js": {
       "sha256": "13f3caea4e097cb210531c175e34809ead00eb7fca86570faa51a1929c787b32"
@@ -3178,6 +3178,12 @@
     "act_wheel_of_fortune.png": {
       "sha256": "f74a5ad07774fa69b233ba21186ec4e5d695c86bdbed8cc94fa13f7fa3420c34"
     },
+    "carriage_chest.png": {
+      "sha256": "7c17abc757c8ecf9c8f338764c59820998d2eb74d73f051ac0d31ae5018d1b3d"
+    },
+    "carriage_plus.png": {
+      "sha256": "902972f84385d3d350ea161d463ff609917e99370d4569a3e836b46c417bd200"
+    },
     "chat_alliance_tab.png": {
       "sha256": "27375af0e1baac4839193b073604295338bc8f2776c2ecb5e116cf611a237947"
     },
@@ -3189,6 +3195,9 @@
     },
     "event_center_icon.png": {
       "sha256": "ba4652d418bcd84af9971d507314c5aec49ef1de8273d3a1029f23d181c31219"
+    },
+    "icon_invite.png": {
+      "sha256": "0c21d24e803bd425fc85c44655c03d428ff8ae23e2c049eaa1bbc07fba25d572"
     },
     "join_button.png": {
       "sha256": "271ba437e6793b6f2179e8e6ea923f29f49bfed07b45ac208a0f5696f1ee4ac1"
@@ -3211,20 +3220,17 @@
     "mk_24h_Sawmill_Speed-up_x5.png": {
       "sha256": "bb524ea3c64470d981f05ea721c73caeae8d637aed28030fb04afcb8f7893981"
     },
-    "mk_BM_01.png": {
+    "mk_Artwork_Fragment_Chest_IV_x5.png": {
+      "sha256": "4899d6da1c8d05479b1cba97a08800e0dcdc232e0b882cf7fcf0395c66e455c5"
+    },
+    "mk_Artwork_Fragment_Chest_VI_x5.png": {
       "sha256": "91463983e51625ee65f481ad93810174cc60b78a3d70298afcaa322df3713e00"
+    },
+    "mk_Artwork_Fragment_Chest_V_x5.png": {
+      "sha256": "4f3d1205de653975c6fa84402d46d0fc7e6f40493efd14f7b5b7a4d779b88f07"
     },
     "mk_BM_02.png": {
       "sha256": "b5d028a0019533aaabba50810df8e2fe70cae753cf67f4771ce523d62082700d"
-    },
-    "mk_BM_03.png": {
-      "sha256": "4899d6da1c8d05479b1cba97a08800e0dcdc232e0b882cf7fcf0395c66e455c5"
-    },
-    "mk_BM_04.png": {
-      "sha256": "7c1934cfb1cc69f2ec11340ead10401c05a7cc0e2790f93494d4d5c9166bd6fb"
-    },
-    "mk_BM_05.png": {
-      "sha256": "d9c561cbd585e483b428dbe682df208349d660b20378cfbdacaad13c21ff169f"
     },
     "mk_BM_06.png": {
       "sha256": "ed8dea899da7bd46382e2eaa903ca842781e586ca70e16bc60111c0fdd0b94e6"
@@ -3232,53 +3238,14 @@
     "mk_BM_07.png": {
       "sha256": "8bad0673c876a08b6ef99d4e3dc6b90a9fa3439f7884bf58e9812b08b0ae4a09"
     },
-    "mk_BM_08.png": {
-      "sha256": "8a24f96c39ec4d1b58d94877d28368a61e8acd20eb0f907ebd96011aa3504ab3"
-    },
-    "mk_BM_09.png": {
-      "sha256": "cd4067b2ea756a16a9c2f73aad07a6ede140361a7b137d5a06d0ebef4bc424fb"
-    },
     "mk_BM_10.png": {
       "sha256": "22d11b33bb2d4a4bb3e66c9affcfeaa494af878bd2e7e6f8a886a813b0540a24"
-    },
-    "mk_BM_11.png": {
-      "sha256": "6f34059545dc1bdbd57f6c6268eed72e1e2954be4cea563d41bfd41778e287f5"
-    },
-    "mk_BM_12.png": {
-      "sha256": "40f9c3210fae5f4b368737270a2577c26ec65935dbce4ebc49a16247e756436f"
-    },
-    "mk_BM_13.png": {
-      "sha256": "4f04f3210168e2f3c6039b3763834affad88d466549eb7597bc62492865ba171"
-    },
-    "mk_BM_14.png": {
-      "sha256": "26f66bd019c14e60bf44d0b955b84ad3f98ed06ea69e0ad65f20645532fd612b"
     },
     "mk_BM_15.png": {
       "sha256": "4f4b7593bc423f1d026ed964d36f78b697f750d4dfb6f1b43fff1dc85089687e"
     },
-    "mk_BM_16.png": {
-      "sha256": "071b3548d79bf71c98f0dc73678780ae1e284cffbbb510c4814b4b1e61e3537f"
-    },
-    "mk_BM_17.png": {
-      "sha256": "a8d7f461c4a6924af0077fd6cc60d0ecb12d50c6a9575b1a4d6e20d26ebe21c8"
-    },
-    "mk_BM_19.png": {
-      "sha256": "32dc2ba6f4dca2a50786a58647c95016c4215f4255f9c0bcc0c5e8259fa4ea24"
-    },
-    "mk_BM_21.png": {
-      "sha256": "81bcd6440189bff6a081491ca3fe25234f580992e9cc380b17834d0ef4449e84"
-    },
-    "mk_BM_22.png": {
-      "sha256": "71c8a65f2042b7d531638af5f8102ffbfd634b2a978714c88652399e0d98f4f0"
-    },
-    "mk_BM_25.png": {
-      "sha256": "4f3d1205de653975c6fa84402d46d0fc7e6f40493efd14f7b5b7a4d779b88f07"
-    },
     "mk_BM_27.png": {
       "sha256": "745bfa2a5c5cfe41e51596c0cb45a60c86a8bfffac9f8901b6146a47937a72fb"
-    },
-    "mk_BM_29.png": {
-      "sha256": "df034f1edb3f7f64ded84944d37d13debf2510bbf29ad55c8f422baf84245fc8"
     },
     "mk_BM_30.png": {
       "sha256": "68df544b884a7592bbc68377cd78b3d8bd78ad8274f79a1d22e818e6aa37553d"
@@ -3292,26 +3259,17 @@
     "mk_BM_39.png": {
       "sha256": "a919c3cdca183b2deba20fc0923a1873de2c590a9da478a4ff2ff45fe35e94af"
     },
-    "mk_BM_41.png": {
-      "sha256": "7c8d0fdcb4c3af5f193f07605064d32d1260fc4cee7785a24de76ec6b8104a03"
-    },
     "mk_BM_42.png": {
       "sha256": "1de3e04bf6d48b3e633141372e11c4f4a287ef8539177b9a378a0d3ac0c013c7"
-    },
-    "mk_BM_44.png": {
-      "sha256": "7672d18f97025ac0cb47ac3c7ad093ccf3ec5f3fddb330d76507c8d8e967f331"
-    },
-    "mk_BM_45.png": {
-      "sha256": "85a62f27ec3704b8e0e4803a2a2eb013b175f74c4db3116a14dc14c40876fbaf"
-    },
-    "mk_BM_48.png": {
-      "sha256": "17d499e7364dbc6fb8a1c3031754dc80031da669bdb6c20316254b03caf6300c"
     },
     "mk_BM_51.png": {
       "sha256": "88f2c2edd0f8d814369668bfefd25b84ba1843c39fda23238d3ce87f9c73e1bd"
     },
     "mk_Champions_Armor.png": {
       "sha256": "e397c195b5ebe7697a1a1c3839ee11d6f0114774c830f3afbe55e32dae12eb2e"
+    },
+    "mk_Champions_Boots.png": {
+      "sha256": "0fc993f2c463312ed78faa4631b140523ecdaaea617c98e881492e235e8a4a3a"
     },
     "mk_Champions_Helmet.png": {
       "sha256": "005c1b73326958b1deef282c729ba1827b20aeb87c1dab45619c5611bd34aff5"
@@ -3331,8 +3289,8 @@
     "mk_Cloth_Hood.png": {
       "sha256": "7284c7275848a9a8431fca1ecf4773e5d456d93533eb83b5b3f2facbf4ca9ac7"
     },
-    "mk_Dragon_Crystal_x10.png": {
-      "sha256": "37b807828fbc2ee7936facc43c45f191301b8f1303807d6523bd0b6a910b55b5"
+    "mk_Dragon_Crystal_x20.png": {
+      "sha256": "17d499e7364dbc6fb8a1c3031754dc80031da669bdb6c20316254b03caf6300c"
     },
     "mk_Elites_Bow.png": {
       "sha256": "57ce730bac0fd81f1b95d53e2d9a1eb07f160f90f940aadad27fd848ebe83c0c"
@@ -3340,11 +3298,29 @@
     "mk_Fighters_Ring.png": {
       "sha256": "65fd3e5f6076bae1b0cfcf6bb2568c3a3317be931f18495b4158cfef72d893fa"
     },
+    "mk_Food_200M.png": {
+      "sha256": "8a24f96c39ec4d1b58d94877d28368a61e8acd20eb0f907ebd96011aa3504ab3"
+    },
+    "mk_Food_500M.png": {
+      "sha256": "81bcd6440189bff6a081491ca3fe25234f580992e9cc380b17834d0ef4449e84"
+    },
+    "mk_Gear_Lv3_Crystal.png": {
+      "sha256": "72cede78e101eeffc6f675cbfdd9bd963ddac7d456fdab921e1aa915796ce2b0"
+    },
+    "mk_Gear_Lv3_Horn.png": {
+      "sha256": "49f3415e24cb2f9012bbf347db47a8810b9309b82b609b09c0b639a589b8d1bc"
+    },
     "mk_Gear_Lv3_Mountain_Decoration.png": {
       "sha256": "b74df482532315a0a4bc79d1f5679112423964a123c5a2d55d1dcb71af7a94c8"
     },
     "mk_Gear_Lv3_Thunder_Staff.png": {
       "sha256": "cf8911d40792bf8598494ec3eef37fda47613337ca2202389ac5eb0850610cbe"
+    },
+    "mk_Gear_Lv4_Fire_Crystal.png": {
+      "sha256": "16a1d167a2ff58a4457830e9f26b5e6d4ef77f98c3bcc338fb18180c3ce8b2d6"
+    },
+    "mk_Gear_Lv4_Wind_Decoration.png": {
+      "sha256": "f7014652b08880252208d51cc490ecf51ef30b89758fb5f85d3241e090e87647"
     },
     "mk_General_EXP_10000_x20.png": {
       "sha256": "c2ea68c5acde9ac36849441b3f50d34aec2b806240e08be1515ff030167e051d"
@@ -3367,20 +3343,62 @@
     "mk_Generals_Axe.png": {
       "sha256": "2d5449d9490c816760e4524522c703c3ce0bf5fd3d8da49c52a4c7b3e713e8e7"
     },
-    "mk_Lumber_20M.png": {
-      "sha256": "ef9e79fd6f0df1ad9124b304fd8ead246cedcdbb748ab8a0b97447cebfdef7ea"
+    "mk_Generals_Sword.png": {
+      "sha256": "6f34059545dc1bdbd57f6c6268eed72e1e2954be4cea563d41bfd41778e287f5"
+    },
+    "mk_Gold_100K.png": {
+      "sha256": "7c1934cfb1cc69f2ec11340ead10401c05a7cc0e2790f93494d4d5c9166bd6fb"
+    },
+    "mk_Leather_Boots.png": {
+      "sha256": "2af2cde680a1164e995458644e726ca4cf4666e01dc0a1738fb7389e98e20ade"
+    },
+    "mk_Lumber_200M.png": {
+      "sha256": "32dc2ba6f4dca2a50786a58647c95016c4215f4255f9c0bcc0c5e8259fa4ea24"
+    },
+    "mk_Monarch_EXP_10000_x1.png": {
+      "sha256": "071b3548d79bf71c98f0dc73678780ae1e284cffbbb510c4814b4b1e61e3537f"
+    },
+    "mk_Monarch_EXP_20000_x1.png": {
+      "sha256": "cd4067b2ea756a16a9c2f73aad07a6ede140361a7b137d5a06d0ebef4bc424fb"
     },
     "mk_Monarch_EXP_2000_x5.png": {
       "sha256": "f168bcd0d48e33ff66596436d2c96826d43694a8e61b23121cbaaf48c5c73d88"
     },
-    "mk_Runestone_Chest_x1.png": {
-      "sha256": "0fc993f2c463312ed78faa4631b140523ecdaaea617c98e881492e235e8a4a3a"
+    "mk_Ore_500M.png": {
+      "sha256": "71c8a65f2042b7d531638af5f8102ffbfd634b2a978714c88652399e0d98f4f0"
+    },
+    "mk_Refining_Stone_x50.png": {
+      "sha256": "26f66bd019c14e60bf44d0b955b84ad3f98ed06ea69e0ad65f20645532fd612b"
+    },
+    "mk_Research_Stone_x25.png": {
+      "sha256": "40f9c3210fae5f4b368737270a2577c26ec65935dbce4ebc49a16247e756436f"
+    },
+    "mk_Research_Stone_x50.png": {
+      "sha256": "7c8d0fdcb4c3af5f193f07605064d32d1260fc4cee7785a24de76ec6b8104a03"
+    },
+    "mk_Runestone_Chest_x50.png": {
+      "sha256": "df034f1edb3f7f64ded84944d37d13debf2510bbf29ad55c8f422baf84245fc8"
     },
     "mk_Spiritual_Beast_EXP_1000_x10.png": {
       "sha256": "26c6738af48f34ac5ce889acb174cf4879ca0aa0a4cc88ddd134693743d60ab6"
     },
+    "mk_Spiritual_Beast_EXP_5000_x10.png": {
+      "sha256": "d9c561cbd585e483b428dbe682df208349d660b20378cfbdacaad13c21ff169f"
+    },
+    "mk_Stamina_50.png": {
+      "sha256": "83c76006973da6dbd4503fd41cd9be8fb2eb2727a9004a9e232d202713669f9f"
+    },
+    "mk_Stamina_50_x10.png": {
+      "sha256": "7672d18f97025ac0cb47ac3c7ad093ccf3ec5f3fddb330d76507c8d8e967f331"
+    },
     "mk_Standard_Leg_Armor.png": {
       "sha256": "43abc8e90dd2eda16e9614ca6970675048e0bc2227b0d3fbaf53fd124691532f"
+    },
+    "mk_Stone_200M.png": {
+      "sha256": "4f04f3210168e2f3c6039b3763834affad88d466549eb7597bc62492865ba171"
+    },
+    "mk_Stone_50M.png": {
+      "sha256": "a8d7f461c4a6924af0077fd6cc60d0ecb12d50c6a9575b1a4d6e20d26ebe21c8"
     },
     "mk_Transcendence_Boots.png": {
       "sha256": "74b3da7ecde476fa64d04b6d3d521ad2e632e82274328d36fd45082815cd03ec"
@@ -3388,7 +3406,7 @@
     "mk_Transcendence_Ring.png": {
       "sha256": "7448dfa92ff60cc6e09bc99385b822c7ab7fb018bf1ab7f1ec5345b25347e8b8"
     },
-    "mk_Tribute_x1.png": {
+    "mk_Tribute_x10.png": {
       "sha256": "60d40ba18739004340a7aab92192613bb0425f61ff71e3e699233e3dee36cd1e"
     },
     "mk_VIP_1_Day_x1.png": {
@@ -3400,18 +3418,42 @@
     "mk_VIP_60_Minutes_x1.png": {
       "sha256": "a399e84b56694582c83169ba9d0c27a90261b2c4c2022856260532e60eae7c17"
     },
-    "mk_VIT_50.png": {
-      "sha256": "83c76006973da6dbd4503fd41cd9be8fb2eb2727a9004a9e232d202713669f9f"
-    },
     "rally_icon.png": {
       "sha256": "a8e83f9d54048e01c976346571b9df98cc8112da9d0c5054a1b7ec71f836686e"
     },
+    "ring_attack.png": {
+      "sha256": "535f52218403ccb5cccdd1efd3eb3dd5e018897e379dad08d5e7488275b0b14c"
+    },
+    "ring_gchest.png": {
+      "sha256": "d8ca7bf109e65ab3c0e34b05a00f78fa76b7fa40ef78d7c59853079e6637db82"
+    },
+    "ring_rare_books.png": {
+      "sha256": "1a0c0daa9d6ea872c23650115bddb9dda0177fe4d4e3cf6d01d736e60c69c73d"
+    },
+    "ring_train.png": {
+      "sha256": "78d9fda10ca0435f342ec426f11a01adccbcf792c8e966ad7c22da6a5242f684"
+    },
+    "ring_wheel.png": {
+      "sha256": "c48684d0db42262f9e0206910b0b52af7491f4f288ebf86ce144949f136119cd"
+    },
     "war_button.png": {
       "sha256": "fbd54ed9520be3b6c1694d2b32a447f486e7b56624c901f6ba3d392761fe6ec5"
+    },
+    "war_shortcut.png": {
+      "sha256": "9e086b39676532a35bc0c3aef64ef5109637ca0853a8af7f155c92822d5087ad"
+    },
+    "warehouse_hand.png": {
+      "sha256": "c2d339a043137bbb876a6466c0d9182f456b3bfc86c1c1bd2aa37d91c6bc8a3e"
+    },
+    "wheel_page_title.png": {
+      "sha256": "7433742e0a68b284c7cccd05ecab366145a799a5e8706887bcf176329f3404df"
+    },
+    "wheel_reward_banner.png": {
+      "sha256": "5666f1595abce1a20b5cc32202b2bb5a77331fc339d5fb6318930cc80a39110c"
     },
     "world_map_btn.png": {
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "06f0bda558cb122f0e534b5038c9196b95d6f2ea8ef994298a9096265bfef5ea"
+  "sig": "01986b7f64a03943fabe1c4df595f03521b5c6485a2c842b696991d49e1ae7c9"
 }

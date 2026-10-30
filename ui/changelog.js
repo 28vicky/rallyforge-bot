@@ -1,5 +1,12 @@
 /* What's new - newest first. Add one entry per release: v = version, new = new things, fixed = things that now work. Only what the user sees or gains, in plain words: short, to the point, no internal details, numbers, timings or developer notes. */
 window.CHANGELOG = [
+  { v: "2.5.29", date: "2026-10-30",
+    new: ["Alliance donation: donates the free Alliance Science donations and comes back as they refill. Never uses gems.",
+      "Tasks that are not ready yet show faded with \"Not ready yet\" - a screen recording of one helps us finish it."],
+    fixed: ["Black Market items show their real names (no more \"BM 44\"); your picks move to the new names by themselves.",
+      "Screen check: the bot no longer presses Back on the city, which asked to exit the game.",
+      "Run a task now: All tasks and search show one simple A-Z list.",
+      "Smoother scrolling on every page; cleaner Overview."] },
   { v: "2.5.28", date: "2026-10-30",
     new: ["Faster screenshots on MuMu 12: the bot sees the game much faster. BlueStacks works as before."],
     fixed: ["City map: a mapped city is locked so it is never wiped by accident, a failed mapping run puts your old map back, and Find missing only adds buildings.",

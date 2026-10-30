@@ -1722,7 +1722,7 @@ const dutyGroup = (id, g) => (DUTY_UI[id] ? DUTY_UI[id][0] : g === "Reward claim
 const dutyShown = (id) => S.dev || !DUTY_TEST.has(id);
 // owner 30 Oct 22:18-22:28: not proven yet on the owner's instances -> testers see them faded ("Not ready yet"), switch locked,
 // never run (rally_bot.NOT_READY_DUTIES - keep both lists the same). The owner's PC (dev tools) uses them as usual.
-const DUTY_NOT_READY = new Set(["trade_carriage", "alliance_donation", "wisdom_dome_tokens", "civilization_card", "lucky_raffle", "refining_card", "alliance_treasure", "recruit_citizens", "ranger_knight", "troop_healing", "build_traps", "mail", "alliance_shop", "ev_star_trail", "ev_divination", "ev_taotie", "tavern_catalog"]);
+const DUTY_NOT_READY = new Set(["trade_carriage", "wisdom_dome_tokens", "civilization_card", "lucky_raffle", "refining_card", "alliance_treasure", "recruit_citizens", "ranger_knight", "troop_healing", "build_traps", "mail", "alliance_shop", "ev_star_trail", "ev_divination", "ev_taotie", "tavern_catalog"]);
 const dutyLocked = (id) => !S.dev && DUTY_NOT_READY.has(id);
 const RUN_SETUP = new Set(["map_city"]);              // one-time jobs: Run now lists them under Setup, on top
 // C7: one status badge, one vocabulary (Done 07:23 · Done for today · Due · Next 08:01 · Retrying 08:30 · Running now)

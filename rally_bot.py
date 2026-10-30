@@ -19648,7 +19648,7 @@ DUTY_BY_ID = {d["id"]: d for d in DUTY_LIBRARY}
 # Owner 30 Oct 22:18-22:28: duties not yet proven on the owner's instances (no recording / never worked / not tested on the
 # new code) are shown faded as "Not ready yet" in testers' builds and never run there - their saved switch stays, so they
 # come back by themselves once ready. The owner's PC (admin.txt) runs them as usual. Same list in ui/pages.js DUTY_NOT_READY.
-NOT_READY_DUTIES = {"trade_carriage", "alliance_donation", "wisdom_dome_tokens", "civilization_card", "lucky_raffle", "refining_card", "alliance_treasure", "recruit_citizens", "ranger_knight", "troop_healing", "build_traps", "mail", "alliance_shop", "ev_star_trail", "ev_divination", "ev_taotie", "tavern_catalog"}
+NOT_READY_DUTIES = {"trade_carriage", "wisdom_dome_tokens", "civilization_card", "lucky_raffle", "refining_card", "alliance_treasure", "recruit_citizens", "ranger_knight", "troop_healing", "build_traps", "mail", "alliance_shop", "ev_star_trail", "ev_divination", "ev_taotie", "tavern_catalog"}
 
 
 def duty_ready(did):
