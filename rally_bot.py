@@ -16070,7 +16070,27 @@ def don_button(img):
     return None
 
 
+def _don_leave(dev, stop):
+    """Owner 30 Oct 22:51: when the donating is over, leave at once (the recording: Back arrow, Back arrow -> city) -
+    never sit on the page until the screen guard notices it."""
+    for _ in range(3):
+        if stop.is_set():
+            return
+        shot = dev.screenshot()
+        if on_base_view(shot) or not page_has_back_arrow(shot):
+            return
+        dev.tap(*GAME_BACK_ARROW)
+        _nap(stop, 0.9, 1.2)
+
+
 def run_alliance_donation(dev, cfg, log, stop):
+    try:
+        _run_alliance_donation(dev, cfg, log, stop)
+    finally:
+        _don_leave(dev, stop)
+
+
+def _run_alliance_donation(dev, cfg, log, stop):
     rd_alliance_page(dev, cfg, stop)
     if not rd_alliance_row(dev, stop, ["Alliance Science"], title=["Alliance Science", "Science"]):
         rd_snap(dev.screenshot(), "adon_failed")
@@ -16970,6 +16990,9 @@ def rd_page(dev, stop, log, words, region, shot=None):
     return None
 
 
+CARRIAGE_OWN_TOP = 360            # owner 30 Oct 22:46: '+' slots above this y belong to the R4/R5 alliance carriage (top)
+
+
 def is_carriage_page(shot):
     if carriage_left(shot) is not None:
         return True
@@ -17096,13 +17119,25 @@ def run_trade_carriage(dev, cfg, log, stop):
         return
     sent = 0
     tried = 0
+    bad_spots = []
     while left > 0 and done_today + sent < want and tried < 6 and not stop.is_set():
         tried += 1
         if not task_guard(dev, stop, log, "Trade Carriage", is_carriage_page):
             raise RuntimeError("lost the Trade Carriage page")
         carriage_claim_chests(dev, cfg, log, stop)          # a claimed chest frees its slot ('+')
-        spots = carriage_plus_spots(dev.screenshot())
+        # owner 30 Oct 22:46: the TOP slot (the big alliance carriage) is the R4/R5 one, once a day - never touched.
+        # Only the player's own slots below it are used; a slot that did not work is skipped for the rest of this run.
+        shot = dev.screenshot()
+        if rd_seen(shot, ["Arrival Time", "Transport Goods", "Plundered"], region=(30, 640, 480, 160)):
+            # Kiravik 30 Oct 22:52: a tap landed on a carriage on the road - its info panel hides the slots under it
+            dev.tap(300, 380)                               # empty ground above the panel closes it
+            _nap(stop, 0.9, 1.2)
+            shot = dev.screenshot()
+            bad_spots = [b for b in bad_spots if b[1] < 600]    # slots the panel was hiding get another try
+        spots = [p for p in carriage_plus_spots(shot) if p[1] >= CARRIAGE_OWN_TOP and p not in bad_spots]
         if not spots:
+            if sent:
+                log(f"[+]  Trade Carriage: {sent} transport(s) sent this time")
             # every slot holds a carriage: on the road (timer) or back with a chest to claim (e.g. from yesterday).
             # Owner 14:50: that is NOT done - claiming the chests comes later; for now try again later.
             rd_snap(dev.screenshot(), "carriage_full")
@@ -17111,20 +17146,25 @@ def run_trade_carriage(dev, cfg, log, stop):
         _nap(stop, 1.8, 2.3)
         shot = dev.screenshot()
         sf = find_green_button(shot, x_min=270, x_max=535, y_min=820, y_max=960)
-        if not sf:
-            rd_snap(shot, "carriage_noformation")
-            dev.back()
-            _nap(stop, 1.2, 1.6)
+        dispatch_only = rd_seen(shot, ["Dispatch"], region=(120, 880, 300, 80)) and not rd_seen(shot, ["Formation", "Select"], region=(0, 800, 540, 160))
+        if not sf or dispatch_only:                         # no formation screen (the carriage page's own green Dispatch
+            rd_snap(shot, "carriage_noformation")           # button is not 'Select Formation') - this slot is skipped
+            bad_spots.append(spots[0])
+            if not is_carriage_page(shot):
+                task_guard(dev, stop, log, "Trade Carriage", is_carriage_page)
             continue
         dev.tap(*sf)
         _nap(stop, 2.2, 2.8)
         if not carriage_march(dev, cfg, log, stop, preset):
-            dev.back()
-            _nap(stop, 1.2, 1.6)
-            raise RuntimeError("no March button on the formation screen")
+            bad_spots.append(spots[0])
+            if not task_guard(dev, stop, log, "Trade Carriage", is_carriage_page):
+                raise RuntimeError("no March button on the formation screen")
+            continue
         sent += 1
         new = carriage_left(dev.screenshot())
         left = new if new is not None else left - 1
+    if sent == 0 and left > 0 and done_today < want:          # rule 23: nothing sent is never done
+        raise RuntimeError(f"no carriage could be sent ({left} transport(s) left today) - trying again later")
     log(f"[+]  Trade Carriage: {sent} transport(s) sent, {left} left today")
 
 
