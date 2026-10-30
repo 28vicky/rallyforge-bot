@@ -1761,6 +1761,8 @@ function defaultsHead(what, run) {
     h("div", {}, h("b", {}, "Universal defaults"), h("small", { class: "hint" }, "For every instance without its own " + what + " ", infoTip("Universal defaults", "New instances start with these " + what + ". An instance with its own " + what + " keeps them."))),   // owner 30 Oct: less to read
     btn("Apply to…", () => applyToDialog(what, run), "sm"));
 }
+// short names for saved choice values (the saved value never changes - only what the user sees)
+const OPT_SHORT = { "my Repeat setting": "My repeat", "a number of runs": "Runs", "a total of troops": "Troops" };
 const OWN_DUTY_KEYS = ["duties", "crazy_eggs", "champions", "wheel"];
 
 PAGES.duties = function (fixed) {
@@ -1793,8 +1795,10 @@ PAGES.duties = function (fixed) {
       if (o.k === "every_n" && ov("every_unit") === "once a day") return null;     // owner 30 Oct 23:04
       const save = async (v) => { take(await act(api("duty_set", { serial, id: r.id, opt: { [o.k]: v } }))); if (o.k === "every_unit" || o.k === "until") drawSide(); };
       if (o.type === "bool") return h("div", { class: "wide" }, h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!o.val, onchange: (e) => save(e.target.checked) }), h("span", { class: "sw" }), h("span", {}, o.label)));
-      if (o.type === "select") return h("label", {}, h("span", { class: "lab" }, o.label), ((st) => sel(st, "v", o.choices, { label: o.label, after: () => save(st.v) }))({ v: o.val }));
-      return h("label", {}, h("span", { class: "lab" }, o.label), h("input", { type: "number", min: o.min, max: o.max, value: o.val, onchange: (e) => save(e.target.value) }));
+      if (o.type === "select") return h("label", { class: "wide" }, h("span", { class: "lab" }, o.label),     // owner 30 Oct 23:28: a pick-one row gets the full width, never cut off
+        ((st) => sel(st, "v", o.choices.map((c) => [c, OPT_SHORT[c] || c]), { label: o.label, after: () => save(st.v) }))({ v: o.val }));
+      const lab = o.k === "goal" ? (ov("until") === "a number of runs" ? "Runs per building" : "Troops per building") : o.label;
+      return h("label", {}, h("span", { class: "lab" }, lab), h("input", { type: "number", min: o.min, max: o.max, value: o.val, onchange: (e) => save(e.target.value) }));
     }));
   const SET_IDS = ["crazy_eggs", "champions", "wheel", "black_market", "@tasks"];
   const hasSet = (r) => !!((r.opts && r.opts.length) || SET_IDS.includes(r.id));
@@ -1821,7 +1825,7 @@ PAGES.duties = function (fixed) {
     side.appendChild(h("aside", { class: "sidep", role: "dialog", "aria-modal": "true", "aria-label": r.t + " settings" },
       h("div", { class: "sph" },
         h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!r.on, "aria-label": r.t, onchange: async (e) => { await setOn(r, e.target.checked); drawSide(); } }), h("span", { class: "sw" })),
-        h("div", { class: "spt" }, h("h3", {}, r.t), h("small", {}, [serial ? "This instance" : "Universal default", r.g, r.schedule, r.pts ? "+" + r.pts + " activity points" : ""].filter(Boolean).join(" · ")),
+        h("div", { class: "spt" }, h("h3", {}, r.t), h("small", {}, [serial ? "This instance" : "Universal default", r.g, r.schedule, r.pts ? "+" + r.pts + " points" : ""].filter(Boolean).join(" · ")),
           serial && r.on ? dutyBadge(r.status, r.status_text) : null),     // status on its own line under the title: a long one never squeezes the title
         h("button", { class: "spx", type: "button", "aria-label": "Close", title: "Close (Esc)", onclick: closeSide }, "×")),
       h("div", { class: "spb" }, setBody(r)),

@@ -1541,6 +1541,8 @@ a.lnk,.lnkb,.viewall,.vlink{display:inline-flex;align-items:center;min-height:28
 .spf .hint{flex:1}
 .spb .fgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin-bottom:12px}
 .spb .fgrid .wide{grid-column:1/-1}
+.spb .fgrid label.wide{align-items:flex-start}
+.spb .fgrid .seg{max-width:100%;flex-wrap:wrap}
 .spb .fgrid label:not(.tgl){display:flex;flex-direction:column;gap:4px}
 .spb .panel{border:0;padding:0;background:transparent;box-shadow:none}
 /* C7 one badge: same colours on every screen, never cut off, readable in dark mode */
