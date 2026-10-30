@@ -11746,23 +11746,35 @@ def wheel_btn(pick, coins):
 WHEEL_COST = {100: 9000, 10: 900, 1: 100}
 WHEEL_COINS_BOX = (234, 128, 190, 48)
 WHEEL_ICON = (141, 328)                                              # "Wheel of Fortune" in the Tavern's ring menu
-# Owner 30 Oct 14:10: Tavern ring items found from the ring's own "i" (Detail) icon, found by picture - the items sit at a
-# fixed distance from it wherever the ring opens (measured on Stalds' open Tavern ring, debug\duty_ring_Great_General_Chest:
-# Detail i at 113,402). No text read (1-60 s on the busy PC; the two-line "Great General / Chest" label was not read).
-TAVERN_RING = {"wheel": (28, -84), "gchest": (259, -132),
-               "rare_books": (21, -91)}                   # Wisdom Dome ring (Kiravik debug\duty_ring_Rare_Books: Detail 174,409)
+# Owner 30 Oct 14:36: ring items are found by their OWN PICTURE anywhere in the ring - never by a fixed place (the ring
+# changes: an upgrading / training building shows extra items - Speed Up, Instant Finish, Cancel - and the others move)
+# and never by text (1-60 s per read on the busy PC). Templates ring_<item>.png cut from real screens: Stalds' Tavern
+# ring (wheel, gchest), Kiravik's Wisdom Dome ring (rare_books), the owner's Barracks ring (train - the same crossed
+# swords are "View" while troops train). A few sizes are tried (emulators / phones differ a little).
+RING_ICON_MIN = 0.8
 
 
-def tavern_ring_spot(shot, item):
-    """-> (x, y) of a Tavern ring item, or None when no ring (Detail icon) is on the screen."""
-    d = find_detail_icon(shot)
-    if not d or item not in TAVERN_RING:
+def ring_icon(shot, item, region=(0, 100, 540, 760)):
+    """-> (x, y) of the ring item's icon, or None (not on the screen / template missing)."""
+    try:
+        t0 = tpl("ring_" + item)
+    except Exception:
         return None
-    dx, dy = TAVERN_RING[item]
-    x, y = d[0] + dx, d[1] + dy
-    if not (15 <= x <= 525 and 110 <= y <= 860):
-        return None
-    return int(x), int(y)
+    x0, y0, w, h = region
+    area = shot[y0:y0 + h, x0:x0 + w]
+    best = None
+    for sc in (0.85, 0.92, 1.0, 1.08, 1.15):
+        t = t0 if sc == 1.0 else cv2.resize(t0, None, fx=sc, fy=sc)
+        if area.shape[0] < t.shape[0] or area.shape[1] < t.shape[1]:
+            continue
+        _, mv, _, ml = cv2.minMaxLoc(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED))
+        if mv >= RING_ICON_MIN and (best is None or mv > best[2]):
+            best = (x0 + ml[0] + t.shape[1] // 2, y0 + ml[1] + t.shape[0] // 2, mv)
+    return (int(best[0]), int(best[1])) if best else None
+
+
+def tavern_ring_spot(shot, item):                          # (old name, kept for its callers)
+    return ring_icon(shot, item)
 
 
 WHEEL_COINS_TIGHT = (225, 132, 155, 40)                  # the number only (the '+' button left out)
@@ -16114,8 +16126,134 @@ def rd_train(dev, cfg, log, stop, duty_id, ring_word, qty_xy, what):
         rd_finish_with_speedups(dev, stop, log, what)
 
 
+# ---- Train troops (owner 30 Oct 14:33 walkthrough + 14:36): building -> its ring's Train (crossed swords, "View" while
+# training) found by PICTURE -> scroll the troop row to the start (T1) -> step to the chosen tier -> amount (default 500,
+# or the game's own number) -> green Train -> optional Training Speedup -> Finish All. Instant Train (gems) never.
+TRAIN_BUILDINGS = {"Barracks (ground)": "Barracks", "Stable (mounted)": "Stable", "Archer Camp (ranged)": "Archer Camp",
+                   "Workshop (siege)": "Workshop"}
+TRAIN_ROW_Y, TRAIN_SLOT, TRAIN_FIRST_X = 615, 118, 58     # Stalds' training page (debug\duty_train_troops_1)
+TRAIN_QTY = (455, 795)                                     # the amount box right of the slider
+
+
+def train_target(cfg):
+    b = TRAIN_BUILDINGS.get(str(rd_opt(cfg, "train_troops", "building", "Barracks (ground)")), "Barracks")
+    return f"go:Troop Training|{b}"
+
+
+def train_selected_x(shot):
+    """x of the troop circle with the gold 'selected' ring on the tier row, or None."""
+    try:
+        hsv = cv2.cvtColor(shot[TRAIN_ROW_Y - 50:TRAIN_ROW_Y + 50], cv2.COLOR_BGR2HSV)
+        m = cv2.inRange(hsv, (10, 120, 150), (30, 255, 255)) > 0
+        yy, xx = np.ogrid[:100, :540]
+        best = (0.0, None)
+        for x in range(25, 520, 5):
+            d = np.sqrt((xx - x) ** 2 + (yy - 50) ** 2)
+            v = float(m[(d >= 34) & (d <= 44)].mean())
+            if v > best[0]:
+                best = (v, x)
+        return best[1] if best[0] >= 0.12 else None
+    except Exception:
+        return None
+
+
+def train_row_shift(a, b):
+    """How far the tier row slid sideways between two screens (px, + = right), 0 when it did not move."""
+    try:
+        ga = np.float32(cv2.cvtColor(a[TRAIN_ROW_Y - 40:TRAIN_ROW_Y + 40], cv2.COLOR_BGR2GRAY))
+        gb = np.float32(cv2.cvtColor(b[TRAIN_ROW_Y - 40:TRAIN_ROW_Y + 40], cv2.COLOR_BGR2GRAY))
+        (dx, _), resp = cv2.phaseCorrelate(ga, gb)
+        return int(round(dx)) if resp > 0.2 and abs(dx) > 8 else 0
+    except Exception:
+        return 0
+
+
+def train_pick_tier(dev, stop, log, tier):
+    """Row to the start (T1 on the left), tap T1, then step right one circle at a time to the tier. Every step is
+    checked: the gold ring must move exactly one circle right. -> True when the tier is selected."""
+    for _ in range(4):                                     # finger left -> right: the row scrolls back to T1
+        dev.swipe(100, TRAIN_ROW_Y, 500, TRAIN_ROW_Y, 300)
+        _nap(stop, 0.4, 0.6)
+    dev.tap(TRAIN_FIRST_X, TRAIN_ROW_Y)
+    _nap(stop, 0.9, 1.2)
+    sel = train_selected_x(dev.screenshot())
+    if sel is None or abs(sel - TRAIN_FIRST_X) > 30:
+        log(f"[!]   Train troops: T1 was not selected (gold ring at {sel})")
+        return False
+    shot = dev.screenshot()
+    for t in range(2, tier + 1):
+        if stop.is_set():
+            return False
+        nxt = sel + TRAIN_SLOT
+        if nxt > 520:                                      # the next circle is off the row: move the row one circle left
+            dev.slow_drag(400, TRAIN_ROW_Y, 400 - TRAIN_SLOT, TRAIN_ROW_Y)
+            _nap(stop, 0.6, 0.8)
+            shot = dev.screenshot()
+            sel = train_selected_x(shot)
+            if sel is None:
+                log("[!]   Train troops: lost the selected troop while moving the row")
+                return False
+            nxt = sel + TRAIN_SLOT
+        before = shot
+        dev.tap(nxt, TRAIN_ROW_Y)
+        _nap(stop, 0.9, 1.2)
+        shot = dev.screenshot()
+        new = train_selected_x(shot)
+        moved = train_row_shift(before, shot)              # the game may slide the row to centre the new choice
+        # one circle right = the gold ring sits where the next circle is now (its old place + the row's slide)
+        if new is None or abs(new - (nxt + moved)) > 30:
+            log(f"[!]   Train troops: T{t} could not be selected (locked?) - nothing trained")
+            return False
+        sel = new
+    log(f"[i]   Train troops: T{tier} selected")
+    return True
+
+
 def run_train_troops(dev, cfg, log, stop):
-    rd_train(dev, cfg, log, stop, "train_troops", "Train", (418, 797), "Train troops")
+    what = "Train troops"
+    bname = TRAIN_BUILDINGS.get(str(rd_opt(cfg, "train_troops", "building", "Barracks (ground)")), "Barracks")
+    tier = max(1, min(int(float(rd_opt(cfg, "train_troops", "tier", 1) or 1)), 16))
+    amount = max(1, min(int(float(rd_opt(cfg, "train_troops", "amount", 500) or 500)), 9999999))
+    game_number = rd_opt(cfg, "train_troops", "game_number", False) in (True, "true", "1", 1)
+    speed = rd_opt(cfg, "train_troops", "speedups", False) in (True, "true", "1", 1)
+    at = ring_icon(dev.screenshot(), "train")
+    if at:
+        dev.tap(*at)
+        _nap(stop, 2.0, 2.6)
+    elif not rd_ring(dev, stop, ["Train", "View"]):
+        raise RuntimeError(f"no Train button in the {bname} menu")
+    shot = dev.screenshot()
+    rd_snap(shot, "train_troops_1")
+    if rd_find(shot, ["Training Speedup", "Speed Up", "Speedup"], region=(280, 860, 260, 100)):
+        log(f"[+]  {what}: the {bname} is already training")
+        if speed:
+            rd_finish_with_speedups(dev, stop, log, what)
+        return
+    if not rd_find(shot, ["Train"], region=(280, 860, 260, 100), whole=True):
+        raise RuntimeError("the training page did not open")
+    if not train_pick_tier(dev, stop, log, tier):
+        raise RuntimeError(f"could not select T{tier} - not trained")
+    if not game_number:
+        dev.tap(*TRAIN_QTY)
+        _nap(stop, 1.4, 1.8)
+        rd_clear_field(dev, stop)                          # the box already holds a number: typing would add to it
+        dev.text(str(amount))
+        _nap(stop, 0.6, 0.9)
+        rd_keyboard_ok(dev, stop)
+        shot = dev.screenshot()
+        rd_snap(shot, "train_troops_2")
+        got = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (TRAIN_QTY[0] - 90, TRAIN_QTY[1] - 28, 180, 56))))
+        if amount not in got:                              # never train the full (max) amount by mistake
+            raise RuntimeError(f"the amount box does not show {amount} (read {got[:3]}) - not trained")
+    shot = dev.screenshot()
+    btn = find_green_button(shot, x_min=280, x_max=535, y_min=860, y_max=955)   # green Train (right); Instant Train is orange (left)
+    if not btn:
+        raise RuntimeError("no Train button")
+    dev.tap(*btn)
+    _nap(stop, 2.0, 2.5)
+    log(f"[+]  {what}: T{tier} in the {bname} - {'the game' + chr(39) + 's number' if game_number else f'{amount:,}'} queued")
+    if speed:
+        rd_finish_with_speedups(dev, stop, log, what)
 
 
 def run_build_traps(dev, cfg, log, stop):
@@ -18529,9 +18667,12 @@ DUTY_LIBRARY = [
      "target": "go:Troop Healing|Hospital", "tap_dy": 0, "steps": ["wait 1.2", "troop_healing"],
      "opts": [{"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
     {"id": "train_troops", "group": "Daily activities", "title": "Train troops", "every_min": 240, "verified": False,
-     "note": "Barracks > Train: trains the amount you set of the troop the page has selected. Instant Train (gems) is never pressed. Needs the city map (Barracks).",
+     "note": "Barracks / Stable / Archer Camp / Workshop > Train: picks the troop level you set (T1 = lowest) and trains the number you set (500 by default) or the game's own number. Instant Train (gems) is never pressed. Needs the city map.",
      "target": "go:Troop Training|Barracks", "tap_dy": 0, "steps": ["wait 1.2", "train_troops"],
-     "opts": [{"k": "amount", "label": "Troops per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
+     "opts": [{"k": "building", "label": "Building", "type": "select", "choices": list(TRAIN_BUILDINGS), "def": "Barracks (ground)"},
+              {"k": "tier", "label": "Troop level (T1-T16)", "type": "number", "min": 1, "max": 16, "def": 1},
+              {"k": "amount", "label": "Troops per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
+              {"k": "game_number", "label": "Use the game's number instead", "type": "bool", "def": False},
               {"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
     {"id": "build_traps", "group": "Daily activities", "title": "Build traps", "every_min": 240, "verified": False,
      "note": "Trap Factory > Build: builds the amount you set of the trap the page has selected. Instant Train (gems) is never pressed. Needs the city map (Trap Factory).",
@@ -18820,6 +18961,8 @@ def run_now_tasks(cfg, serial):
                 continue                                         # 2 others are mapping: stays queued, joins rallies meanwhile
             d = DUTY_BY_ID[tid[5:]]
             t = {k: d[k] for k in ("target", "steps", "no_tile", "go_page") if k in d}
+            if d["id"] == "train_troops":
+                t["target"] = train_target(cfg)
             t["name"], t["count"] = tid, d.get("count", 1)
             if tid == "duty:black_market" and bm_keep_going(cfg):
                 t["no_tile"] = True
@@ -18843,6 +18986,8 @@ def duty_tasks_due(cfg, serial):
             continue                                       # Map my city / Map city again button (Run now) starts it
         if duty_status(serial, d["id"], cfg)[0] in ("due",):
             t = {k: d[k] for k in ("target", "steps", "no_tile", "go_page") if k in d}
+            if d["id"] == "train_troops":
+                t["target"] = train_target(cfg)
             t["name"] = "duty:" + d["id"]
             t["count"] = d.get("count", 1)
             if d["id"] == "black_market" and bm_keep_going(cfg):
