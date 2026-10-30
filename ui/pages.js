@@ -447,7 +447,7 @@ function instancePage(serial) {
     h("div", { class: "ihctl" }, jrSwitch(serial, { after: () => rerender() }), ajSwitch(serial, { after: () => rerender() }),
       h("button", { id: "instTakeBack", class: "btn sm takeback", type: "button", style: { display: "none" }, title: "The game was opened on another device. Take it back now instead of waiting.", onclick: () => act(api("takeback", { serial })) }, "Take back"),
       // owner 30 Oct 20:19: "Run a task now" was two scrolls down at 900 px - now on every tab, next to the switches
-      h("button", { class: "btn sm runnowbtn", type: "button", title: "Run one task now, before anything else - then the bot carries on", onclick: () => modal({ title: "Run a task now", body: runNowCard(serial, { bare: true }), buttons: [{ label: "Close" }] }) }, ico("bolt"), "Run a task now")));
+      h("button", { class: "btn sm runnowbtn", type: "button", title: "Run one task now, before anything else - then the bot carries on", onclick: (e) => runNowPop(e.currentTarget, serial) }, ico("bolt"), "Run a task now")));
   const warn = h("div", { id: "instWarn", class: "warnbar", style: { display: "none" } },
     h("b", {}, "\u26A0 Out of stamina. "), "This instance has no stamina left and no usable stamina items, so it cannot join rallies. It is still checking, and starts joining again by itself as soon as it has stamina (wait for it to refill, or add stamina items to the account).");
 
@@ -2286,6 +2286,31 @@ function pinBuildingsDialog(culture) {
   load(culture);
 }
 
+// owner 30 Oct 20:41: Run now opens as a dropdown under its header button (not a full pop-up) - quick pick, page stays in view
+function runNowPop(anchor, serial) {
+  const was = document.querySelector(".rnpop");
+  if (was) { was._close(); if (was._anchor === anchor) return; }     // second click on the button closes it
+  const box = h("div", { class: "rnpop", role: "dialog", "aria-label": "Run a task now" },
+    h("div", { class: "rnhead" }, h("b", {}, "Run a task now")), runNowCard(serial, { bare: true }));
+  box._anchor = anchor;
+  document.body.appendChild(box);
+  const place = () => {
+    if (!anchor.isConnected) return close();
+    const r = anchor.getBoundingClientRect(), w = box.offsetWidth;
+    box.style.left = Math.max(8, Math.min(r.right - w, innerWidth - 8 - w)) + "px";
+    box.style.top = r.bottom + 6 + "px";
+  };
+  const off = (e) => { if (!box.contains(e.target) && !anchor.contains(e.target) && !e.target.closest(".pick")) close(); };
+  const key = (e) => { if (e.key === "Escape" && !document.querySelector(".pick")) { e.stopPropagation(); close(); anchor.focus(); } };
+  const tick = setInterval(place, 300);                 // follows the button if the window is resized; closes if the page changed
+  function close() { clearInterval(tick); document.removeEventListener("mousedown", off, true); document.removeEventListener("keydown", key, true); removeEventListener("resize", place); box.remove(); anchor.classList.remove("open"); }
+  box._close = close;
+  anchor.classList.add("open");
+  place();
+  setTimeout(() => { document.addEventListener("mousedown", off, true); document.addEventListener("keydown", key, true); }, 0);
+  addEventListener("resize", place);
+  const sel = box.querySelector("select"); if (sel) setTimeout(() => sel.focus(), 50);
+}
 function runNowCard(serial, o = {}) {
   const root = h("div", { class: o.bare ? "runnow bare" : "panel runnow" });   // bare: inside the header "Run now" pop-up (owner 30 Oct 20:19)
   let pick = "", last = "";

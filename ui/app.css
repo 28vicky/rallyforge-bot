@@ -2168,3 +2168,11 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .loggrid{grid-template-columns:minmax(240px,1fr) minmax(0,2fr)}       /* itinerary was squeezed to a sliver at 900 px */
 @media (max-width:1240px){:root .whoami .wtx b{font-size:12.5px;white-space:normal;line-height:1.2}}   /* "RallyForge beta" fits the narrower sidebar */
 .runnow.bare .sub{padding:0;margin-left:0}
+/* Run now dropdown under the header button (owner 30 Oct 20:41) */
+.rnpop{position:fixed;z-index:70;width:400px;max-width:calc(100vw - 16px);background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 34px -8px rgba(20,22,29,.28);padding:14px 16px 16px}
+.rnpop .rnhead{margin-bottom:2px;font-size:14.5px}
+.rnpop .runnow.bare{min-width:0}
+.rnpop .runnow .sub{font-size:12.5px;color:var(--mute);margin-bottom:10px}
+.ih2 .ihctl .runnowbtn.open{border-color:var(--accent1);color:var(--accent2);background:var(--card)}
+/* full-size side spacing (owner 30 Oct 20:41): 50 px -> ~32 px each side at 1240 px and wider */
+@media (min-width:1241px){:root .main{padding-left:16px;padding-right:16px}:root .app.inst-mode .pages{padding-left:16px;padding-right:16px}}
