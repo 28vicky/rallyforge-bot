@@ -1390,7 +1390,28 @@ PAGES.telegram = function () {
   const lib = panel(null, h("div", { class: "hint" }, "Every coordinate ever seen, kept for good so tasks can use them later."), h("div", { class: "pmax-fill" }, libBox));
   setTimeout(loadLib, 400);
   // ONE window: buttons on top switch between the views; Maximize makes the whole window fill the right section
-  const views = [["live", "Live coordinates", live], ["lib", "Library", lib], ["boss", "Boss finder", boss], ["login", "Login", login]];
+  // owner 31 Oct: iScout = a second coordinate source, sent by the RallyForge Chrome extension from the user's own iScout page
+  const isc = panel(null);
+  const drawIsc = (j) => {
+    isc.innerHTML = "";
+    if (!j) return;
+    const st = j.stats || {}, live = st.last && j.now - st.last < 120;
+    const age = st.last ? Math.max(0, Math.round(j.now - st.last)) : 0;
+    isc.append(
+      h("div", { class: "iscst" + (live ? " on" : "") }, h("span", { class: "dot" }),
+        h("b", {}, live ? "Connected" : st.last ? "No list lately" : "Not linked yet"),
+        h("span", { class: "mute" }, st.last ? `${st.n} monsters · ${age < 60 ? age + " s" : Math.round(age / 60) + " min"} ago` + (st.servers && st.servers.length ? " · server " + st.servers.join(", ") : "")
+          : "Open iScout in Chrome with the extension")),
+      h("div", { class: "iscode" }, h("span", { class: "lab" }, "Link code"), h("code", {}, j.code),
+        btn("Copy", () => { try { navigator.clipboard.writeText(j.code); toast("Link code copied.", "ok"); } catch (e) {} }, "sm")),
+      h("ol", { class: "iscsteps" },
+        h("li", {}, "In Chrome open ", h("code", {}, "chrome://extensions"), ", turn on Developer mode, click Load unpacked and pick ", h("code", {}, j.folder)),
+        h("li", {}, "Click the RallyForge icon in Chrome, paste the link code, Save."),
+        h("li", {}, "Open your iScout page and keep it open. Pick Telegram, iScout or both per instance on its Monster hunts tab.")));
+  };
+  api("iscout_info", {}).then(drawIsc);
+  const iscT = setInterval(() => { if (!isc.isConnected) return clearInterval(iscT); if (isc.offsetParent) api("iscout_info", {}).then(drawIsc); }, 10000);
+  const views = [["live", "Live coordinates", live], ["lib", "Library", lib], ["boss", "Boss finder", boss], ["iscout", "iScout", isc], ["login", "Login", login]];
   let cur = "live";
   try { cur = localStorage.getItem("rf_tg_view") || "live"; } catch (e) {}
   if (!views.some((v) => v[0] === cur)) cur = "live";
@@ -2707,7 +2728,22 @@ function monsterRallyTab(serial) {
     strip.innerHTML = "";
     if (!duty) return;
     const grp = (label, ...kids) => h("div", { class: "hugrp" }, h("span", { class: "hugl" }, label), h("div", { class: "hugi" }, ...kids));
+    const srcPick = () => {
+      const cur = optVal("source", "both") || "both";
+      return h("div", { class: "hurule" }, h("span", { class: "hurl" }, "Coordinates from"),
+        segPick({ v: cur }, "v", [["both", "Both"], ["telegram", "Telegram"], ["iscout", "iScout"]], { small: true, label: "Coordinates from",
+          after: (v) => { const o = duty.opts.find((x) => x.k === "source"); if (o) o.val = v; queue({ source: v }); } }),
+        h("small", { class: "hurh" }, "where this instance gets monsters"));
+    };
     strip.append(
+      grp("Coordinates", srcPick(),
+        h("div", { class: "hurule" }, h("span", { class: "hurl" }, "Server"),
+          h("input", { type: "text", inputmode: "numeric", class: "hustepv husrv", placeholder: "Any", "aria-label": "Server",
+            value: +optVal("server", 0) ? String(optVal("server", 0)) : "",
+            onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); },
+            onchange: (e) => { const v = Math.max(0, Math.min(99999, parseInt(e.target.value, 10) || 0)); e.target.value = v ? String(v) : "";
+              const o = duty.opts.find((x) => x.k === "server"); if (o) o.val = v; queue({ server: v }); } }),
+          h("small", { class: "hurh" }, "only this server's monsters"))),
       grp("Which monsters",
         stepper("max_km", "Max distance", "only monsters this close", 0, 50, 0, 99999, (v) => v ? v + " km" : "Any"),
         stepper("max_age", "Refresh cache every", "clears old coordinates", 10, 5, 1, 600, (v) => v + " min")),

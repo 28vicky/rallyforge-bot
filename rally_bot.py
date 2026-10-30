@@ -7796,6 +7796,43 @@ def feed_clear():
             quiet_err("feed_clear", _e)
 
 
+_TG_SERVER_RE = re.compile(r"xy:?\s*\[(\d{2,5})\]")
+_tg_server = {}                      # Telegram chat -> server number of its last search (EvonyBossBot "Hive xy: [1087]")
+
+# ---- iScout (owner 31 Oct): the RallyForge Chrome extension reads the iScout page and sends its list here ----
+ISCOUT_PORT = 47321                  # fixed local port the extension sends to (127.0.0.1 only)
+iscout_stats = {"last": 0, "n": 0, "servers": []}
+
+
+def iscout_name(name):
+    """'Normal Harpy' -> 'Harpy', 'Junior Cerberus' -> 'Cerberus' (iScout's level comes from 'Lv1')."""
+    n = re.sub(r"\s+", " ", str(name or "")).strip()
+    n = re.sub(r"^Normal\s+", "", n, flags=re.I)
+    return _MONSTER_ALIASES.get(n, n)
+
+
+def iscout_add(rows):
+    """One full iScout list: [{name, level, server, x, y}] -> the live coordinate list, one 'chat' per server, so a
+    monster missing from the next list is dropped like an EvonyBossBot list. -> number of monsters taken."""
+    by = {}
+    for r in rows or []:
+        try:
+            x, y = int(r["x"]), int(r["y"])
+            if not (0 <= x <= 1200 and 0 <= y <= 1200) or not r.get("name"):
+                continue
+            srv = int(r.get("server") or 0)
+            lv = int(r["level"]) if str(r.get("level") or "").isdigit() else None
+            by.setdefault(srv, []).append({"name": iscout_name(r["name"]), "level": lv, "x": x, "y": y, "km": None,
+                                           "server": srv or None})
+        except Exception:
+            continue
+    for srv, items in by.items():
+        feed_add(items, f"iScout {srv}" if srv else "iScout")
+    n = sum(len(v) for v in by.values())
+    iscout_stats.update(last=time.time(), n=n, servers=sorted(k for k in by if k))
+    return n
+
+
 def get_bosses():
     with _boss_lock:
         if not _bosses and BOSS_FILE.exists():
@@ -7918,6 +7955,12 @@ class TgLink:
                     chat = getattr(chat, "title", None) or getattr(chat, "username", None) or getattr(chat, "first_name", "") or ""
                 except Exception:
                     chat = ""
+                _sv = _TG_SERVER_RE.search(txt)              # owner 31 Oct: "Hive xy: [1087] 645 598" = the server of this search
+                if _sv:
+                    _tg_server[chat] = int(_sv.group(1))
+                for _it in items:
+                    if _tg_server.get(chat):
+                        _it.setdefault("server", _tg_server[chat])
                 feed_note(chat, bool(items))
                 if items:
                     feed_add(items, chat, keep_min)
@@ -18225,6 +18268,8 @@ def mr_targets(cfg, tried, serial=None):
         upd = 0
     pool = list(feed) + [dict(b, t=upd) for b in get_bosses()]
     max_km = float(rd_opt(cfg, "monster_rally", "max_km", 0) or 0)
+    src = str(rd_opt(cfg, "monster_rally", "source", "both") or "both")      # owner 31 Oct: Telegram / iScout / both, per instance
+    my_srv = int(rd_opt(cfg, "monster_rally", "server", 0) or 0)            # this instance's server (0 = not set: every server)
     out, seen, skips = [], set(), {}
 
     def skip(it, why, short, keep=False):
@@ -18245,6 +18290,12 @@ def mr_targets(cfg, tried, serial=None):
             w = mr_block_why(key)
             skip(it, {"rallied": "Taken by another rally", "dead": "Gone (not on the map any more)"}.get(w, "Picked by another instance"),
                  "taken", keep=True)
+            continue
+        isc = str(it.get("chat") or "").startswith("iScout")
+        if (src == "telegram" and isc) or (src == "iscout" and not isc):
+            continue
+        if my_srv and it.get("server") and int(it["server"]) != my_srv:
+            skip(it, f"Server {it['server']} · this instance is on {my_srv}", "other server")
             continue
         if now - float(it.get("t") or 0) > age:     # owner 29 Oct: the cache REFRESHES - older coordinates are simply
             continue                                   # dropped (not listed as "too old"); the next Telegram list shows
@@ -19769,6 +19820,8 @@ DUTY_LIBRARY = [
               {"k": "max_wait", "label": "Give up on a monster after (min, 0 = wait until it is hunted)", "type": "number", "min": 0, "max": 120, "def": 0},
               {"k": "max_age", "label": "Refresh coordinates every (min)", "type": "number", "min": 1, "max": 600, "def": 10},
               {"k": "max_km", "label": "Only monsters within (km, 0 = any distance)", "type": "number", "min": 0, "max": 99999, "def": 0},
+              {"k": "source", "label": "Coordinates from", "type": "select", "choices": ["both", "telegram", "iscout"], "def": "both"},
+              {"k": "server", "label": "This instance's server (0 = any)", "type": "number", "min": 0, "max": 99999, "def": 0},
               {"k": "refill", "label": "Refill stamina with items", "type": "bool", "def": True},
               {"k": "heal_min", "label": "Auto heal every (min, 0 = off)", "type": "number", "min": 0, "max": 1440, "def": 0},
               {"k": "skip_busy", "label": "Skip a monster a march is already going to", "type": "bool", "def": False}]},

@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "RallyForge iScout Link",
+  "version": "1.0.0",
+  "description": "Sends the monsters on your iScout page to RallyForge on this PC, and keeps the page fresh.",
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1:47321/*", "https://iscout.club/*", "https://*.iscout.club/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{ "matches": ["https://iscout.club/*", "https://*.iscout.club/*"], "js": ["content.js"], "run_at": "document_idle" }],
+  "action": { "default_title": "RallyForge iScout Link", "default_popup": "popup.html" }
+}

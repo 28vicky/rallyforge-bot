@@ -43,7 +43,8 @@ def main():
     if not m:
         sys.exit("rally_bot.py has no VERSION = \"x.y.z\" line.")
     files = {}
-    for name in ["rally_bot.py", "web_app.py", "rf_license.py", *sorted(f"ui/{x.name}" for x in (HERE / "ui").glob("*") if x.suffix in (".js", ".css", ".html")), *a.extra]:
+    for name in ["rally_bot.py", "web_app.py", "rf_license.py", *sorted(f"ui/{x.name}" for x in (HERE / "ui").glob("*") if x.suffix in (".js", ".css", ".html")),
+                 *sorted(f"extension/{x.name}" for x in (HERE / "extension").glob("*") if x.suffix in (".js", ".json", ".html")), *a.extra]:   # iScout link (31 Oct)
         p = HERE / name
         if not p.exists():
             sys.exit(f"{name} is missing from this folder.")

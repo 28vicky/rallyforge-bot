@@ -692,6 +692,34 @@ class HuntsService(Base):
         self.assertEqual(out[2]["pairs"][0]["preset"], "III")                          # 1st in boxes III + VIII (2nd in I): tie -> lower number
 
 
+    def test_coordinate_source_and_server_per_instance(self):
+        """owner 31 Oct: each instance picks Telegram / iScout / both and its server; other servers are skipped."""
+        def cfg(src, srv):
+            return {"duties": {"monster_rally": {"rules": [{"name": "Cerberus", "min": 1, "max": 5, "preset": "I", "time": "5"}],
+                                                 "presets": {"I": {"mode": "rally"}}, "source": src, "server": srv}}}
+        now = time.time()
+        feed = [{"name": "Cerberus", "level": 1, "x": 1, "y": 1, "t": now, "chat": "iScout 1087", "server": 1087},
+                {"name": "Cerberus", "level": 1, "x": 2, "y": 2, "t": now, "chat": "iScout 1113", "server": 1113},
+                {"name": "Cerberus", "level": 1, "x": 3, "y": 3, "t": now, "chat": "Hunters", "server": 1087},
+                {"name": "Cerberus", "level": 1, "x": 4, "y": 4, "t": now, "chat": "Hunters"}]
+        def xs(c):
+            with mock.patch.object(rb, "feed_get", return_value=(feed, 0)), mock.patch.object(rb, "get_bosses", return_value=[]):
+                return sorted(t["x"] for t in rb.mr_targets(c, {}, self.S))
+        self.assertEqual(xs(cfg("both", 0)), [1, 2, 3, 4])
+        self.assertEqual(xs(cfg("both", 1087)), [1, 3, 4])            # no server known (4) -> kept
+        self.assertEqual(xs(cfg("iscout", 1113)), [2])
+        self.assertEqual(xs(cfg("telegram", 1087)), [3, 4])
+
+    def test_iscout_rows_and_telegram_server(self):
+        with mock.patch.object(rb, "feed_add") as fa:
+            n = rb.iscout_add([{"name": "Junior Cerberus", "level": "1", "server": "1087", "x": "755", "y": "926"},
+                               {"name": "Normal Harpy", "level": "1", "server": "1087", "x": "9999", "y": "1"}])
+        self.assertEqual(n, 1)
+        items, chat = fa.call_args[0]
+        self.assertEqual(chat, "iScout 1087")
+        self.assertEqual(items[0]["name"], "Cerberus")
+        self.assertEqual(rb._TG_SERVER_RE.search("Hive xy: [1087] 645 598").group(1), "1087")
+
     def _own_cfg(self, own, order):
         mr = {"rules": [{"name": "Pumpkin", "min": 7, "max": 7, "preset": "I", "time": "5"},
                         {"name": "Turtle", "min": 6, "max": 6, "preset": "I", "time": "5"},

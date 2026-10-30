@@ -3010,6 +3010,15 @@ class Api:
         rb.feed_set_keep(m)
         return self.coords(p)
 
+    def iscout_info(self, p):
+        """iScout extension: the link code (made once, kept in the settings) and when the last list came in."""
+        code = str(self.c.cfg.get("iscout_code") or "")
+        if not code:
+            code = "-".join(secrets.token_hex(2).upper() for _ in range(2))
+            self.c.apply_config({"iscout_code": code})
+        return {"code": code, "port": rb.ISCOUT_PORT, "stats": dict(rb.iscout_stats), "now": time.time(),
+                "folder": str(Path(__file__).resolve().parent / "extension")}
+
     def coords_clear(self, p):
         rb.feed_clear()
         return self.coords(p)
@@ -3211,6 +3220,58 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": False, "error": f"{type(e).__name__}: {e}"})
 
 
+class IScoutHandler(BaseHTTPRequestHandler):
+    """Owner 31 Oct: the RallyForge Chrome extension posts the iScout list here (127.0.0.1, fixed port, link code)."""
+    ctl = None
+
+    def log_message(self, *a):
+        pass
+
+    def _send(self, code, obj):
+        b = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(b)))
+        self.end_headers()
+        self.wfile.write(b)
+
+    def _code_ok(self, code):
+        want = str(self.ctl.cfg.get("iscout_code") or "")
+        return bool(want) and secrets.compare_digest(str(code or "").strip().upper(), want)
+
+    def do_GET(self):                                    # the extension's "Test link" button
+        q = parse_qs(urlparse(self.path).query)
+        if urlparse(self.path).path != "/ping" or not self._code_ok((q.get("code") or [""])[0]):
+            return self._send(403, {"ok": False})
+        return self._send(200, {"ok": True, "app": "RallyForge"})
+
+    def do_POST(self):
+        if urlparse(self.path).path != "/iscout":
+            return self._send(404, {"ok": False})
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > 2_000_000:
+                return self._send(413, {"ok": False})
+            p = json.loads(self.rfile.read(n) or b"{}")
+        except Exception:
+            return self._send(400, {"ok": False})
+        if not self._code_ok(p.get("code")):
+            return self._send(403, {"ok": False, "error": "wrong link code"})
+        got = rb.iscout_add(p.get("items") or [])
+        return self._send(200, {"ok": True, "n": got})
+
+
+def start_iscout_server(ctl):
+    IScoutHandler.ctl = ctl
+    try:
+        srv = ThreadingHTTPServer(("127.0.0.1", rb.ISCOUT_PORT), IScoutHandler)
+    except OSError as e:                                 # port busy (a second app copy): the extension just can't link
+        ctl.log(f"[i] iScout link not available ({e})")
+        return
+    srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+
 def start_server(ctl):
     key = secrets.token_urlsafe(18)
     Handler.ctl, Handler.api, Handler.key = ctl, Api(ctl), key
@@ -3404,6 +3465,7 @@ def main():
                     return
         threading.Thread(target=_lic_watch, daemon=True).start()
     port, key = start_server(ctl)
+    start_iscout_server(ctl)
     url = f"http://127.0.0.1:{port}/?k={key}"
     try:
         (rb.USER / "startup.log").open("a", encoding="utf-8").write(f"server up on port {port}\n")
