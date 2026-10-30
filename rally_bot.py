@@ -7113,7 +7113,6 @@ _ALLY_MIN_RALLIES = 3     # one shared rally can be a coincidence: a group needs
 _ALLY_WINDOW = 3600       # ...within the last hour (a link that is not re-confirmed expires)
 _RALLY_LEVEL = {}         # (monster, end time // 15) -> level read on the card (missed rallies respect level rules)
 QUIET_RESTART_MIN = 30    # alone on its server: no rally on the list this long -> chat check, then restart anyway
-GROUP_RESTART_GAP = 600   # in a group: at most one 'misses the group's rallies' restart per 10 min per instance
 
 
 def _list_has_rallies(shot):
@@ -7163,10 +7162,29 @@ def note_rally(serial, mon, left, level=None):
                 links.append((mon, end, now))
 
 
+_ALONE = {"t": 0.0, "set": set()}
+
+
+def alone_instances():
+    """alliance_groups.json {"alone": ["127.0.0.1:16576", ...]}: instances that are each in their own alliance - never
+    grouped with others (owner 30 Oct: Rory and GK-P). Re-read once a minute."""
+    if time.time() - _ALONE["t"] > 60:
+        _ALONE["t"] = time.time()
+        try:
+            d = json.loads((USER / "alliance_groups.json").read_text(encoding="utf-8"))
+            _ALONE["set"] = {str(x) for x in d.get("alone", [])}
+        except Exception:
+            _ALONE["set"] = set()
+    return _ALONE["set"]
+
+
 def allies_of(serial):
     """Instances matched with `serial` by enough separate rallies in the last hour."""
     now = time.time()
-    return {s for pair, links in list(_ALLIES.items()) if serial in pair for s in pair if s != serial
+    alone = alone_instances()
+    if serial in alone:
+        return set()
+    return {s for pair, links in list(_ALLIES.items()) if serial in pair for s in pair if s != serial and s not in alone
             and sum(1 for l in list(links) if now - l[2] < _ALLY_WINDOW) >= _ALLY_MIN_RALLIES}
 
 
@@ -7226,6 +7244,16 @@ CHAT_STATE = {}                # serial -> {"last", "nowar", "off", "broken", "n
 _AGO = re.compile(r"(\d{1,3})?\s*(sec|secs|second|seconds|min|mins|minute|minutes|hour|hours|day|days)\s*ago", re.I)
 
 
+def not_in_alliance(lines):
+    """The 'join an alliance' page, not a chat message. Owner 30 Oct: a fuzzy match fired on chat lines such as
+    '<name> joined the alliance' and restarted instances that ARE in the alliance (56x in one night). Needs the exact
+    words and no chat message on the screen (messages carry 'x mins ago')."""
+    texts = [(t or "").lower() for t, _ in lines]
+    if any(_chat_age(t) is not None for t in texts):
+        return False
+    return any(re.search(r"\b(join an alliance|not in an alliance)\b", t) for t in texts)
+
+
 def _chat_age(text):
     """'19 secs ago' -> 19. The number is sometimes lost by OCR on the yellow bubbles ('min ago'): then a middle guess."""
     m = _AGO.search(text or "")
@@ -7260,9 +7288,9 @@ def read_alliance_chat(dev, cfg, log, stop):
             if not _chat_pic(shot, "chat_alliance_tab", CHAT_TABS_REGION, ["Alliance"], (180, 65, 360, 60)):
                 _chat_fail_shot(dev, shot, "the Alliance chat tab was not found")
                 return "fail", "the Alliance chat tab was not found"
-        if find_text(shot, ["join an alliance", "join alliance", "not in an alliance"], region=(0, 100, 540, 800), cutoff=0.75):
-            return "noally", None
         lines = sorted(ocr_lines(shot[100:880]), key=lambda l: min(w[2] for w in l[1]))
+        if not_in_alliance(lines):                           # owner 30 Oct: exact words on the real page, never a chat line
+            return "noally", None
         wars, pending = [], None
         for text, words in lines:
             low = text.lower()
@@ -20325,7 +20353,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     quiet_err("run_device", _e)
             if st == "rally_list" and now - t_started[0] > 180:
                 group = allies_of(serial)
-                if group and now - qs["miss_at"] > 60:          # A. same alliance + server: rallies the others read, missing here
+                if group and now - qs["miss_at"] > 60 and now - _RALLY_SEEN.get(serial, 0) > 90:   # A. same alliance: only when this list shows no rally
                     qs["miss_at"] = now
                     miss = missed_rallies(serial, cfg)
                     if not miss:
@@ -20342,15 +20370,12 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                         if qs["miss"] == 2:                        # owner 30 Oct: a 10 s refresh before a 5-8 min restart
                             quick_list_refresh(dev, log, stop, f"the alliance sees {names}")
                             continue                               # read the list again: still missing -> chat + restart
-                        qs["miss"] = 0
-                        v = chat_war_check(dev, cfg, log, stop, serial)   # the chat first (owner)
-                        if v != "ok" and now - qs["restart"] > GROUP_RESTART_GAP:
-                            qs["restart"] = now
-                            log(f"[!] The rally list still misses {names} that the other instances of this alliance see - restarting Evony")
-                            force_restart_game(dev, cfg, log, stop, must=True, reason="rally list misses the alliance's rallies")
+                        qs["miss"] = 0                             # owner 30 Oct: never a restart for this - only the 30-min empty-list rule restarts
+                        log(f"[i] The alliance sees {names}, this list still does not after a reopen and a refresh - no restart "
+                            f"(restart only after {QUIET_RESTART_MIN} min of a completely empty list)")
                         continue
                 quiet_since = max(_RALLY_SEEN.get(serial, 0), t_started[0], qs["quiet_at"])
-                if not group and now - quiet_since > QUIET_RESTART_MIN * 60:   # B. alone on its server: 30 min without a rally
+                if now - quiet_since > QUIET_RESTART_MIN * 60:   # B. owner 30 Oct: EVERY instance - 30 min of a completely empty list
                     qs["quiet_at"] = now
                     if quick_list_refresh(dev, log, stop, f"no rally for {QUIET_RESTART_MIN} min"):
                         _RALLY_SEEN[serial] = time.time()
@@ -20360,7 +20385,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                     if v == "ok":
                         log("[i] No rally on this list for 30 min, but the Alliance chat shows the list is working - no restart")
                     else:
-                        log(f"[!] No rally on this list for {QUIET_RESTART_MIN} min (alone on its server) and the chat does not show "
+                        log(f"[!] No rally on this list for {QUIET_RESTART_MIN} min and the chat does not show "
                             "the list working - restarting Evony once (a quiet server costs a few minutes, a stuck list costs rallies)")
                         force_restart_game(dev, cfg, log, stop, must=True, reason=f"no rally for {QUIET_RESTART_MIN} min")
                     continue
@@ -20379,9 +20404,9 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                             log("[!] Chat check: 5 restarts did not help - not restarting for this any more, alert sent")
                     elif not ck.get("noally") and quick_list_refresh(dev, log, stop, "the chat shows rallies this list missed"):
                         ck["broken"] = 0
-                    else:
-                        log(f"[!] Chat check: restarting Evony (try {ck['broken']} of 5)")
-                        force_restart_game(dev, cfg, log, stop, must=True, reason="chat check failed")
+                    else:                                      # owner 30 Oct: restarts only after 30 min of a completely empty list
+                        log(f"[i] Chat check: something looks wrong ({ck['broken']} of 5) - no restart yet; "
+                            f"restart only after {QUIET_RESTART_MIN} min of a completely empty list")
                 else:
                     ck["broken"] = 0
                 continue
