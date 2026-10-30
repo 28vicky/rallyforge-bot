@@ -111,6 +111,7 @@ const ICO = {
   eye: '<path d="M2.500 12S6 5.500 12 5.500 21.500 12 21.500 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="2.800"/>',
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   egg: '<path d="M12 3C8 3 5 10 5 14.500a7 7 0 0 0 14 0C19 10 16 3 12 3z"/>',
+  bolt: '<path d="M13 3 5 13.5h6L10 21l8-11h-6z"/>',
 };
 function ico(name, cls) {
   const e = h("span", { class: "ico" + (cls ? " " + cls : "") });
@@ -227,7 +228,7 @@ function layout() {
         // (ui-simple) Pause all / Stop all live only in the page header - one place for run controls
         h("button", { class: "btn ib ctlbtn", id: "ctlBtn", title: "Dashboard, settings and tools for all instances", onclick: () => { S.sel = "control"; renderSide(); renderTabs(); renderPage(); } }, ico("sliders"), "All instances"))),   // A8 (28 Oct): was "Control settings" - the way home
     h("div", { class: "main" },
-      h("div", { class: "top" }, sideBtn(), h("img", { src: "/assets/logo.png", alt: "" }),
+      h("div", { class: "top" }, sideBtn(), h("h2", { class: "ctltitle" }, "All instances"), h("img", { src: "/assets/logo.png", alt: "" }),   // owner 30 Oct: titled like an instance header
         h("b", {}, "RallyForge Bot"), h("span", { class: "v", title: "RallyForge" }, "v" + S.version),
         saveStEl(),
         h("div", { class: "livebar", id: "liveBar", role: "group", "aria-label": "Live - what each instance is doing" }),
@@ -808,7 +809,7 @@ function todayModel(j, serial) {
   const items = (j.queue || []).map((q) => {
     const k = nowText === "Duty: " + q.title ? "run" : q.status;
     const tip = k === "gaveup" || k === "retry" ? (q.msg ? "Last problem: " + q.msg : q.text) : "";
-    return { k, title: dutyName(q.id, q.title), text: q.text, tip };
+    return { id: q.id, k, title: dutyName(q.id, q.title), text: q.text, tip };
   }).sort((a, b) => (order[a.k] ?? 3) - (order[b.k] ?? 3));
   const cnt = j.count || { done: 0, on: items.length }, left = cnt.on - cnt.done;
   const resetIn = (j.reset_at || 0) - (Date.now() / 1000 + skew);

@@ -605,16 +605,11 @@ function instancePage(serial) {
         h("h3", {}, h("span", { class: "livedot" + (st === "run" ? " on" : "") }), st === "run" ? "Now executing" : "Last step"), st === "run" ? h("span", { class: "livetag" }, "Live") : null));   // A2: a stopped instance shows its last step, not a live one
       const lab = L.querySelector(".actlab"); if (lab) lab.remove();
       R.querySelector("h3").replaceWith(h("div", { class: "cardhead" },
-        h("div", {}, h("h3", {}, "Monster joins"), h("small", { class: "sub" }, "Live rally history log")),
+        h("div", {}, h("h3", {}, "Monster joins")),
         h("a", { href: "#", class: "viewall", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("logs"); } }, "View all \u2192")));
-      // a new instance (no own settings yet) leads with Auto-Join: one question, one click; nothing is written until the user picks
-      const how = { m: "" };
-      const lead = Object.keys(ov).length ? null : panel(null,
-        h("div", { class: "cardhead" }, h("h3", {}, "How should " + (dev.name || "this instance") + " join rallies?")),
-        segPick(how, "m", [["game", "The game's Auto-Join", AJ_TIP], ["bot", "The bot joins with your presets", "The bot opens each rally and marches with your presets."]],
-          { label: "How it joins", after: (v) => { ajSetOne(serial, v === "game"); rerender(); } }),
-        h("p", { class: "hint", style: { marginTop: "8px" } }, "Have the Rally Monthly Card? Pick Auto-Join - no presets needed. You can change it any time with the Auto-Join switch at the top."));
-      return [lead, renderTodayCard(serial), h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, L), panel(null, R)), h("div", { class: "dcol" }, cityMapCard(serial), runNowCard(serial)))];
+      // owner 30 Oct 20:51-20:54: less to read - the setup question (same as the header switches) and the repeated counters are gone
+      return [h("div", { class: "ovtop" }, runNowCard(serial), nowNextCard(serial)), renderTodayCard(serial, { lite: true }),
+        h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, R)), h("div", { class: "dcol" }, cityMapCard(serial)))];
     }],
     ["routines", "Duties", () => [PAGES.duties(serial)]],   // A9: one word - "Duties" everywhere
     ["rally", "Join rallies", () => sections("rally", [
@@ -1527,7 +1522,7 @@ PAGES.license = function () {
 
 
 // ====================================================================== Today card (one instance)
-function renderTodayCard(serial) {
+function renderTodayCard(serial, o = {}) {
   const head = h("div", { class: "tdreset" }), list = h("div", { class: "tdq" }), sum = h("div", { class: "tdsum" });
   const res = h("div", { class: "tdres" }), week = h("small", { class: "tdweek" });
   // the game's Auto-Join (ui-simple): time left, when the bot renews it, and a warning when it has not been checked for a while
@@ -1550,7 +1545,8 @@ function renderTodayCard(serial) {
       h("span", { class: "ajsub" }, left <= renewMin * 60 ? "renews now" : "renews at " + at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })),
       stale ? h("span", { class: "ajwarn" }, "Not checked for " + Math.round(r.age_s / 60) + " min") : h("span", { class: "ajsub" }, "checked " + (r.age_s < 60 ? "just now" : Math.round(r.age_s / 60) + " min ago")));
   };
-  const card = h("div", { class: "panel today" },
+  const card = o.lite ? h("div", { class: "panel today lite" },          // Overview (owner 30 Oct): numbers only, no lists to read
+      h("div", { class: "cardhead" }, h("h3", {}, "Today"), head), aj, res, h("div", { class: "tdfoot" }, week)) : h("div", { class: "panel today" },
     h("div", { class: "cardhead" }, h("h3", {}, "Today"), head),
     aj,
     h("div", { class: "tdgrid" },
@@ -1758,7 +1754,7 @@ function applyToDialog(what, run) {
 }
 function defaultsHead(what, run) {
   return h("div", { class: "defhead" },
-    h("div", {}, h("b", {}, "Universal defaults"), h("small", { class: "hint" }, "New instances start with these " + what + ". An instance with its own " + what + " keeps them.")),
+    h("div", {}, h("b", {}, "Universal defaults"), h("small", { class: "hint" }, "For every instance without its own " + what + " ", infoTip("Universal defaults", "New instances start with these " + what + ". An instance with its own " + what + " keeps them."))),   // owner 30 Oct: less to read
     btn("Apply to…", () => applyToDialog(what, run), "sm"));
 }
 const OWN_DUTY_KEYS = ["duties", "crazy_eggs", "champions", "wheel"];
@@ -2060,7 +2056,7 @@ function cityMapCard(serial) {
     root.appendChild(h("div", { class: "cardhead cmhead" }, h("div", {}, h("h3", {}, "City map"), h("small", { class: "sub" }, sub)), h("div", { class: "cmacts" }, acts)));
     if (!j.running && !j.mapped) {                     // empty state: one clear action, nothing else
       root.appendChild(h("div", { class: "cmempty" }, h("b", {}, "This city is not mapped yet"),
-        h("p", { class: "hint" }, "Map my city moves round your whole city once (about 5-6 min), builds its picture and pins the buildings. This instance doesn't join rallies while it maps.")));
+        h("p", { class: "hint" }, "One-time setup, about 5 min ", infoTip("Map my city", "The bot moves round your whole city once, builds its picture and pins the buildings. This instance doesn't join rallies while it maps."))));
       return;
     }
     const n = j.running ? (pr.found || 0) : have, tot = j.running ? (pr.total || total) : total;
@@ -2277,38 +2273,129 @@ function pinBuildingsDialog(culture) {
   load(culture);
 }
 
-function runNowCard(serial) {
-  const root = h("div", { class: "panel runnow" });
-  let pick = "", last = "";
-  const set = async (name, o) => { const r = await act(api(name, { serial, ...o })); if (r) { last = JSON.stringify(r.queue); draw(r); } };
-  const draw = (j) => {
-    root.innerHTML = "";
-    const groups = {};
-    for (const t of j.tasks || []) {
-      const id = t.id.startsWith("duty:") ? t.id.slice(5) : "";
-      if (id && !dutyShown(id)) continue;
-      if (RUN_SETUP.has(id) && !S.dev) continue;          // PCR2 A5: Map my city lives on Overview > City map only (it can wipe pins)
-      // one-time jobs on top (Setup), developer test duties in their own group at the bottom - never mixed into City
-      const g = !id ? "My tasks" : RUN_SETUP.has(id) ? "Setup" : DUTY_TEST.has(id) ? "Testing (developer)" : dutyGroup(id, t.group);
-      (groups[g] = groups[g] || []).push([t.id, id ? dutyName(id, t.title) : t.title]);
-    }
-    const go = h("button", { class: "btn", type: "button", disabled: !pick, onclick: () => { if (pick) { const id = pick; pick = ""; set("run_now_add", { id }); } } }, "Run now");
-    const s = h("select", { "aria-label": "Task to run", onchange: (e) => { pick = e.target.value; go.disabled = !pick; } }, h("option", { value: "" }, "Pick a task\u2026"),
-      ["Setup", ...DUTY_GROUPS, "Testing (developer)"].filter((g) => groups[g]).map((g) => h("optgroup", { label: g }, groups[g].map(([v, t]) => h("option", { value: v, selected: v === pick }, t)))));
-    root.append(...[h("div", { class: "cardhead" }, h("h3", {}, "Run a task now")),
-      h("small", { class: "sub" }, serial ? "Runs once, before anything else, then the bot carries on." : "Runs once on every instance, before anything else."),
-      h("div", { class: "runrow" }, s, go),
-      (j.queue || []).length ? h("div", { class: "row", style: { gap: "6px", flexWrap: "wrap", marginTop: "8px" } }, h("span", { class: "lab" }, "Waiting:"),
-        j.queue.map((q, i) => { const id = String(q.id || "").startsWith("duty:") ? q.id.slice(5) : ""; return h("span", { class: "chip" }, (i + 1) + ". " + (id ? dutyName(id, q.title) : q.title) + " ",
-          h("a", { href: "#", title: "Cancel", "aria-label": "Cancel", onclick: (e) => { e.preventDefault(); set("run_now_remove", { id: q.id }); } }, "\u00d7")); })) : null].filter(Boolean));
+function runNowCard(serial, o = {}) {
+  // owner 30 Oct 21:11-21:17: quick picks (your recent tasks) + search, like Spotlight - no list scrolling inside the page;
+  // type to find any task; "All tasks" for browsing. Click = runs next; x on "Next:" cancels.
+  const root = h("div", { class: o.bare ? "runnow bare" : "panel runnow" });
+  let data = { tasks: [], queue: [] }, q = "", all = false, last = "";
+  const RK = "rf_rn_recent_" + (serial || "all");
+  const recent = () => { try { return JSON.parse(localStorage.getItem(RK) || "[]"); } catch (e) { return []; } };
+  const remember = (id) => { try { localStorage.setItem(RK, JSON.stringify([id, ...recent().filter((x) => x !== id)].slice(0, 8))); } catch (e) {} };
+  const find = h("input", { type: "search", class: "rnfind", placeholder: "Search all tasks", "aria-label": "Search all tasks", autocomplete: "off", oninput: () => { q = find.value.trim().toLowerCase(); draw(); } });
+  const list = h("div", { class: "rnlist", role: "list" }), wait = h("div", { class: "rnwait" });
+  const allBtn = h("button", { class: "lnkb rnall", type: "button", onclick: () => { all = !all; draw(); } });
+  const name = (t) => { const id = String(t.id || "").startsWith("duty:") ? t.id.slice(5) : ""; return id ? dutyName(id, t.title) : t.title; };
+  const shown = () => (data.tasks || []).filter((t) => { const id = t.id.startsWith("duty:") ? t.id.slice(5) : ""; return !(id && !dutyShown(id)) && !(RUN_SETUP.has(id) && !S.dev); });
+  const add = async (t) => {
+    const r = await act(api("run_now_add", { serial, id: t.id }));
+    if (!r) return;
+    remember(t.id); data = r; last = JSON.stringify(r.queue); draw();
+    toast(name(t) + (serial ? " runs next" : " runs next on every instance"), "ok");
+    if (o.onAdd) o.onAdd();
   };
-  draw({ tasks: [], queue: [] });
-  act(api("run_now", { serial })).then((j) => { if (j) { last = JSON.stringify(j.queue); draw(j); } });
+  const row = (t, tag, queued) => h("button", { class: "rntask" + (queued ? " q" : ""), type: "button", role: "listitem", disabled: queued, onclick: () => add(t) },
+    h("span", { class: "rnn" }, name(t)), queued ? h("small", { class: "rntag" }, "Queued") : tag ? h("small", { class: "rntag " + tag[1] }, tag[0]) : null, queued ? null : h("span", { class: "rngo" }, ico("bolt")));
+  const DEFAULT_PICKS = ["duty:wheel", "duty:black_market", "duty:train_troops", "duty:alliance_help", "duty:collect_resources", "duty:alliance_gift", "duty:champions", "duty:trade_carriage", "duty:mail"];   // fresh install: common tasks
+  let upNext = new Set();                                // what the Now card already shows (Up next + failed) - never twice on one page
+  const picks = () => {                                  // owner 30 Oct 21:17: only YOUR recent tasks - failed / due live in the Now card
+    const by = new Map(shown().map((t) => [t.id, t]));
+    const ok = (id) => by.has(id) && !upNext.has(id);
+    const ids = [...new Set([...recent().filter(ok), ...DEFAULT_PICKS.filter(ok)])];   // yours first, topped up with common ones
+    return ids.slice(0, 4).map((id) => [by.get(id), null]);
+  };
+  const loadNext = async () => {                         // same rule as the Now card: first 3 of running / due / waiting / retry, plus failed
+    if (!serial || o.bare) return;
+    const j = await api("today", { serial }, { quiet: true }).catch(() => null);
+    if (!j) return;
+    const its = todayModel(j, serial).items;
+    const ids = its.filter((x) => ["run", "due", "waiting", "retry"].includes(x.k)).slice(0, 3).concat(its.filter((x) => x.k === "gaveup")).map((x) => "duty:" + x.id);
+    const key = ids.join("|");
+    if (key !== [...upNext].join("|")) { upNext = new Set(ids); if (!q && !all) draw(); }
+  };
+  setTimeout(loadNext, 0);
+  const tick3 = setInterval(() => { if (!root.isConnected) { clearInterval(tick3); return; } loadNext(); }, 15000);
+  const draw = () => {
+    list.innerHTML = "";
+    const queued = new Set((data.queue || []).map((x) => x.id)), tasks = shown();
+    list.classList.toggle("scroll", !!q || all);
+    if (q || all) {                                       // search results / every task, grouped
+      const groups = {};
+      for (const t of tasks) {
+        if (q && !name(t).toLowerCase().includes(q)) continue;
+        const id = t.id.startsWith("duty:") ? t.id.slice(5) : "";
+        const g = !id ? "My tasks" : RUN_SETUP.has(id) ? "Setup" : DUTY_TEST.has(id) ? "Testing (developer)" : dutyGroup(id, t.group);
+        (groups[g] = groups[g] || []).push(t);
+      }
+      const order = ["Setup", ...DUTY_GROUPS, "Testing (developer)"].filter((g) => groups[g]);
+      for (const g of order) { list.appendChild(h("div", { class: "rngrp" }, g)); for (const t of groups[g]) list.appendChild(row(t, null, queued.has(t.id))); }
+      if (!order.length) list.appendChild(h("div", { class: "rnnone" }, tasks.length ? "No task called \u201c" + find.value.trim() + "\u201d" : "Loading\u2026"));
+    } else {
+      const p = picks();
+      p.forEach(([t, tag]) => list.appendChild(row(t, tag, queued.has(t.id))));
+      if (!p.length) list.appendChild(h("div", { class: "rnnone" }, tasks.length ? "Search above, or open All tasks. Tasks you run show up here." : "Loading\u2026"));
+    }
+    allBtn.hidden = !!q; allBtn.textContent = all ? "Show quick picks" : "All tasks (" + tasks.length + ")";
+    wait.innerHTML = "";
+    const qq = data.queue || [];
+    wait.hidden = !qq.length;
+    if (qq.length) wait.append(h("span", { class: "lab" }, "Next:"), ...qq.map((x, i) => h("span", { class: "chip" }, (i + 1) + ". " + name(x) + " ",
+      h("a", { href: "#", title: "Cancel", "aria-label": "Cancel " + name(x), onclick: async (e) => { e.preventDefault(); const r = await act(api("run_now_remove", { serial, id: x.id })); if (r) { data = r; last = JSON.stringify(r.queue); draw(); } } }, "\u00d7"))));
+  };
+  const lab = h("div", { class: "rnlab" }, h("span", {}, "Quick picks"), allBtn);
+  root.append(...[o.bare ? null : h("div", { class: "cardhead" }, h("h3", { title: serial ? "Runs next, then the bot carries on" : "Runs next on every instance" }, "Run a task now")),
+    find, lab, list, wait].filter(Boolean));
+  const relab = () => { lab.firstChild.textContent = q ? "Results" : all ? "All tasks" : "Quick picks"; };
+  find.addEventListener("input", relab); allBtn.addEventListener("click", relab);
+  draw();
+  act(api("run_now", { serial })).then((j) => { if (j) { data = j; last = JSON.stringify(j.queue); draw(); } });
+  const onQ = (e) => { if (!root.isConnected) return removeEventListener("rf-runnow", onQ); if (e.detail.serial === serial) { data = e.detail.r; last = JSON.stringify(data.queue); draw(); } };
+  addEventListener("rf-runnow", onQ);                    // "Run again" in the Now card shows up in "Next:" at once
   const tick = setInterval(async () => {          // the queue empties when the bot starts the task: redraw only when it changed
     if (!root.isConnected) { clearInterval(tick); return; }
     const j = await api("run_now", { serial }, { quiet: true }).catch(() => null);
-    if (j && j.queue && JSON.stringify(j.queue) !== last && !root.contains(document.activeElement)) { last = JSON.stringify(j.queue); draw(j); }
+    if (j && j.queue && JSON.stringify(j.queue) !== last) { data = j; last = JSON.stringify(j.queue); if (!root.contains(document.activeElement) || document.activeElement === find) draw(); }
   }, 10000);
+  return root;
+}
+
+// owner 30 Oct 20:53: the second column next to Run a task - what the bot does now, what comes next, and problems only when there are any
+function nowNextCard(serial) {
+  const root = h("div", { class: "panel nownext" });
+  const dot = h("span", { class: "livedot" }), nowEl = h("div", { class: "nnnow" }), next = h("div", { class: "nnlist" }), probs = h("div", { class: "nnprob" });
+  root.append(h("div", { class: "cardhead" }, h("h3", {}, dot, "Now")), nowEl, h("div", { class: "nnlab" }, "Up next"), next, probs);
+  let items = [], failed = [], queued = new Set(), lastKey = "";
+  const goDuties = (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("routines"); };
+  const paint = () => {
+    const st = (S.devStatus.find((x) => x.id === serial) || {}).state;
+    const run = st === "run", t = ((S.now || {})[serial] || {}).text || "";
+    const nowTxt = run ? (t || "Starting\u2026") : st === "pause" ? "Paused" : "Not running";
+    const key = JSON.stringify([nowTxt, run, items]);
+    if (key === lastKey) return;
+    lastKey = key;
+    dot.classList.toggle("on", run);
+    nowEl.textContent = nowTxt; nowEl.classList.toggle("off", !run); nowEl.title = t;
+    next.innerHTML = "";
+    const up = items.filter((x) => ["run", "due", "waiting", "retry"].includes(x.k)).slice(0, 3);
+    up.forEach((x) => next.appendChild(h("div", { class: "nnrow" }, h("span", { class: "nnt" }, x.title), dutyBadge(x.k, x.text, x.tip))));
+    if (!up.length) next.appendChild(h("div", { class: "nnempty" }, items.length ? "All duties done for today" : h("span", {}, "No duties on \u00b7 ", h("a", { href: "#", class: "lnk", onclick: goDuties }, "Choose duties"))));
+    probs.innerHTML = "";
+    const bad = failed.filter((x) => !queued.has("duty:" + x.id));
+    bad.slice(0, 2).forEach((x) => probs.appendChild(h("div", { class: "nnbad", title: x.msg || x.text || "" },
+      h("span", { class: "nnbt" }, h("b", {}, dutyName(x.id, x.title)), h("small", {}, "Failed today")),
+      h("button", { class: "btn sm", type: "button", onclick: async () => { const r = await act(api("run_now_add", { serial, id: "duty:" + x.id })); if (r) { queued = new Set((r.queue || []).map((y) => y.id)); lastKey = ""; paint(); window.dispatchEvent(new CustomEvent("rf-runnow", { detail: { serial, r } })); toast(dutyName(x.id, x.title) + " runs next", "ok"); } } }, "Run again"))));
+    if (bad.length > 2) probs.appendChild(h("a", { href: "#", class: "lnk nnmore", onclick: goDuties }, "+" + (bad.length - 2) + " more in Duties"));
+  };
+  const load = async () => {
+    if (!root.isConnected) return;
+    const j = await api("today", { serial }, { quiet: true }).catch(() => null);
+    if (j) { items = todayModel(j, serial).items; failed = (j.queue || []).filter((x) => x.status === "gaveup"); }
+    const rq = await api("run_now", { serial }, { quiet: true }).catch(() => null);
+    if (rq) queued = new Set((rq.queue || []).map((y) => y.id));
+    lastKey = ""; paint();
+  };
+  setTimeout(load, 0);                                   // after the card is on the page (load skips a card that is not)
+  const t1 = setInterval(() => { if (!root.isConnected) { clearInterval(t1); clearInterval(t2); return; } paint(); }, 1000);
+  const t2 = setInterval(load, 15000);
   return root;
 }
 
