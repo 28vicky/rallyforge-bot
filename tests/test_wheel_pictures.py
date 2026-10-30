@@ -65,3 +65,11 @@ def test_tavern_ring_items_from_detail_icon():
 def test_dome_gem_button_is_green():
     shot = cv2.imread(str(S / "dome_honor_token_kiravik.png"))
     assert rb.btn_colour(shot, *rb.DOME_GEM_BTN) == "green"
+
+
+def test_dome_buy_button_by_colour():
+    conf = cv2.imread(str(S / "dome_buy_confirm_phone.png"))         # owner's phone screenshot, scaled to 540 wide
+    page = cv2.imread(str(S / "dome_honor_token_kiravik.png"))
+    b = rb.find_green_button(conf, x_min=280, x_max=480, y_min=360, y_max=840)
+    assert b and 330 < b[0] < 390                                      # the green Buy (right), never the red Cancel
+    assert rb.find_green_button(page, x_min=280, x_max=480, y_min=360, y_max=840) is None

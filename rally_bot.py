@@ -16288,6 +16288,24 @@ def run_offering_tributes(dev, cfg, log, stop):
 
 
 # --- gem duties (owner 22 Oct: the user switches them on knowing they spend gems; no extra gem block) ----------------
+def find_green_button(shot, x_min, x_max, y_min, y_max, min_w=90, min_h=30):
+    """Owner 30 Oct: a bright green game button (e.g. the confirm popup's Buy) inside the box, by colour only (no text
+    read). The widest green block wins. -> (x, y) of its middle or None."""
+    try:
+        hsv = cv2.cvtColor(shot[y_min:y_max, x_min:x_max], cv2.COLOR_BGR2HSV)
+        m = cv2.inRange(hsv, (40, 80, 50), (90, 255, 255))
+        m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((5, 9), np.uint8))
+        n, _, st, cen = cv2.connectedComponentsWithStats(m)
+        best = None
+        for i in range(1, n):
+            x, y, w, h, a = st[i]
+            if w >= min_w and h >= min_h and (best is None or w * h > best[0]):
+                best = (w * h, int(cen[i][0]) + x_min, int(cen[i][1]) + y_min)
+        return (best[1], best[2]) if best else None
+    except Exception:
+        return None
+
+
 DOME_GEM_BTN = (450, 155)          # green "500 gems" button, Purchase by Gems row (Kiravik 30 Oct debug\duty_dome_2)
 
 
@@ -16323,17 +16341,29 @@ def run_wisdom_dome_tokens(dev, cfg, log, stop):
         # the green 500-gem button on the right, never found. The button is tapped by its place + green colour.
         if btn_colour(shot, *DOME_GEM_BTN) != "green":
             rd_snap(shot, "dome_nobutton")
-            if bought == 0:
+            if bought == 0 and not rd_seen(shot, ["Purchase by Gems", "Daily Chance", "Goddess Honor"], region=(0, 0, 540, 260)):
                 raise RuntimeError("no Purchase by Gems button on the Goddess Honor Token page")
+            if bought == 0:                                # the right page, button not green = today's 5 are bought
+                log("[+]  Wisdom Dome: the 500-gem button is not active - today's purchases are used")
+                rd_nothing()
             break
         dev.tap(*DOME_GEM_BTN)
-        _nap(stop, 1.4, 1.8)
-        rd_snap(dev.screenshot(), "dome_3_confirm")
-        if not rd_tap(dev, stop, ["Buy"], region=(240, 500, 280, 110), whole=True, wait=(1.8, 2.3)):
+        buy = None
+        t0 = time.time()
+        while time.time() - t0 < 6 and not stop.is_set():  # owner 30 Oct 14:16: "Are you sure ... 500 Gems?" -> green Buy (right)
+            stop.wait(0.3)
+            sc = dev.screenshot()
+            buy = find_green_button(sc, x_min=280, x_max=480, y_min=360, y_max=840)   # below the page's green Go
+            if buy:
+                break
+        if not buy:
             rd_snap(dev.screenshot(), "dome_3")
             dev.back()
             raise RuntimeError("no Buy button in the confirm popup")
+        dev.tap(*buy)
+        _nap(stop, 1.5, 2.0)
         bought += 1
+        log(f"[i]   Wisdom Dome: bought token {bought} (Buy at {buy})")
         rd_close_reward(dev, stop, spot=(270, 120))
     log(f"[+]  Wisdom Dome: {bought} Goddess Honor Token(s) bought with gems")
 
