@@ -885,6 +885,12 @@ class Device:
         self._guard_t = 0.0
         self._guard_busy = False
         self._guard_unknown = 0
+        self._sig, self._shot_t = None, 0.0     # small grey copy of the last screenshot (screen guard)
+        self._tap_sig, self._tap_t = None, 0.0  # the screen as it was at the last tap
+        self.dead_taps = 0                      # taps in a row that changed nothing on screen
+        self.screen_stuck = 0.0                 # set when DEAD_TAP_LIMIT taps in a row changed nothing (rally loop acts on it)
+        self._dead_ok = False                   # True while the screen guard itself is getting out (its taps are not counted)
+        self.lag_restart_due = False            # red wifi for LAG_MAX_S non-stop: the rally loop restarts the game
 
     def arm_guard(self, cfg, log, stop):
         """Turn on the universal pop-up closer: whatever the bot is doing, a known pop-up that appears is closed."""
@@ -1107,6 +1113,11 @@ class Device:
             img = cv2.resize(img, EXPECTED_SIZE, interpolation=cv2.INTER_AREA)
         else:
             self.sx = self.sy = 1.0
+        try:                                                 # screen guard: what the screen looks like now (cheap, 135x240 grey)
+            self._sig = cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), (135, 240), interpolation=cv2.INTER_AREA)
+            self._shot_t = time.time()
+        except Exception:
+            pass
         if self.guard and not self._guard_busy and time.time() - self._guard_t > 2.0:
             img = self._guard_check(img)
         if not getattr(self, "_lag_busy", False):
@@ -1114,12 +1125,13 @@ class Device:
         return img
 
     def _lag_wait(self, img):
-        """Evony shows a red wifi icon mid-screen while the game lags (usually the PC is overloaded); taps made then
-        get lost and rallies are missed. Owner 25 Oct: hold this instance still until the icon goes (up to 2 min), then
-        let the game settle 20 s with no icon before the next tap. Only a lag of 2+ min non-stop counts as a strike
-        (lag_streak) - the rally loop restarts Evony on that. Time spent here does not count as 'lost' (lag_spent)."""
+        """Evony shows a red wifi icon mid-screen while the game lags; taps made then get lost, and taps made right after
+        it clears bring it back. Owner 30 Oct 19:31: the moment the icon is seen, nothing is tapped for 30 s; then look
+        again - still there = another 30 s; gone = 10 s more with no icon before the next tap. Red wifi for 5 min
+        non-stop = restart the game (lag_restart_due; a duty stops at once so the rally loop can do it). Time spent here
+        does not count as 'lost' (lag_spent)."""
         try:
-            if not lag_icon(img):
+            if self.lag_restart_due or not lag_icon(img):    # a restart is already due: no second 5-min wait
                 return img
         except Exception:
             return img
@@ -1130,32 +1142,74 @@ class Device:
         t0 = time.time()
         self.lag_times = [t for t in getattr(self, "lag_times", []) if t0 - t < 600] + [t0]   # lag spells in the last 10 min
         stopped = lambda: stop is not None and stop.is_set()
+
+        def hold(secs):
+            if stop is not None:
+                stop.wait(secs)
+            else:
+                time.sleep(secs)
+        settled = False
         try:
             if log:
-                log(f"[!] Game lagging (red wifi icon) - waiting for it to clear (#{self.lag_count} this run)")
-            calm_from = None
-            while time.time() - t0 < 120 and not stopped():
-                time.sleep(2.0)
+                log(f"[!] Game lagging (red wifi icon) - no taps, looking again in {LAG_CHECK_S} s (#{self.lag_count} this run)")
+            while time.time() - t0 < LAG_MAX_S and not stopped():
+                hold(LAG_CHECK_S)
+                if stopped():
+                    break
                 img = self.screenshot()
                 if lag_icon(img):
-                    calm_from = None
-                    continue
-                calm_from = calm_from or time.time()
-                if time.time() - calm_from >= 20:                # 20 s with no icon: the game has caught up
-                    self.lag_streak = 0
                     if log:
-                        log(f"[+] Game settled after {time.time() - t0:.0f}s")
-                    return img
-            if not stopped():
-                self.lag_streak = getattr(self, "lag_streak", 0) + 1
+                        log(f"[i]   still red wifi after {time.time() - t0:.0f} s - waiting {LAG_CHECK_S} s more")
+                    continue
+                hold(LAG_CALM_S)                              # gone: 10 s more with no icon before anything is tapped
+                if stopped():
+                    break
+                img = self.screenshot()
+                if lag_icon(img):
+                    continue
+                settled = True
+                self.lag_streak = 0
                 if log:
-                    log(f"[!] Still lagging after 2 min - carrying on ({self.lag_streak} in a row)")
+                    log(f"[+] Game settled after {time.time() - t0:.0f}s (red wifi gone + {LAG_CALM_S} s calm)")
+                return img
         finally:
             self.lag_spent = getattr(self, "lag_spent", 0.0) + (time.time() - t0)
             self._lag_busy = False
+        if not stopped() and not settled:
+            self.lag_streak = getattr(self, "lag_streak", 0) + 1
+            self.lag_restart_due = True
+            if log:
+                log(f"[!] Red wifi for {LAG_MAX_S // 60} min non-stop - the game is restarted")
+            if getattr(_TL, "duty_deadline", None):          # inside a duty: stop it now, the rally loop restarts the game
+                raise RuntimeError(f"the game lagged (red wifi) for {LAG_MAX_S // 60} min - restarting the game")
         return img
 
+    def _dead_tap_check(self):
+        """Owner 30 Oct 19:25 - screen guard for EVERY tap (every duty, the rally list, recovery): when DEAD_TAP_LIMIT
+        taps in a row changed nothing on the screen (each looked at before the next tap), the bot is stuck on a screen
+        it does not understand. Inside a duty: the duty stops at once (the runner goes back to the city and tries
+        again). Elsewhere: screen_stuck is set and the rally loop gets out (screen_unstick)."""
+        if self._dead_ok:
+            return
+        s = self._sig
+        if s is None:
+            return
+        if self._tap_sig is not None and self._shot_t > self._tap_t:      # looked at the screen since the last tap
+            self.dead_taps = self.dead_taps + 1 if same_screen(self._tap_sig, s) else 0
+        self._tap_sig, self._tap_t = s, time.time()
+        in_duty = bool(getattr(_TL, "duty_deadline", None))
+        lim = DEAD_TAP_LIMIT_DUTY if in_duty else DEAD_TAP_LIMIT
+        if self.dead_taps < lim:
+            return
+        self.dead_taps = 0
+        self._tap_sig = None
+        if in_duty:
+            raise RuntimeError(f"the screen did not react to {lim} taps in a row (screen guard) - "
+                               "back to the city, tried again")
+        self.screen_stuck = time.time()
+
     def tap(self, x, y):
+        self._dead_tap_check()
         self.acted = time.time()
         j = TAP_JITTER_PX                                   # a few pixels off each time, like a finger (never the exact same pixel)
         x, y = x + random.randint(-j, j), y + random.randint(-j, j)
@@ -1379,6 +1433,35 @@ def template_path(name):
         if p.exists():
             return p
     return None
+
+
+LAG_CHECK_S, LAG_CALM_S, LAG_MAX_S = 30, 10, 300   # owner 30 Oct 19:31: red wifi -> look every 30 s, gone + 10 s calm, 5 min = restart
+DEAD_TAP_LIMIT = 4                           # owner 30 Oct 19:25: taps in a row with no change on screen = stuck (screen guard)
+DEAD_TAP_LIMIT_DUTY = 6                      # inside a duty a few 'nothing here' taps are normal (empty chests, tries) - a bit more room
+
+
+class quiet_taps:
+    """Taps that may change nothing on purpose (trying spots, empty chests): not counted by the screen guard."""
+    def __init__(self, dev):
+        self.dev = dev
+
+    def __enter__(self):
+        self.was = getattr(self.dev, "_dead_ok", False)
+        self.dev._dead_ok = True
+
+    def __exit__(self, *a):
+        self.dev._dead_ok = self.was
+        self.dev._tap_sig = None
+        self.dev.dead_taps = 0
+
+
+def same_screen(a, b, pix=20, frac=0.01):
+    """Two 135x240 grey screen copies are the same screen: under 1% of the pixels changed clearly (a ticking timer or a
+    small animation stays under that; a page, pop-up or map move is far over it)."""
+    try:
+        return float((cv2.absdiff(a, b) > pix).mean()) < frac
+    except Exception:
+        return False
 
 
 LAG_REGION = (120, 330, 300, 300)            # the red wifi "lag" icon sits in the middle of the screen
@@ -7411,6 +7494,71 @@ _GAME_RESTARTS = {}        # serial -> times Evony was restarted (last hour)
 _ON_LIST = {}              # serial -> last time the instance was on its rally list
 
 
+_UNSTICK_AT = {}                                  # serial -> times the screen guard had to get out (last 10 min)
+
+
+def screen_unstick(dev, cfg, log, stop, where="the rally list"):
+    """Owner 30 Oct 19:25 - screen guard: DEAD_TAP_LIMIT taps in a row changed nothing. Save the picture, then get out
+    step by step, looking after each: the pop-up's X -> the game's Back arrow -> the phone Back (an 'exit the game?' box
+    gets Cancel) -> the city. Nothing on screen changes at all = a frozen game -> restart the game. Stuck 3 times in
+    10 min = tapping the wrong thing again and again -> restart the game too (force_restart_game falls back to an
+    emulator restart when the game can not be restarted). -> True when the screen moved on."""
+    serial = getattr(dev, "serial", "")
+    dev._dead_ok = True
+    try:
+        now = time.time()
+        hist = [t for t in _UNSTICK_AT.get(serial, []) if now - t < 600] + [now]
+        _UNSTICK_AT[serial] = hist
+        shot = dev.screenshot()
+        log(f"[!] Screen guard: {DEAD_TAP_LIMIT} taps in a row changed nothing on {where} - getting out (X, Back, city)"
+            f" - picture saved")
+        failure_evidence(dev, "screen_stuck", f"{DEAD_TAP_LIMIT} taps changed nothing ({where})", shot=shot,
+                         extra={"where": where, "times_10min": len(hist)})
+        if len(hist) >= 3:
+            _UNSTICK_AT[serial] = []
+            log(f"[!] Screen guard: stuck {len(hist)} times in 10 min - restarting the game")
+            force_restart_game(dev, cfg, log, stop, must=True, reason="screen guard: stuck again and again")
+            return False
+        base = dev._sig
+        for how in ("x", "arrow", "key", "key"):
+            if stop.is_set():
+                return False
+            if how == "x":
+                cx = find_close_x(shot)
+                if not cx:
+                    continue
+                dev.tap(cx[0][0], cx[0][1])
+            elif how == "arrow":
+                if not page_has_back_arrow(shot):
+                    continue
+                dev.tap(*GAME_BACK_ARROW)
+            else:
+                dev.back()
+            _nap(stop, 1.5, 2.0)
+            shot = dev.screenshot()
+            if cancel_quit_dialog(dev, shot, log):
+                _nap(stop, 1.2, 1.6)
+                shot = dev.screenshot()
+            if base is not None and dev._sig is not None and not same_screen(base, dev._sig):
+                log(f"[+] Screen guard: the screen moved on ({'X' if how == 'x' else 'Back arrow' if how == 'arrow' else 'Back'})")
+                if not _on_city_now(dev, cfg):
+                    leave_to_city(dev, cfg, stop, log)
+                return True
+        log("[!] Screen guard: nothing on screen reacts (X, Back) - restarting the game")
+        force_restart_game(dev, cfg, log, stop, must=True, reason="screen guard: the screen does not react")
+        return False
+    except InstanceStopped:
+        raise
+    except Exception as _e:
+        quiet_err("screen_unstick", _e)
+        return False
+    finally:
+        dev._dead_ok = False
+        dev.dead_taps = 0
+        dev._tap_sig = None
+        dev.screen_stuck = 0.0
+
+
 def force_restart_game(dev, cfg, log, stop, must=False, reason="reason not given"):
     """Close Evony completely, open it again and wait until it is stable (used when the bot is lost).
     Owner 25 Oct: restarts must be rare (73 in one morning; each costs minutes and loads the PC -> more lag -> more
@@ -7437,9 +7585,23 @@ def force_restart_game(dev, cfg, log, stop, must=False, reason="reason not given
     pkg = evony_package(dev.adb, dev.serial, cfg)
     log(f"[!] Closing and reopening Evony - {reason}")
     LOADING[dev.serial] = ("restart", time.time())
-    _adb(dev.adb, dev.serial, "shell", "am", "force-stop", pkg)
-    _nap(stop, 3, 4)
-    start_app(dev.adb, dev.serial, pkg)                   # a game restart is light: it never waits for other emulators (25 Oct)
+    dev.lag_restart_due, dev.lag_streak = False, 0
+    try:                                                  # owner 30 Oct 19:31: the game can not be restarted (the emulator does
+        _adb(dev.adb, dev.serial, "shell", "am", "force-stop", pkg)   # not answer / Evony will not close) -> restart the whole emulator
+        _nap(stop, 3, 4)
+        try:
+            still = bool(re.fullmatch(r"[\d\s]+", _adb(dev.adb, dev.serial, "shell", "pidof", pkg).strip() or "x"))
+        except Exception:
+            still = False
+        if still:
+            log("[!] Evony did not close - restarting the emulator instead")
+            return restart_emulator(dev, cfg, log, stop, "Evony would not close for a game restart")
+        start_app(dev.adb, dev.serial, pkg)               # a game restart is light: it never waits for other emulators (25 Oct)
+    except InstanceStopped:
+        raise
+    except Exception as e:
+        log(f"[!] Could not restart Evony ({e}) - restarting the emulator instead")
+        return restart_emulator(dev, cfg, log, stop, "the game could not be restarted")
     _nap(stop, 8)
     if wait_stable(dev, cfg, log, stop, pkg, allow_emu_restart=False) or stop.is_set():
         return not stop.is_set()
@@ -13256,7 +13418,8 @@ def open_building_here(dev, cfg, log, stop, bname, spots=None, how="the Activity
     for x, y in (spots or [(300, 460), (270, 490), (330, 430), (270, 420)]):
         if stop.is_set():
             return False
-        dev.tap(x, y)
+        with quiet_taps(dev):                              # trying spots: a miss is expected, not a stuck screen
+            dev.tap(x, y)
         _nap(stop, 1.2, 1.5)
         shot = dev.screenshot()
         ring = find_detail_icon(shot)                      # picture check first (fast); text reads only when it is not there
@@ -13886,6 +14049,9 @@ def _at_map_zoom(dev, shot):
 
 
 
+PINCH_PARAMS = {"pressure": 50, "major": 6, "steps": 20, "delay": 0.06}   # pinch_lab 20 Oct settings
+
+
 def ensure_city_zoom(dev, cfg, stop, log):
     """Owner 30 Oct 11:45 + 11:54: every city duty starts zoomed out. Look first: already out -> carry on, no zooming.
     Not out -> ONE zoom-out (Ctrl+wheel), look again and carry on either way. A view that does not change is not an
@@ -13903,6 +14069,22 @@ def ensure_city_zoom(dev, cfg, stop, log):
             dev._zoom_ok_at = time.time()
             return True
         name = (load_config().get("device_names") or {}).get(dev.serial)
+        # owner 30 Oct 19:25 (Rory zoomed in, Ctrl+wheel and the real wheel did nothing): two-finger pinch FIRST - it is a
+        # touch inside the emulator, it never moves the user's mouse. Only on the clean city view (a pinch on a Store page
+        # once opened Google Play on K). Then Ctrl+wheel, the real mouse only as the last (opt-in) fallback.
+        if _on_city_now(dev, cfg) and not stop.is_set():
+            sent = dev.pinch_in(**PINCH_PARAMS)
+            _nap(stop, 1.2, 1.5)
+            after = dev.screenshot()
+            if sent and _at_map_zoom(dev, after):
+                dev.zoomed_out = True
+                dev._zoom_ok_at = time.time()
+                log("[i]   zoom: zoomed out with a two-finger pinch - the city now matches the map")
+                return True
+            sc = _view_scale(before, after)
+            log(f"[i]   zoom: two-finger pinch {'sent' if sent else 'NOT sent'} - view "
+                + (f"{sc:.2f}x" if sc else "not measurable") + (f" ({getattr(dev, 'last_pinch', '')})" if not sent or not sc or sc >= 0.97 else ""))
+            before = after
         if not wheel_zoom_out(dev, log, name):
             log("[i]   zoom: could not send the zoom-out - carrying on with the task at this zoom")
             return False
@@ -16218,9 +16400,29 @@ TRAIN_ROW_Y, TRAIN_SLOT, TRAIN_FIRST_X = 615, 118, 58     # Stalds' training pag
 TRAIN_QTY = (455, 795)                                     # the amount box right of the slider
 
 
-def train_target(cfg):
-    b = TRAIN_BUILDINGS.get(str(rd_opt(cfg, "train_troops", "building", "Barracks (ground)")), "Barracks")
-    return f"go:Troop Training|{b}"
+TRAIN_BKEY = {"Barracks (ground)": "b_barracks", "Stable (mounted)": "b_stable", "Archer Camp (ranged)": "b_archer",
+              "Workshop (siege)": "b_workshop"}
+_TRAIN_NEXT = {}                                           # (serial, building) -> time its training timer ends (+1 min)
+
+
+def train_buildings(conf):
+    """Owner 30 Oct 19:25: Train troops on every ticked building. conf = the duty's own settings. Nothing ticked yet
+    (setups from before) = the old single 'building' choice, so nobody's setup changes."""
+    old = str(conf.get("building") or "Barracks (ground)")
+    old = old if old in TRAIN_BUILDINGS else "Barracks (ground)"
+    return [b for b, k in TRAIN_BKEY.items() if (conf[k] is True if conf.get(k) is not None else b == old)]
+
+
+def train_due_buildings(cfg, serial):
+    """Ticked buildings whose own timer is over (a busy building waits for its timer)."""
+    now = time.time()
+    return [b for b in train_buildings((cfg.get("duties") or {}).get("train_troops") or {})
+            if _TRAIN_NEXT.get((serial, b), 0) <= now]
+
+
+def train_target(cfg, serial=""):
+    due = train_due_buildings(cfg, serial) or train_buildings((cfg.get("duties") or {}).get("train_troops") or {})
+    return f"go:Troop Training|{TRAIN_BUILDINGS.get(due[0], 'Barracks') if due else 'Barracks'}"
 
 
 def train_selected_x(shot):
@@ -16301,8 +16503,54 @@ def train_page(shot):
 
 
 def run_train_troops(dev, cfg, log, stop):
-    what = "Train troops"
-    bname = TRAIN_BUILDINGS.get(str(rd_opt(cfg, "train_troops", "building", "Barracks (ground)")), "Barracks")
+    """Owner 30 Oct 19:25: every ticked building in turn. The runner already opened the first due building's ring menu;
+    the others are reached by their pins from the city. A busy building (timer running) waits for its timer, the
+    others still train; a building that fails does not stop the rest."""
+    serial = getattr(dev, "serial", "")
+    todo = train_due_buildings(cfg, serial)
+    if not todo:
+        todo = train_buildings((cfg.get("duties") or {}).get("train_troops") or {})[:1]
+    done, busy, failed = [], {}, []
+    for n, label in enumerate(todo):
+        if stop.is_set():
+            break
+        bname = TRAIN_BUILDINGS.get(label, "Barracks")
+        try:
+            if n:                                          # the next building: back to the city, then its pin
+                leave_to_city(dev, cfg, stop, log)
+                if not city_task_target(dev, cfg, log, stop, {"target": f"go:Troop Training|{bname}", "tap_dy": 0}, {}):
+                    raise RuntimeError(f"could not reach the {bname}")
+                _nap(stop, 1.2, 1.6)
+            left = train_one_building(dev, cfg, log, stop, bname)
+            if left is None:
+                done.append(bname)
+                _TRAIN_NEXT.pop((serial, label), None)
+            else:
+                busy[bname] = left
+                _TRAIN_NEXT[(serial, label)] = time.time() + left
+        except InstanceStopped:
+            raise
+        except RuntimeError as e:
+            if "screen guard" in str(e) or "red wifi" in str(e) or "no progress" in str(e) or "the limit" in str(e):
+                raise                                      # a stuck screen / lag / time limit ends the whole run
+            failed.append(f"{bname}: {e}")
+            log(f"[!]  Train troops: {bname} - {e}")
+    log(f"[i]  Train troops: trained {', '.join(done) or 'none'}"
+        + (f"; busy {', '.join(f'{b} ({fmt_hms(v)})' for b, v in busy.items())}" if busy else "")
+        + (f"; failed {', '.join(failed)}" if failed else ""))
+    if failed and not done and not busy:
+        raise RuntimeError("; ".join(failed)[:110])
+    if failed and not busy:
+        raise RuntimeError("; ".join(failed)[:110])        # some failed: not done, tried again (rule 23)
+    if busy:
+        rd_wait(min(busy.values()))                        # come back when the first busy building's timer ends
+    if failed:
+        raise RuntimeError("; ".join(failed)[:110])        # some failed: not done, tried again (rule 23)
+
+
+def train_one_building(dev, cfg, log, stop, bname):
+    """The building's ring menu is open. -> None when troops were queued, else the seconds until it can train again."""
+    what = f"Train troops ({bname})"
     tier = max(1, min(int(float(rd_opt(cfg, "train_troops", "tier", 1) or 1)), 16))
     amount = max(1, min(int(float(rd_opt(cfg, "train_troops", "amount", 500) or 500)), 9999999))
     game_number = rd_opt(cfg, "train_troops", "game_number", False) in (True, "true", "1", 1)
@@ -16320,12 +16568,10 @@ def run_train_troops(dev, cfg, log, stop):
         # owner 30 Oct 18:43 (Stalds 18:08): the page opened but the building is still training - "Training Troops
         # 04:51:19", no Train button. Not a failure, not done: come back when the timer is over.
         left = rd_hms_left(" ".join(t for t, _ in rd_lines(shot, (230, 790, 160, 60)))) if busy_row else None
-        log(f"[+]  {what}: the {bname} is already training" + (f" ({fmt_hms(left)} left)" if left else ""))
+        log(f"[+]  {what}: already training" + (f" ({fmt_hms(left)} left)" if left else " (timer not read - look again in 30 min)"))
         if speed and rd_finish_with_speedups(dev, stop, log, what):
-            rd_wait(60)                                    # finished with speed-ups: train the next batch in a minute
-        else:
-            rd_wait((left or 1800) + 60)                   # timer unread -> look again in 30 min
-        return
+            return 60                                      # finished with speed-ups: train the next batch in a minute
+        return (left or 1800) + 60
     # green Train + orange Instant Train by colour: the word 'Train' sits over the button's timer ("Train 1d 13:35")
     # and is not read as a whole word (Kiravik 30 Oct 18:52)
     if not train_page(shot) and not rd_find(shot, ["Train"], region=(280, 860, 260, 100), whole=True):
@@ -16355,9 +16601,10 @@ def run_train_troops(dev, cfg, log, stop):
         raise RuntimeError("no Train button")
     dev.tap(*btn)
     _nap(stop, 2.0, 2.5)
-    log(f"[+]  {what}: T{tier} in the {bname} - {'the game' + chr(39) + 's number' if game_number else f'{amount:,}'} queued")
+    log(f"[+]  {what}: T{tier} - {'the game' + chr(39) + 's number' if game_number else f'{amount:,}'} queued")
     if speed:
         rd_finish_with_speedups(dev, stop, log, what)
+    return None
 
 
 def run_build_traps(dev, cfg, log, stop):
@@ -16409,16 +16656,17 @@ def run_activity_chests(dev, cfg, log, stop):
         n += 1
         rd_close_reward(dev, stop, spot=(270, 240))
     m = 0
-    for xy in ACTIVITY_MILESTONES:
-        if stop.is_set():
-            break
-        dev.tap(*xy)
-        _nap(stop, 1.2, 1.6)
-        if wheel_reward_panel(dev.screenshot()):
-            m += 1
-        dev.tap(*xy)                                        # second tap closes the reward / the preview
-        _nap(stop, 0.9, 1.2)
-        rd_close_reward(dev, stop, spot=(270, 240))
+    with quiet_taps(dev):                                  # claimed milestones may show nothing: not a stuck screen
+        for xy in ACTIVITY_MILESTONES:
+            if stop.is_set():
+                break
+            dev.tap(*xy)
+            _nap(stop, 1.2, 1.6)
+            if wheel_reward_panel(dev.screenshot()):
+                m += 1
+            dev.tap(*xy)                                    # second tap closes the reward / the preview
+            _nap(stop, 0.9, 1.2)
+            rd_close_reward(dev, stop, spot=(270, 240))
     rd_snap(dev.screenshot(), "activity_2")
     log(f"[+]  Activity: {n} task chest(s) and {m} milestone chest(s) opened")
 
@@ -19122,10 +19370,10 @@ DUTY_LIBRARY = [
      "target": "go:Troop Healing|Hospital", "tap_dy": 0, "steps": ["wait 1.2", "troop_healing"],
      "opts": [{"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
     {"id": "train_troops", "group": "Daily activities", "title": "Train troops", "every_min": 240, "verified": False,
-     "note": "Barracks / Stable / Archer Camp / Workshop > Train: picks the troop level you set (T1 = lowest) and trains the number you set (500 by default) or the game's own number. Instant Train (gems) is never pressed. Needs the city map.",
+     "note": "Every building you tick (Barracks / Stable / Archer Camp / Workshop) > Train: a busy building waits for its timer, the others train. Picks the troop level you set (T1 = lowest) and trains the number you set (500 by default) or the game's own number. Instant Train (gems) is never pressed. Needs the city map.",
      "target": "go:Troop Training|Barracks", "tap_dy": 0, "steps": ["wait 1.2", "train_troops"],
-     "opts": [{"k": "building", "label": "Building", "type": "select", "choices": list(TRAIN_BUILDINGS), "def": "Barracks (ground)"},
-              {"k": "tier", "label": "Troop level (T1-T16)", "type": "number", "min": 1, "max": 16, "def": 1},
+     "opts": [{"k": TRAIN_BKEY[b], "label": b, "type": "bool", "def": False} for b in TRAIN_BUILDINGS] +
+             [{"k": "tier", "label": "Troop level (T1-T16)", "type": "number", "min": 1, "max": 16, "def": 1},
               {"k": "amount", "label": "Troops per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
               {"k": "game_number", "label": "Use the game's number instead", "type": "bool", "def": False},
               {"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
@@ -19430,7 +19678,7 @@ def run_now_tasks(cfg, serial):
             d = DUTY_BY_ID[tid[5:]]
             t = {k: d[k] for k in ("target", "steps", "no_tile", "go_page") if k in d}
             if d["id"] == "train_troops":
-                t["target"] = train_target(cfg)
+                t["target"] = train_target(cfg, serial)
             t["name"], t["count"] = tid, d.get("count", 1)
             if tid == "duty:black_market" and bm_keep_going(cfg):
                 t["no_tile"] = True
@@ -19455,7 +19703,7 @@ def duty_tasks_due(cfg, serial):
         if duty_status(serial, d["id"], cfg)[0] in ("due",):
             t = {k: d[k] for k in ("target", "steps", "no_tile", "go_page") if k in d}
             if d["id"] == "train_troops":
-                t["target"] = train_target(cfg)
+                t["target"] = train_target(cfg, serial)
             t["name"] = "duty:" + d["id"]
             t["count"] = d.get("count", 1)
             if d["id"] == "black_market" and bm_keep_going(cfg):
@@ -20307,8 +20555,8 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
                 duty_budget_end()
             if result and not result[0] and not stop.is_set():
                 fail_shot = _ev_grab(dev)                    # raw grab before leave_to_city closes it (never waits / taps)
-            if stop.is_set() or (result and result[0]):
-                break
+            if stop.is_set() or (result and result[0]) or getattr(dev, "lag_restart_due", False):
+                break                                        # red wifi 5 min: the rally loop restarts the game first
             dev.expect_city = False
             if on_map:
                 clear_popups(dev, cfg, log, stop, rounds=3, want_city=False)
@@ -20328,6 +20576,8 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
             task_running_set(getattr(dev, "serial", ""), None)
         if duty_id in MAP_HEAVY:
             map_slot_free(getattr(dev, "serial", ""))
+        if getattr(dev, "lag_restart_due", False):
+            break                                            # red wifi 5 min: back to the rally loop, it restarts the game
         if not on_map and not _on_city_now(dev, cfg):         # map duties: the rally list is reached from the map (Alliance button)
             leave_to_city(dev, cfg, stop, log)
         if duty_id != "royal_thief" and not stop.is_set():
@@ -21272,6 +21522,15 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
                 last_watch = time.time()
                 bring_online(dev, cfg, log, stop)                 # restarts the emulator / game if it died and waits
             screen = dev.screenshot()
+            if getattr(dev, "lag_restart_due", False):          # owner 30 Oct 19:31: red wifi 5 min non-stop -> restart the game
+                dev.lag_restart_due, dev.lag_streak = False, 0
+                war_streak[0] = 0
+                force_restart_game(dev, cfg, log, stop, must=True, reason="red wifi for 5 min")
+                continue
+            if getattr(dev, "screen_stuck", 0):                 # owner 30 Oct 19:25: taps change nothing -> get out now
+                screen_unstick(dev, cfg, log, stop)
+                off_list[0] = None
+                continue
             errors = 0
             last_ok[0] = time.time()
             _TL.perf["loops"] += 1

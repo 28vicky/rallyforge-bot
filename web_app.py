@@ -1709,7 +1709,8 @@ class Api:
                          "on": bool(conf.get("on")), "every_min": int(conf.get("every_min", d["every_min"]) or 0),
                          "default_every": d["every_min"], "verified": bool(d.get("verified")),
                          "status": st, "status_text": txt, "today": today,
-                         "opts": [dict(o, val=conf.get(o["k"], o.get("def"))) for o in (d.get("opts") or [])],
+                         "opts": [dict(o, val=(o["label"] in rb.train_buildings(conf)) if d["id"] == "train_troops" and o["k"] in rb.TRAIN_BKEY.values()
+                                       else conf.get(o["k"], o.get("def"))) for o in (d.get("opts") or [])],
                          "gems": bool(d.get("gems")),
                          "schedule": ("When the next egg is ready" if d["id"] == "crazy_eggs"
                                       else "Every " + rb.fmt_mins(rb.every_n_minutes(conf, d["every_min"]))
