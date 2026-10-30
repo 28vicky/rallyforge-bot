@@ -1,9 +1,9 @@
 {
-  "version": "2.5.30",
-  "notes": "Troop training: Repeat choice and Train until a goal. My tasks removed.",
+  "version": "2.5.31",
+  "notes": "Monster hunts go to the newest sightings first and get back to hunting faster; simpler Troop training settings that fit any window.",
   "files": {
     "rally_bot.py": {
-      "sha256": "1a6609e3dd52223fd7b8b7552a2339b0e9de79a80c779c92c7e5ee26dc747711"
+      "sha256": "7687eb1a9d53d781784237d622211195644e7ff889e7c2af73a4dc1a406dc6e3"
     },
     "web_app.py": {
       "sha256": "131ef972918e1688649fa78f5758fbd109493d8cb7984a83d86d7e4643a710dd"
@@ -12,13 +12,13 @@
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "04c77fe9096de63e0d1d42c3305c3ab02c36b8a0cd055dd754baeb033d026285"
+      "sha256": "e1677e1bc9efe74b7589fb8709b6a56ac5b25cc062798227924ff891d157f04b"
     },
     "ui/app.js": {
       "sha256": "0505f73b9cae36fcfa8a3e611d41c4b22e1d7a49273b6f2d0ec4dcdfa46af171"
     },
     "ui/changelog.js": {
-      "sha256": "958d8e3f27035385e930fdf1711976572513ec96a0c998ebd22664e511c98af2"
+      "sha256": "a27ca61cb0ba9928cf3db5119140ee7ad8d1103cdb5f1148d01417ebfa09cb42"
     },
     "ui/dialogs.js": {
       "sha256": "f9222b8cf22cb7d06737e48bee98a1a431b919b44397560cc92e8ad16c113252"
@@ -30,7 +30,7 @@
       "sha256": "c8bb06b64f72952473a35d3864d820553e79c0154866bb9aac3e8c445fa6329d"
     },
     "ui/pages.js": {
-      "sha256": "ac57b062dee37181991c2fd94fc8b3fec4b8090614da3039d915ac929296d522"
+      "sha256": "eaf6da666127ed99e428561b1c997f36cb3710c79f319d0856a771a56d027ca9"
     },
     "ui/tour.js": {
       "sha256": "13f3caea4e097cb210531c175e34809ead00eb7fca86570faa51a1929c787b32"
@@ -3455,5 +3455,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "087665c152efd75437014ad60ea7eff4187d213bcefd772a10ffeca544d654ea"
+  "sig": "8336782b7aa7b7d08ffc84cf35da04134c1b2f0be31a0ea9721c83e864c8bd37"
 }
