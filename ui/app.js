@@ -1193,7 +1193,8 @@ function undoLast() {
     const flip = (e) => { e.stopPropagation(); const open = n.classList.toggle("opened"); txt.textContent = open ? t : short; i.setAttribute("aria-expanded", open); };
     n.onclick = flip;
   };
-  const scan = (root) => (root || document).querySelectorAll(".pages .note").forEach(fold);
+  // owner 30 Oct 21:48: long hint paragraphs too (Settings etc.) - first sentence + (i), the rest one click away
+  const scan = (root) => (root || document).querySelectorAll(".pages .note, .pages div.hint, .pages p.hint").forEach(fold);
   window.watchNotes = (el) => new MutationObserver(() => el.querySelectorAll(".note").forEach(fold)).observe(el, { childList: true, subtree: true });   // panels outside #pages (duty side panel)
   const start = () => {
     const p = document.getElementById("pages"); if (!p) return setTimeout(start, 300);

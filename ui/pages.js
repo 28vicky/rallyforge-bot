@@ -943,10 +943,10 @@ PAGES.monsters = function (fixed) {
   if (fixed === undefined) return monstersPanel(S.cfg, sc.bar);
   if (ajIsOn(fixed)) sc.bar = h("div", {}, sc.bar, note("Auto-Join is on for this instance - the game joins rallies itself. This list is used only when Auto-Join is off."));   // PCR2 A4
   if (sc.own) return monstersPanel(sc.c, sc.bar);
-  const cat = panSplit(S.catalog).flatMap((x) => x[1]), skip = S.cfg.monster_skip || {};
-  const joins = cat.filter(([n, lv]) => (skip[n] || []).length < lv.length).length;
-  return panel("Monsters", sc.bar, h("p", { class: "sumline" }, h("b", {}, "Joins " + joins + " of " + cat.length + " monsters"), " with the universal list (All instances \u203a Join rallies)."),
-    note("Make own to pick different monsters or levels for this instance."));
+  // owner 30 Oct 21:48: show the universal list itself (read-only, like Stamina) instead of a line of text - "Make own" to change it
+  const el = monstersPanel(S.cfg, sc.bar);
+  [...el.children].forEach((x) => { if (x !== sc.bar && x.tagName !== "H3" && !x.contains(sc.bar)) lockedWrap(x, true); });
+  return el;
 };
 function monstersPanel(c, top) {
   c.monster_skip = c.monster_skip || {};
