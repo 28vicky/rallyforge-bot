@@ -91,3 +91,25 @@ def test_pick_tier_stops_on_locked(monkeypatch):
 def test_target_follows_the_building():
     assert rb.train_target({"duties": {"train_troops": {"building": "Stable (mounted)"}}}) == "go:Troop Training|Stable"
     assert rb.train_target({}) == "go:Troop Training|Barracks"
+
+
+def test_carriage_plus_slots_by_picture():
+    spots = rb.carriage_plus_spots(cv2.imread(str(S / "carriage_page_phone.png")))
+    assert len(spots) == 4
+    for x, y in [(128, 678), (219, 1005), (290, 787), (421, 611)]:
+        assert any(abs(x - a) < 8 and abs(y - b) < 8 for a, b in spots)
+
+
+def test_carriage_march_buttons_by_colour():
+    pw = cv2.imread(str(S / "carriage_march_power_phone.png"))
+    rs = cv2.imread(str(S / "carriage_march_reset_phone.png"))
+    H = pw.shape[0]
+    assert rb.find_green_button(pw, x_min=70, x_max=300, y_min=H - 140, y_max=H)            # Power First
+    assert rb.find_green_button(rs, x_min=70, x_max=300, y_min=H - 140, y_max=H) is None    # Reset is red
+    m = rb.find_colour_button(pw, *rb.ORANGE, x_min=300, x_max=540, y_min=H - 140, y_max=H)
+    assert m and m[0] > 330                                                                  # March (orange, right)
+
+
+def test_carriage_one_on_the_road_three_slots():
+    spots = rb.carriage_plus_spots(cv2.imread(str(S / "carriage_page_one_out_phone.png")))   # owner 14:50: 3 left
+    assert len(spots) == 3

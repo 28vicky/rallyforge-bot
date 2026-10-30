@@ -16351,7 +16351,7 @@ def run_gate_visitors(dev, cfg, log, stop):
     log(f"[+]  Gate visitors: {n} visitor(s) claimed")
 
 
-CARRIAGE_SLOTS = [(218, 772), (290, 583), (424, 435), (128, 491)]
+CARRIAGE_PER_DAY = 4                                       # the game's daily transports
 
 
 def carriage_left(img):
@@ -16362,36 +16362,122 @@ def carriage_left(img):
     return None
 
 
+def carriage_plus_spots(shot):
+    """Owner 30 Oct 14:44: the empty carriage slots ("+" circles) found by their picture, wherever they are.
+    -> [(x, y), ...] top to bottom."""
+    try:
+        t = cv2.cvtColor(tpl("carriage_plus"), cv2.COLOR_BGR2GRAY)
+    except Exception:
+        return []
+    g = cv2.cvtColor(shot, cv2.COLOR_BGR2GRAY)
+    r = cv2.matchTemplate(g, t, cv2.TM_CCOEFF_NORMED)
+    h, w = t.shape[:2]
+    out = []
+    for _ in range(6):
+        _, mv, _, ml = cv2.minMaxLoc(r)
+        if mv < 0.85:
+            break
+        out.append((ml[0] + w // 2, ml[1] + h // 2))
+        r[max(0, ml[1] - 30):ml[1] + 30, max(0, ml[0] - 30):ml[0] + 30] = -1
+    return sorted(out, key=lambda p: p[1])
+
+
+def find_colour_button(shot, lo, hi, x_min, x_max, y_min, y_max, min_w=90, min_h=30):
+    """Widest block of one colour (HSV lo..hi) in the box -> (x, y) or None (orange March, red Reset, ...)."""
+    try:
+        hsv = cv2.cvtColor(shot[y_min:y_max, x_min:x_max], cv2.COLOR_BGR2HSV)
+        m = cv2.morphologyEx(cv2.inRange(hsv, lo, hi), cv2.MORPH_CLOSE, np.ones((5, 9), np.uint8))
+        n, _, st, cen = cv2.connectedComponentsWithStats(m)
+        best = None
+        for k in range(1, n):
+            if st[k][2] >= min_w and st[k][3] >= min_h and (best is None or st[k][4] > best[0]):
+                best = (st[k][4], int(cen[k][0]) + x_min, int(cen[k][1]) + y_min)
+        return (best[1], best[2]) if best else None
+    except Exception:
+        return None
+
+
+ORANGE = ((8, 120, 110), (28, 255, 255))
+CARRIAGE_SWORDS = (44, 930)        # small crossed-swords button left of Power First / Reset (changes the troop mode)
+
+
+def carriage_march(dev, cfg, log, stop, preset):
+    """The March (formation) screen is open. preset 1-8: that preset, nothing else (owner 14:47: the bot does not care
+    which troops it holds). No preset: the troop mode until the green 'Power First' shows, tap it. Then March."""
+    if preset:
+        dev.tap(*preset_xy(cfg, preset))
+        _nap(stop, 1.0, 1.3)
+    else:
+        for k in range(4):                                 # green = Power First; red = Reset: the swords switch the mode
+            shot = dev.screenshot()
+            pf = find_green_button(shot, x_min=70, x_max=300, y_min=820, y_max=960)
+            if pf:
+                dev.tap(*pf)
+                _nap(stop, 1.0, 1.3)
+                break
+            dev.tap(*CARRIAGE_SWORDS)
+            _nap(stop, 0.9, 1.2)
+        else:
+            log("[i]   Trade Carriage: 'Power First' did not show - marching with the troops already set")
+    shot = dev.screenshot()
+    mb = find_colour_button(shot, *ORANGE, x_min=300, x_max=540, y_min=820, y_max=960)
+    if not mb:
+        rd_snap(shot, "carriage_nomarch")
+        return False
+    dev.tap(*mb)
+    _nap(stop, 2.0, 2.6)
+    return True
+
+
 def run_trade_carriage(dev, cfg, log, stop):
-    """From the city: Trade Carriage (found by its name) -> each empty slot: take the first carriage, Select Formation,
-    March with the preset already shown, until Transports Left Today is 0. Refresh Goods is never pressed (owner)."""
+    """Owner 30 Oct 14:44-14:47: the carriage (its pin) -> a '+' slot (by picture) -> green Select Formation -> the user's
+    preset, or Power First when none is set -> March. As many as set per day (2 = the Activity task), never more than
+    'Transports Left Today'. Refresh Goods is never pressed."""
+    want = max(1, min(int(float(rd_opt(cfg, "trade_carriage", "times", 2) or 2)), 4))
+    pr = str(rd_opt(cfg, "trade_carriage", "preset", "Don't change") or "")
+    preset = int(pr) if pr.isdigit() else 0
     if not rd_city_label(dev, stop, ["Trade Carriage", "Carriage"], cfg=cfg, log=log):
-        raise RuntimeError("the Trade Carriage is not on the city screen")
+        raise RuntimeError("the Trade Carriage is not on the city screen (pin it once in Fix pins)")
     shot = dev.screenshot()
     rd_snap(shot, "carriage_1")
     left = carriage_left(shot)
     if left is None:
         raise RuntimeError("the Trade Carriage page did not open")
+    if left <= 0:                                          # owner 14:48: 0 left = all used today, a + would only show a pop-up
+        log("[+]  Trade Carriage: Transports Left Today is 0 - all done for today")
+        return
+    # owner 14:50: the GAME's counter decides - transports the user sent by hand count too (4 a day: sent = 4 - left)
+    done_today = CARRIAGE_PER_DAY - left
+    if done_today >= want:
+        log(f"[+]  Trade Carriage: {done_today} sent today (game: {left} left) - nothing to do")
+        return
     sent = 0
-    for xy in CARRIAGE_SLOTS:
-        if left <= 0 or stop.is_set():
-            break
-        dev.tap(*xy)
+    tried = 0
+    while left > 0 and done_today + sent < want and tried < 6 and not stop.is_set():
+        tried += 1
+        spots = carriage_plus_spots(dev.screenshot())
+        if not spots:
+            # every slot holds a carriage: on the road (timer) or back with a chest to claim (e.g. from yesterday).
+            # Owner 14:50: that is NOT done - claiming the chests comes later; for now try again later.
+            rd_snap(dev.screenshot(), "carriage_full")
+            raise RuntimeError(f"no empty slot ({left} transport(s) left today) - carriages on the road or chests to claim, trying later")
+        dev.tap(*spots[0])
         _nap(stop, 1.8, 2.3)
         shot = dev.screenshot()
-        if not rd_tap(dev, stop, ["Select Formation"], region=(270, 870, 270, 100), wait=(2.2, 2.8), shot=shot):
-            if carriage_left(shot) is None:                 # a carriage that is already on the road opened: close it
-                dev.back()
-                _nap(stop, 1.2, 1.6)
+        sf = find_green_button(shot, x_min=270, x_max=535, y_min=820, y_max=960)
+        if not sf:
+            rd_snap(shot, "carriage_noformation")
+            dev.back()
+            _nap(stop, 1.2, 1.6)
             continue
-        if not rd_tap(dev, stop, ["March"], region=(270, 870, 270, 100), whole=True, wait=(2.2, 2.8)):
-            rd_snap(dev.screenshot(), "carriage_nomarch")
+        dev.tap(*sf)
+        _nap(stop, 2.2, 2.8)
+        if not carriage_march(dev, cfg, log, stop, preset):
             dev.back()
             _nap(stop, 1.2, 1.6)
             raise RuntimeError("no March button on the formation screen")
         sent += 1
-        shot = dev.screenshot()
-        new = carriage_left(shot)
+        new = carriage_left(dev.screenshot())
         left = new if new is not None else left - 1
     log(f"[+]  Trade Carriage: {sent} transport(s) sent, {left} left today")
 
@@ -16400,7 +16486,7 @@ def run_trade_carriage(dev, cfg, log, stop):
 def run_offering_tributes(dev, cfg, log, stop):
     """Shrine's ring menu is open: Offer -> Offer Tribute -> slider to the most (50) -> Offer. Uses Tribute items;
     Offer Gems is never pressed and the popup must not mention gems."""
-    times = max(1, min(int(float(rd_opt(cfg, "offering_tributes", "times", 1) or 1)), 20))
+    times = max(1, min(int(float(rd_opt(cfg, "offering_tributes", "times", 3) or 3)), 20))
     if not rd_ring(dev, stop, ["Offer"]):
         raise RuntimeError("no Offer button in the Shrine menu")
     done = 0
@@ -18677,18 +18763,20 @@ DUTY_LIBRARY = [
     {"id": "build_traps", "group": "Daily activities", "title": "Build traps", "every_min": 240, "verified": False,
      "note": "Trap Factory > Build: builds the amount you set of the trap the page has selected. Instant Train (gems) is never pressed. Needs the city map (Trap Factory).",
      "target": "go:Trap Building|Trap Factory", "tap_dy": 0, "steps": ["wait 1.2", "build_traps"],
-     "opts": [{"k": "amount", "label": "Traps per run", "type": "number", "min": 1, "max": 9999999, "def": 500},
+     "opts": [{"k": "amount", "label": "Traps per run", "type": "number", "min": 1, "max": 9999999, "def": 150},
               {"k": "speedups", "label": "Finish with speed-up items", "type": "bool", "def": False}]},
     {"id": "gate_visitors", "group": "Reward claims", "title": "Gate visitors", "every_min": 120, "verified": False,
      "note": "While 'A visitor is waiting at the city gate' shows: opens each visitor and claims the gift.",
      "target": "self:", "steps": ["gate_visitors"]},
     {"id": "trade_carriage", "group": "Daily activities", "title": "Trade Carriage", "every_min": 0, "verified": False,
-     "note": "Trade Carriage: sends all 4 daily transports with the first carriage offered and the march preset already shown. Never refreshes goods.",
-     "target": "self:", "steps": ["trade_carriage"]},
+     "note": "Trade Carriage (its pin): fills empty slots and marches - with your preset, or Power First when no preset is set - as many times as you set (2 completes the daily Activity task), never more than the game's 'Transports Left Today'. Never refreshes goods.",
+     "target": "self:", "steps": ["trade_carriage"],
+     "opts": [{"k": "times", "label": "Transports per day", "type": "number", "min": 1, "max": 4, "def": 2},
+              {"k": "preset", "label": "March preset", "type": "select", "choices": ["Don't change", "1", "2", "3", "4", "5", "6", "7", "8"], "def": "Don't change"}]},
     {"id": "offering_tributes", "group": "Daily activities", "title": "Shrine offering", "every_min": 0, "verified": False,
      "note": "Shrine > Offer > Offer Tribute at the most allowed (50), using Tribute items. When no tributes are left it can offer with gems instead (your choice below, off by default). Needs the city map (Shrine).",
      "target": "go:Offering|Shrine", "tap_dy": 0, "steps": ["wait 1.2", "offering_tributes"],
-     "opts": [{"k": "times", "label": "Tribute offers per day", "type": "number", "min": 1, "max": 20, "def": 1},
+     "opts": [{"k": "times", "label": "Tribute offers per day", "type": "number", "min": 1, "max": 20, "def": 3},
               {"k": "gems", "label": "No tributes left: offer with gems", "type": "bool", "def": False},
               {"k": "gem_count", "label": "Gem offers (25 gems first, then more)", "type": "number", "min": 1, "max": 50, "def": 3}]},
     {"id": "wisdom_dome_tokens", "group": "Daily activities", "title": "Wisdom Dome tokens (gems)", "every_min": 0, "verified": False, "gems": True,
