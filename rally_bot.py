@@ -19632,7 +19632,7 @@ def eq_green_buttons(shot, region=(330, 370, 210, 585)):
     -> [(x, y, w)] widest first. Go is gold, Claimed is grey: only Claim is green."""
     x0, y0, w, h = region
     hsv = cv2.cvtColor(shot[y0:y0 + h, x0:x0 + w], cv2.COLOR_BGR2HSV)
-    m = cv2.inRange(hsv, (38, 90, 90), (85, 255, 255))
+    m = cv2.inRange(hsv, (38, 120, 40), (85, 255, 255))   # dark green (K 31 Oct: V ~70)
     m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (9, 5)))
     n, _, st, _ = cv2.connectedComponentsWithStats(m)
     out = [(int(st[i][0] + st[i][2] / 2) + x0, int(st[i][1] + st[i][3] / 2) + y0, int(st[i][2]))
@@ -19649,21 +19649,16 @@ def eq_claim_here(dev, stop, tag=""):
         shot = dev.screenshot()
         if i == 0 and tag and (USER / "admin.txt").exists():
             rd_snap(shot, "eq_" + tag)                   # owner PC only: what each day / sub-tab looked like (31 Oct test)
-        btn = eq_green_buttons(shot) or eq_green_buttons(shot, (0, 820, 540, 135))   # rows, else a Claim All bar at the bottom
+        btn = eq_green_buttons(shot, (150, 820, 240, 135)) or eq_green_buttons(shot)   # Claim All (bottom) first, else a row's Claim
         if btn:
             x, y, w = btn[0]
             dev.tap(x, y)
             n += 1
             _nap(stop, 0.9, 1.2)
-            if w > 200:                                  # Claim All may show a reward panel
-                ev_close(dev, stop)
             continue
-        ev_close(dev, stop)                              # nothing green: a reward panel may be in the way
-        if swipes:
-            break
-        swipes += 1
-        dev.swipe(270, 880, 270, 520, 600)               # the rest of the list (claimable rows usually sit on top)
-        _nap(stop, 0.8, 1.0)
+        if n:
+            ev_close(dev, stop)                          # a reward panel may be in the way
+        break                                            # nothing green: Claim All shows whenever anything here is claimable
     return n
 
 
@@ -19687,30 +19682,56 @@ def eq_chests(dev, stop, region=(0, 95, 540, 140)):     # chest row ~y115, above
     return n
 
 
+def eq_red_spots(shot, region, lo=25, hi=400):
+    """The red badge dots on event quest pages are darker than elsewhere (K 31 Oct: V ~140) -> [(x, y)]."""
+    x0, y0, w, h = region
+    hsv = cv2.cvtColor(shot[y0:y0 + h, x0:x0 + w], cv2.COLOR_BGR2HSV)
+    m = cv2.inRange(hsv, (0, 190, 105), (12, 255, 255)) | cv2.inRange(hsv, (172, 190, 105), (180, 255, 255))
+    n, _, st, cen = cv2.connectedComponentsWithStats(m)
+    return [(int(cen[i][0]) + x0, int(cen[i][1]) + y0) for i in range(1, n) if lo <= st[i][4] <= hi]
+
+
 def eq_days(shot):
-    """-> [(x, y, has_red_dot)] of the 'Day N' tabs, left to right."""
-    out = []
+    """-> [(x, y, has_red_dot)] of the 'Day N' tabs, left to right. The selected tab's text often isn't read (K 31 Oct:
+    only Day 2 and Day 5 read), so the row is completed from the spacing of the tabs that were read."""
+    xs, ys = [], []
     for text, ws in rd_lines(shot, (0, 90, 540, 420)):
         for s in ws:
-            if re.fullmatch(r"day", s[0].lower().strip(".,:")) or re.fullmatch(r"day\d", s[0].lower()):
-                x, y = int(s[1]), int(s[2])
-                if all(abs(x - ox) > 25 for ox, _, _ in out):
-                    red = bool(ev_red_spots(shot, (max(0, x - 20), max(0, y - 45), 120, 55)))   # dot = tab's top-right
-                    out.append((x, y, red))
-    return sorted(out)
+            if re.fullmatch(r"day\d?", s[0].lower().strip(".,:")):
+                x = int(s[1])
+                if all(abs(x - ox) > 40 for ox in xs):
+                    xs.append(x)
+                    ys.append(int(s[2]))
+    if not xs:
+        return []
+    xs.sort()
+    sp0 = 540 / 5
+    gaps = [b - a for a, b in zip(xs, xs[1:])]
+    sp = min(g / max(1, round(g / sp0)) for g in gaps) if gaps else sp0
+    first = xs[0]
+    while first - sp > 15:
+        first -= sp
+    y = sorted(ys)[len(ys) // 2]
+    out, x = [], first
+    while x < 525:
+        xi = int(round(x))
+        out.append((xi, y, bool(eq_red_spots(shot, (max(0, xi - 20), max(0, y - 45), 120, 55)))))   # dot = tab's top-right
+        x += sp
+    return out
 
 
 def eq_quest_page(dev, stop, log, name):
     """King's Path / Gather Troops page in quest time: every day and sub-tab with a red dot - two rounds, because
-    claiming can finish more quests (owner 31 Oct 03:48)."""
-    n = eq_chests(dev, stop)
+    claiming can finish more quests (owner 31 Oct 03:48). The progress chests are only taken in chest-claiming time
+    (King's Path's red curtain looks like badges)."""
+    n = 0
     days = eq_days(dev.screenshot())                     # the only text read on this page
     if not days:
         rd_snap(dev.screenshot(), "event_quests_no_days_" + name.replace(" ", "_").replace("'", ""))
         return n + eq_claim_here(dev, stop)
     for rnd in range(2):
         shot = dev.screenshot()
-        todo = [(x, y) for x, y, _ in days if ev_red_spots(shot, (max(0, x - 20), max(0, y - 45), 120, 55))]
+        todo = [(x, y) for x, y, _ in days if eq_red_spots(shot, (max(0, x - 20), max(0, y - 45), 120, 55))]
         if rnd == 0:
             x0, y0 = days[0][0], days[0][1]              # the open day may hold claims without a dot of its own
             todo = [(x0, y0)] + [d for d in todo if d != (x0, y0)]
@@ -19725,7 +19746,7 @@ def eq_quest_page(dev, stop, log, name):
             n += eq_claim_here(dev, stop, f"r{rnd}_d{x}_tab0")
             done = set()
             for _ in range(4):                           # sub-tabs (2-3 a day) with a red dot, in the band under the days
-                spots = [sp for sp in ev_red_spots(dev.screenshot(), (0, y + 25, 540, 75)) if (sp[0] // 30) not in done]
+                spots = [sp for sp in eq_red_spots(dev.screenshot(), (0, y + 25, 540, 60)) if (sp[0] // 30) not in done]
                 if not spots or stop.is_set():
                     break
                 sx, sy = spots[0]
@@ -19734,7 +19755,7 @@ def eq_quest_page(dev, stop, log, name):
                 _nap(stop, 0.9, 1.2)
                 n += eq_claim_here(dev, stop, f"r{rnd}_d{x}_tab{sx}")
             log(f"[i]   {name}: day at x{x} round {rnd + 1}: {n - n0} claim(s), {len(done)} sub-tab(s) with a dot, {time.time() - t0:.0f} s")
-    return n + eq_chests(dev, stop)
+    return n
 
 
 def run_event_quests(dev, cfg, log, stop):
