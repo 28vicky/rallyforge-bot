@@ -13704,8 +13704,11 @@ def ensure_city_zoom(dev, cfg, stop, log):
         if stop.is_set():
             return False
         before = dev.screenshot()
+        if time.time() - getattr(dev, "_zoom_ok_at", 0) < 600:    # located on the map in the last 10 min: zoom is right,
+            return True                                    # no extra ~20 s locate (the user rarely zooms by hand)
         if _at_map_zoom(dev, before):
             dev.zoomed_out = True
+            dev._zoom_ok_at = time.time()
             return True
         name = (load_config().get("device_names") or {}).get(dev.serial)
         if not wheel_zoom_out(dev, log, name):
@@ -13715,6 +13718,7 @@ def ensure_city_zoom(dev, cfg, stop, log):
         after = dev.screenshot()
         if _at_map_zoom(dev, after):
             dev.zoomed_out = True
+            dev._zoom_ok_at = time.time()
             log("[i]   zoom: zoomed out - the city now matches the map")
             return True
         sc = _view_scale(before, after)
@@ -14153,6 +14157,7 @@ def _city_seen(dev, shot, loc):
     if not loc:
         return
     dev._last_cam = (float(loc[0]), float(loc[1]), time.time())
+    dev._zoom_ok_at = time.time()                          # the screen located on the map = the city is at the map's zoom
     photo = getattr(dev, "_photo", None)
     if photo is not None:
         try:
@@ -15340,6 +15345,7 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
     k_scale = _DRAG_SCALE.get(dev.serial, 1.0)             # learned: map px moved per finger px (slow drag: ~1.0 expected)
     log(f"[i]   jump: camera at {round(cx)},{round(cy)} - pin {round(mapx)},{round(mapy)} - {round(dx)},{round(dy)} px away (scale {k_scale:.2f})")
     before = dev.screenshot()
+    last_loc = None
     t_lim = t0 + 30                                        # plan 25 Oct: max ~6 drags / 30 s, then the task fails and retries later
     zero = 0
     for k in range(6):                                     # closed loop: slow drag -> measure the real move -> correct
@@ -15383,6 +15389,7 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
         zero = 0
         cx, cy = cx - mdx, cy - mdy                        # the map moved by (mdx, mdy) on screen -> camera moved the other way
         ra = cmap.locate(after)                            # K 27 Oct: a 330 px drag leaves ~30 px overlap, the frame measure then
+        last_loc = (after, ra) if ra else None             # owner 30 Oct 12:13: a locate costs up to ~20 s on a busy PC - reused below
         if ra:                                             # falls back to 'moved like the finger' and drifted 197 px - the map
             cx, cy = ra[0], ra[1]                          # match is absolute, so it wins whenever it hits
             log(f"[i]   nav: located cx={round(cx)} cy={round(cy)} points={ra[2]}")
@@ -15395,7 +15402,7 @@ def jump_to_pin(dev, cfg, log, stop, nav, cmap, mapx, mapy):
     if find_detail_icon(before):
         close_ring(dev, stop, (270, 490))
         before = dev.screenshot()
-    r = cmap.locate(before)                                # the one real check on the map
+    r = last_loc[1] if last_loc is not None and last_loc[0] is before else cmap.locate(before)   # the one real check on the map
     if not r:
         log("[i]   jump: the view after the drags is not found on the map - using the step-by-step route")
         return None
@@ -15639,20 +15646,15 @@ def run_collect_resources(dev, cfg, log, stop):
     if hit:
         _tap_warehouse_hand(dev, stop, log, hit, f"(on screen, {time.time() - t0:.0f} s)")
         return
-    ensure_city_zoom(dev, cfg, stop, log)
-    if stop.is_set():
-        return
-    log(f"[i]   Collect resources: on the city view, zoom checked ({time.time() - t0:.0f} s)")
-    shot = _settled_shot(dev, stop)
-    hit = find_warehouse_hand(shot)
-    if hit:                                                # on screen after zooming out
-        _tap_warehouse_hand(dev, stop, log, hit, f"(on screen, {time.time() - t0:.0f} s)")
-        return
     pin = _pin_of(dev, "Warehouse") or culture_pin(dev, "Warehouse")
     cmap = city_map(dev)
     if pin and cmap is not None:
-        nav = CityNav(dev, stop, log)
+        nav = CityNav(dev, stop, log)                      # the jump's own map check proves the zoom: no separate zoom check
         at = goto_on_map(dev, cfg, log, stop, nav, cmap, float(pin[0]), float(pin[1]), tol=120)
+        if at is None and not stop.is_set():               # the map could not place the view: maybe zoomed in - zoom out once, retry
+            dev._zoom_ok_at = 0
+            ensure_city_zoom(dev, cfg, stop, log)
+            at = goto_on_map(dev, cfg, log, stop, nav, cmap, float(pin[0]), float(pin[1]), tol=120)
         if at is not None:
             shot = _settled_shot(dev, stop)
             hit = find_warehouse_hand(shot)
@@ -15668,6 +15670,7 @@ def run_collect_resources(dev, cfg, log, stop):
         log("[i]   Collect resources: the city map could not reach the Warehouse - looking around instead")
     else:
         log("[i]   Collect resources: no Warehouse pin on this city - looking around instead")
+        ensure_city_zoom(dev, cfg, stop, log)
     for i, (dx, dy) in enumerate(HAND_SWEEP):              # fallback only: slow drags around the current view
         if stop.is_set():
             return
