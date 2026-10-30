@@ -2133,7 +2133,7 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .ih2 .ihctl .runnowbtn .ico svg{width:15px;height:15px}
 .runnow.bare{min-width:min(460px,80vw)}
 .runnow.bare .sub{display:block;margin-bottom:10px}
-.tdres{grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}       /* 5 in a row when there is room, 3 + 2 when narrow */
+.tdres{grid-template-columns:repeat(auto-fit,minmax(84px,1fr))}       /* 5 in a row; wraps only when really narrow */
 @media (max-width:1240px){
   :root .main{padding-left:12px;padding-right:12px}
   :root .app.inst-mode .pages{padding-left:10px;padding-right:10px}
