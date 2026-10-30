@@ -6624,6 +6624,15 @@ def settle_game(dev, cfg, log, stop):
         except Exception:
             _nap(stop, 2)
             continue
+        if not ready_screen(screen, cfg) and full_game_page(screen) and page_backs < 6:
+            # owner 30 Oct 12:50-12:52: after an app restart Rob sat on Champions and K on the Wheel 1-3 min "loading" -
+            # the game was open. A page with the gold Back arrow and the red title bar IS the game: leave it at once.
+            page_backs += 1
+            dev.tap(*cfg.get("city_to_tap", (35, 35)))
+            log("[*] The game is open on a page (not loading) - tapped its Back arrow")
+            good, not_ready_since, loading_since = 0, None, None
+            _nap(stop, 1.5, 2.0)
+            continue
         closed = purchase_guard(dev, screen, log) or claim_popup(dev, screen, log)
         for name in ([] if closed else list_templates("popup_")):
             h = find(screen, name, 0.85)
@@ -6794,6 +6803,7 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
     way_back = []                                              # times the way back to the city was tried (loop guard, 29 Oct)
     black_since, black_restart = None, False                   # black picture after a start: wait (and restart the emulator once if it stays)
     end = time.time() + cfg["game_load_timeout"]
+    page_backs = 0
     while time.time() < end and not stop.is_set():
         if pause_gate():                                       # paused meanwhile: no clicks, no timeout, start counting again after the resume
             good, not_ready_since = 0, None
@@ -6826,6 +6836,15 @@ def _wait_stable(dev, cfg, log, stop, pkg=None, allow_emu_restart=True):
             log(f"[+] The game picture is back after {time.time() - black_since:.0f}s")
             black_since = None
             end = max(end, time.time() + 60)
+        if not ready_screen(screen, cfg) and full_game_page(screen) and page_backs < 6:
+            # owner 30 Oct 12:50-12:52: after an app restart Rob sat on Champions and K on the Wheel 1-3 min "loading" -
+            # the game was open. A page with the gold Back arrow and the red title bar IS the game: leave it at once.
+            page_backs += 1
+            dev.tap(*cfg.get("city_to_tap", (35, 35)))
+            log("[*] The game is open on a page (not loading) - tapped its Back arrow")
+            good, not_ready_since, loading_since = 0, None, None
+            _nap(stop, 1.5, 2.0)
+            continue
         closed = purchase_guard(dev, screen, log) or claim_popup(dev, screen, log)
         for name in ([] if closed else list_templates("popup_")):
             h = find(screen, name, 0.85)
@@ -10755,6 +10774,19 @@ def buttons_hidden(shot):
 
 _VIEW_FAILS = {}           # serial -> times ensure_view could not reach the wanted view (last 5 min)
 _VIEW_RESTARTING = set()  # serials restarting Evony because recovery went round in circles
+
+
+def full_game_page(shot):
+    """A full game page (Champions, Wheel, Alliance, events...): gold Back arrow top left AND a red title bar. Pixels
+    only - no text reading, so it is instant even while 8 instances start at once."""
+    try:
+        hsv = cv2.cvtColor(shot[8:80, 5:75], cv2.COLOR_BGR2HSV)
+        gold = cv2.countNonZero(cv2.inRange(hsv, (12, 110, 150), (32, 255, 255)))
+        bar = cv2.cvtColor(shot[8:58, 120:420], cv2.COLOR_BGR2HSV)
+        red = float((((bar[:, :, 0] < 10) | (bar[:, :, 0] > 170)) & (bar[:, :, 1] > 80) & (bar[:, :, 2] > 40)).mean())
+        return gold > 250 and red >= 0.5
+    except Exception:
+        return False
 
 
 def game_screen_shown(shot):
@@ -18514,6 +18546,39 @@ def run_now_set(serial, ids):
         save_duty_state(data)
 
 
+def task_running_set(serial, name):
+    """The task this instance is doing now (None = none). Kept in duties_state.json so it survives an app restart."""
+    try:
+        with _DUTY_LOCK:
+            data = load_duty_state()
+            tr = data.setdefault("_running", {})
+            if name:
+                tr[serial or "default"] = {"name": name, "at": time.time()}
+            else:
+                tr.pop(serial or "default", None)
+            save_duty_state(data)
+    except Exception as _e:
+        quiet_err("task_running_set", _e)
+
+
+def resume_interrupted_task(serial, log):
+    """At start: a task that was cut off by a restart / stop less than 60 min ago goes first in 'run now'."""
+    try:
+        r = (load_duty_state().get("_running") or {}).get(serial or "default")
+        task_running_set(serial, None)
+        if not r or time.time() - float(r.get("at", 0)) > 3600:
+            return
+        name = str(r.get("name") or "")
+        did = name[5:] if name.startswith("duty:") else ""
+        if not name or did in MAP_HEAVY or did.startswith("map"):
+            return
+        run_now_set(serial, [name] + [x for x in run_now_list(serial) if x != name])
+        shown = DUTY_BY_ID[did]["title"] if did in DUTY_BY_ID else name
+        log(f"[*] '{shown}' was cut off by the restart - doing it first")
+    except Exception as _e:
+        quiet_err("resume_interrupted_task", _e)
+
+
 def run_now_done(serial, tid):
     run_now_set(serial, [x for x in run_now_list(serial) if x != tid])
 
@@ -19351,6 +19416,8 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
             continue                                         # still in the 'run now' list: it starts when a place is free
         for rid in (name, "task:" + name):                      # a 'run now' request is used up once the task is started
             run_now_done(getattr(dev, "serial", ""), rid)
+        if duty_id not in MAP_HEAVY:                         # owner 30 Oct 12:52: a restart mid-task picks the task up again
+            task_running_set(getattr(dev, "serial", ""), name)   # (never a mapping run - rule 19)
         result = None
         if task_needs_city_map(t) and not city_map_items(dev):
             log(f"[!] '{shown}' needs the city map. {CITY_MAP_HELP}")
@@ -19423,6 +19490,8 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         if duty_id and result is not None and not stop.is_set():
             if duty_record(getattr(dev, "serial", ""), duty_id, *result, nothing=bool(result[0] and getattr(_TL, "rd_nothing", False))) == "gaveup":
                 duty_failed_report(dev, cfg, log, shown, result[1])
+        if not stop.is_set():                                # finished (done or failed): nothing to pick up again
+            task_running_set(getattr(dev, "serial", ""), None)
         if duty_id in MAP_HEAVY:
             map_slot_free(getattr(dev, "serial", ""))
         if not on_map and not _on_city_now(dev, cfg):         # map duties: the rally list is reached from the map (Alliance button)
@@ -20342,6 +20411,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             f"(unknown monsters: {cfg['monster_unknown']})")
 
     duty_log_at = [0.0]
+    resume_interrupted_task(serial, log)
     while not stop.is_set():
         if live_settings(cfg, serial, cfg_seen):
             log("[i] Settings changed - using the new ones from now on")
