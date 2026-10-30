@@ -2467,7 +2467,7 @@ class Api:
         # bot's places are in the navigation frame (picture + CITY_VIEW corner, see rb.culture_pin).
         ox, oy = rb.CITY_VIEW[0], rb.CITY_VIEW[1]
         movable = []
-        for name in rb.MOVABLE_BUILDINGS:
+        for name in rb.MOVABLE_BUILDINGS + rb.PIN_EXTRAS:
             st, pic = "missing", None
             try:
                 bm = json.loads(rb._learn_path(dev, name).with_suffix(".json").read_text(encoding="utf-8"))
@@ -2476,7 +2476,7 @@ class Api:
                     pic = [bm["map"][0] - ox, bm["map"][1] - oy]
             except Exception:
                 pass
-            movable.append({"name": name, "state": st, "pic": pic})
+            movable.append({"name": name, "state": st, "pic": pic, "extra": name in rb.PIN_EXTRAS})
         over = rb.pins_override(dev)
         fixed = [{"name": k, "pic": over.get(k, v), "moved": k in over} for k, v in cpins.items()]
         # Owner spec 28 Oct: 0 map until Map my city ran; the picture is THIS city's own (never the culture picture).
@@ -2540,7 +2540,7 @@ class Api:
 
     def _movable_name(self, p):
         name = str(p.get("name") or "").strip()
-        if name not in rb.MOVABLE_BUILDINGS:
+        if name not in rb.MOVABLE_BUILDINGS + rb.PIN_EXTRAS:
             raise ApiError("That building can't be placed here.")
         return name
 

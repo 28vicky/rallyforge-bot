@@ -13947,6 +13947,8 @@ def zoom_out_full(dev, cfg, stop, log):
 
 MOVABLE_BUILDINGS = ("Market", "Barracks", "Prison", "Hospital", "Embassy", "Warehouse", "Stable", "Arsenal",
                      "Archer Camp", "Trap Factory", "Workshop", "War Hall", "Forge")   # owner 27 Oct: players move these
+PIN_EXTRAS = ("Trade Carriage",)   # owner 30 Oct 15:06: placed by hand in Fix pins (not a building: Map my city / Find missing
+                                    # never look for it and it is not counted in "Movable buildings found")
 
 
 def building_pictures(dev, names, own=False):

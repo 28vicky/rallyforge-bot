@@ -2050,8 +2050,9 @@ function cityMapCard(serial) {
   const paint = (j) => {
     root.innerHTML = "";
     const mv = j.movable || [], fx = j.fixed || [], pr = j.progress || {};
-    const nFound = mv.filter((b) => b.state === "found").length, nPlaced = mv.filter((b) => b.state === "placed").length;
-    const miss = mv.filter((b) => b.state === "missing"), have = nFound + nPlaced, total = mv.length;
+    const core = mv.filter((b) => !b.extra);           // extras (Trade Carriage) are pinned by hand: not counted, never searched
+    const nFound = core.filter((b) => b.state === "found").length, nPlaced = core.filter((b) => b.state === "placed").length;
+    const miss = core.filter((b) => b.state === "missing"), have = nFound + nPlaced, total = core.length;
     const sub = j.running ? "Mapping now · stop " + (pr.stop || 0) + " of " + (pr.stops || "?")
       : j.mapped ? "Mapped " + (j.at || "") + (j.culture ? " · " + cap1(j.culture) + " culture" : "") + (j.locked ? " · Locked" : " · Unlocked")
       : queued ? "Map my city runs next on this instance" : "Not mapped yet";
