@@ -9842,10 +9842,84 @@ def _short_amount(txt):
     return int(d) if len(d) >= 3 else None
 
 
+# Owner 31 Oct - the Teacher teaches the bot to read (no AI in the bot): every crop a reader could not read is saved
+# under reads/<kind>/; the Teacher has Claude label them at night, finds the best reading recipe with the same
+# Tesseract and writes reading_recipes.json here; the running bot uses it at once (only a recipe that is never worse).
+READS_DIR = USER / "reads"
+RECIPES_FILE = USER / "reading_recipes.json"
+READS_KEEP = 150                                           # crops kept per kind (oldest go first)
+_recipes = {"t": None, "d": {}}
+
+
+def read_miss(kind, crop, serial=""):
+    """Save a crop the bot could not read, for the Teacher. Never raises, never slows the bot."""
+    try:
+        if crop is None or not getattr(crop, "size", 0):
+            return
+        d = READS_DIR / kind
+        d.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(d / f"{str(serial).replace(':', '_').replace('.', '_')}_{time.strftime('%Y%m%d_%H%M%S')}.png"), crop)
+        old = sorted(d.glob("*.png"), key=lambda p: p.stat().st_mtime)
+        for p in old[:-READS_KEEP]:
+            p.unlink(missing_ok=True)
+    except Exception as _e:
+        quiet_err("read_miss", _e)
+
+
+def read_recipe(kind):
+    """The Teacher's recipe for this kind of read, or None (re-loaded when the file changes)."""
+    try:
+        t = RECIPES_FILE.stat().st_mtime
+    except OSError:
+        return None
+    if t != _recipes["t"]:
+        try:
+            _recipes["d"] = json.loads(RECIPES_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            _recipes["d"] = {}
+        _recipes["t"] = t
+    return ((_recipes["d"].get(kind) or {}).get("recipe")) or None
+
+
+def apply_read_recipe(crop, r):
+    """Same steps as the Teacher's reads.prep + tess_config -> text."""
+    g = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
+    m = r.get("mode", "gray")
+    if m == "white":
+        g = np.where(g >= int(r.get("cut", 170)), 0, 255).astype("uint8")
+    elif m == "otsu":
+        _, g = cv2.threshold(g, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        if g.mean() < 127:
+            g = 255 - g
+    elif m == "inv":
+        g = 255 - g
+    s = float(r.get("scale", 3))
+    g = cv2.resize(g, None, fx=s, fy=s, interpolation=cv2.INTER_CUBIC)
+    cfg = f"--psm {int(r.get('psm', 7))}" + (" -c tessedit_char_whitelist=0123456789,.KMB" if r.get("digits") else "")
+    with _ocr_gate:
+        return pytesseract.image_to_string(g, config=cfg).strip()
+
+
+def read_amount_learned(kind, crop):
+    """An amount read with the Teacher's recipe, or None when there is no recipe / it read nothing."""
+    r = read_recipe(kind)
+    if not r or crop is None:
+        return None
+    try:
+        t = re.sub(r"\s", "", apply_read_recipe(crop, r))
+        m = re.search(r"[\d.,']+[KMBkmb]?", t)
+        return _short_amount(m.group(0)) if m else None
+    except Exception as _e:
+        quiet_err("read_amount_learned", _e)
+        return None
+
+
 def bm_read_gems(dev, img, log, serial):
     """The gem total, read again over ~3 s when the first read failed (a passing banner / animation covers it); still
     unread -> the crop is saved for tuning and the last total read in the last 30 min is used. -> gems or None."""
     _, gems = market_totals(img, "gems")
+    if gems is None:
+        gems = read_amount_learned("bm_gems", img[282:330, 265:540])
     tries = 0
     while gems is None and tries < 4:
         tries += 1
@@ -9855,22 +9929,20 @@ def bm_read_gems(dev, img, log, serial):
             break
         img = s2
         _, gems = market_totals(img, "gems")
+        if gems is None:
+            gems = read_amount_learned("bm_gems", img[282:330, 265:540])
     row = (load_duty_state().get(serial or "default") or {}).get("black_market") or {}
     if gems is not None:
         if gems != row.get("gems_seen"):
             bm_save(serial, gems_seen=gems, gems_seen_at=time.time(), gems_unread=0)
         return gems
-    try:
-        (USER / "debug").mkdir(exist_ok=True)
-        cv2.imwrite(str(USER / "debug" / f"bm_gems_unread_{str(serial).replace(':', '_')}.png"), img[270:340, 240:540])
-    except Exception as _e:
-        quiet_err("bm_gems_crop", _e)
+    read_miss("bm_gems", img[282:330, 265:540], serial)    # the Teacher learns from it
     last, at = row.get("gems_seen"), float(row.get("gems_seen_at") or 0)
     bm_save(serial, gems_unread=int(row.get("gems_unread") or 0) + 1)
     if isinstance(last, int) and time.time() - at < 1800:
         log(f"[i] Black Market: gem total not readable - using the last one read ({last:,}, {int((time.time() - at) / 60)} min ago)")
         return last
-    log("[!] Black Market: gem total not readable (picture saved: debug/bm_gems_unread_*.png)")
+    log("[!] Black Market: gem total not readable (picture saved for the Teacher)")
     return None
 
 
@@ -12341,13 +12413,16 @@ def wheel_coins(img, min_digits=1):
         d = re.sub(r"[^0-9]", "", " ".join(t for t, _ in ocr_lines(img[y:y + h, x:x + w], sc)))
         if len(d) >= min_digits:
             return int(d)
+    x, y, w, h = WHEEL_COINS_TIGHT
     try:
-        x, y, w, h = WHEEL_COINS_TIGHT
         g = cv2.resize(cv2.cvtColor(img[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY), None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
         d = re.sub(r"[^0-9]", "", pytesseract.image_to_string(g, config="--psm 7 -c tessedit_char_whitelist=0123456789,"))
-        return int(d) if len(d) >= min_digits else None
+        if len(d) >= min_digits:
+            return int(d)
     except Exception:
-        return None
+        pass
+    v = read_amount_learned("wheel_coins", img[y:y + h, x:x + w])     # owner 31 Oct: the Teacher's recipe, if any
+    return v
 
 
 def _wheel_pic(img, name, region, thr):
@@ -12597,6 +12672,8 @@ def run_wheel(dev, cfg, log, stop):
                 c = wheel_coins(shot) if wheel_on_page(shot) and not wheel_reward_panel(shot) else None
             if c is None and coins is None:
                 rd_snap(shot, "wheel_coins_unread")
+                read_miss("wheel_coins", shot[WHEEL_COINS_TIGHT[1]:WHEEL_COINS_TIGHT[1] + WHEEL_COINS_TIGHT[3],
+                                              WHEEL_COINS_TIGHT[0]:WHEEL_COINS_TIGHT[0] + WHEEL_COINS_TIGHT[2]], serial)
                 raise RuntimeError(f"could not read the Wheel coins (after {done} spin(s))")
             if c is not None and c < 10:                   # a tiny total (e.g. 0): read twice more, all must agree
                 for _ in range(2):                         # (a lost digit must not end the run)
