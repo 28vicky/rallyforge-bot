@@ -1,27 +1,27 @@
 {
-  "version": "2.5.31",
-  "notes": "Monster hunts go to the newest sightings first and get back to hunting faster; simpler Troop training settings that fit any window.",
+  "version": "2.5.32",
+  "notes": "Keep going until your limit from Run now, Black Market pay mix, Trade Carriage ready, grouped monster lists, settings apply at once, Telegram reconnects by itself, better reading of gems and coins.",
   "files": {
     "rally_bot.py": {
-      "sha256": "7687eb1a9d53d781784237d622211195644e7ff889e7c2af73a4dc1a406dc6e3"
+      "sha256": "81a5ab9f7a2e8902c7c8f31907cb2cadf04f45621918cf84cb023ebc78960e70"
     },
     "web_app.py": {
-      "sha256": "131ef972918e1688649fa78f5758fbd109493d8cb7984a83d86d7e4643a710dd"
+      "sha256": "78df542de4e5a486dcc0dbbe31e7d10d163f9e451f51b4892cf200d307e1321c"
     },
     "rf_license.py": {
       "sha256": "75a7262a7c053e6bde30fd378136b273cf8030b8facd276efd92b51c906918e6"
     },
     "ui/app.css": {
-      "sha256": "e1677e1bc9efe74b7589fb8709b6a56ac5b25cc062798227924ff891d157f04b"
+      "sha256": "2bf519a1689d45b91cde7d663f4fe9c607cb1aaf3bc04bb3fab632da237a5d66"
     },
     "ui/app.js": {
-      "sha256": "0505f73b9cae36fcfa8a3e611d41c4b22e1d7a49273b6f2d0ec4dcdfa46af171"
+      "sha256": "fc35e831e2e15ad9dbfb77c9fb84fa15ed4f6b0145e45deee191ca9f3d35c4e7"
     },
     "ui/changelog.js": {
-      "sha256": "a27ca61cb0ba9928cf3db5119140ee7ad8d1103cdb5f1148d01417ebfa09cb42"
+      "sha256": "7877180bedefffa77432e231ab7a80056331097d3b61ca198a3ff17d5f0e82d4"
     },
     "ui/dialogs.js": {
-      "sha256": "f9222b8cf22cb7d06737e48bee98a1a431b919b44397560cc92e8ad16c113252"
+      "sha256": "d92a0d5d12ce94355ebacfbd8a2168a546f0dc04142b646a62c7e380a61289fe"
     },
     "ui/fonts.css": {
       "sha256": "0079b08400ee0e621f0f62ac689394f23ea52f599af2e1195304a0ef9eaf0776"
@@ -30,7 +30,7 @@
       "sha256": "c8bb06b64f72952473a35d3864d820553e79c0154866bb9aac3e8c445fa6329d"
     },
     "ui/pages.js": {
-      "sha256": "eaf6da666127ed99e428561b1c997f36cb3710c79f319d0856a771a56d027ca9"
+      "sha256": "7b59a0ddea4cf0fa979bb00327fc22a75cb689cffa77f1c24713460596f84a85"
     },
     "ui/tour.js": {
       "sha256": "13f3caea4e097cb210531c175e34809ead00eb7fca86570faa51a1929c787b32"
@@ -3455,5 +3455,5 @@
       "sha256": "e8dd050f89ef25fb69ebfcddbd6a3f9045dc904835423e4cdfea589cfaadb9f0"
     }
   },
-  "sig": "8336782b7aa7b7d08ffc84cf35da04134c1b2f0be31a0ea9721c83e864c8bd37"
+  "sig": "0d10fa5370b0ebc6c11ad10750269f039d86552f4a722e658d175b37e0c7fa7a"
 }
