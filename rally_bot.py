@@ -7594,6 +7594,38 @@ def screen_unstick(dev, cfg, log, stop, where="the rally list"):
         dev.screen_stuck = 0.0
 
 
+_NO_ALLY_SEEN = {}                           # serial -> times the 'Benefits of being in an Alliance' page was seen
+
+
+def no_alliance_page(shot):
+    """Owner 31 Oct: after a fast login / an error the game sometimes forgets the alliance and shows 'Benefits of being
+    in an Alliance' with Create (200 gems) / Join. The bot never taps those buttons."""
+    try:
+        return bool(rd_seen(shot, ["Benefits of being in an Alliance"], region=(40, 330, 460, 90), cutoff=0.8))
+    except Exception:
+        return False
+
+
+def handle_no_alliance_page(dev, cfg, log, stop, serial):
+    """The game did not load the alliance: restart the game (it comes back after a fresh login). Twice in 2 h at most;
+    seen a third time = the account may really be in no alliance -> one alert, Back, no more restarts. -> True if handled."""
+    now = time.time()
+    seen = [t for t in _NO_ALLY_SEEN.get(serial, []) if now - t < 7200] + [now]
+    _NO_ALLY_SEEN[serial] = seen
+    if len(seen) <= 2:
+        log("[!] The game shows 'Benefits of being in an Alliance' - it did not load the alliance (fast login / error). "
+            "Restarting the game (Create / Join are never tapped)")
+        force_restart_game(dev, cfg, log, stop, must=True, reason="the game did not load the alliance")
+        return True
+    if len(seen) == 3:
+        log("[!] The game still shows no alliance after 2 restarts - this account may really be in no alliance. "
+            "Not restarting for it again; please check this instance")
+        notify(cfg, serial, "The game shows no alliance even after 2 restarts - is this account in an alliance?")
+    dev.back()
+    _nap(stop, 1.0, 1.4)
+    return True
+
+
 def force_restart_game(dev, cfg, log, stop, must=False, reason="reason not given"):
     """Close Evony completely, open it again and wait until it is stable (used when the bot is lost).
     Owner 25 Oct: restarts must be rare (73 in one morning; each costs minutes and loads the PC -> more lag -> more
@@ -21750,6 +21782,8 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
             if st == "rally_list":
                 war_streak[0] = 0
                 return True
+            if st != "city" and no_alliance_page(screen) and handle_no_alliance_page(dev, cfg, log, stop, serial):
+                continue
             if st in ("unknown", "city") and not fg_checked[0] and cfg.get("auto_launch_game", True):
                 fg_checked[0] = True                           # owner 29 Oct 18:11 (Rob): the game was closed and the bot tapped the
                 try:                                           # emulator home for 3.5 min first - look whether Evony is on screen at once
