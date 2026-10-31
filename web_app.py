@@ -1713,6 +1713,7 @@ class Api:
                          "default_every": d["every_min"], "verified": bool(d.get("verified")),
                          "status": st, "status_text": txt, "today": today,
                          "keep": (rb.keep_runs(serial).get(d["id"]) or None) if scope and d["id"] in rb.KEEP_DUTIES else None,
+                         "needs": rb.duty_needs(serial, d) if scope else None,
                          "opts": [dict(o, val=(o["label"] in rb.train_buildings(conf)) if d["id"] == "train_troops" and o["k"] in rb.TRAIN_BKEY.values()
                                        else conf.get(o["k"], o.get("def"))) for o in (d.get("opts") or [])],
                          "gems": bool(d.get("gems")),

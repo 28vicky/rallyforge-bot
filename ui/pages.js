@@ -608,7 +608,7 @@ function instancePage(serial) {
         h("div", {}, h("h3", {}, "Monster joins")),
         h("a", { href: "#", class: "viewall", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("logs"); } }, "View all \u2192")));
       // owner 30 Oct 20:51-20:54: less to read - the setup question (same as the header switches) and the repeated counters are gone
-      return [h("div", { class: "ovtop" }, runNowCard(serial), nowNextCard(serial)), renderTodayCard(serial, { lite: true }),
+      return [getStartedCard(serial), h("div", { class: "ovtop" }, runNowCard(serial), nowNextCard(serial)), renderTodayCard(serial, { lite: true }),
         h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, R)), h("div", { class: "dcol" }, cityMapCard(serial)))];
     }],
     ["routines", "Duties", () => [PAGES.duties(serial)]],   // A9: one word - "Duties" everywhere
@@ -1300,6 +1300,12 @@ PAGES.market = function (fixed, redraw) {
       newBox,
       h("div", { class: "bmbar" }, pills, search),
       holder));
+  // owner 31 Oct: in the narrow Duties side panel 70+ pictures were hard to browse - there, Add items opens a big window
+  const addBody = add.querySelector(".bmaddb");
+  const addBtn = h("button", { class: "btn bmaddbtn", type: "button", onclick: () => {
+    const md = modal({ title: "Add Black Market items", wide: true, body: addBody, buttons: [{ label: "Done", cls: "pri", onclick: () => { draw(); } }], oncancel: () => draw(), focus: false });
+    md.el.classList.add("bmpick-md");
+  } });
   let autoOpened = false;
   const draw = () => {
     const all = [...new Set([...names, ...c.market_items.map((i) => i.name)])];
@@ -1319,13 +1325,14 @@ PAGES.market = function (fixed, redraw) {
     })) : h("div", { class: "empty" }, q ? "Nothing matches “" + q + "”." : "No pictures in this group yet."));
     const left = all.filter((n) => !chosen(n)).length;
     addSum.textContent = "Add items" + (all.length ? " · " + left + " more to choose from" : "");
+    addBtn.textContent = (c.market_items.length ? "Add more items" : "Choose items to buy") + (all.length ? " \u00b7 " + left + " to choose from" : "");
     if (!c.market_items.length && !autoOpened) { add.open = true; autoOpened = true; }
     drawNew(); drawPicks(); drawSum(); lockSpend();
   };
   api("market_pictures", {}, { quiet: true }).then((j) => { names = (j && j.names) || []; draw(); }).catch(() => draw());
   if (S.dev) api("market_new_list", {}, { quiet: true }).then((j) => { newItems = (j && j.items) || []; if (newItems.length) add.open = true; drawNew(); }).catch(() => {});
   draw();
-  const body = h("div", {}, sum, spend, picks, panel(null, add));
+  const body = h("div", {}, sum, spend, picks, redraw ? h("div", { class: "bmaddrow" }, addBtn) : panel(null, add));
   return h("div", { class: "bmpage" }, sc.bar, lockedWrap(body, sc.locked));
 };
 
@@ -1887,7 +1894,7 @@ PAGES.duties = function (fixed) {
         h("div", { class: "spt" }, h("h3", {}, r.t), h("small", {}, [serial ? "This instance" : "Universal default", r.g, r.schedule, r.pts ? "+" + r.pts + " points" : ""].filter(Boolean).join(" · ")),
           serial && r.on ? dutyBadge(r.status, r.status_text) : null),     // status on its own line under the title: a long one never squeezes the title
         h("button", { class: "spx", type: "button", "aria-label": "Close", title: "Close (Esc)", onclick: closeSide }, "×")),
-      h("div", { class: "spb" }, keepBox, setBody(r)),
+      h("div", { class: "spb" }, serial ? needsLine(r) : null, keepBox, setBody(r)),
       h("div", { class: "spf" }, h("span", { class: "hint" }, "Changes save as you make them."), runBtn, h("button", { class: "btn pri", type: "button", onclick: closeSide }, "Done"))));
   };
   const openSide = (id) => {
@@ -1925,9 +1932,9 @@ PAGES.duties = function (fixed) {
     h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: false, disabled: true, "aria-label": r.t + " (not ready yet)" }), h("span", { class: "sw" })),
     h("div", { class: "dtx" }, h("b", {}, r.t), h("small", {}, "Not ready yet"))) : h("div", { class: "dline" + (r.on ? "" : " off") },
     h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!r.on, "aria-label": r.t, onchange: (e) => setOn(r, e.target.checked) }), h("span", { class: "sw" })),
-    h("div", { class: "dtx", title: r.note || "" }, h("b", {}, r.t, r.pts ? h("span", { class: "dpts", title: "Activity points" }, "+" + r.pts) : null), h("small", {}, r.schedule || r.note || "")),
+    h("div", { class: "dtx", title: r.note || "" }, h("b", {}, r.t, r.pts ? h("span", { class: "dpts", title: "Activity points" }, "+" + r.pts) : null), h("small", {}, r.schedule || r.note || ""), serial && r.on ? needsLine(r) : null),
     S.dev && r.verified === false ? h("span", { class: "dbadge", title: "Developer: steps not yet watched on a real instance" }, "untested") : null,
-    serial && r.on ? dutyBadge(r.status, r.status_text, r.week && r.week.last_error ? "Last problem: " + r.week.last_error : "") : null,
+    serial && r.on && !r.needs ? dutyBadge(r.status, r.status_text, r.week && r.week.last_error ? "Last problem: " + r.week.last_error : "") : null,
     serial && r.on && r.status === "gaveup" ? h("button", { class: "btn sm", type: "button", onclick: async () => { take(await act(api("duty_retry", { serial, id: r.id }))); toast("It runs again shortly.", "ok"); } }, "Retry") : null,
     hasSet(r) ? h("button", { class: "btn sm dset" + (sideId === r.id ? " on" : ""), type: "button", "data-id": r.id, "aria-label": r.t + " settings", onclick: () => openSide(r.id) }, "Settings") : null);
   let q = "";                                     // C14: search, across every group (typing clears the group chip)
@@ -2085,6 +2092,48 @@ const cmImgKey = (j) => String(j.pic_t || 0);           // the picture file's ti
 const MV_STATE = { found: ["Found by bot", "ok"], placed: ["Placed by you", "next"], missing: ["Missing", "todo"] };
 // ---- City map card (owner spec 28 Oct, claude/city_mapper_spec_28oct.md): 0 map -> ONE button "Map my city" -> the
 //      city's own picture builds live with "N / 13 found - Market" -> missing = place by hand -> "Map city again".
+// owner 31 Oct 15:08: a new user never finds the City map at the bottom of Overview - every place that needs it links here
+function goCityMap() {
+  if (S.gotoInstTab) S.gotoInstTab("ov");
+  setTimeout(() => { const c = document.querySelector(".panel.citymap"); if (!c) return;
+    c.scrollIntoView({ behavior: "smooth", block: "center" }); c.classList.add("flash"); setTimeout(() => c.classList.remove("flash"), 1600); }, 250);
+}
+function needsLine(r) {                               // a duty that cannot work yet: say what is missing + one button
+  const n = r.needs; if (!n) return null;
+  return h("div", { class: "needs" }, h("span", {}, n.kind === "map" ? "Needs your city map" : "Pin " + n.name + " on your city map first"),
+    h("button", { class: "lnkb", type: "button", onclick: (e) => { e.stopPropagation(); goCityMap(); } }, n.kind === "map" ? "Map my city" : "Open City map"));
+}
+// owner 31 Oct: "Get started" - the setup steps on top of Overview, each with its own button; gone once all are done
+function getStartedCard(serial) {
+  const root = h("div", {});
+  const KEY = "rf_gs_hide_" + serial;
+  let hidden = false; try { hidden = localStorage.getItem(KEY) === "1"; } catch (e) {}
+  if (hidden) return root;
+  (async () => {
+    const m = await api("city_map_info", { serial }, { quiet: true }).catch(() => null);
+    const d = await api("duties", { serial }, { quiet: true }).catch(() => null);
+    const st = (S.devStatus.find((x) => x.id === serial) || {}).state;
+    const ov = (S.cfg.per_device || {})[serial] || {};
+    const joinOn = ov.join_rallies !== undefined ? ov.join_rallies !== false : S.cfg.join_rallies !== false;
+    const steps = [
+      { t: "Map your city", sub: "About 2 minutes. The bot learns where your buildings are.", done: !!(m && m.mapped), b: "Map my city", go: goCityMap },
+      { t: "Choose what the bot does", sub: "Duties, joining rallies or Monster hunts.", done: !!(d && (d.duties || []).some((x) => x.on)) || joinOn,
+        b: "Choose duties", go: () => S.gotoInstTab && S.gotoInstTab("routines") },
+      { t: "Start this instance", sub: "It runs on its own from here.", done: st === "run" || st === "pause", b: "Start", go: () => collectAndRun("start", { serial }) },
+    ];
+    const left = steps.filter((x) => !x.done).length;
+    if (!left || !root.isConnected) return;
+    root.appendChild(h("section", { class: "panel gstart", "aria-label": "Get started" },
+      h("div", { class: "gshead" }, h("div", {}, h("h3", {}, "Get started"), h("small", { class: "hint" }, (steps.length - left) + " of " + steps.length + " done")),
+        h("button", { class: "lnkb", type: "button", onclick: () => { try { localStorage.setItem(KEY, "1"); } catch (e) {} root.remove(); } }, "Hide")),
+      h("ol", { class: "gslist" }, ...steps.map((x, i) => h("li", { class: x.done ? "done" : "" },
+        h("span", { class: "gsn" }, x.done ? "\u2713" : String(i + 1)),
+        h("div", { class: "gst" }, h("b", {}, x.t), h("small", { class: "hint" }, x.sub)),
+        x.done ? null : h("button", { class: "btn sm" + (steps.findIndex((y) => !y.done) === i ? " pri" : ""), type: "button", onclick: x.go }, x.b))))));
+  })();
+  return root;
+}
+
 function cityMapCard(serial) {
   const root = h("div", { class: "panel citymap" });
   let last = null, queued = false;

@@ -2246,3 +2246,21 @@ body:has(.sideov) .jumpbox, body:has(.ov) .jumpbox{visibility:hidden}
 .rnopt:has(input:checked){border-color:var(--accent1);background:var(--field)}
 .rnopt input{margin-top:3px}.rnopt span{display:flex;flex-direction:column;gap:3px;min-width:0}
 .rnopt.dis{opacity:.6;cursor:default}
+
+/* owner 31 Oct: Get started (Overview), duty "needs" line, City map flash, Black Market picker window */
+.gstart{margin:0 0 14px}
+.gshead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+.gshead h3{margin:0}
+.gslist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.gslist li{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;flex-wrap:wrap}
+.gslist li.done{opacity:.6}
+.gsn{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--field);border:1px solid var(--line)}
+.gslist li.done .gsn{background:var(--good,#2e9e6b);color:#fff;border-color:transparent}
+.gst{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.needs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;font-size:12px;color:var(--warn)}
+.spb>.needs{margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--field);font-size:13px}
+.panel.citymap.flash{box-shadow:0 0 0 3px var(--accent1);transition:box-shadow .3s}
+.bmaddrow{margin-top:12px}.bmaddbtn{width:100%}
+.md.bmpick-md{width:min(96vw,1100px);max-width:min(96vw,1100px)}
+.md.bmpick-md .mb{overflow:auto}
+.needs .lnkb{color:var(--accent1);font-weight:700;text-decoration:underline;text-underline-offset:2px}

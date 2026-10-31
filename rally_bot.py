@@ -21126,6 +21126,27 @@ def open_square(dev, cfg, log, stop, nav, shrine, number):
     return name, res[0], res[1], tx, ty, True                # the map is filled with what the game says, not with what we expect
 
 
+DUTY_PINS = {"trade_carriage": "Trade Carriage", "collect_resources": "Warehouse"}   # duties that walk to one pin
+
+
+def duty_needs(serial, d):
+    """Owner 31 Oct (a new user never finds the city map at the bottom of Overview): what a duty still needs before it
+    can work on this instance -> None | {'kind': 'map'} | {'kind': 'pin', 'name': building}."""
+    try:
+        dev = _SerialOnly(serial or "default")
+        needs_map = task_needs_city_map(d) or d["id"] in DUTY_PINS
+        if not needs_map:
+            return None
+        if not city_mapped(dev):
+            return {"kind": "map"}
+        pin = DUTY_PINS.get(d["id"])
+        if pin and not any(k.split("#")[0].lower() == pin.lower() for k in city_map_items(dev)):
+            return {"kind": "pin", "name": pin}
+    except Exception as _e:
+        quiet_err("duty_needs", _e)
+    return None
+
+
 def task_needs_city_map(t):
     tgt = str(t.get("target", "")).lower()
     steps = [str(x).strip().lower() for x in t.get("steps", [])]
