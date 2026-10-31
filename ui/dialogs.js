@@ -721,3 +721,39 @@ function showLogin(msg) {
   document.body.appendChild(ov);
   setTimeout(() => id.focus(), 50);
 }
+
+// owner 31 Oct 13:53: Run now on Black Market / Wheel / Train troops asks once or "keep going until the limit".
+// On demand: the duty stays OFF in Duties, so nothing keeps spending after the job is done. -> "once" | "keep" | null
+const KEEP_RUN = new Set(["black_market", "wheel", "train_troops"]);
+function keepLimit(serial, id) {
+  const c = Object.assign({}, S.cfg || {}, ((S.cfg || {}).per_device || {})[serial] || {});
+  const n = (v) => Number(v || 0).toLocaleString("en-US");
+  if (id === "black_market") {
+    const fl = Number(c.market_min_gems || 0), mx = Number(c.market_max_gems || 0);
+    if (!fl && !mx) return { ok: false, text: "Set a Gem floor (or a Gem limit per visit) in the Black Market settings first - that is where it stops." };
+    return { ok: true, text: fl ? "the gem floor of " + n(fl) + " gems" : "the gem limit of " + n(mx) + " gems for this visit" };
+  }
+  if (id === "wheel") { const r = Number((c.wheel || {}).reserve || 0); return { ok: true, text: r ? "only " + n(r) + " coins are left (coins to keep)" : "the coins run out" }; }
+  if (id === "train_troops") {
+    const t = ((c.duties || {}).train_troops) || {}, u = t.until || "my Repeat setting";
+    if (u === "my Repeat setting") return { ok: false, text: "Set 'Train until' to a number of runs or troops in the Train troops settings first - that is where it stops." };
+    return { ok: true, text: n(t.goal || 1000000) + (u === "a number of runs" ? " runs" : " troops") + " per building" };
+  }
+  return { ok: false, text: "" };
+}
+function runNowAsk(serial, id, title) {
+  return new Promise((res) => {
+    const lim = keepLimit(serial, id);
+    let pick = lim.ok ? "keep" : "once";
+    const opt = (v, head, sub, dis) => h("label", { class: "rnopt" + (dis ? " dis" : "") },
+      h("input", { type: "radio", name: "rnk", value: v, checked: pick === v, disabled: dis, onchange: () => { pick = v; } }),
+      h("span", {}, h("b", {}, head), h("small", { class: "hint" }, sub)));
+    modal({ title: "Run " + title + " now",
+      body: h("div", { class: "rnask" },
+        opt("keep", "Keep going until the limit", lim.ok ? "Runs until " + lim.text + ". Leaves only for Auto-Join, Crazy Eggs and your other duties, then comes straight back. Stops by itself." : lim.text, !lim.ok),
+        opt("once", "Run once", "One run, then back to normal."),
+        h("small", { class: "hint" }, title + " stays off in Duties - nothing runs again by itself after this.")),
+      buttons: [{ label: "Cancel", onclick: () => res(null) }, { label: "Start", cls: "pri", onclick: () => res(pick) }],
+      oncancel: () => res(null), focus: false });
+  });
+}

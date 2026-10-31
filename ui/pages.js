@@ -1864,10 +1864,12 @@ PAGES.duties = function (fixed) {
     const KEEP_LIMIT = { black_market: "the gem floor or gem limit", wheel: "the coins to keep", train_troops: "the Train until goal" };
     const keepOn = r.keep && r.keep.start && !r.keep.done;
     const runBtn = !serial || r.id === "@tasks" ? null : KEEP_LIMIT[r.id]
-      ? h("button", { class: "btn", type: "button", "aria-haspopup": "menu", onclick: (e) => menu(e.currentTarget, [
-          { label: "Run once", run: runOnce },
-          { label: "Keep going until the limit", run: async () => { const j = await act(api("run_now_add", { serial, id: "duty:" + r.id, keep: true }));
-              if (j) { toast(r.t + " keeps going until " + KEEP_LIMIT[r.id] + ".", "ok"); take(await act(api("duties", { serial }))); drawSide(); } } }]) }, "Run now \u25be")
+      ? h("button", { class: "btn", type: "button", "aria-haspopup": "dialog", onclick: async () => {
+          const a = await runNowAsk(serial, r.id, r.t);
+          if (a === "once") return runOnce();
+          if (a !== "keep") return;
+          const j = await act(api("run_now_add", { serial, id: "duty:" + r.id, keep: true }));
+          if (j) { toast(r.t + " keeps going until " + KEEP_LIMIT[r.id] + ".", "ok"); take(await act(api("duties", { serial }))); drawSide(); } } }, "Run now")
       : h("button", { class: "btn", type: "button", onclick: runOnce }, "Run now");
     const keepStop = async () => { take(await act(api("keep_stop", { serial, id: r.id }))); drawSide(); };
     const keepBox = !serial || !r.keep ? null : keepOn
@@ -2270,10 +2272,13 @@ function runNowCard(serial, o = {}) {
   const name = (t) => { const id = String(t.id || "").startsWith("duty:") ? t.id.slice(5) : ""; return id ? dutyName(id, t.title) : t.title; };
   const shown = () => (data.tasks || []).filter((t) => { const id = t.id.startsWith("duty:") ? t.id.slice(5) : ""; return !(id && !dutyShown(id)) && !(RUN_SETUP.has(id) && !S.dev); });
   const add = async (t) => {
-    const r = await act(api("run_now_add", { serial, id: t.id }));
+    const did = String(t.id || "").startsWith("duty:") ? t.id.slice(5) : "";
+    let keep = false;
+    if (serial && KEEP_RUN.has(did)) { const a = await runNowAsk(serial, did, name(t)); if (!a) return; keep = a === "keep"; }
+    const r = await act(api("run_now_add", { serial, id: t.id, keep }));
     if (!r) return;
     remember(t.id); data = r; last = JSON.stringify(r.queue); draw();
-    toast(name(t) + (serial ? " runs next" : " runs next on every instance"), "ok");
+    toast(name(t) + (keep ? " keeps going until its limit" : serial ? " runs next" : " runs next on every instance"), "ok");
     if (o.onAdd) o.onAdd();
   };
   const row = (t, tag, queued) => h("button", { class: "rntask" + (queued ? " q" : ""), type: "button", role: "listitem", disabled: queued, onclick: () => add(t) },

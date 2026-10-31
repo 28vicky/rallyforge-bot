@@ -2239,3 +2239,10 @@ body:has(.sideov) .jumpbox, body:has(.ov) .jumpbox{visibility:hidden}
 /* owner 31 Oct: Run now > Keep going until the limit - status / finished note at the top of the duty's side panel */
 .keepbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;margin:0 0 12px;border:1px solid var(--line);border-radius:12px;background:var(--field)}
 .keepbox>div{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:2px}
+
+/* owner 31 Oct: Run now > once / keep going dialog */
+.rnask{display:flex;flex-direction:column;gap:10px;max-width:460px}
+.rnopt{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--line);border-radius:12px;cursor:pointer}
+.rnopt:has(input:checked){border-color:var(--accent1);background:var(--field)}
+.rnopt input{margin-top:3px}.rnopt span{display:flex;flex-direction:column;gap:3px;min-width:0}
+.rnopt.dis{opacity:.6;cursor:default}
