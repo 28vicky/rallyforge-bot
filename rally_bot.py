@@ -3334,6 +3334,14 @@ def speed_up():
 
 def _nap(stop, lo, hi=None):
     stop.wait(pace(random.uniform(lo, hi if hi is not None else lo)))
+    live = getattr(_TL, "live", None)                    # owner 31 Oct: settings saved while a long duty runs work at once,
+    if live and time.time() - live[4][0] >= 2:           # not only when the duty is over (Champions switched mid-run)
+        live[4][0] = time.time()
+        try:
+            if live_settings(live[0], live[1], live[2]):
+                live[3]("[i] Settings changed - using the new ones from now on")
+        except Exception as _e:
+            quiet_err("_nap.live", _e)
 
 
 def perf_report():
@@ -12650,6 +12658,11 @@ def run_champions(dev, cfg, log, stop):
             ch_snap(dev.screenshot(), "1_noname")
             raise RuntimeError("the champion's name could not be read (nothing was done)")
         plan = {cur: {"taps": CH_TAPS, "greets": CH_GREETS}}
+    # owner 31 Oct (tester Kulim): 15 taps and 10 greets are for the whole day, all champions together. Switching from
+    # Helen to Cleopatra mid-day made the bot plan a full day for Cleopatra on top and kept trying. Never plan more
+    # than the day has left (the game's counter or the saved one, whichever is higher).
+    rem_t = max(0, CH_TAPS - max(t_used or 0, sum(int(v) for v in taps_used.values())))
+    rem_g = max(0, CH_GREETS - max(g_used or 0, sum(int(v) for v in greets_used.values())))
     order = sorted(plan, key=lambda n: CHAMPIONS.index(n))
     if len(order) > 1 and ch_name(dev.screenshot()) in order and CHAMPIONS.index(ch_name(dev.screenshot())) > (CHAMPIONS.index(order[0]) + CHAMPIONS.index(order[-1])) / 2:
         order.reverse()                                    # start from the end that is nearer
@@ -12659,8 +12672,8 @@ def run_champions(dev, cfg, log, stop):
     for name in order:
         if stop.is_set():
             break
-        need_t = max(0, plan[name]["taps"] - int(taps_used.get(name, 0)))
-        need_g = max(0, plan[name]["greets"] - int(greets_used.get(name, 0)))
+        need_t = min(rem_t, max(0, plan[name]["taps"] - int(taps_used.get(name, 0))))
+        need_g = min(rem_g, max(0, plan[name]["greets"] - int(greets_used.get(name, 0))))
         if not (need_t or need_g):
             log(f"[i]   Champions: {name} - today's taps and greets already done")
             continue
@@ -12677,6 +12690,7 @@ def run_champions(dev, cfg, log, stop):
         if need_t:
             n = ch_do_taps(dev, stop, log, name, need_t, serial, day)
             total_taps += n
+            rem_t = max(0, rem_t - n)
             log(f"[+]  Champions: {name} - {n} of {need_t} taps")
             tu = ch_taps_used(dev.screenshot())
             if n < need_t and not (tu is not None and tu >= CH_TAPS):
@@ -12684,6 +12698,7 @@ def run_champions(dev, cfg, log, stop):
         if need_g and not stop.is_set():
             n = ch_do_greets(dev, stop, log, name, need_g, serial, day)
             total_greets += n
+            rem_g = max(0, rem_g - n)
             log(f"[+]  Champions: {name} - {n} of {need_g} greets")
             if n < need_g and getattr(dev, "_ch_later", 0):
                 left += need_g - n
@@ -21095,6 +21110,7 @@ def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
         cfg_seen = [CONFIG.stat().st_mtime]                          # settings saved after this are taken over while running
     except OSError:
         cfg_seen = [None]
+    _TL.live = (cfg, serial, cfg_seen, log, [0.0])                  # _nap() takes saved settings over during long duties too
     _TL.ctl, _TL.stop = ctl, stop
 
     def nap(lo, hi=None):
