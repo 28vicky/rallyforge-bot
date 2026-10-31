@@ -21031,6 +21031,12 @@ def _run_city_tasks(dev, cfg, log, stop, tasks, last_run):
         name = t.get("name", "task")
         duty_id = name[5:] if name.startswith("duty:") else ""
         on_map = duty_id in MAP_DUTIES                        # owner 25 Oct: map duties never go city <-> map after each step
+        if duty_id == "royal_thief" and not on_map:          # owner 31 Oct (Kiravik): the Invite shows on the world map too -
+            try:                                             # start right there, no trip to the city first
+                _s0 = dev.screenshot()
+                on_map = view_of(_s0, cfg) == "world" and find_invite_icon(_s0) is not None
+            except Exception as _e:
+                quiet_err("royal_thief.on_map", _e)
         shown = DUTY_BY_ID[duty_id]["title"] if duty_id in DUTY_BY_ID else name
         log(f"[*] {'Duty' if duty_id else 'City task'}: {shown}")
         log("@act " + json.dumps({"k": "step", "text": f"{'Duty' if duty_id else 'City task'}: {shown}"}))     # shown under 'Now executing'
