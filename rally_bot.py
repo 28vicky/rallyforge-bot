@@ -7823,6 +7823,30 @@ def pick_boss(cfg=None):
     return items[0] if items else None
 
 
+def tg_plain_error(e):
+    """Owner 31 Oct (Dida PC): Telegram errors in plain words - what happened and what to press."""
+    name, msg = type(e).__name__, str(e)
+    low = (name + " " + msg).lower()
+    if "authkeyunregistered" in low or "key is not registered" in low or "sessionrevoked" in low or "sessionexpired" in low:
+        return "Telegram ended this login (logged out elsewhere, or under Settings > Devices) - press Send code, then Log in again"
+    if "sendcodeunavailable" in low or "all available options" in low:
+        return ("Telegram already sent a code - look in your Telegram app (chat 'Telegram'), type it here and press Log in. "
+                "No code? Wait about an hour, then press Send code once")
+    if "phonecodeexpired" in low or "code has expired" in low:
+        return "The code has expired - press Send code once for a new one"
+    if "phonecodeinvalid" in low:
+        return "Wrong code - use the newest message from 'Telegram' in your Telegram app"
+    if "floodwait" in low:
+        sec = getattr(e, "seconds", None)
+        return f"Telegram asks to wait {max(1, round(sec / 60))} min before trying again" if sec else "Telegram asks to wait before trying again"
+    if name in ("TimeoutError", "CancelledError") or not msg.strip():
+        return "Telegram did not answer in time - check the internet; the app keeps trying"
+    return msg
+
+
+TG_QUIET_MIN = 10                         # no message from the watched chats this long -> read them directly
+
+
 class TgLink:
     """Your own Telegram account (phone-number login) used to talk to a boss-finder bot and read its answers.
     Needs the 'telethon' package and an api_id / api_hash from https://my.telegram.org (API development tools)."""
@@ -7862,6 +7886,12 @@ class TgLink:
     def send_code(self, phone):
         async def go():
             await self._connect()
+            # owner 31 Oct: a second press made Telethon RESEND the old code, and Telegram refuses after a few
+            # resends (SendCodeUnavailableError) - always ask for a fresh code instead
+            try:
+                getattr(self.client, "_phone_code_hash", {}).pop(phone.strip(), None)
+            except Exception as _e:
+                quiet_err("send_code.fresh", _e)
             sent = await self.client.send_code_request(phone.strip())
             self.phone, self.code_hash = phone.strip(), sent.phone_code_hash
         self._call(go(), 40)
@@ -7915,23 +7945,83 @@ class TgLink:
                 raise RuntimeError("none of the chats to watch could be found")
 
             async def handler(event):
-                txt = event.raw_text or ""
-                items = parse_bosses(txt)
                 try:
                     chat = (await event.get_chat())
                     chat = getattr(chat, "title", None) or getattr(chat, "username", None) or getattr(chat, "first_name", "") or ""
                 except Exception:
                     chat = ""
-                feed_note(chat, bool(items))
-                if items:
-                    feed_add(items, chat, keep_min)
-                if on_update:
-                    on_update(items)
+                m = event.message
+                self._feed_seen.add((event.chat_id, m.id, m.edit_date.timestamp() if m.edit_date else 0))
+                self._feed_text(event.raw_text or "", chat, keep_min, on_update)
             for ev in (events.NewMessage(chats=ents), events.MessageEdited(chats=ents)):
                 self.client.add_event_handler(handler, ev)
             _feed_stats["chats"] = labels
+            _feed_stats.pop("error", None)
+            self._feed_ents = list(zip(ents, labels))
+            if not getattr(self, "_guard", None) or self._guard.done():
+                self._guard = self.loop.create_task(self._feed_guard(keep_min, on_update))
             return labels
         return self._call(go(), 60)
+
+    _feed_seen = set()
+    _feed_ents = []
+
+    def _feed_text(self, txt, chat, keep_min, on_update):
+        items = parse_bosses(txt)
+        feed_note(chat, bool(items))
+        if items:
+            feed_add(items, chat, keep_min)
+        if on_update:
+            on_update(items)
+
+    async def _feed_guard(self, keep_min, on_update):
+        """Owner 31 Oct (Dida PC: 9 h without a coordinate, no error): Telegram's live updates can stop silently.
+        After TG_QUIET_MIN min without a message, read the watched chats directly every minute; messages the live
+        updates missed are added and the connection is renewed. A login Telegram ended is said in plain words."""
+        import asyncio
+        start, said_quiet = time.time(), False
+        while True:
+            await asyncio.sleep(60)
+            last = max(float(_feed_stats.get("last") or 0), start)
+            if time.time() - last < TG_QUIET_MIN * 60:
+                if said_quiet:
+                    self.log("[+] Telegram: messages are coming in again")
+                    said_quiet = False
+                _feed_stats.pop("quiet_since", None)
+                continue
+            try:
+                if not self.client.is_connected():
+                    await self.client.connect()
+                missed = 0
+                for ent, label in list(self._feed_ents):
+                    for m in reversed(await self.client.get_messages(ent, limit=20)):
+                        t = (m.edit_date or m.date).timestamp()
+                        key = (m.chat_id, m.id, m.edit_date.timestamp() if m.edit_date else 0)
+                        if t <= last - 5 or key in self._feed_seen:
+                            continue
+                        self._feed_seen.add(key)
+                        missed += 1
+                        self._feed_text(m.raw_text or "", label, keep_min, on_update)
+                if len(self._feed_seen) > 5000:
+                    self._feed_seen.clear()
+                if missed:
+                    self.log(f"[!] Telegram: the live updates had stopped - read {missed} missed message(s) directly; reconnecting")
+                    await self.client.disconnect()
+                    await self.client.connect()
+                    await self.client.catch_up()
+                    said_quiet = False
+                elif not said_quiet:
+                    mins = round((time.time() - last) / 60)
+                    self.log(f"[i] Telegram: no new message in the watched chats for {mins} min - checked them directly, they are quiet")
+                    _feed_stats["quiet_since"] = last
+                    said_quiet = True
+            except Exception as e:
+                txt = tg_plain_error(e)
+                if txt.startswith("Telegram ended this login"):
+                    _feed_stats["error"] = txt
+                    self.log(f"[!] Telegram: {txt}")
+                    return
+                quiet_err("TgLink._feed_guard", e)
 
     def listen(self, bot, on_update=None):
         """Read every message the bot sends (new or edited) and keep the boss list up to date."""
@@ -18731,7 +18821,9 @@ def _run_monster_rally(dev, cfg, log, stop):
         top = max(sk, key=sk.get) if sk else ""
         hunt_status(serial, "waiting", "Waiting for monsters",
                     "No matching monster in Telegram" + (f" · top reason: {sk[top]} {top}" if top else "") + " · checks again in 1 min")
-        return later(MR_POLL_MIN, "no Telegram coordinate matches the monster list")
+        nfeed = len(feed_get(_feed_keep[0] if _feed_keep[0] is not None else 60)[0])   # owner 31 Oct: dead feed vs no match
+        return later(MR_POLL_MIN, "no Telegram coordinate matches the monster list" + (f" ({nfeed} in the Telegram list)" if nfeed
+                     else " - the Telegram list is empty (no coordinates came in)"))
     keep_free = 0                                            # owner 28 Oct: "Marches kept free" is not needed
     max_wait = float(rd_opt(cfg, "monster_rally", "max_wait", 0) or 0) * 60          # 0 = hold until it is hunted / gone
     refill = rd_opt(cfg, "monster_rally", "refill", True) in (True, "true", "1", 1)

@@ -995,8 +995,11 @@ function updateSummary() {
     } else lc.textContent = "";
   }
   const m = $("#sbRam");
-  if (m && S.ram && S.ram.total_mb) { m.textContent = `${(S.ram.proc_mb || 0).toFixed(0)} MB`; m.title = `The app uses ${(S.ram.proc_mb || 0).toFixed(0)} MB \u00b7 ${S.ram.free_mb.toFixed(0)} MB free on this PC`; }
-  const t = $("#sbTg"); if (t) t.textContent = "Telegram: " + (S.tg.ready ? "Connected" : "Not connected");
+  if (m && S.ram && S.ram.total_mb) { m.textContent = `${(S.ram.priv_mb || S.ram.proc_mb || 0).toFixed(0)} MB`; m.title = `The app uses ${(S.ram.priv_mb || S.ram.proc_mb || 0).toFixed(0)} MB \u00b7 ${S.ram.free_mb.toFixed(0)} MB free on this PC`; }
+  const t = $("#sbTg");                                     // owner 31 Oct: "Connected" while nothing came in for hours
+  if (t) { const q = S.tg.ready && S.tg.quiet_since ? Math.round((Date.now() / 1000 - S.tg.quiet_since) / 60) : 0;
+    t.textContent = "Telegram: " + (!S.tg.ready ? "Not connected" : q ? "Connected \u00b7 quiet " + q + " min" : "Connected");
+    t.title = S.tg.status || ""; }
   const u = $("#sbUpd");
   if (u) {
     const U = S.update;

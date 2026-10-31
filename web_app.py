@@ -1344,7 +1344,7 @@ class Controller:
     def _tg_obj(self):
         if self.tg is None:
             api_id, h = self._tg_keys()
-            self.tg = rb.TgLink(api_id, h)
+            self.tg = rb.TgLink(api_id, h, log=self.log)      # owner 31 Oct: its warnings went to the console only
         return self.tg
 
     def _tg_run(self, label, fn):
@@ -1355,8 +1355,8 @@ class Controller:
             try:
                 self._tg_result(fn(tg))
             except Exception as e:
-                self.tg_status = f"Problem: {type(e).__name__}: {e}"
-                self.log(f"[!] Telegram: {e}")
+                self.tg_status = "Problem: " + rb.tg_plain_error(e)
+                self.log(f"[!] Telegram: {rb.tg_plain_error(e)}")
         threading.Thread(target=work, daemon=True).start()
 
     def _tg_listen(self, tg):
@@ -1371,8 +1371,8 @@ class Controller:
                 labels = tg.listen_feed(chats, on_update=lambda items: self.event("coords"), keep_min=int(self.cfg.get("tg_keep_min", 60) or 0))
                 self.tg_status = "Logged in - watching " + ", ".join(labels or [chats])
             except Exception as e:
-                self.tg_status = f"Problem: {e}"
-                self.log(f"[!] Telegram: {e}")
+                self.tg_status = "Problem: " + rb.tg_plain_error(e)
+                self.log(f"[!] Telegram: {rb.tg_plain_error(e)}")
 
     def tg_connect(self):
         def fn(tg):
@@ -2134,7 +2134,8 @@ class Api:
             last = c.seq
         ram = getattr(c, "ram", None) or rb.memory_info()
         return {"seq": last, "logs": logs, "acts": acts, "events": events, "devs": c.status_list(),
-                "tg": {"status": c.tg_status, "ready": c.tg_ready},
+                "tg": {"status": rb._feed_stats.get("error") or c.tg_status, "ready": c.tg_ready and not rb._feed_stats.get("error"),
+                       "quiet_since": rb._feed_stats.get("quiet_since")},
                 "ram": ram, "city": c.city_any_running() or c.jobs["city"]["running"], "city_progress": None, "city_jobs": c.city_jobs_state(),
                 "gen_scan": {"running": c.jobs["generals"]["running"], "count": c.jobs["generals"].get("count", 0)},
                 "catalog": {"running": c.jobs["catalog"]["running"], "count": c.jobs["catalog"].get("count", 0)},
