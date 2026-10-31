@@ -9825,6 +9825,55 @@ def bm_pay_set(pay):
     return s or {"gems"}
 
 
+def _short_amount(txt):
+    """'432,750' -> 432750, '2.5M' -> 2500000, '1.2B' -> 1200000000, '300K' -> 300000; fewer than 3 digits -> None."""
+    t = str(txt or "").strip().replace("'", ",")
+    m = re.fullmatch(r"([\d.,]+)([KMBkmb]?)", t)
+    if not m:
+        return None
+    num, suf = m.group(1), m.group(2).upper()
+    if suf:
+        try:
+            v = float(num.replace(",", "."))   # a short amount has one decimal point at most
+        except ValueError:
+            return None
+        return int(round(v * {"K": 1e3, "M": 1e6, "B": 1e9}[suf]))
+    d = re.sub(r"\D", "", num)
+    return int(d) if len(d) >= 3 else None
+
+
+def bm_read_gems(dev, img, log, serial):
+    """The gem total, read again over ~3 s when the first read failed (a passing banner / animation covers it); still
+    unread -> the crop is saved for tuning and the last total read in the last 30 min is used. -> gems or None."""
+    _, gems = market_totals(img, "gems")
+    tries = 0
+    while gems is None and tries < 4:
+        tries += 1
+        time.sleep(0.8)
+        s2 = dev.screenshot()
+        if not market_on_screen(s2):
+            break
+        img = s2
+        _, gems = market_totals(img, "gems")
+    row = (load_duty_state().get(serial or "default") or {}).get("black_market") or {}
+    if gems is not None:
+        if gems != row.get("gems_seen"):
+            bm_save(serial, gems_seen=gems, gems_seen_at=time.time(), gems_unread=0)
+        return gems
+    try:
+        (USER / "debug").mkdir(exist_ok=True)
+        cv2.imwrite(str(USER / "debug" / f"bm_gems_unread_{str(serial).replace(':', '_')}.png"), img[270:340, 240:540])
+    except Exception as _e:
+        quiet_err("bm_gems_crop", _e)
+    last, at = row.get("gems_seen"), float(row.get("gems_seen_at") or 0)
+    bm_save(serial, gems_unread=int(row.get("gems_unread") or 0) + 1)
+    if isinstance(last, int) and time.time() - at < 1800:
+        log(f"[i] Black Market: gem total not readable - using the last one read ({last:,}, {int((time.time() - at) / 60)} min ago)")
+        return last
+    log("[!] Black Market: gem total not readable (picture saved: debug/bm_gems_unread_*.png)")
+    return None
+
+
 def market_totals(img, which="both"):
     """The gold (left) and gem (right) totals in the row under the shop picture -> (gold, gems); None when unread.
     which="gems" / "gold" reads only that one (each read is a slow text read - owner 28 Oct: faster shop)."""
@@ -9834,8 +9883,12 @@ def market_totals(img, which="both"):
             for _t, ws in ocr_lines(img[282:330, x0:x1], 3.0):
                 runs, cur = [], ""                         # neighbouring number pieces belong together: OCR can split
                 for w in ws:                               # '432,750' into '4' + '32,750' (Kulim 24 Oct: ~400k read as 32,750)
-                    if re.fullmatch(r"[\d.,']+", w[0].strip()):
-                        cur += w[0]
+                    wt = w[0].strip()
+                    if re.fullmatch(r"[\d.,']+", wt):
+                        cur += wt
+                    elif re.fullmatch(r"[\d.,']+[KMBkmb]", wt):   # owner 31 Oct (Stalds: gems never read): '2.5M' / '300K'
+                        runs.append(cur + wt)
+                        cur = ""
                     else:
                         if cur:
                             runs.append(cur)
@@ -9843,9 +9896,9 @@ def market_totals(img, which="both"):
                 if cur:
                     runs.append(cur)
                 for r in runs:
-                    d = re.sub(r"\D", "", r)
-                    if len(d) >= 3 and (best is None or len(d) > len(str(best))):
-                        best = int(d)
+                    v = _short_amount(r)
+                    if v is not None and (best is None or v > best):
+                        best = v
         except Exception as _e:
             quiet_err("market_totals.num", _e)
         return best
@@ -10393,6 +10446,8 @@ def run_market(dev, cfg, log, stop):
     pend = 0                                                 # gems spent since the gem total was last believed
     bought, failed = {}, set()                              # failed: slot numbers that did not sell (until the next refresh)
     gold, gems = market_totals(img)
+    if gems is None and (int(cfg.get("market_min_gems", 0) or 0) or int(cfg.get("market_max_gems", 0) or 0)):
+        gems = bm_read_gems(dev, img, log, getattr(dev, "serial", ""))   # owner 31 Oct: a floor needs the gem total
     try:                                                     # the shop with its gold / gem row, to check the numbers read (a 6-digit
         (USER / "debug").mkdir(exist_ok=True)               # gem total was read as 32,750 on Kulim (tester system) 24 Oct)
         cv2.imwrite(str(USER / "debug" / f"bm_totals_{str(getattr(dev, 'serial', '')).replace(':', '_')}.png"), img)
@@ -10648,8 +10703,13 @@ def run_market(dev, cfg, log, stop):
         bm_save(serial, next_at=now + BM_AGAIN_MIN * 60, wait_gems=False)
         log(f"[i] Black Market: gem limit for this visit reached - next visit in {BM_AGAIN_MIN} min")
     else:                                                    # the shop closed / a dialog: straight back soon
-        bm_save(serial, next_at=now + 120, wait_gems=False)
-        log("[i] Black Market: visit ended early - back in 2 min")
+        unread = int(((load_duty_state().get(serial or "default") or {}).get("black_market") or {}).get("gems_unread") or 0)
+        if gems is None and unread >= 3:                     # owner 31 Oct (Stalds: 70 trips in a night): the gem total keeps
+            bm_save(serial, next_at=now + 1800, wait_gems=False)   # failing - no walking back every 2 min
+            log("[!] Black Market: the gem total could not be read 3 visits in a row - next try in 30 min")
+        else:
+            bm_save(serial, next_at=now + 120, wait_gems=False)
+            log("[i] Black Market: visit ended early - back in 2 min")
 
 
 def fix_building_name(text):
@@ -12529,10 +12589,10 @@ def run_wheel(dev, cfg, log, stop):
         if coins is None or since_read >= 10:
             shot = dev.screenshot()
             c = wheel_coins(shot)
-            for _ in range(3):                             # Skip 27 Oct 20:01: one bad read ended the run after 200 spins
-                if c is not None or stop.is_set():
-                    break
-                stop.wait(0.8)
+            for _ in range(10):                            # Skip 27 Oct 20:01: one bad read ended the run after 200 spins
+                if c is not None or stop.is_set():         # owner 31 Oct: the scrolling news banner sits over the coins for
+                    break                                  # ~10 s - keep looking until it has passed (was 3 x 0.8 s)
+                stop.wait(1.5)
                 shot = dev.screenshot()
                 c = wheel_coins(shot) if wheel_on_page(shot) and not wheel_reward_panel(shot) else None
             if c is None and coins is None:
