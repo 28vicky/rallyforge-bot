@@ -10883,8 +10883,9 @@ def city_task_target(dev, cfg, log, stop, task, nav_state):
         items = city_map_items(dev)
         keys = sorted(k for k in items if k.split("#")[0].lower() == name.lower().split("#")[0]
                       and (("#" not in name) or k.lower() == name.lower()))
-        if not keys:
-            log(f"[!] Task '{task.get('name')}': '{name}' is not on the city map. {CITY_MAP_HELP}")
+        if not keys:                                   # owner 31 Oct (DD): never say "the map is missing" when it is there
+            log(f"[!] Task '{task.get('name')}': '{name}' is not on the city map. "
+                + (f"The map has no pin for '{name}' - add it with Fix pins on the City map card." if items else CITY_MAP_HELP))
             return False
         ensure_city_zoom(dev, cfg, stop, log)          # owner 30 Oct: every city duty starts fully zoomed out
         nav = nav_state.get("nav") or CityNav(dev, stop, log)
@@ -15970,6 +15971,7 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
         quiet_err("jump_to_pin", _e)
     lost = 0
     prev_cam = None
+    zoom_tried = False
     for i in range(8):
         if stop.is_set():
             log("[i]   nav: goto_on_map=failure reason=stopped")
@@ -15981,6 +15983,14 @@ def goto_on_map(dev, cfg, log, stop, nav, cmap, mapx, mapy, tol=60):
         r = cmap.locate(shot)
         if not r:
             lost += 1
+            if lost >= 3 and not zoom_tried and _on_city_now(dev, cfg):
+                # owner 31 Oct (tester DD: 12 h of "not found on the map" until a game restart zoomed out): the view
+                # is probably zoomed in - zoom out now (fresh check, not the 10-min memory) and look once more
+                zoom_tried, lost = True, 0
+                dev._zoom_ok_at = 0
+                log("[i]   nav: the screen is not found on the city map - zooming out and looking again")
+                ensure_city_zoom(dev, cfg, stop, log)
+                continue
             if lost >= 3:
                 log("[i]   the screen is not found on the city map (zoomed differently, window in the way, or the city changed?)")
                 log("[i]   nav: goto_on_map=failure reason=map_not_located")
