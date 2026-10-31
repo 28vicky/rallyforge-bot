@@ -1747,29 +1747,40 @@ MONSTER_CATALOG.append(["Summoned", _SUMMONED + [[_n, [[1, ""]]] for _n in (
 VIKING_EASY_MEASURED = {1, 10, 20, 30, 40, 50}      # the other Easy levels are estimated between these, so they only count when the card's level is known
 VIKING_SETS = {"Viking (Easy)": [[1, "1.1M"], [2, "1.2M"], [3, "1.2M"], [4, "1.3M"], [5, "1.3M"], [6, "1.4M"], [7, "1.5M"], [8, "1.5M"], [9, "1.6M"], [10, "1.7M"], [11, "1.8M"], [12, "1.9M"], [13, "2M"], [14, "2.1M"], [15, "2.2M"], [16, "2.3M"], [17, "2.5M"], [18, "2.6M"], [19, "2.7M"], [20, "2.9M"], [21, "3.1M"], [22, "3.2M"], [23, "3.4M"], [24, "3.6M"], [25, "3.8M"], [26, "4M"], [27, "4.2M"], [28, "4.4M"], [29, "4.6M"], [30, "4.9M"], [31, "5.2M"], [32, "5.4M"], [33, "5.7M"], [34, "6M"], [35, "6.4M"], [36, "6.7M"], [37, "7.1M"], [38, "7.5M"], [39, "7.9M"], [40, "8.3M"], [41, "8.8M"], [42, "9.2M"], [43, "9.7M"], [44, "10.3M"], [45, "10.8M"], [46, "11.4M"], [47, "12M"], [48, "12.7M"], [49, "13.4M"], [50, "14.1M"]], "Viking (Normal)": [[1, "3.2M"], [2, "3.4M"], [3, "3.7M"], [4, "3.9M"], [5, "4.2M"], [6, "4.5M"], [7, "4.8M"], [8, "5.2M"], [9, "5.6M"], [10, "5.9M"], [11, "6.4M"], [12, "6.8M"], [13, "7.3M"], [14, "7.8M"], [15, "8.4M"], [16, "9M"], [17, "9.6M"], [18, "10.3M"], [19, "11M"], [20, "11.8M"], [21, "12.6M"], [22, "13.5M"], [23, "14.5M"], [24, "15.5M"], [25, "16.6M"], [26, "17.8M"], [27, "19M"], [28, "20.4M"], [29, "21.8M"], [30, "23.4M"], [31, "25M"], [32, "26.8M"], [33, "28.7M"], [34, "30.7M"], [35, "32.9M"], [36, "35.2M"], [37, "37.7M"], [38, "40.4M"], [39, "43.2M"], [40, "46.3M"], [41, "49.6M"], [42, "53.1M"], [43, "56.8M"], [44, "60.8M"], [45, "65.1M"], [46, "69.8M"], [47, "74.7M"], [48, "80M"], [49, "85.6M"], [50, "91.7M"]], "Viking (Hard)": [[1, "10.6M"], [2, "11.3M"], [3, "12M"], [4, "12.7M"], [5, "13.5M"], [6, "14.3M"], [7, "15.2M"], [8, "16.1M"], [9, "17.1M"], [10, "18.1M"], [11, "19.3M"], [12, "20.4M"], [13, "21.7M"], [14, "23M"], [15, "24.4M"], [16, "26M"], [17, "27.5M"], [18, "29.2M"], [19, "31M"], [20, "32.9M"], [21, "35M"], [22, "37.1M"], [23, "39.4M"], [24, "41.8M"], [25, "44.4M"], [26, "47.1M"], [27, "50M"], [28, "53.1M"], [29, "56.3M"], [30, "59.8M"], [31, "63.4M"], [32, "67.3M"], [33, "71.5M"], [34, "75.9M"], [35, "80.5M"], [36, "85.5M"], [37, "90.7M"], [38, "96.3M"], [39, "102.2M"], [40, "108.5M"], [41, "115.1M"], [42, "122.2M"], [43, "129.7M"], [44, "137.7M"], [45, "146.1M"], [46, "155.1M"], [47, "164.6M"], [48, "174.8M"], [49, "185.5M"], [50, "196.9M"]], "Viking (Hell)": [[1, "17.9M"], [2, "19.5M"], [3, "21.3M"], [4, "23.3M"], [5, "25.4M"], [6, "27.8M"], [7, "30.3M"], [8, "33.1M"], [9, "36.1M"], [10, "39.5M"], [11, "43.1M"], [12, "47.1M"], [13, "51.4M"], [14, "56.1M"], [15, "61.3M"], [16, "66.9M"], [17, "73.1M"], [18, "79.8M"], [19, "87.1M"], [20, "95.1M"], [21, "103.9M"], [22, "113.5M"], [23, "123.9M"], [24, "135.3M"], [25, "147.7M"], [26, "161.3M"], [27, "176.2M"], [28, "192.4M"], [29, "210.1M"], [30, "229.4M"], [31, "250.5M"], [32, "273.5M"], [33, "298.7M"], [34, "326.2M"], [35, "356.2M"], [36, "388.9M"], [37, "424.7M"], [38, "463.8M"], [39, "506.4M"], [40, "551.8M"], [41, "569.7M"], [42, "588.3M"], [43, "607.4M"], [44, "627.2M"], [45, "647.6M"], [46, "668.7M"], [47, "690.4M"], [48, "712.9M"], [49, "736.1M"], [50, "760.1M"]]}
 MONSTER_CATALOG.append(["Vikings", [[_n, _l] for _n, _l in VIKING_SETS.items()] + [["Viking Icebreaker",[[1,"89.4M"]]],["Viking Berserker",[[2,"134.1M"]]],["Viking Chief",[[3,"262.7M"]]],["King of the Vikings",[[4,"1B"]]]]])        # Easy / Normal / Hard / Hell, level + power
-# owner 29 Oct: group the monsters the way the game guide does (Normal Boss / Event Boss / Viking / Alliance Challenge /
-# Event Normal Monster), in the guide's order. Only the groups change - saved settings use monster names, not groups.
+# owner 31 Oct: the owner's own grouping for Join rallies + Monster hunts (replaces the 29 Oct guide grouping). Only the
+# groups change - saved settings use monster names, not groups. World bosses are never listed (they are never joined).
+# Royal Thief / Desert Bandit / Dugger are taken out of the lists but stay known names, so the reader never mistakes them.
+MONSTER_REMOVED = ["Royal Thief", "Desert Bandit", "Dugger"]
+_WORLD_BOSSES_LOW = {"silver lionheart knight", "thunder scorpion", "bird of hurricane", "behemoth king", "lord of lava",
+                     "scorpion king"}          # = NEVER_JOIN (defined further down; Scorpion King = one guide's other name)
+
+
 def _regroup_catalog(cat):
     lv = {n: l for _c, ms in cat for n, l in ms}
-    lv.setdefault("Royal Thief", [[1, "13.6M"]])
-    lv.setdefault("Desert Bandit", [[i, p] for i, p in enumerate(("3.5M", "5.5M", "10.4M", "19.5M", "30.6M", "48M", "82.4M",
-                                                                      "118.1M", "165.2M", "289M"), 1)])
+    lv["Outlander Elites"] = [[i, ""] for i in range(1, 36)]          # owner 31 Oct: 35 levels (no power numbers yet)
+    vik = ["Viking (Easy)", "Viking (Normal)", "Viking (Hard)", "Viking (Hell)",
+           "Viking Icebreaker", "Viking Berserker", "Viking Chief", "King of the Vikings"]
     groups = [
-        ("Normal Boss", [n for n, _ in cat[0][1]]),
-        ("Event Boss", ["Fenrir", "Garuda", "Royal Thief", "Lava Turtle", "Golem", "Witch", "Warlord", "Ymir", "Sphinx", "Pan",
-                        "Hydra", "Knight Bayard", "Cerberus", "Aglaope", "Achelois", "Basilisk", "Draugr", "Desert Bandit",
-                        "Pumpkin Monster", "Nian", "Taotie"]),
-        ("Viking", ["Viking (Easy)", "Viking (Normal)", "Viking (Hard)", "Viking (Hell)"]),
-        ("Alliance Challenge", ["Viking Icebreaker", "Viking Berserker", "Viking Chief", "King of the Vikings"]),
-        ("Event Normal Monster", ["Cranky Snowman"]),
+        ("Normal Bosses", [n for n, _ in cat[0][1]]),
+        ("Regular Event Bosses", ["Cerberus", "Knight Bayard", "Ymir", "Pan", "Lava Turtle", "Golem", "Witch", "Warlord",
+                                  "Garuda", "Aglaope", "Taotie", "Sphinx", "Hydra"]),
+        ("Summoned Monsters", ["Fenrir", "Achelois", "Basilisk", "Draugr", "Gugler Knight", "Savage Tiger Gladiator",
+                               "Arachne", "Carcinus", "Harpy", "Serpopard", "Nasu", "Barbary Pirate", "Temple Guard",
+                               "Outlander Elites"]),
+        ("Special Event Bosses", ["Nian", "Pumpkin Monster", "Cranky Snowman"]),
+        ("Viking Challenges", vik),
     ]
     used = {n for _g, ns in groups for n in ns}
-    groups.append(("Other", [n for _c, ms in cat for n, _l in ms if n not in used]))   # summoned / auto-join extras
+    extra = [n for _c, ms in cat for n, _l in ms
+             if n not in used and n not in MONSTER_REMOVED and n.lower() not in _WORLD_BOSSES_LOW]
+    if extra:                                                            # a catalogue name no group has yet
+        groups.append(("Other", extra))
     return [[g, [[n, lv[n]] for n in ns if n in lv]] for g, ns in groups]
 
 
 MONSTER_CATALOG = _regroup_catalog(MONSTER_CATALOG)
 MONSTER_NAMES += [_n for _c, _ms in MONSTER_CATALOG for _n, _l in _ms if _n not in MONSTER_NAMES]
+MONSTER_NAMES += [_n for _n in MONSTER_REMOVED if _n not in MONSTER_NAMES]   # still read correctly, just not listed
 MONSTER_NAMES.append("Viking") if "Viking" not in MONSTER_NAMES else None      # the card only says "Lv.N Viking"; the set comes from the power
 
 
@@ -2319,7 +2330,7 @@ def viking_resolve(power, level=None):
 
 # Point bosses: hit once for alliance points, nobody needs to join them. World bosses (owner 23 Oct): they show on the
 # rally list but cannot be joined as alliance rallies. Never joined, whatever the monster list says.
-NEVER_JOIN = {"silver lionheart knight", "thunder scorpion", "bird of hurricane", "behemoth king", "lord of lava"}
+NEVER_JOIN = set(_WORLD_BOSSES_LOW)      # owner 31 Oct: + Scorpion King
 WORLD_BOSS_NAMES = [" ".join(w.capitalize() for w in n.split()) for n in sorted(NEVER_JOIN)]
 # A world boss whose picture is close to a normal monster (owner 23 Oct: Behemoth King was joined as "Behemoth"):
 # when the picture says one of these, the name under the portrait is read as well.

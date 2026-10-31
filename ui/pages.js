@@ -936,7 +936,7 @@ function lockedWrap(el, locked) { if (locked) { el.style.opacity = "0.55"; el.st
 
 // ====================================================================== monsters
 // owner 29 Oct: both monster lists (Join rallies, Hunts) show Pan as Ground / Ranged / Mounted Pan
-const PAN_KINDS = ["Ground Pan", "Ranged Pan", "Mounted Pan"];
+const PAN_KINDS = ["Ranged Pan", "Ground Pan", "Mounted Pan"];   // owner 31 Oct order
 const panSplit = (catalog) => (catalog || []).map(([g, list]) => [g, list.flatMap((m) => m[0] === "Pan" ? PAN_KINDS.map((k) => [k, m[1]]) : [m])]);
 PAGES.monsters = function (fixed) {
   const sc = scopeBar("monsters", ["monster_skip", "monster_presets", "monster_unknown"], "monster list", fixed);
@@ -982,7 +982,7 @@ function monstersPanel(c, top) {
         pre.addEventListener("input", () => { const p = parsePresets(pre.value); if (p.length) c.monster_presets[n] = p; else delete c.monster_presets[n]; });
         const multi = lv.length > 1;
         const row = h("div", { class: "mon-row" },
-          box, h("span", { class: "mon-name" }, (cname === "Normal Boss" && lv.length === 1) ? h("b", { class: "mon-lvnum" }, String(lv[0][0])) : null, n, known.has(n.toLowerCase()) ? h("span", { class: "mon-pic", title: "The bot has a picture of this monster" }, "pic") : null),
+          box, h("span", { class: "mon-name" }, (cname === "Normal Bosses" && lv.length === 1) ? h("b", { class: "mon-lvnum" }, String(lv[0][0])) : null, n, known.has(n.toLowerCase()) ? h("span", { class: "mon-pic", title: "The bot has a picture of this monster" }, "pic") : null),
           h("span", { class: "muted mon-sum" }, multi ? (st === "join" ? "all levels" : st === "skip" ? "all skipped" : (lv.length - skipSet(n).size) + " of " + lv.length + " levels") : ""),
           pre);
         card.appendChild(row);
