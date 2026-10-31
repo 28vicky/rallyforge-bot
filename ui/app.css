@@ -2264,3 +2264,12 @@ body:has(.sideov) .jumpbox, body:has(.ov) .jumpbox{visibility:hidden}
 .md.bmpick-md{width:min(96vw,1100px);max-width:min(96vw,1100px)}
 .md.bmpick-md .mb{overflow:auto}
 .needs .lnkb{color:var(--accent1);font-weight:700;text-decoration:underline;text-underline-offset:2px}
+
+/* owner 31 Oct: Needs attention strip (Overview) */
+.needatt{margin:0 0 14px;border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
+.nahead{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}.nahead h3{margin:0}
+.nalist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.nalist li{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.nalist li:first-child{border-top:0}
+.nadot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--warn)}
+.nat{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:2px}

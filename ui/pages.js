@@ -608,7 +608,7 @@ function instancePage(serial) {
         h("div", {}, h("h3", {}, "Monster joins")),
         h("a", { href: "#", class: "viewall", onclick: (e) => { e.preventDefault(); if (S.gotoInstTab) S.gotoInstTab("logs"); } }, "View all \u2192")));
       // owner 30 Oct 20:51-20:54: less to read - the setup question (same as the header switches) and the repeated counters are gone
-      return [getStartedCard(serial), h("div", { class: "ovtop" }, runNowCard(serial), nowNextCard(serial)), renderTodayCard(serial, { lite: true }),
+      return [getStartedCard(serial), attentionCard(serial), h("div", { class: "ovtop" }, runNowCard(serial), nowNextCard(serial)), renderTodayCard(serial, { lite: true }),
         h("div", { class: "dutygrid ovgrid" }, h("div", { class: "dcol" }, panel(null, R)), h("div", { class: "dcol" }, cityMapCard(serial)))];
     }],
     ["routines", "Duties", () => [PAGES.duties(serial)]],   // A9: one word - "Duties" everywhere
@@ -2130,6 +2130,44 @@ function getStartedCard(serial) {
         h("span", { class: "gsn" }, x.done ? "\u2713" : String(i + 1)),
         h("div", { class: "gst" }, h("b", {}, x.t), h("small", { class: "hint" }, x.sub)),
         x.done ? null : h("button", { class: "btn sm" + (steps.findIndex((y) => !y.done) === i ? " pri" : ""), type: "button", onclick: x.go }, x.b))))));
+  })();
+  return root;
+}
+
+// owner 31 Oct 15:19: "Needs attention" - only things the user must act on, each with one button; nothing = no strip
+function attentionCard(serial) {
+  const root = h("div", {});
+  (async () => {
+    const d = await api("duties", { serial }, { quiet: true }).catch(() => null);
+    const rows = (d && d.duties) || [], items = [];
+    const goTg = () => { S.sel = "control"; S.tab = "telegram"; renderSide(); renderTabs(); renderPage(); };
+    const goDuty = () => S.gotoInstTab && S.gotoInstTab("routines");
+    const huOn = ((S.cfg.per_device || {})[serial] || {}).duties ? !!((((S.cfg.per_device || {})[serial] || {}).duties || {}).monster_rally || {}).on
+      : !!(((S.cfg.duties || {}).monster_rally || {}).on);
+    const tg = S.tg || {};
+    if (huOn && !tg.ready)
+      items.push({ t: "Telegram is not connected", sub: tg.status && /problem/i.test(tg.status) ? tg.status.replace(/^Problem:\s*/, "") : "Monster hunts get their coordinates from Telegram.", b: "Open Telegram", go: goTg });
+    else if (huOn && tg.quiet_since && Date.now() / 1000 - tg.quiet_since > 1800)
+      items.push({ t: "No new coordinates for " + Math.round((Date.now() / 1000 - tg.quiet_since) / 60) + " min", sub: "The bot keeps checking the chats by itself.", b: "Open Telegram", go: goTg });
+    const wantMap = rows.filter((r) => r.on && r.needs && r.needs.kind === "map").map((r) => dutyName(r.id, r.title));
+    if (wantMap.length)                                  // one line for all of them (art director: no repeated buttons)
+      items.push({ t: wantMap.length === 1 ? wantMap[0] + " is waiting for your city map" : wantMap.length + " duties are waiting for your city map",
+        sub: wantMap.length === 1 ? "Map your city once and it starts by itself." : wantMap.join(", ") + ".", b: "Map my city", go: goCityMap });
+    rows.filter((r) => r.on && r.needs && r.needs.kind === "pin").forEach((r) => items.push({ t: dutyName(r.id, r.title) + " can't run yet",
+      sub: "Pin " + r.needs.name + " on your city map first.", b: "Open City map", go: goCityMap }));
+    rows.filter((r) => r.on && r.status === "gaveup").forEach((r) => items.push({ t: dutyName(r.id, r.title) + " keeps failing today",
+      sub: (r.week && r.week.last_error) || "It is tried again every hour.", b: "Try again", go: async () => { await act(api("duty_retry", { serial, id: r.id })); toast("It runs again shortly.", "ok"); root.remove(); } }));
+    const ram = S.ram || {};
+    if ((ram.commit_free_mb != null && ram.commit_free_mb < 1024) || (ram.free_mb != null && ram.free_mb < 300))
+      items.push({ t: "This PC is low on memory", sub: "Close programs you don't need, or make the Windows page file bigger.", b: null });
+    if (!items.length || !root.isConnected) return;
+    const shown = items.slice(0, 4);
+    root.appendChild(h("section", { class: "panel needatt", "aria-label": "Needs attention" },
+      h("div", { class: "nahead" }, h("h3", {}, "Needs attention"), h("small", { class: "hint" }, items.length + (items.length === 1 ? " thing" : " things"))),
+      h("ul", { class: "nalist" }, ...shown.map((x) => h("li", {}, h("span", { class: "nadot", "aria-hidden": "true" }),
+        h("div", { class: "nat" }, h("b", {}, x.t), h("small", { class: "hint" }, x.sub)),
+        x.b ? h("button", { class: "btn sm", type: "button", onclick: x.go }, x.b) : null))),
+      items.length > shown.length ? h("button", { class: "lnkb", type: "button", onclick: goDuty }, "+" + (items.length - shown.length) + " more in Duties") : null));
   })();
   return root;
 }
