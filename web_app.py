@@ -1712,6 +1712,7 @@ class Api:
                          "on": bool(conf.get("on")), "every_min": int(conf.get("every_min", d["every_min"]) or 0),
                          "default_every": d["every_min"], "verified": bool(d.get("verified")),
                          "status": st, "status_text": txt, "today": today,
+                         "keep": (rb.keep_runs(serial).get(d["id"]) or None) if scope and d["id"] in rb.KEEP_DUTIES else None,
                          "opts": [dict(o, val=(o["label"] in rb.train_buildings(conf)) if d["id"] == "train_troops" and o["k"] in rb.TRAIN_BKEY.values()
                                        else conf.get(o["k"], o.get("def"))) for o in (d.get("opts") or [])],
                          "gems": bool(d.get("gems")),
@@ -2014,11 +2015,33 @@ class Api:
             locked = [s for s in self._rn_targets(p) if rb.city_locked(types.SimpleNamespace(serial=s))]
             if locked:
                 raise ApiError("This city map is locked. Press Unlock on the City map card first.")
+        keep = bool(p.get("keep")) and tid[5:] in rb.KEEP_DUTIES     # owner 31 Oct: Run now > Keep going until the limit
+        if keep:
+            if not p.get("serial"):
+                raise ApiError("Keep going runs on one instance - open the instance first.")
+            ec = self._eff(p.get("serial"))
+            if tid == "duty:black_market" and not (int(ec.get("market_min_gems") or 0) or int(ec.get("market_max_gems") or 0)):
+                raise ApiError("Set a Gem floor or a Gem limit per visit first - that is where the Black Market stops.")
+            if tid == "duty:train_troops" and not rb.train_goal((ec.get("duties") or {}).get("train_troops") or {})[0]:
+                raise ApiError("Set 'Train until' to a number of runs or troops first - that is where training stops.")
         for s in self._rn_targets(p):
             if tid in ("duty:map_city", "duty:map_movable"):
                 rb.map_request_set(types.SimpleNamespace(serial=s))   # Run now > Map my city is a press too
+            if keep:
+                rb.keep_set(s, tid[5:], True)
             rb.run_now_set(s, rb.run_now_list(s) + [tid])
         return self.run_now(p)
+
+    def keep_stop(self, p):
+        """Stop a 'Keep going' run now (or hide its finished note)."""
+        tid = str(p.get("id", ""))
+        s = self._scope(p)
+        if s and tid in rb.KEEP_DUTIES:
+            if rb.keep_active(s, tid):
+                rb.keep_set(s, tid, False, "stopped by you")
+            else:
+                rb.keep_dismiss(s, tid)
+        return self.duties({"serial": s})
 
     def run_now_remove(self, p):
         tid = str(p.get("id", ""))

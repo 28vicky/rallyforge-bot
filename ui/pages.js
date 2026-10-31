@@ -1859,14 +1859,33 @@ PAGES.duties = function (fixed) {
     const r = list().find((x) => x.id === sideId);
     if (!r || !root.isConnected) { closeSide(); return; }
     side.innerHTML = "";
-    const runBtn = serial && r.id !== "@tasks" ? h("button", { class: "btn", type: "button", onclick: async () => { if (await act(api("run_now_add", { serial, id: "duty:" + r.id }))) toast(r.t + " runs next on this instance.", "ok"); } }, "Run now") : null;
+    const runOnce = async () => { if (await act(api("run_now_add", { serial, id: "duty:" + r.id }))) toast(r.t + " runs next on this instance.", "ok"); };
+    // owner 31 Oct: Black Market / Wheel / Train troops can also keep going until the user's own limit, then stop by themselves
+    const KEEP_LIMIT = { black_market: "the gem floor or gem limit", wheel: "the coins to keep", train_troops: "the Train until goal" };
+    const keepOn = r.keep && r.keep.start && !r.keep.done;
+    const runBtn = !serial || r.id === "@tasks" ? null : KEEP_LIMIT[r.id]
+      ? h("button", { class: "btn", type: "button", "aria-haspopup": "menu", onclick: (e) => menu(e.currentTarget, [
+          { label: "Run once", run: runOnce },
+          { label: "Keep going until the limit", run: async () => { const j = await act(api("run_now_add", { serial, id: "duty:" + r.id, keep: true }));
+              if (j) { toast(r.t + " keeps going until " + KEEP_LIMIT[r.id] + ".", "ok"); take(await act(api("duties", { serial }))); drawSide(); } } }]) }, "Run now \u25be")
+      : h("button", { class: "btn", type: "button", onclick: runOnce }, "Run now");
+    const keepStop = async () => { take(await act(api("keep_stop", { serial, id: r.id }))); drawSide(); };
+    const keepBox = !serial || !r.keep ? null : keepOn
+      ? h("div", { class: "keepbox" }, h("div", {}, h("b", {}, "Keeping going until " + KEEP_LIMIT[r.id]),
+          h("small", { class: "hint" }, "Started " + new Date(r.keep.start * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " · comes back after urgent work · stops by itself")),
+          h("button", { class: "btn sm", type: "button", onclick: keepStop }, "Stop"))
+      : !r.on ? h("div", { class: "keepbox" }, h("div", {}, h("b", {}, "Finished" + (r.keep.why ? " - " + r.keep.why : "")),
+          h("small", { class: "hint" }, r.t + " isn't on. Turn it on so it runs every day?")),
+          h("button", { class: "btn sm pri", type: "button", onclick: async () => { await setOn(r, true); await keepStop(); } }, "Turn on"),
+          h("button", { class: "btn sm", type: "button", onclick: keepStop }, "Not now"))
+      : null;
     side.appendChild(h("aside", { class: "sidep", role: "dialog", "aria-modal": "true", "aria-label": r.t + " settings" },
       h("div", { class: "sph" },
         h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: !!r.on, "aria-label": r.t, onchange: async (e) => { await setOn(r, e.target.checked); drawSide(); } }), h("span", { class: "sw" })),
         h("div", { class: "spt" }, h("h3", {}, r.t), h("small", {}, [serial ? "This instance" : "Universal default", r.g, r.schedule, r.pts ? "+" + r.pts + " points" : ""].filter(Boolean).join(" · ")),
           serial && r.on ? dutyBadge(r.status, r.status_text) : null),     // status on its own line under the title: a long one never squeezes the title
         h("button", { class: "spx", type: "button", "aria-label": "Close", title: "Close (Esc)", onclick: closeSide }, "×")),
-      h("div", { class: "spb" }, setBody(r)),
+      h("div", { class: "spb" }, keepBox, setBody(r)),
       h("div", { class: "spf" }, h("span", { class: "hint" }, "Changes save as you make them."), runBtn, h("button", { class: "btn pri", type: "button", onclick: closeSide }, "Done"))));
   };
   const openSide = (id) => {

@@ -304,18 +304,94 @@ def merge_device_cfg(cfg, serial):
     return m
 
 
+# Owner 31 Oct: Run now > "Keep going until the limit" (Black Market / Wheel / Train troops). While a keep run is on, the
+# bot treats that duty as switched on with its 'until the limit' settings, comes back to it after urgent work, and the
+# duty itself ends the keep run when the user's limit is reached (gem floor / gem limit, coins to keep, train goal).
+# The saved settings are never changed: the overrides live only in keep_runs.json and only in the running bot.
+KEEP_FILE = USER / "keep_runs.json"
+KEEP_DUTIES = ("black_market", "wheel", "train_troops")
+_keep_lock = threading.Lock()
+
+
+def keep_load():
+    try:
+        return json.loads(KEEP_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def keep_runs(serial):
+    """{duty_id: {'start': t, 'done': t?, 'why': str?}} for this emulator."""
+    return keep_load().get(serial or "default") or {}
+
+
+def keep_active(serial, duty_id):
+    r = keep_runs(serial).get(duty_id) or {}
+    return bool(r.get("start")) and not r.get("done")
+
+
+def keep_set(serial, duty_id, on=True, why=""):
+    with _keep_lock:
+        data = keep_load()
+        row = data.setdefault(serial or "default", {})
+        if on:
+            row[duty_id] = {"start": time.time()}
+        elif duty_id in row and not row[duty_id].get("done"):
+            row[duty_id].update(done=time.time(), why=why)
+        else:
+            return
+        try:
+            save_json(KEEP_FILE, data)
+        except Exception as _e:
+            quiet_err("keep_set", _e)
+
+
+def keep_dismiss(serial, duty_id):
+    with _keep_lock:
+        data = keep_load()
+        (data.get(serial or "default") or {}).pop(duty_id, None)
+        try:
+            save_json(KEEP_FILE, data)
+        except Exception as _e:
+            quiet_err("keep_dismiss", _e)
+
+
+def apply_keep(m, serial):
+    """The running bot's settings with this emulator's active keep runs on top (a copy; the saved file is untouched)."""
+    act = [d for d in KEEP_DUTIES if keep_active(serial, d)]
+    if not act:
+        return m
+    m = dict(m)
+    m["duties"] = {k: dict(v or {}) for k, v in (m.get("duties") or {}).items()}
+    for d in act:
+        m["duties"].setdefault(d, {})["on"] = True
+        if d == "black_market":
+            m["market_refresh_mode"], m["market_paid_refresh"] = "all", True
+        elif d == "wheel":
+            m["wheel"] = {**(m.get("wheel") or {}), "spins": 0}
+    return m
+
+
+def _settings_stamp():
+    """config.json + keep_runs.json change times: either one changing = new settings for the running bot."""
+    out = []
+    for f in (CONFIG, KEEP_FILE):
+        try:
+            out.append(f.stat().st_mtime)
+        except OSError:
+            out.append(None)
+    return tuple(out)
+
+
 def live_settings(cfg, serial, seen):
     """Settings saved while this instance runs: take them over in place (every part of the bot holds this same dict),
     so a change works from the next action without Stop/Start. seen = [last config.json time]. -> True if taken over."""
-    try:
-        m = CONFIG.stat().st_mtime
-    except OSError:
-        return False
+    m = _settings_stamp()
     if m == seen[0]:
         return False
     seen[0] = m
     try:
-        new = merge_device_cfg(load_config(), serial)
+        new = apply_keep(merge_device_cfg(load_config(), serial), serial)
         changed = [k for k, v in new.items() if cfg.get(k) != v]
         if not changed:                                      # the file was written (e.g. a duty record) but nothing changed
             return False
@@ -10510,6 +10586,9 @@ def run_market(dev, cfg, log, stop):
         bm_save(serial, next_at=0, wait_gems=False)
         log(f"[i] Black Market: leaving the shop for {left_for} - back right after")
     elif end in ("floor", "nogems"):
+        if keep_active(serial, "black_market"):
+            keep_set(serial, "black_market", False, "gem floor reached" if end == "floor" else "out of gems")
+            log("[+] Black Market: keep-going run finished - " + ("gem floor reached" if end == "floor" else "out of gems"))
         nxt = now + BM_LOW_WAIT_MIN * 60
         row = (load_duty_state().get(serial or "default") or {}).get("black_market") or {}
         bm_save(serial, next_at=nxt, wait_gems=True, end_why=end, end_gems=gems)
@@ -10520,6 +10599,9 @@ def run_market(dev, cfg, log, stop):
             notify(cfg, serial, f"Black Market: {'gem floor reached' if end == 'floor' else 'out of gems'}"
                                 f"{f' ({gems:,} gems)' if isinstance(gems, int) else ''} - looking again every hour")
     elif end == "limit":                                     # 'most gems in one visit': this visit only
+        if keep_active(serial, "black_market"):
+            keep_set(serial, "black_market", False, "gem limit for a visit reached")
+            log("[+] Black Market: keep-going run finished - gem limit for a visit reached")
         bm_save(serial, next_at=now + BM_AGAIN_MIN * 60, wait_gems=False)
         log(f"[i] Black Market: gem limit for this visit reached - next visit in {BM_AGAIN_MIN} min")
     else:                                                    # the shop closed / a dialog: straight back soon
@@ -10602,6 +10684,9 @@ def run_step(dev, cfg, log, stop, step):
         return
     if cmd == "wheel":
         run_wheel(dev, cfg, log, stop)
+        if keep_active(getattr(dev, "serial", ""), "wheel"):          # Run now 'keep going': spun until the coins to keep
+            keep_set(getattr(dev, "serial", ""), "wheel", False, "spun until the coins to keep")
+            log("[+]  Wheel: keep-going run finished - spun down to the coins to keep")
         return
     if cmd == "activity_go":                               # More > Activity > tile > Go: the game itself walks to the building
         activity_go(dev, cfg, log, stop, arg or "Greet Champion", probe=True)
@@ -16898,6 +16983,7 @@ def run_train_goal(dev, cfg, log, stop, conf):
     left = train_goal_left(serial, conf)
     if not left:
         log("[+]  Train troops: goal reached - nothing more is trained until you set a new goal")
+        keep_set(getattr(dev, "serial", ""), "train_troops", False, "goal reached")
         return
     label = left[0]                                        # one building at a time, in order
     bname = TRAIN_BUILDINGS.get(label, "Barracks")
@@ -16929,6 +17015,7 @@ def run_train_goal(dev, cfg, log, stop, conf):
             nxt = train_goal_left(serial, conf)
             if not nxt:
                 log("[+]  Train troops: goal reached on every ticked building")
+                keep_set(getattr(dev, "serial", ""), "train_troops", False, "goal reached")
                 return
             label = nxt[0]
             bname = TRAIN_BUILDINGS.get(label, "Barracks")
@@ -21164,12 +21251,9 @@ def run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
 
 
 def _run_device(serial, adb, cfg, log, stop, on_frame=None, ctl=None):
-    cfg = merge_device_cfg(cfg, serial)                              # per-instance overrides
+    cfg = apply_keep(merge_device_cfg(cfg, serial), serial)          # per-instance overrides + Run now 'keep going'
     set_pacing(cfg)
-    try:
-        cfg_seen = [CONFIG.stat().st_mtime]                          # settings saved after this are taken over while running
-    except OSError:
-        cfg_seen = [None]
+    cfg_seen = [_settings_stamp()]                                   # settings saved after this are taken over while running
     _TL.live = (cfg, serial, cfg_seen, log, [0.0])                  # _nap() takes saved settings over during long duties too
     _TL.ctl, _TL.stop = ctl, stop
 

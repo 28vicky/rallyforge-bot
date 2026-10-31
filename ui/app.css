@@ -2235,3 +2235,7 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 
 /* owner 30 Oct 23:04: the status bar's go-to-top / bottom arrows never show over a side panel or a dialog */
 body:has(.sideov) .jumpbox, body:has(.ov) .jumpbox{visibility:hidden}
+
+/* owner 31 Oct: Run now > Keep going until the limit - status / finished note at the top of the duty's side panel */
+.keepbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;margin:0 0 12px;border:1px solid var(--line);border-radius:12px;background:var(--field)}
+.keepbox>div{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:2px}
