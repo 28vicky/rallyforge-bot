@@ -17212,8 +17212,14 @@ def _run_train_troops(dev, cfg, log, stop):
     others still train; a building that fails does not stop the rest."""
     serial = getattr(dev, "serial", "")
     todo = train_due_buildings(cfg, serial)
-    if not todo:
-        todo = train_buildings((cfg.get("duties") or {}).get("train_troops") or {})[:1]
+    if not todo:                                           # owner 31 Oct (Kiravik): every ticked building already trained
+        log("[i]  Train troops: every ticked building is trained for now - nothing to do")
+        return
+    conf_t = (cfg.get("duties") or {}).get("train_troops") or {}
+    _ev = duty_every(DUTY_BY_ID["train_troops"], conf_t) if "train_troops" in DUTY_BY_ID else 0
+    # a building that trained is not trained again before its next repeat (once a day = the next game day): a retry for
+    # ONE failed building (Kiravik 31 Oct: Stable) went through Barracks again every time
+    next_ok = time.time() + (_ev * 60 if _ev else 86400 - ((time.time() - reset_min() * 60) % 86400))
     done, busy, failed, maxed = [], {}, [], []
     for n, label in enumerate(todo):
         if stop.is_set():
@@ -17228,7 +17234,7 @@ def _run_train_troops(dev, cfg, log, stop):
             left = train_one_building(dev, cfg, log, stop, bname)
             if left is None:
                 done.append(bname)
-                _TRAIN_NEXT.pop((serial, label), None)
+                _TRAIN_NEXT[(serial, label)] = next_ok
             elif left == "max":                            # at the game's limit: skipped, not a failure
                 maxed.append(bname)
                 _TRAIN_NEXT[(serial, label)] = time.time() + 6 * 3600   # look again in 6 h (troops may be used meanwhile)
@@ -17303,6 +17309,13 @@ def train_one_building(dev, cfg, log, stop, bname):
         shot = dev.screenshot()
         rd_snap(shot, "train_troops_2")
         got = rd_numbers(" ".join(t for t, _ in rd_lines(shot, (TRAIN_QTY[0] - 90, TRAIN_QTY[1] - 28, 180, 56))))
+        if amount not in got:                              # owner 31 Oct: the Teacher's recipe, then save the crop for it
+            crop = shot[TRAIN_QTY[1] - 28:TRAIN_QTY[1] + 28, TRAIN_QTY[0] - 90:TRAIN_QTY[0] + 90]
+            v = read_amount_learned("train_amount", crop)
+            if v is not None:
+                got = [v]
+            else:
+                read_miss("train_amount", crop, getattr(dev, "serial", ""))
         if amount not in got:                              # never train the full (max) amount by mistake
             raise RuntimeError(f"the amount box does not show {amount} (read {got[:3]}) - not trained")
     shot = dev.screenshot()
@@ -17318,6 +17331,11 @@ def train_one_building(dev, cfg, log, stop, bname):
         batch = max(nums) if nums else 0
     dev.tap(*btn)
     _nap(stop, 2.0, 2.5)
+    after = dev.screenshot()                               # owner 31 Oct: check it really started - the page changes
+    if train_page(after) and find_green_button(after, x_min=280, x_max=535, y_min=860, y_max=955) and \
+            not rd_find(after, ["Training Troops", "Training"], region=(0, 770, 540, 90)):
+        rd_snap(after, "train_troops_3_not_started")
+        raise RuntimeError("pressed Train but the training did not start (a message or not enough resources?)")
     _TL.train_batch = batch
     log(f"[+]  {what}: T{tier} - {f'{batch:,}' if batch else ('the game' + chr(39) + 's number')} queued")
     if speed:
