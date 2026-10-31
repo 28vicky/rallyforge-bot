@@ -74,9 +74,9 @@ class NotReadyDuties(unittest.TestCase):
         try:
             if had:
                 d.rename(d.with_suffix(".bak"))
-            cfg = {"duties": {"trade_carriage": {"on": True}, "alliance_help": {"on": True}}}
-            self.assertEqual(rb.duty_status("x", "trade_carriage", cfg)[0], "off")
-            self.assertNotIn("duty:trade_carriage", [t["name"] for t in rb.duty_tasks_due(cfg, "x")])
+            cfg = {"duties": {"mail": {"on": True}, "alliance_help": {"on": True}}}
+            self.assertEqual(rb.duty_status("x", "mail", cfg)[0], "off")
+            self.assertNotIn("duty:mail", [t["name"] for t in rb.duty_tasks_due(cfg, "x")])
             d.write_text("owner")
             self.assertTrue(rb.duty_ready("trade_carriage"))
         finally:
