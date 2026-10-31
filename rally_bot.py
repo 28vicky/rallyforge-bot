@@ -9662,6 +9662,18 @@ def refresh_cost(img, refresh, default=50):
     return int(default)
 
 
+def bm_pay_set(pay):
+    """A Black Market item's payment choice -> set of 'gems' / 'gold' / 'resources' (food, lumber, stone, ore).
+    Old single values keep their meaning: 'resources' was any non-gem price (gold too), 'both' = anything."""
+    p = str(pay or "gems").strip().lower()
+    old = {"gems": {"gems"}, "gold": {"gold"}, "resources": {"gold", "resources"}, "both": {"gems", "gold", "resources"},
+           "any": {"gems", "gold", "resources"}}
+    if p in old:
+        return set(old[p])
+    s = {x.strip() for x in p.split(",")} & {"gems", "gold", "resources"}
+    return s or {"gems"}
+
+
 def market_totals(img, which="both"):
     """The gold (left) and gem (right) totals in the row under the shop picture -> (gold, gems); None when unread.
     which="gems" / "gold" reads only that one (each read is a slow text read - owner 28 Oct: faster shop)."""
@@ -10307,8 +10319,8 @@ def run_market(dev, cfg, log, stop):
             for name, tname, pay in wanted:
                 if market_match(img, slot, tname, th) < th:
                     continue
-                kind_ok = (slot["gem"] and pay in ("gems", "both")) or (not slot["gem"] and pay in ("resources", "both")) or \
-                          (slot.get("gold") and pay == "gold")      # owner 28 Oct: Gold = only a gold price, never other resources
+                ps = bm_pay_set(pay)                                 # owner 31 Oct: any mix of Gems / Gold / Resources
+                kind_ok = ("gems" in ps) if slot["gem"] else ("gold" in ps) if slot.get("gold") else ("resources" in ps)
                 price = read_price(img, slot["btn"])
                 if not kind_ok:
                     log(f"[i] {bm_label(name)} is for sale but paid with {'gems' if slot['gem'] else 'gold' if slot.get('gold') else 'resources'} - not allowed")

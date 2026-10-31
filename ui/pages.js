@@ -1150,10 +1150,22 @@ PAGES.market = function (fixed, redraw) {
   c.market_items = c.market_items || [];
   let cat = "all", q = "", names = [];
   // owner 28 Oct: shop prices are gems, gold or other resources. Resources = any non-gem price (gold, food, lumber, stone, ore)
-  const PAY_SHORT = [["gems", "Gems"], ["gold", "Gold"], ["resources", "Resources"], ["both", "Any"]];
+  // owner 31 Oct: pay = any mix of Gems / Gold / Resources (e.g. gold + resources, never gems). Saved as "gold,resources";
+  // old single values keep their meaning ("resources" was every non-gem price, gold too; "both" = anything).
+  const PAY_KINDS = [["gems", "Gems"], ["gold", "Gold"], ["resources", "Resources", "Food, lumber, stone, ore"]];
+  const paySet = (p) => { p = String(p || "gems"); const old = { gems: ["gems"], gold: ["gold"], resources: ["gold", "resources"], both: ["gems", "gold", "resources"] };
+    return new Set(old[p] || p.split(",").filter((x) => PAY_KINDS.some(([k]) => k === x))); };
+  const payStr = (s) => PAY_KINDS.map(([k]) => k).filter((k) => s.has(k)).join(",");
+  const payPick = (cur, label, onSet) => {                   // multi-choice chips: tap to add / remove, at least one stays on
+    const s = cur == null ? new Set() : paySet(cur);
+    const g = h("div", { class: "seg small", role: "group", "aria-label": label });
+    PAY_KINDS.forEach(([k, l, tip]) => g.appendChild(h("button", { class: "segb" + (s.has(k) ? " on" : ""), type: "button", title: tip || "", "aria-pressed": s.has(k) ? "true" : "false",
+      onclick: () => { const n = new Set(s); if (n.has(k)) { if (n.size === 1) { toast("Pick at least one way to pay", "warn"); return; } n.delete(k); } else n.add(k); onSet(payStr(n)); } }, l)));
+    return g;
+  };
   const fmt = (v) => Number(v || 0).toLocaleString("en-US");
   const chosen = (n) => c.market_items.find((i) => i.name === n);
-  const addItem = (n) => { if (!chosen(n)) c.market_items.push({ name: n, pay: bmGold(n) && (c.market_pay || "gems") === "gems" ? "resources" : (c.market_pay || "gems") }); };   // gold-priced goods never get "Gems only"
+  const addItem = (n) => { if (!chosen(n)) c.market_items.push({ name: n, pay: bmGold(n) && (c.market_pay || "gems") === "gems" ? "gold,resources" : (c.market_pay || "gems") }); };   // gold-priced goods never get "Gems only"
   const pick = (n) => { if (chosen(n)) c.market_items = c.market_items.filter((i) => i.name !== n); else addItem(n); draw(); };
   // ---- summary line
   const sum = h("div", { class: "bmsum" });
@@ -1211,10 +1223,9 @@ PAGES.market = function (fixed, redraw) {
     picksHead.innerHTML = "";
     picksHead.appendChild(h("h3", {}, "Your picks" + (k ? " (" + k + ")" : "")));
     if (k) {
-      const same = c.market_items.every((i) => (i.pay || "gems") === (c.market_items[0].pay || "gems")) ? (c.market_items[0].pay || "gems") : "";
-      const st = { v: same };
+      const p0 = payStr(paySet(c.market_items[0].pay)), same = c.market_items.every((i) => payStr(paySet(i.pay)) === p0) ? p0 : null;
       picksHead.appendChild(h("div", { class: "bmsetall" }, h("span", { class: "hint" }, "Set all to"),
-        segPick(st, "v", PAY_SHORT, { small: true, label: "Set all to", after: (v) => { c.market_items.forEach((i) => { i.pay = v; }); c.market_pay = v; draw(); } }),
+        payPick(same, "Set all to", (v) => { c.market_items.forEach((i) => { i.pay = v; }); c.market_pay = v; draw(); }),
         h("a", { href: "#", class: "lnk", onclick: (e) => { e.preventDefault(); c.market_items = []; draw(); } }, "Clear all")));
     }
     picksBody.innerHTML = "";
@@ -1223,11 +1234,11 @@ PAGES.market = function (fixed, redraw) {
       return;
     }
     picksBody.appendChild(h("div", { class: "bmpicks" }, ...c.market_items.map((it) => {
-      const f = bmInfo(it.name), st = { v: it.pay || "gems" };
+      const f = bmInfo(it.name);
       return h("div", { class: "bmpick", title: f.label },
         h("img", { src: `/api/market_img?name=${encodeURIComponent(it.name)}&k=${window.KEY}`, alt: "", onerror: (e) => (e.target.style.visibility = "hidden") }),
         h("div", { class: "bmpn" }, f.label),
-        segPick(st, "v", PAY_SHORT, { small: true, label: "Pay for " + f.label + " with", after: (v) => { it.pay = v; draw(); } }),
+        payPick(it.pay, "Pay for " + f.label + " with", (v) => { it.pay = v; draw(); }),
         h("button", { class: "bmx", type: "button", "aria-label": "Remove " + f.label, title: "Remove", onclick: () => pick(it.name) }, "×"));
     })));
   };
