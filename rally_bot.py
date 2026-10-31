@@ -5926,7 +5926,7 @@ _low_prio_done = [False]
 
 def memory_info():
     """{'total_mb', 'free_mb', 'used_pct', 'proc_mb'} for this PC and for this app (None where unknown)."""
-    info = {"total_mb": None, "free_mb": None, "used_pct": None, "proc_mb": None}
+    info = {"total_mb": None, "free_mb": None, "used_pct": None, "proc_mb": None, "priv_mb": None, "commit_free_mb": None}
     try:
         if os.name == "nt":
             import ctypes
@@ -5949,6 +5949,9 @@ def memory_info():
             m.dwLength = ctypes.sizeof(MEMSTAT)
             ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
             info["total_mb"], info["free_mb"] = m.ullTotalPhys / 2 ** 20, m.ullAvailPhys / 2 ** 20
+            # owner 31 Oct: Windows refuses memory when the COMMIT limit (RAM + page file) is used up, even with
+            # GBs of RAM "free" (07:03-07:35 every instance got "Insufficient memory" at 1.3-3 GB free)
+            info["commit_free_mb"] = m.ullAvailPageFile / 2 ** 20
             k32, psapi = ctypes.windll.kernel32, ctypes.windll.psapi
             k32.GetCurrentProcess.restype = wintypes.HANDLE
             psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(PMC), wintypes.DWORD]
@@ -5956,6 +5959,7 @@ def memory_info():
             p.cb = ctypes.sizeof(PMC)
             if psapi.GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(p), p.cb):
                 info["proc_mb"] = p.WorkingSetSize / 2 ** 20
+                info["priv_mb"] = p.PagefileUsage / 2 ** 20      # real size: the working set is trimmed every 2 min
         else:
             mem = {k: int(v.split()[0]) for k, v in (l.split(":", 1) for l in open("/proc/meminfo"))
                    if k in ("MemTotal", "MemAvailable")}
@@ -5976,7 +5980,7 @@ def memory_report(info=None):
     """One '[mem]' log line: this app's memory now / at start / peak, PC free RAM, the app's CPU use since the
     last line and threads. Logged every 10 min so a slow leak or creeping load is easy to spot."""
     info = info or memory_info()
-    proc, free = info.get("proc_mb"), info.get("free_mb")
+    proc, free = info.get("priv_mb") or info.get("proc_mb"), info.get("free_mb")
     if proc:
         _MEM_SEEN["first"] = _MEM_SEEN["first"] or proc
         _MEM_SEEN["peak"] = max(_MEM_SEEN["peak"], proc)
@@ -5988,7 +5992,7 @@ def memory_report(info=None):
     _MEM_SEEN["cpu"] = (cpu_s, now)
     mb = lambda v: f"{v:.0f} MB" if v else "?"
     return (f"[mem] app {mb(proc)} (start {mb(_MEM_SEEN['first'])}, peak {mb(_MEM_SEEN['peak'])}), "
-            f"PC free {mb(free)}, app CPU {cpu_txt}, threads {threading.active_count()}, "
+            f"PC free {mb(free)}, PC commit free {mb(info.get('commit_free_mb'))}, app CPU {cpu_txt}, threads {threading.active_count()}, "
             f"alert keys {len(_notify_at)}")
 
 

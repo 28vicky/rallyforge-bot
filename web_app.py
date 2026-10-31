@@ -837,10 +837,13 @@ class Controller:
         self.ram = info
         if info["total_mb"]:
             need = int(self.cfg.get("min_free_ram_mb", 0) or 0)
-            if info["free_mb"] < max(need, 300) and time.time() - self._ram_warned > 300:
+            cfree = info.get("commit_free_mb")
+            low = info["free_mb"] < max(need, 300) or (cfree is not None and cfree < 1024)
+            if low and time.time() - self._ram_warned > 300:
                 self._ram_warned = time.time()
-                self.log(f"[!] The PC is low on memory: {info['free_mb']:.0f} MB free.")
-                rb.notify(self.cfg, "PC", f"Low on memory: {info['free_mb']:.0f} MB free.")
+                why = f"{info['free_mb']:.0f} MB RAM free" + (f", {cfree:.0f} MB commit left (RAM + page file)" if cfree is not None else "")
+                self.log(f"[!] The PC is low on memory: {why}. Close other programs or make the Windows page file bigger.")
+                rb.notify(self.cfg, "PC", f"Low on memory: {why}.")
         self._trim_n += 1
         if self._trim_n % 24 == 0:                       # every ~2 min, for everyone (not only Low memory mode)
             rb.trim_memory()
@@ -2970,7 +2973,7 @@ class Api:
                 if d.get("kind") in ("go", "solo"):
                     why = "Rallied" if d.get("kind") == "go" else "Attacked"
             else:
-                why = ""                                       # the "Not in any of your presets" heading says it
+                why = "Not in your presets"                    # owner 31 Oct: never a blank Why (the heading scrolls away)
             x, y = (int(v) for v in key.split(","))
             onmap.append({"key": key, "x": x, "y": y, "name": it.get("name"), "level": lv or None, "km": it.get("km"),
                           "seen": seen_t, "order": oi, "why": why, "kind": d.get("kind") or ""})

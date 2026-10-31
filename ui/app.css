@@ -1779,7 +1779,7 @@ select.pick-open{border-color:var(--accent1)}
 .hudhead{display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px;padding:8px 16px;border-bottom:1px solid var(--line)}
 .hudhead h3{margin:0}
 .hutwrap{overflow:auto;overscroll-behavior:contain}   /* height set by fitTable(): only the table scrolls, never the page */
-.hurow.hd{position:sticky;top:0;z-index:1}
+.hurow.hd{position:sticky;top:0;z-index:3;box-shadow:0 1px 0 var(--line)}   /* owner 31 Oct: rows scrolled under the header showed through it */
 .hurow.old .hunm,.hurow.old .huloc{color:var(--mute)}
 .huloc{display:inline-flex;align-items:center;gap:6px;justify-self:start;max-width:100%;padding:3px 8px;margin:-3px -8px;border:0;border-radius:8px;background:transparent;color:var(--fg);font:inherit;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer}
 .huloc:hover,.huloc:focus-visible{background:var(--hu-soft)}
@@ -1803,7 +1803,7 @@ button.hustat2{cursor:pointer}button.hustat2:hover{color:var(--fg)}
 .hudtab.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .hutable{min-width:0}
 .hurow{display:grid;gap:12px;align-items:center;padding:9px 16px;border-top:1px solid var(--line);font-size:13px;min-width:0}
-.hurow.hd{border-top:0;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);background:var(--hu-soft)}
+.hurow.hd{border-top:0;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);background:linear-gradient(var(--hu-soft),var(--hu-soft)),var(--card)}
 .hurow>span{min-width:0}
 .hut{font-family:var(--mono);font-size:12px;color:var(--mute)}
 .hunm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
