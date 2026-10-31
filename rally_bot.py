@@ -6021,7 +6021,8 @@ _low_prio_done = [False]
 
 def memory_info():
     """{'total_mb', 'free_mb', 'used_pct', 'proc_mb'} for this PC and for this app (None where unknown)."""
-    info = {"total_mb": None, "free_mb": None, "used_pct": None, "proc_mb": None, "priv_mb": None, "commit_free_mb": None}
+    info = {"total_mb": None, "free_mb": None, "used_pct": None, "proc_mb": None, "priv_mb": None, "commit_free_mb": None,
+            "tm_mb": None}
     try:
         if os.name == "nt":
             import ctypes
@@ -6039,7 +6040,9 @@ def memory_info():
                             ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
                             ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
                             ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                            ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
+                            ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
+                            ("PrivateUsage", ctypes.c_size_t), ("PrivateWorkingSetSize", ctypes.c_size_t),
+                            ("SharedCommitUsage", ctypes.c_ulonglong)]   # PROCESS_MEMORY_COUNTERS_EX2 (Windows 10 2004+)
             m = MEMSTAT()
             m.dwLength = ctypes.sizeof(MEMSTAT)
             ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
@@ -6052,15 +6055,22 @@ def memory_info():
             psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(PMC), wintypes.DWORD]
             p = PMC()
             p.cb = ctypes.sizeof(PMC)
-            if psapi.GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(p), p.cb):
+            ok = psapi.GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(p), p.cb)
+            if not ok:                                            # older Windows: the short struct (no private working set)
+                p.cb = ctypes.sizeof(PMC) - 3 * ctypes.sizeof(ctypes.c_size_t)
+                ok = psapi.GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(p), p.cb)
+                p.PrivateWorkingSetSize = 0
+            if ok:
                 info["proc_mb"] = p.WorkingSetSize / 2 ** 20
                 info["priv_mb"] = p.PagefileUsage / 2 ** 20      # real size: the working set is trimmed every 2 min
+                # owner 31 Oct: the footer shows exactly what Task Manager's Memory column shows (private working set)
+                info["tm_mb"] = (p.PrivateWorkingSetSize or p.WorkingSetSize) / 2 ** 20
         else:
             mem = {k: int(v.split()[0]) for k, v in (l.split(":", 1) for l in open("/proc/meminfo"))
                    if k in ("MemTotal", "MemAvailable")}
             info["total_mb"], info["free_mb"] = mem["MemTotal"] / 1024, mem["MemAvailable"] / 1024
             rss = next(int(l.split()[1]) for l in open("/proc/self/status") if l.startswith("VmRSS"))
-            info["proc_mb"] = rss / 1024
+            info["proc_mb"] = info["tm_mb"] = rss / 1024
         if info["total_mb"]:
             info["used_pct"] = 100.0 * (1 - info["free_mb"] / info["total_mb"])
     except Exception as _e:
@@ -6087,8 +6097,41 @@ def memory_report(info=None):
     _MEM_SEEN["cpu"] = (cpu_s, now)
     mb = lambda v: f"{v:.0f} MB" if v else "?"
     return (f"[mem] app {mb(proc)} (start {mb(_MEM_SEEN['first'])}, peak {mb(_MEM_SEEN['peak'])}), "
+            f"Task Manager {mb(info.get('tm_mb'))}, "
             f"PC free {mb(free)}, PC commit free {mb(info.get('commit_free_mb'))}, app CPU {cpu_txt}, threads {threading.active_count()}, "
-            f"alert keys {len(_notify_at)}")
+            f"alert keys {len(_notify_at)} | {memory_breakdown()}")
+
+
+def _nbytes(o, depth=0, seen=None):
+    """Bytes of the pictures / arrays held in a cache (dicts, lists, tuples of numpy arrays), roughly."""
+    seen = seen if seen is not None else set()
+    if depth > 4 or id(o) in seen:
+        return 0
+    seen.add(id(o))
+    if isinstance(o, np.ndarray):
+        return int(o.nbytes)
+    if isinstance(o, dict):
+        return sum(_nbytes(v, depth + 1, seen) for v in list(o.values()))
+    if isinstance(o, (list, tuple)):
+        return sum(_nbytes(v, depth + 1, seen) for v in list(o))
+    return 0
+
+
+def memory_breakdown():
+    """Owner 31 Oct (1.2 GB vs Evonex 300-400 MB): what the big parts hold, so the savings can be measured."""
+    try:
+        maps = [m for m in list(_CITY_MAPS.values()) + list(_CULTURE_MAPS.values()) if m is not None]
+        pics = sum(sum(int(k[2].nbytes) for k in m.kf if k[2] is not None) for m in maps)
+        feats = sum(int(m._desc.nbytes) if m._desc is not None else 0 for m in maps)
+        n_match = sum(int(getattr(m, "_n_matchers", 0)) for m in maps)
+        caches = {"templates": _cache, "popups": _poplib_cache, "nav": _navlib, "city pics": _CITY_PIC, "detail": _DETAIL_TPL,
+                  "monsters": _mon_cache, "generals": _gen_cache}
+        parts = ", ".join(f"{k} {_nbytes(v) / 2 ** 20:.0f} MB" for k, v in caches.items())
+        return (f"maps {len(maps)} ({pics / 2 ** 20:.0f} MB pictures, {feats / 2 ** 20:.0f} MB features, {n_match} matchers), "
+                f"{parts}, python objects {len(gc.get_objects()) // 1000}k")
+    except Exception as _e:
+        quiet_err("memory_breakdown", _e)
+        return "breakdown n/a"
 
 
 def trim_memory():
@@ -14082,6 +14125,7 @@ class CityMap:
             m.add([self._desc])
             m.train()
             self._tl.m = m
+            self._n_matchers = getattr(self, "_n_matchers", 0) + 1   # memory breakdown (owner 31 Oct)
         return m
 
     def locate(self, shot, min_pts=KF_MIN_PTS):
